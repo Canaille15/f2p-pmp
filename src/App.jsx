@@ -1,13 +1,10 @@
 const SUPABASE_URL = "https://vrhykmrbdakjycfqbzpt.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHlrbXJiZGFranljZnFiem90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg3MzI5NzUsImV4cCI6MjA2NDMxODk3NX0.4X8Fsh49gGZ754yvQy-hNqD8_xS46VzXg2E_Lsz82vM";
 
-
 import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
-
-// ─── PERSISTANCE LOCALE (localStorage) ───────────────────────────────────────
-// Hook : comme useState mais sauvegarde automatiquement dans le navigateur
+// —— PERSISTANCE LOCALE (localStorage) ——
 function usePersist(key, defaultValue) {
   const [value, setValue] = useState(() => {
     try {
@@ -15,6 +12,7 @@ function usePersist(key, defaultValue) {
       return stored ? JSON.parse(stored) : defaultValue;
     } catch { return defaultValue; }
   });
+
   const setPersist = useCallback((next) => {
     setValue(prev => {
       const val = typeof next === "function" ? next(prev) : next;
@@ -22,10 +20,9 @@ function usePersist(key, defaultValue) {
       return val;
     });
   }, [key]);
+
   return [value, setPersist];
 }
-
-
 // ─── MIGRATION DONNÉES ────────────────────────────────────────────────────────
 // Si la structure des données change dans une future version,
 // on peut nettoyer l'ancien localStorage ici
