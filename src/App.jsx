@@ -2,8 +2,8 @@ import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "VOTRE_URL_SUPABASE";
-const SUPABASE_ANON_KEY = "VOTRE_CLE_ANON";
+const SUPABASE_URL = "https://vrhykmrbdakjycfqbzpt.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHlrbXJiZGFranljZnFienB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTM0MTAsImV4cCI6MjA5NTgyOTQxMH0.LMAwtDR3hSliWV89KO9cRIaC3Wy2QGDh5r8Hl_G_4pY";
 async function sbFetch(path, opts={}) {
   if (SUPABASE_URL==="VOTRE_URL_SUPABASE") return null;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
