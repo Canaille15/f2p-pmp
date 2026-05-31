@@ -32,8 +32,7 @@ if (localStorage.getItem("f2ppmp_version") !== DATA_VERSION) {
   localStorage.setItem("f2ppmp_version", DATA_VERSION);
 }
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "VOTRE_URL_SUPABASE";
-const SUPABASE_ANON_KEY = "VOTRE_CLE_ANON";
+
 async function sbFetch(path, opts={}) {
   if (SUPABASE_URL==="VOTRE_URL_SUPABASE") return null;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -329,7 +328,7 @@ const AGENTS_INIT = [
   {id:"R23",nom:"SAURY",           prenom:"Stéphane",  grade:"CP5NIV2",poste:"AC PAR",       fam:"PAR"},
   // Nouveaux agents détectés feuilles 30/05 – 01/06/2026
   {id:"P54",nom:"LEGOGUELIN",       prenom:"Antoine",   grade:"CP5NIV2",poste:"AC LC",         fam:"PRCI"},
-].map(a=>].map(a=>({...a,initials:a.prenom[0]+(a.nom.replace(/[\s-]/g,"")[0]||"")}));
+].map(a=>({ ...a, initials: a.prenom[0] + (a.nom.replace(/[ \s-]/g, '').slice(0, 3).toUpperCase()) }))
 
 // ─── COMPOSANTS DE BASE ───────────────────────────────────────────────────────
 function EqBadge({code,small,showHours}){
