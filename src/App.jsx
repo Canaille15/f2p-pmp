@@ -1,3 +1,7 @@
+const SUPABASE_URL = "https://vrhykmrbdakjycfqbzpt.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHlrbXJiZGFranljZnFiem90Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg3MzI5NzUsImV4cCI6MjA2NDMxODk3NX0.4X8Fsh49gGZ754yvQy-hNqD8_xS46VzXg2E_Lsz82vM";
+
+
 import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
