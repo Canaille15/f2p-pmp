@@ -892,7 +892,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
               <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
               {code&&<div style={{fontSize:8,fontWeight:700,color:eq?.tc,background:eq?.bg,borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{eq?.label?.slice(0,4)}</div>}
               {en?.jsCode&&en.jsCode!==code&&<div style={{fontSize:7,color:"#94a3b8",fontFamily:"monospace",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{en.jsCode}</div>}
-            </div>;
+            </div>
           })}
         </div>
       </div>
