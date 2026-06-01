@@ -126,13 +126,13 @@ const EQUIPES = [
   { code:"JF",   label:"Jour/Fête",  heures:"",            color:"#ea580c", textColor:"#fff", dot:"#fed7aa", prive:false, compteur:"travail", bg:"#ea580c" },
   // ── REPOS / RÉSERVISTE — fond coloré, texte blanc ────────────────────────
   { code:"RP",   label:"RP",         heures:"",            color:"#16a34a", textColor:"#fff", dot:"#bbf7d0", prive:true,  compteur:"RP",      bg:"#16a34a" },
-  { code:"RU",   label:"RU",         heures:"",            color:"#d97706", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#d97706" },
-  { code:"RQ",   label:"RQ",         heures:"",            color:"#d97706", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#d97706" },
+  { code:"RU",   label:"RU",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
+  { code:"RQ",   label:"RQ",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
   { code:"TC",   label:"TC",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
   { code:"RN",   label:"RN",         heures:"",            color:"#4338ca", textColor:"#fff", dot:"#e0e7ff", prive:true,  compteur:"RN",      bg:"#4338ca" },
   { code:"NU",   label:"NU",         heures:"",            color:"#475569", textColor:"#fff", dot:"#cbd5e1", prive:false, compteur:"RU",      bg:"#475569" },
-  { code:"CA",   label:"Congé Ann.", heures:"",            color:"#0369a1", textColor:"#fff", dot:"#bae6fd", prive:true,  compteur:"CP",      bg:"#0369a1" },
-  { code:"CP",   label:"Congé",      heures:"",            color:"#0369a1", textColor:"#fff", dot:"#bae6fd", prive:true,  compteur:"CP",      bg:"#0369a1" },
+  { code:"CA",   label:"Congé Ann.", heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
+  { code:"CP",   label:"Congé",      heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
   { code:"MA",   label:"Maladie",    heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
   { code:"VT",   label:"Tps Partiel",heures:"",            color:"#9333ea", textColor:"#fff", dot:"#e9d5ff", prive:true,  compteur:"ABS",     bg:"#9333ea" },
   { code:"ABS",  label:"Absent",     heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
@@ -672,8 +672,8 @@ const DEFAULT_COLORS = {
   // Travail = rouge vif
   M:"#ef4444", AM:"#ef4444", N:"#ef4444", J:"#ef4444", JF:"#ef4444",
   // Non travaillé = blanc cassé par défaut (personnalisable)
-  RP:"#f8fafc", RU:"#f8fafc", RQ:"#f8fafc", NU:"#f8fafc",
-  CA:"#f8fafc", CP:"#f8fafc", MA:"#f8fafc", VT:"#f8fafc",
+  RP:"#16a34a", RU:"#eab308", RQ:"#eab308", NU:"#f8fafc",
+  CA:"#eab308", CP:"#eab308", MA:"#f8fafc", VT:"#f8fafc",
   ABS:"#f8fafc", FOR:"#f8fafc", DISPO:"#f8fafc", TC:"#f8fafc",
   RN:"#f8fafc", VM:"#f8fafc",
 };
@@ -2034,9 +2034,10 @@ function ImportDeroulement({agent,onClose,onImport}){
     {c:"J",    l:"Journée",    bg:"#ea580c",tc:"#fff",dot:"#fed7aa"},
     // Repos / Réserviste — fond coloré, texte blanc
     {c:"RP",   l:"RP",         bg:"#16a34a",tc:"#fff",dot:"#bbf7d0",prive:true},
-    {c:"RU",   l:"RU/RQ",      bg:"#d97706",tc:"#fff",dot:"#fef9c3",prive:true},
+    {c:"RU",   l:"RU",         bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
+    {c:"RQ",   l:"RQ",         bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
     {c:"NU",   l:"NU",         bg:"#475569",tc:"#fff",dot:"#cbd5e1"},
-    {c:"CA",   l:"Congé Ann.", bg:"#0369a1",tc:"#fff",dot:"#bae6fd",prive:true},
+    {c:"CA",   l:"Congé Ann.", bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
     {c:"MA",   l:"Maladie",    bg:"#dc2626",tc:"#fff",dot:"#fecaca",prive:true},
     {c:"VT",   l:"Tps Partiel",bg:"#9333ea",tc:"#fff",dot:"#e9d5ff",prive:true},
     {c:"ABS",  l:"Absent",     bg:"#dc2626",tc:"#fff",dot:"#fecaca",prive:true},
