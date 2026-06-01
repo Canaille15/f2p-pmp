@@ -908,18 +908,37 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
           const isToday=dk===TODAY;
           const isWE=new Date(dk).getDay()===0||new Date(dk).getDay()===6;
           let bg=isWE?"#f8fafc":"#fff";
-          if(en&&showData&&eq) bg=eq.bg||eq.color||"#fff";
-          return <div key={dk} style={{border:isToday?"2px solid #6366f1":"1.5px solid #e2e8f0",borderRadius:10,overflow:"hidden",background:bg,boxShadow:isToday?"0 0 0 3px #eef2ff":"none"}}>
-            <div style={{padding:"5px 7px",background:isToday?"#1e293b":isWE?"#f1f5f9":"rgba(0,0,0,.04)",borderBottom:"1px solid rgba(0,0,0,.06)"}}>
-              <div style={{fontSize:10,fontWeight:700,color:isToday?"#fff":isWE?"#94a3b8":"#1e293b"}}>{DAYS_L[i].slice(0,3)}</div>
-              <div style={{fontSize:8,color:"#94a3b8"}}>{dk?.slice(8)}/{dk?.slice(5,7)}</div>
+          if(en?.finNuit&&!en?.equipe) bg="#eff6ff"; // bleu très clair pour fin de nuit pure
+          else if(en&&showData&&eq) bg=eq.bg||eq.color||"#fff";
+          // Couleurs pour la carte avec dégradé
+          const hasNuit2=en?.equipe2==="N";
+          const isFinNuit2=en?.finNuit;
+          // Bordure colorée selon état
+          const cardBorder=isToday?"2px solid #6366f1":hasNuit2?"2px solid #1e3a8a":isFinNuit2?"2px solid #1e3a8a":"1.5px solid #e2e8f0";
+          // Header : couleur fin de nuit si J+1, sinon couleur normale
+          const headerBg=isFinNuit2?"#1e3a8a":isToday?"#1e293b":isWE?"#f1f5f9":"rgba(0,0,0,.04)";
+          const headerColor=isFinNuit2?"#fff":isToday?"#fff":isWE?"#94a3b8":"#1e293b";
+          return <div key={dk} style={{border:cardBorder,borderRadius:10,overflow:"hidden",
+            background:bg,boxShadow:isToday?"0 0 0 3px #eef2ff":hasNuit2||isFinNuit2?"0 0 0 2px #bfdbfe":"none",
+            display:"flex",flexDirection:"column"}}>
+            {/* HEADER — couleur fin de nuit si J+1 */}
+            <div style={{padding:"5px 7px",background:headerBg,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
+              {isFinNuit2&&<div style={{fontSize:7,fontWeight:800,color:"#bfdbfe",letterSpacing:.3}}>🌙 NUIT → MATIN</div>}
+              <div style={{fontSize:10,fontWeight:700,color:headerColor}}>{DAYS_L[i].slice(0,3)}</div>
+              <div style={{fontSize:8,color:isFinNuit2?"#93c5fd":"#94a3b8"}}>{dk?.slice(8)}/{dk?.slice(5,7)}</div>
             </div>
             <div style={{padding:"5px 5px",minHeight:52,display:"flex",flexDirection:"column",gap:3}}>
               {en&&showData&&<>
+                {/* Fin de nuit J+1 */}
+                {en.finNuit&&<div style={{background:"#dbeafe",borderRadius:6,padding:"3px 5px",
+                  fontSize:8,fontWeight:700,color:"#1e3a8a",textAlign:"center",lineHeight:1.3}}>
+                  🌙 Nuit jusqu'au matin<br/>
+                  <span style={{fontWeight:400,color:"#3b82f6"}}>Libre ensuite</span>
+                </div>}
                 {/* Période principale */}
-                <span style={{display:"inline-flex",alignItems:"center",gap:3,background:eq?.bg||"#f1f5f9",color:eq?.tc||eq?.textColor||"#475569",borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
+                {code&&<span style={{display:"inline-flex",alignItems:"center",gap:3,background:eq?.bg||"#f1f5f9",color:eq?.tc||eq?.textColor||"#475569",borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
                   <span style={{width:5,height:5,borderRadius:"50%",background:eq?.dot,flexShrink:0}}/>{eq?.label||code}
-                </span>
+                </span>}
                 {/* Période 2 (RP+N ou UNU+N) */}
                 {en.equipe2&&(()=>{
                   const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];
@@ -940,12 +959,22 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
                 <option value="">—</option>
                 {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"UNU",l:"UNU"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
               </select>
-              {/* Sélecteur prise de nuit (si RP, RU ou UNU) */}
-              {(code==="RP"||code==="RU"||code==="UNU")&&<select value={en?.equipe2||""} onChange={e=>setDay(dk,e.target.value||null,true)}
-                style={{fontSize:8,border:"1px solid #bfdbfe",borderRadius:4,padding:"1px 2px",background:"#eff6ff",color:"#1e3a8a",cursor:"pointer",outline:"none"}}>
-                <option value="">+ Nuit ?</option>
-                <option value="N">🌙 Prise de nuit</option>
-              </select>}
+              {/* Bouton prise de nuit — bas de carte coloré en bleu nuit si actif */}
+              {code&&<div style={{
+                background:hasNuit2?"#1e3a8a":"transparent",
+                borderTop:hasNuit2?"none":"1px solid #f1f5f9",
+                marginTop:"auto",padding:"2px 4px",
+                borderBottomLeftRadius:8,borderBottomRightRadius:8,
+              }}>
+                <select value={en?.equipe2||""} onChange={e=>setDay(dk,e.target.value||null,true)}
+                  style={{width:"100%",fontSize:8,border:"none",
+                    background:"transparent",
+                    color:hasNuit2?"#bfdbfe":"#94a3b8",
+                    cursor:"pointer",outline:"none",fontWeight:hasNuit2?700:400}}>
+                  <option value="">🌙 + prise de nuit</option>
+                  <option value="N">🌙 Nuit ce soir ✓</option>
+                </select>
+              </div>}
             </div>
           </div>;
         })}
@@ -1011,6 +1040,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
                 setDay(dk,next||null);
               }}>
               <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
+              {en?.finNuit&&showData&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center",lineHeight:1.4}}>🌙 fin nuit<br/><span style={{fontWeight:400,fontSize:6}}>libre</span></div>}
               {code&&<div style={{fontSize:8,fontWeight:700,color:eq?.tc,background:eq?.bg,borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{eq?.label?.slice(0,4)}</div>}
               {en?.equipe2&&(()=>{const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];return <div style={{fontSize:7,fontWeight:700,color:eq2?.textColor||eq2?.tc,background:eq2?.color||eq2?.bg,borderRadius:4,padding:"1px 3px",display:"inline-block",marginTop:1}}>🌙N</div>;})()} 
               {en?.jsCode&&en.jsCode!==code&&<div style={{fontSize:7,color:"#94a3b8",fontFamily:"monospace",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{en.jsCode}</div>}
@@ -1859,60 +1889,94 @@ function ImportDeroulement({agent,onClose,onImport}){
   const fam=FAMILLES[agent?.famille||agent?.fam];
   const [year,setYear]=useState(new Date().getFullYear());
   const [month,setMonth]=useState(new Date().getMonth());
-  const [jours,setJours]=useState({});
+  const [jours,setJours]=useState({}); // {dk: {equipe, equipe2}}
   const [saved,setSaved]=useState(false);
 
-  // Générer les jours du mois sélectionné
   const daysInMonth=new Date(year,month+1,0).getDate();
   const daysList=Array.from({length:daysInMonth},(_,i)=>{
     const d=new Date(year,month,i+1);
     return {
       dk:`${year}-${String(month+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`,
-      dow:d.getDay(),
-      num:i+1,
+      dow:d.getDay(), num:i+1,
     };
   });
 
-  const EQUIPES_DISPONIBLES=[
-    {c:"M",  l:"Matinée",  bg:"#fefce8",tc:"#713f12",dot:"#ca8a04"},
-    {c:"AM", l:"Soirée",   bg:"#dcfce7",tc:"#14532d",dot:"#16a34a"},
-    {c:"N",  l:"Nuit",     bg:"#dbeafe",tc:"#1e3a8a",dot:"#1e3a8a"},
-    {c:"J",  l:"Journée",  bg:"#ffedd5",tc:"#7c2d12",dot:"#ea580c"},
-    {c:"RP", l:"RP",       bg:"#d1fae5",tc:"#065f46",dot:"#10b981",prive:true},
-    {c:"RU", l:"RU/RQ",    bg:"#fef9c3",tc:"#713f12",dot:"#eab308",prive:true},
-    {c:"CP", l:"Congé",    bg:"#e0f2fe",tc:"#0369a1",dot:"#0ea5e9",prive:true},
-    {c:"ABS",l:"Absent",   bg:"#fee2e2",tc:"#991b1b",dot:"#ef4444",prive:true},
-    {c:"FOR",l:"Formation",bg:"#fef9c3",tc:"#713f12",dot:"#eab308"},
-    {c:"DISPO",l:"Dispo",  bg:"#f0fdf4",tc:"#065f46",dot:"#10b981"},
-  ];
-
-  const setDay=(dk,code)=>{
-    setJours(prev=>code?{...prev,[dk]:code}:{...prev,[dk]:undefined});
+  // Lendemain d'une date
+  const nextDk=(dk)=>{
+    const d=new Date(dk); d.setDate(d.getDate()+1);
+    return d.toISOString().slice(0,10);
   };
 
-  const fillWeek=(dow,code)=>{
-    // Remplir tous les jours de semaine (dow) du mois
+  const EQUIPES_DISPO=[
+    {c:"M",  l:"Matinée",   bg:"#fefce8",tc:"#713f12",dot:"#ca8a04"},
+    {c:"AM", l:"Soirée",    bg:"#dcfce7",tc:"#14532d",dot:"#16a34a"},
+    {c:"N",  l:"Nuit",      bg:"#dbeafe",tc:"#1e3a8a",dot:"#1e3a8a"},
+    {c:"J",  l:"Journée",   bg:"#ffedd5",tc:"#7c2d12",dot:"#ea580c"},
+    {c:"RP", l:"RP",        bg:"#d1fae5",tc:"#065f46",dot:"#10b981",prive:true},
+    {c:"RU", l:"RU/RQ",     bg:"#fef9c3",tc:"#713f12",dot:"#eab308",prive:true},
+    {c:"UNU",l:"UNU",       bg:"#f5f3ff",tc:"#5b21b6",dot:"#8b5cf6"},
+    {c:"CP", l:"Congé",     bg:"#e0f2fe",tc:"#0369a1",dot:"#0ea5e9",prive:true},
+    {c:"ABS",l:"Absent",    bg:"#fee2e2",tc:"#991b1b",dot:"#ef4444",prive:true},
+    {c:"FOR",l:"Formation", bg:"#fef9c3",tc:"#713f12",dot:"#eab308"},
+    {c:"DISPO",l:"Dispo",   bg:"#f0fdf4",tc:"#065f46",dot:"#10b981"},
+  ];
+
+  const setEquipe=(dk,equipe)=>{
+    setJours(prev=>equipe
+      ?{...prev,[dk]:{...(prev[dk]||{}),equipe}}
+      :{...prev,[dk]:prev[dk]?.equipe2?{...prev[dk],equipe:undefined}:undefined}
+    );
+  };
+
+  const setNuit=(dk,hasNuit)=>{
+    setJours(prev=>{
+      const next={...prev};
+      if(hasNuit){
+        // Ajouter prise de nuit sur J
+        next[dk]={...(next[dk]||{}),equipe2:"N"};
+        // Ajouter fin de nuit sur J+1
+        const j1=nextDk(dk);
+        next[j1]={...(next[j1]||{}),finNuit:true};
+      } else {
+        // Retirer prise de nuit sur J
+        if(next[dk]){const {equipe2,...rest}=next[dk];next[dk]=Object.keys(rest).length?rest:undefined;}
+        // Retirer fin de nuit sur J+1
+        const j1=nextDk(dk);
+        if(next[j1]){const {finNuit,...rest}=next[j1];next[j1]=Object.keys(rest).length?rest:undefined;}
+      }
+      return next;
+    });
+  };
+
+  const fillWeek=(dow,equipe)=>{
     const next={...jours};
     daysList.forEach(d=>{
-      if(d.dow===dow) next[d.dk]=code||undefined;
+      if(d.dow===dow) next[d.dk]=equipe?{...(next[d.dk]||{}),equipe}:undefined;
     });
     setJours(next);
   };
 
   const handleSave=()=>{
-    const result=Object.entries(jours)
-      .filter(([,c])=>c)
-      .map(([dk,equipe])=>{
-        const eq=EQUIPES_DISPONIBLES.find(e=>e.c===equipe);
-        return {date:dk,equipe,prive:eq?.prive||false,
-          impressionAt:new Date().toISOString()};
-      });
+    const result=[];
+    Object.entries(jours).forEach(([dk,val])=>{
+      if(!val)return;
+      const eq=EQUIPES_DISPO.find(e=>e.c===val.equipe);
+      if(val.equipe){
+        result.push({date:dk,equipe:val.equipe,equipe2:val.equipe2||null,
+          prive:eq?.prive||false,impressionAt:new Date().toISOString()});
+      } else if(val.finNuit){
+        // Jour J+1 : fin de nuit uniquement
+        result.push({date:dk,equipe:"N_FIN",equipe2:null,finNuit:true,
+          prive:false,impressionAt:new Date().toISOString()});
+      }
+    });
     onImport(result);
     setSaved(true);
-    setTimeout(onClose,1000);
+    setTimeout(onClose,800);
   };
 
   const JOURS_S=["Di","Lu","Ma","Me","Je","Ve","Sa"];
+  const totalSaisis=Object.values(jours).filter(v=>v?.equipe).length;
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",zIndex:600,
@@ -1934,30 +1998,27 @@ function ImportDeroulement({agent,onClose,onImport}){
             color:"#fff",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:14}}>✕</button>
         </div>
 
-        {/* Sélecteur mois/année */}
+        {/* Sélecteur mois */}
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 16px",
           borderBottom:"1px solid #f1f5f9",flexShrink:0,background:"#f8fafc"}}>
-          <button onClick={()=>{
-            if(month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1);
-          }} style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>‹</button>
+          <button onClick={()=>{if(month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1);}}
+            style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>‹</button>
           <div style={{flex:1,textAlign:"center",fontWeight:800,fontSize:14,color:"#1e293b"}}>
             {MOIS_L[month]} {year}
           </div>
-          <button onClick={()=>{
-            if(month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1);
-          }} style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>›</button>
+          <button onClick={()=>{if(month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1);}}
+            style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>›</button>
         </div>
 
-        {/* Remplissage rapide par jour de semaine */}
+        {/* Remplissage rapide */}
         <div style={{padding:"8px 16px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:6,letterSpacing:.5}}>REMPLISSAGE RAPIDE PAR JOUR</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:6,letterSpacing:.5}}>REMPLISSAGE RAPIDE</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
             {[1,2,3,4,5].map(dow=>(
-              <select key={dow} onChange={e=>fillWeek(dow,e.target.value)}
-                style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 6px",
-                  fontSize:11,cursor:"pointer",background:"#fff",color:"#1e293b"}}>
+              <select key={dow} onChange={e=>fillWeek(dow,e.target.value||null)}
+                style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"3px 5px",fontSize:11,cursor:"pointer",background:"#fff"}}>
                 <option value="">{JOURS_S[dow]}</option>
-                {EQUIPES_DISPONIBLES.map(eq=><option key={eq.c} value={eq.c}>{eq.l}</option>)}
+                {EQUIPES_DISPO.map(eq=><option key={eq.c} value={eq.c}>{eq.l}</option>)}
                 <option value="">— Vider</option>
               </select>
             ))}
@@ -1965,36 +2026,64 @@ function ImportDeroulement({agent,onClose,onImport}){
         </div>
 
         {/* Grille des jours */}
-        <div style={{overflowY:"auto",flex:1,padding:"10px 16px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:6}}>
-            {["Di","Lu","Ma","Me","Je","Ve","Sa"].map(d=>(
-              <div key={d} style={{textAlign:"center",fontSize:9,fontWeight:700,color:"#94a3b8",padding:"3px 0"}}>{d}</div>
+        <div style={{overflowY:"auto",flex:1,padding:"10px 14px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+            {JOURS_S.map(d=>(
+              <div key={d} style={{textAlign:"center",fontSize:9,fontWeight:700,color:"#94a3b8",padding:"2px 0"}}>{d}</div>
             ))}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
-            {/* Cases vides avant le 1er */}
-            {Array.from({length:daysList[0]?.dow||0}).map((_,i)=>(
-              <div key={`e${i}`}/>
-            ))}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+            {Array.from({length:daysList[0]?.dow||0}).map((_,i)=><div key={`e${i}`}/>)}
             {daysList.map(({dk,dow,num})=>{
-              const code=jours[dk];
-              const eq=code?EQUIPES_DISPONIBLES.find(e=>e.c===code):null;
+              const val=jours[dk];
+              const eq=val?.equipe?EQUIPES_DISPO.find(e=>e.c===val.equipe):null;
+              const hasNuit=val?.equipe2==="N";
+              const isFinNuit=val?.finNuit;
               const isWE=dow===0||dow===6;
               return(
                 <div key={dk} style={{borderRadius:8,overflow:"hidden",
-                  border:`1.5px solid ${code?eq?.dot||"#e2e8f0":"#e2e8f0"}`,
-                  background:code?eq?.bg:isWE?"#f8fafc":"#fff"}}>
+                  border:`1.5px solid ${val?.equipe?eq?.dot||"#e2e8f0":isFinNuit?"#bfdbfe":"#e2e8f0"}`,
+                  background:val?.equipe?eq?.bg:isFinNuit?"#eff6ff":isWE?"#f8fafc":"#fff",
+                  minHeight:72,display:"flex",flexDirection:"column"}}>
+                  {/* Numéro du jour */}
                   <div style={{textAlign:"center",fontSize:9,fontWeight:700,
                     color:isWE?"#94a3b8":"#1e293b",padding:"2px 0",
                     background:"rgba(0,0,0,.04)"}}>{num}</div>
-                  <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
-                    style={{width:"100%",border:"none",background:"transparent",
-                      fontSize:8,textAlign:"center",cursor:"pointer",
-                      color:eq?.tc||"#94a3b8",fontWeight:code?700:400,
+                  {/* Contenu */}
+                  <div style={{padding:"2px 3px",flex:1,display:"flex",flexDirection:"column",gap:2}}>
+                    {/* Badge fin de nuit (J+1) */}
+                    {isFinNuit&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",
+                      background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center"}}>
+                      🌙 fin nuit
+                    </div>}
+                    {/* Badge équipe principale */}
+                    {val?.equipe&&<div style={{fontSize:7,fontWeight:700,color:eq?.tc,
+                      background:eq?.bg,borderRadius:3,padding:"1px 3px",textAlign:"center"}}>
+                      {eq?.l||val.equipe}
+                    </div>}
+                    {/* Badge prise de nuit */}
+                    {hasNuit&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",
+                      background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center"}}>
+                      🌙 nuit
+                    </div>}
+                  </div>
+                  {/* Sélecteur équipe */}
+                  <select value={val?.equipe||""} onChange={e=>setEquipe(dk,e.target.value||null)}
+                    style={{width:"100%",border:"none",borderTop:"1px solid #f1f5f9",
+                      background:"transparent",fontSize:8,cursor:"pointer",
+                      color:eq?.tc||"#94a3b8",fontWeight:val?.equipe?700:400,
                       outline:"none",padding:"2px 1px"}}>
                     <option value="">—</option>
-                    {EQUIPES_DISPONIBLES.map(e=><option key={e.c} value={e.c}>{e.l}</option>)}
+                    {EQUIPES_DISPO.map(e=><option key={e.c} value={e.c}>{e.l}</option>)}
                   </select>
+                  {/* Toggle prise de nuit */}
+                  {val?.equipe&&<button onClick={()=>setNuit(dk,!hasNuit)}
+                    style={{width:"100%",border:"none",borderTop:"1px solid #f1f5f9",
+                      background:hasNuit?"#dbeafe":"#f8fafc",
+                      color:hasNuit?"#1e3a8a":"#94a3b8",
+                      fontSize:8,cursor:"pointer",padding:"2px 0",fontWeight:hasNuit?700:400}}>
+                    {hasNuit?"🌙 nuit ✓":"🌙 +nuit"}
+                  </button>}
                 </div>
               );
             })}
@@ -2003,17 +2092,17 @@ function ImportDeroulement({agent,onClose,onImport}){
 
         {/* Footer */}
         <div style={{padding:"12px 16px",borderTop:"1px solid #e2e8f0",
-          display:"flex",gap:8,flexShrink:0}}>
+          display:"flex",gap:8,flexShrink:0,background:"#f8fafc"}}>
           <button onClick={onClose}
             style={{flex:1,background:"#f1f5f9",color:"#475569",border:"none",
               borderRadius:10,padding:"11px 0",cursor:"pointer",fontSize:13,fontWeight:700}}>
             Annuler
           </button>
-          <button onClick={handleSave} disabled={Object.values(jours).filter(Boolean).length===0}
-            style={{flex:2,background:Object.values(jours).filter(Boolean).length>0?"#0f4c81":"#e2e8f0",
-              color:Object.values(jours).filter(Boolean).length>0?"#fff":"#94a3b8",
-              border:"none",borderRadius:10,padding:"11px 0",cursor:"pointer",fontSize:13,fontWeight:800}}>
-            {saved?"✅ Enregistré !`":"💾 Enregistrer "+Object.values(jours).filter(Boolean).length+" jour(s)"}
+          <button onClick={handleSave} disabled={totalSaisis===0}
+            style={{flex:2,background:totalSaisis>0?"#0f4c81":"#e2e8f0",
+              color:totalSaisis>0?"#fff":"#94a3b8",border:"none",
+              borderRadius:10,padding:"11px 0",cursor:"pointer",fontSize:13,fontWeight:800}}>
+            {saved?"✅ Enregistré !":"💾 Enregistrer "+totalSaisis+" jour(s)"}
           </button>
         </div>
       </div>
@@ -2436,7 +2525,16 @@ export default function App(){
       jours.forEach(j=>{
         const existing=next[`${agentId}-${j.date}`];
         if(!existing||!existing.impressionAt||(j.impressionAt&&j.impressionAt>existing.impressionAt)){
-          next[`${agentId}-${j.date}`]={equipe:j.equipe,horaires:EQ[j.equipe]?.heures||"",poste:j.jsCode||"",jsCode:j.jsCode||"",prive:j.prive||false,impressionAt:j.impressionAt||null};
+          next[`${agentId}-${j.date}`]={
+            equipe:j.equipe,
+            equipe2:j.equipe2||null,
+            finNuit:j.finNuit||false,
+            horaires:EQ[j.equipe]?.heures||"",
+            poste:j.jsCode||"",
+            jsCode:j.jsCode||"",
+            prive:j.prive||false,
+            impressionAt:j.impressionAt||null,
+          };
         }
       });
       return next;
