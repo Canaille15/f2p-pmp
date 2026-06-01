@@ -707,6 +707,12 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
   const [showHab,setShowHab]=useState(false);
   const [calView,setCalView]=useState("semaine");
   const [monthOff,setMonthOff]=useState(0);
+  const _today=new Date();
+  const _monthDate=new Date(_today.getFullYear(),_today.getMonth()+monthOff,1);
+  const curYear=_monthDate.getFullYear();
+  const curMonth=_monthDate.getMonth();
+  const monthDates=useMemo(()=>getMonthDates(curYear,curMonth),[curYear,curMonth]);
+  const firstDay=useMemo(()=>firstDayOfMonth(curYear,curMonth),[curYear,curMonth]);
   const [showQuit,setShowQuit]=useState(false);
   const [showDemandeConges,setShowDemandeConges]=useState(false);
   const [showAccordConges,setShowAccordConges]=useState(false);
