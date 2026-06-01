@@ -361,10 +361,10 @@ function PinModal({agent,onSuccess,onClose,mode="verify",currentPin}){
   useEffect(()=>{refs[0].current?.focus();},[step]);
 
   const handleDigit=(i,v,arr,setArr)=>{
-    if(!/^\d?$/.test(v))return;
-    const next=[...arr];next[i]=v;setArr(next);
-    if(v&&i<3)refs[i+1].current?.focus();
-    if(!v&&i>0)refs[i-1].current?.focus();
+    const digit=v.replace(/\D/g,'').slice(-1);
+    const next=[...arr];next[i]=digit;setArr(next);
+    if(digit&&i<3) setTimeout(()=>refs[i+1].current?.focus(),10);
+    if(!digit&&i>0) setTimeout(()=>refs[i-1].current?.focus(),10);
   };
   const pinStr=digits.join("");const confStr=confirm.join("");
 
@@ -2010,10 +2010,15 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   useEffect(()=>{ pinRefs[0].current?.focus(); },[]);
 
   const handlePinDigit = (i, v, arr, setArr, refs) => {
-    if (!/^\d?$/.test(v)) return;
-    const next = [...arr]; next[i] = v; setArr(next);
-    if (v && i < 4) refs[i+1].current?.focus();
-    if (!v && i > 0) refs[i-1].current?.focus();
+    // Prendre seulement le dernier chiffre saisi (cas collage)
+    const digit = v.replace(/\D/g, '').slice(-1);
+    const next = [...arr]; next[i] = digit; setArr(next);
+    if (digit && i < 4) {
+      setTimeout(() => refs[i+1].current?.focus(), 10);
+    }
+    if (!digit && i > 0) {
+      setTimeout(() => refs[i-1].current?.focus(), 10);
+    }
   };
 
   const handleLogin = () => {
@@ -2488,10 +2493,10 @@ export default function App(){
                 <input key={i} ref={pinRefs[i]} type="password" inputMode="numeric" maxLength={1}
                   value={pin[i]}
                   onChange={e=>{
-                    if(!/^\d?$/.test(e.target.value))return;
-                    const next=[...pin];next[i]=e.target.value;setPin(next);
-                    if(e.target.value&&i<4)pinRefs[i+1].current?.focus();
-                    if(!e.target.value&&i>0)pinRefs[i-1].current?.focus();
+                    const digit=e.target.value.replace(/[^0-9]/g,'').slice(-1);
+                    const next=[...pin];next[i]=digit;setPin(next);
+                    if(digit&&i<4) setTimeout(()=>pinRefs[i+1].current?.focus(),10);
+                    if(!digit&&i>0) setTimeout(()=>pinRefs[i-1].current?.focus(),10);
                     setErr("");
                   }}
                   onKeyDown={e=>{if(e.key==="Enter"&&pin.every(d=>d))tryLogin();if(e.key==="Backspace"&&!pin[i]&&i>0)pinRefs[i-1].current?.focus();}}
