@@ -118,26 +118,28 @@ const COMPTEUR_COLORS = {
 
 // Équipes avec flag prive et couleur agenda perso
 const EQUIPES = [
-  { code:"M",    label:"Matinée",       heures:"06h10–14h17", color:"#fef3c7", textColor:"#92400e", dot:"#f59e0b", prive:false, compteur:"TRAVAIL" },
-  { code:"AM",   label:"Soirée",        heures:"14h05–22h17", color:"#dbeafe", textColor:"#1e40af", dot:"#3b82f6", prive:false, compteur:"TRAVAIL" },
-  { code:"N",    label:"Nuit",          heures:"22h15–06h17", color:"#ede9fe", textColor:"#5b21b6", dot:"#8b5cf6", prive:false, compteur:"TRAVAIL" },
-  { code:"J",    label:"Journée",       heures:"08h00–17h45", color:"#d1fae5", textColor:"#065f46", dot:"#10b981", prive:false, compteur:"TRAVAIL" },
-  { code:"JF",   label:"Journée/F.",    heures:"",            color:"#bbf7d0", textColor:"#14532d", dot:"#22c55e", prive:false, compteur:"TRAVAIL" },
-  { code:"RFT",  label:"Renfort",       heures:"Variable",    color:"#fce7f3", textColor:"#9d174d", dot:"#ec4899", prive:false, compteur:"TRAVAIL" },
-  { code:"RP",   label:"RP",            heures:"",            color:"#d1fae5", textColor:"#065f46", dot:"#10b981", prive:true,  compteur:"RP"      },
-  { code:"RU",   label:"RU",            heures:"",            color:"#fef9c3", textColor:"#713f12", dot:"#eab308", prive:true,  compteur:"RU"      },
-  { code:"RQ",   label:"RQ",            heures:"",            color:"#fef9c3", textColor:"#713f12", dot:"#eab308", prive:true,  compteur:"RU"      },
-  { code:"TC",   label:"TC",            heures:"",            color:"#dbeafe", textColor:"#1e40af", dot:"#3b82f6", prive:true,  compteur:"TC"      },
-  { code:"RN",   label:"RN",            heures:"",            color:"#ede9fe", textColor:"#5b21b6", dot:"#8b5cf6", prive:true,  compteur:"RN"      },
-  { code:"CP",   label:"Congé",         heures:"",            color:"#e0f2fe", textColor:"#0369a1", dot:"#0ea5e9", prive:true,  compteur:null      },
-  { code:"FOR",  label:"Formation",     heures:"09h00–17h45", color:"#fef9c3", textColor:"#713f12", dot:"#eab308", prive:true,  compteur:null      },
-  { code:"ABS",  label:"Absent",        heures:"",            color:"#fee2e2", textColor:"#991b1b", dot:"#ef4444", prive:true,  compteur:null      },
-  { code:"FERIE",label:"Férié",         heures:"",            color:"#fce7f3", textColor:"#9d174d", dot:"#ec4899", prive:true,  compteur:null      },
-  { code:"NU",   label:"NU",            heures:"",            color:"#f1f5f9", textColor:"#64748b", dot:"#94a3b8", prive:true,  compteur:null      },
-  { code:"RPA",  label:"RPA",           heures:"",            color:"#fef0ff", textColor:"#7e22ce", dot:"#a855f7", prive:true,  compteur:null      },
-  { code:"DISPO",label:"Disponible",    heures:"",            color:"#ecfdf5", textColor:"#065f46", dot:"#10b981", prive:false, compteur:null      },
-  ...Object.keys(CODES_FETES).map(k=>({ code:k, label:k, heures:"", color:"#fdf2f8", textColor:"#9d174d", dot:"#ec4899", prive:true, compteur:"FETE" })),
-  { code:"UNU", label:"UNU", heures:"", color:"#f5f3ff", textColor:"#5b21b6", dot:"#8b5cf6", prive:false, compteur:"RU" },
+  // ── TRAVAIL — fond intense, texte blanc ──────────────────────────────────
+  { code:"M",    label:"Matinée",    heures:"06h10–14h17", color:"#ca8a04", textColor:"#fff", dot:"#fef08a", prive:false, compteur:"travail", bg:"#ca8a04" },
+  { code:"AM",   label:"Soirée",     heures:"14h05–22h17", color:"#7c3aed", textColor:"#fff", dot:"#ddd6fe", prive:false, compteur:"travail", bg:"#7c3aed" },
+  { code:"N",    label:"Nuit",       heures:"22h15–06h17", color:"#1e3a8a", textColor:"#fff", dot:"#bfdbfe", prive:false, compteur:"travail", bg:"#1e3a8a" },
+  { code:"J",    label:"Journée",    heures:"08h00–17h45", color:"#ea580c", textColor:"#fff", dot:"#fed7aa", prive:false, compteur:"travail", bg:"#ea580c" },
+  { code:"JF",   label:"Jour/Fête",  heures:"",            color:"#ea580c", textColor:"#fff", dot:"#fed7aa", prive:false, compteur:"travail", bg:"#ea580c" },
+  // ── REPOS / RÉSERVISTE — fond coloré, texte blanc ────────────────────────
+  { code:"RP",   label:"RP",         heures:"",            color:"#16a34a", textColor:"#fff", dot:"#bbf7d0", prive:true,  compteur:"RP",      bg:"#16a34a" },
+  { code:"RU",   label:"RU",         heures:"",            color:"#d97706", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#d97706" },
+  { code:"RQ",   label:"RQ",         heures:"",            color:"#d97706", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#d97706" },
+  { code:"TC",   label:"TC",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
+  { code:"RN",   label:"RN",         heures:"",            color:"#4338ca", textColor:"#fff", dot:"#e0e7ff", prive:true,  compteur:"RN",      bg:"#4338ca" },
+  { code:"NU",   label:"NU",         heures:"",            color:"#475569", textColor:"#fff", dot:"#cbd5e1", prive:false, compteur:"RU",      bg:"#475569" },
+  { code:"CA",   label:"Congé Ann.", heures:"",            color:"#0369a1", textColor:"#fff", dot:"#bae6fd", prive:true,  compteur:"CP",      bg:"#0369a1" },
+  { code:"CP",   label:"Congé",      heures:"",            color:"#0369a1", textColor:"#fff", dot:"#bae6fd", prive:true,  compteur:"CP",      bg:"#0369a1" },
+  { code:"MA",   label:"Maladie",    heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
+  { code:"VT",   label:"Tps Partiel",heures:"",            color:"#9333ea", textColor:"#fff", dot:"#e9d5ff", prive:true,  compteur:"ABS",     bg:"#9333ea" },
+  { code:"ABS",  label:"Absent",     heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
+  { code:"FOR",  label:"Formation",  heures:"",            color:"#b45309", textColor:"#fff", dot:"#fef9c3", prive:false, compteur:"FOR",     bg:"#b45309" },
+  { code:"DISPO",label:"Dispo",      heures:"",            color:"#059669", textColor:"#fff", dot:"#d1fae5", prive:false, compteur:"DISPO",   bg:"#059669" },
+  { code:"VM",   label:"VM",         heures:"",            color:"#6b7280", textColor:"#fff", dot:"#f3f4f6", prive:true,  compteur:"ABS",     bg:"#6b7280" },
+  ...Object.keys(CODES_FETES).map(k=>({ code:k, label:k, heures:"", color:"#be185d", textColor:"#fff", dot:"#fdf2f8", prive:true, compteur:"FETE", bg:"#be185d" })),
 ];
 const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
 
@@ -145,69 +147,13 @@ const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
 const EQ_COLORS = Object.fromEntries(
   Object.entries(EQ).map(([k,v])=>[k,{
     ...v,
-    bg: v.color||v.bg,
+    bg: v.bg||v.color,
     tc: v.textColor||v.tc,
     dot: v.dot,
     label: v.label,
     prive: v.prive||false,
   }])
 );
-
-const DP_MAP = {
-  "PICCL-":"M","PICCLO":"AM","PICCLX":"N",
-  "PIADJ-":"M","PIADJO":"AM","PIADJX":"N",
-  "PILNE-":"M","PILNEO":"AM","PILNEX":"N",
-  "PILNO-":"M","PILNOO":"AM","PILNOX":"N",
-  "PIVGD-":"M","PIVGDO":"AM",
-  "PILCL-":"M","PILCLO":"AM","PILCLX":"N",
-  "PAAC1-":"M","PAAC1O":"AM","PAAC1X":"N",
-  "PAAC2-":"M","PAAC2O":"AM","PAAC2X":"N",
-  "PAACXX":"N",
-  "RP":"RP","RU":"RU","RQ":"RQ","TC":"TC","RN":"RN",
-  "CP":"CP","FOR":"FOR","ABS":"ABS","FERIE":"FERIE","NU":"NU","DISPO":"DISPO",
-  ...Object.fromEntries(Object.keys(CODES_FETES).map(k=>[k,k])),
-  // Codes formation sur poste (suffixe /)
-  "PIADJ-/":"M","PICCL-/":"M","PILCL-/":"M","PILNE-/":"M","PILNO-/":"M","PIVGD-/":"M",
-  "PIADJO/":"AM","PICCLO/":"AM","PILCLO/":"AM","PILNEO/":"AM","PILNOO/":"AM",
-  "PIADJX/":"N","PICCLX/":"N","PILCLX/":"N","PILNEX/":"N","PILNOX/":"N",
-  "PAAC1-/":"M","PAAC2-/":"M","PAAC1O/":"AM","PAAC2O/":"AM","PAAC1X/":"N","PAAC2X/":"N",
-  "/PAASMJ":"J",
-  // Autres codes journée
-  "K-PRCI":"J","A-PRCI":"J","F-PAR":"J","AFOPRCI":"J","PPRCI":"J",
-  // Codes privés supplémentaires
-  "RPA":"RPA","#SD%":"J","#PPRCI":"J",
-};
-
-const PERIOD_COLORS = {
-  M:    {bg:"#fefce8", bd:"#fde047", hd:"#ca8a04"}, // Jaune doré — bg ivoire, header amber-600
-  J:    {bg:"#fff7ed", bd:"#fed7aa", hd:"#ea580c"}, // Orange   — bg pêche, header orange-600
-  AM:   {bg:"#f0fdf4", bd:"#86efac", hd:"#16a34a"}, // Vert     — bg vert très clair, header green-600
-  N:    {bg:"#eff6ff", bd:"#93c5fd", hd:"#1e3a8a"}, // Bleu marine — bg bleu clair, header blue-900
-  DIVERS:{bg:"#fdf4ff",bd:"#e9d5ff",hd:"#7c3aed"},
-};;
-
-const NIV_HAB = [
-  { code:"EN_COURS", label:"En cours", color:"#fef3c7", textColor:"#92400e", dot:"#f59e0b" },
-  { code:"VALIDE",   label:"Validée",  color:"#d1fae5", textColor:"#065f46", dot:"#10b981" },
-];
-const HAB_PRCI = [
-  ...POSTES_PRCI_3x8.map(p=>({code:p.code,label:p.label,type:"3x8",famille:"PRCI"})),
-  ...POSTES_JOURNEE.filter(p=>p.famille==="PRCI").map(p=>({code:p.jsCode,label:p.label,type:"J",famille:"PRCI"})),
-];
-const HAB_PAR = [
-  ...POSTES_PAR_3x8.map(p=>({code:p.code,label:p.label,type:"3x8",famille:"PAR"})),
-  ...POSTES_JOURNEE.filter(p=>p.famille==="PAR").map(p=>({code:p.jsCode,label:p.label,type:"J",famille:"PAR"})),
-];
-
-const DAYS_S=["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
-const DAYS_L=["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
-const MOIS_L=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-
-function getWeekDates(offset=0){
-  const now=new Date();const day=now.getDay();
-  const diff=day===0?-6:1-day;
-  const mon=new Date(now);mon.setDate(now.getDate()+diff+offset*7);
-  return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d.toISOString().slice(0,10);});
 }
 const TODAY=new Date().toISOString().slice(0,10);
 function dKey(y,m,d){return`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
@@ -957,7 +903,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
               <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
                 style={{fontSize:8,border:"1px solid #e2e8f0",borderRadius:4,padding:"1px 2px",background:"rgba(255,255,255,.85)",color:"#475569",marginTop:"auto",cursor:"pointer",outline:"none"}}>
                 <option value="">—</option>
-                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"UNU",l:"UNU"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
+                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"NU",l:"NU"},{c:"CA",l:"Congé Ann."},{c:"MA",l:"Maladie"},{c:"VT",l:"Tps Partiel"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
               </select>
               {/* Bouton prise de nuit — bas de carte coloré en bleu nuit si actif */}
               {code&&<div style={{
@@ -1034,7 +980,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
             }
             return <div key={dk} style={{background:bg,border:isToday?"2px solid #6366f1":"1px solid #e2e8f0",borderRadius:8,padding:"4px 5px",minHeight:52,cursor:"pointer",position:"relative",boxShadow:isToday?"0 0 0 2px #eef2ff":"none"}}
               onClick={()=>{
-                const codes=["","M","AM","N","J","RP","RU","CP","ABS","FOR"];
+                const codes=["","M","AM","N","J","RP","RU","NU","CA","MA","VT","FOR","DISPO"];
                 const cur=codes.indexOf(code||"");
                 const next=codes[(cur+1)%codes.length];
                 setDay(dk,next||null);
@@ -1908,17 +1854,21 @@ function ImportDeroulement({agent,onClose,onImport}){
   };
 
   const EQUIPES_DISPO=[
-    {c:"M",  l:"Matinée",   bg:"#fefce8",tc:"#713f12",dot:"#ca8a04"},
-    {c:"AM", l:"Soirée",    bg:"#dcfce7",tc:"#14532d",dot:"#16a34a"},
-    {c:"N",  l:"Nuit",      bg:"#dbeafe",tc:"#1e3a8a",dot:"#1e3a8a"},
-    {c:"J",  l:"Journée",   bg:"#ffedd5",tc:"#7c2d12",dot:"#ea580c"},
-    {c:"RP", l:"RP",        bg:"#d1fae5",tc:"#065f46",dot:"#10b981",prive:true},
-    {c:"RU", l:"RU/RQ",     bg:"#fef9c3",tc:"#713f12",dot:"#eab308",prive:true},
-    {c:"UNU",l:"UNU",       bg:"#f5f3ff",tc:"#5b21b6",dot:"#8b5cf6"},
-    {c:"CP", l:"Congé",     bg:"#e0f2fe",tc:"#0369a1",dot:"#0ea5e9",prive:true},
-    {c:"ABS",l:"Absent",    bg:"#fee2e2",tc:"#991b1b",dot:"#ef4444",prive:true},
-    {c:"FOR",l:"Formation", bg:"#fef9c3",tc:"#713f12",dot:"#eab308"},
-    {c:"DISPO",l:"Dispo",   bg:"#f0fdf4",tc:"#065f46",dot:"#10b981"},
+    // Travail — fond intense, texte blanc
+    {c:"M",    l:"Matinée",    bg:"#ca8a04",tc:"#fff",dot:"#fef08a"},
+    {c:"AM",   l:"Soirée",     bg:"#7c3aed",tc:"#fff",dot:"#ddd6fe"},
+    {c:"N",    l:"Nuit",       bg:"#1e3a8a",tc:"#fff",dot:"#bfdbfe"},
+    {c:"J",    l:"Journée",    bg:"#ea580c",tc:"#fff",dot:"#fed7aa"},
+    // Repos / Réserviste — fond coloré, texte blanc
+    {c:"RP",   l:"RP",         bg:"#16a34a",tc:"#fff",dot:"#bbf7d0",prive:true},
+    {c:"RU",   l:"RU/RQ",      bg:"#d97706",tc:"#fff",dot:"#fef9c3",prive:true},
+    {c:"NU",   l:"NU",         bg:"#475569",tc:"#fff",dot:"#cbd5e1"},
+    {c:"CA",   l:"Congé Ann.", bg:"#0369a1",tc:"#fff",dot:"#bae6fd",prive:true},
+    {c:"MA",   l:"Maladie",    bg:"#dc2626",tc:"#fff",dot:"#fecaca",prive:true},
+    {c:"VT",   l:"Tps Partiel",bg:"#9333ea",tc:"#fff",dot:"#e9d5ff",prive:true},
+    {c:"ABS",  l:"Absent",     bg:"#dc2626",tc:"#fff",dot:"#fecaca",prive:true},
+    {c:"FOR",  l:"Formation",  bg:"#b45309",tc:"#fff",dot:"#fef9c3"},
+    {c:"DISPO",l:"Dispo",      bg:"#059669",tc:"#fff",dot:"#d1fae5"},
   ];
 
   const setEquipe=(dk,equipe)=>{
