@@ -1814,134 +1814,170 @@ function EchangesView({agents,schedule,currentAgent,agentProfiles,setAgentProfil
 
 // ─── IMPORT DÉROULÉ PRÉVISIONNEL ─────────────────────────────────────────────
 function ImportDeroulement({agent,onClose,onImport}){
-  const [step,setStep]=useState("choice");
-  const [aiResult,setAiResult]=useState(null);
-  const [error,setError]=useState("");
-  const [manualYear,setManualYear]=useState(new Date().getFullYear());
-  const [manualMonth,setManualMonth]=useState(new Date().getMonth());
-  const [manualDays,setManualDays]=useState({});
-  const fam=FAMILLES[agent.famille];
+  const fam=FAMILLES[agent?.famille||agent?.fam];
+  const [year,setYear]=useState(new Date().getFullYear());
+  const [month,setMonth]=useState(new Date().getMonth());
+  const [jours,setJours]=useState({});
+  const [saved,setSaved]=useState(false);
 
-  const allCodes=[
-    ...POSTES_PRCI_3x8.flatMap(p=>[{c:p.M,l:`${p.label} M`},{c:p.AM,l:`${p.label} AM`},{c:p.N,l:`${p.label} N`}].filter(x=>x.c)),
-    ...POSTES_PAR_3x8.flatMap(p=>[{c:p.M,l:`${p.label} M`},{c:p.AM,l:`${p.label} AM`},{c:p.N,l:`${p.label} N`}].filter(x=>x.c)),
-    {c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},{c:"CP",l:"Congé"},{c:"FOR",l:"Formation"},{c:"ABS",l:"Absent"},
-    {c:"FERIE",l:"Férié"},{c:"NU",l:"NU"},{c:"DISPO",l:"Dispo"},
-    ...Object.keys(CODES_FETES).map(k=>({c:k,l:CODES_FETES[k]})),
+  // Générer les jours du mois sélectionné
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const daysList=Array.from({length:daysInMonth},(_,i)=>{
+    const d=new Date(year,month,i+1);
+    return {
+      dk:`${year}-${String(month+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`,
+      dow:d.getDay(),
+      num:i+1,
+    };
+  });
+
+  const EQUIPES_DISPONIBLES=[
+    {c:"M",  l:"Matinée",  bg:"#fefce8",tc:"#713f12",dot:"#ca8a04"},
+    {c:"AM", l:"Soirée",   bg:"#dcfce7",tc:"#14532d",dot:"#16a34a"},
+    {c:"N",  l:"Nuit",     bg:"#dbeafe",tc:"#1e3a8a",dot:"#1e3a8a"},
+    {c:"J",  l:"Journée",  bg:"#ffedd5",tc:"#7c2d12",dot:"#ea580c"},
+    {c:"RP", l:"RP",       bg:"#d1fae5",tc:"#065f46",dot:"#10b981",prive:true},
+    {c:"RU", l:"RU/RQ",    bg:"#fef9c3",tc:"#713f12",dot:"#eab308",prive:true},
+    {c:"CP", l:"Congé",    bg:"#e0f2fe",tc:"#0369a1",dot:"#0ea5e9",prive:true},
+    {c:"ABS",l:"Absent",   bg:"#fee2e2",tc:"#991b1b",dot:"#ef4444",prive:true},
+    {c:"FOR",l:"Formation",bg:"#fef9c3",tc:"#713f12",dot:"#eab308"},
+    {c:"DISPO",l:"Dispo",  bg:"#f0fdf4",tc:"#065f46",dot:"#10b981"},
   ];
 
-  const callAI=async(content)=>{
-    setStep("loading");
-    try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[...content,{type:"text",
-          text:`Tu analyses un Déroulé Prévisionnel SNCF pour ${agent.prenom} ${agent.nom}.
-Extrais TOUTES les affectations jour par jour pour chaque mois visible.
-Retourne UNIQUEMENT un JSON valide sans markdown :
-{"agent":"NOM PRENOM","annee":2026,"jours":[{"date":"YYYY-MM-DD","jsCode":"PICCL-","equipe":"M","prive":false,"impressionAt":"YYYY-MM-DD HH:MM"}]}
-Règles : code finit par - → M, O → AM, X → N. Codes RP/RU/RQ/CP/FOR/ABS/FERIE/NU/F1..F0/VN → prive:true.
-Si le document a une date et heure d'impression, utilise-la pour impressionAt.`}]}]})});
-      const data=await res.json();
-      const raw=data.content?.map(c=>c.text||"").join("")||"";
-      const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
-      setAiResult(parsed);setStep("result");
-    }catch(e){setError("Erreur : "+e.message);setStep("result");}
+  const setDay=(dk,code)=>{
+    setJours(prev=>code?{...prev,[dk]:code}:{...prev,[dk]:undefined});
   };
 
-  const handleFile=async(e,isPdf)=>{
-    const file=e.target.files[0];if(!file)return;
-    const reader=new FileReader();
-    reader.onload=async()=>{
-      const b64=reader.result.split(",")[1];const mt=isPdf?"application/pdf":file.type;
-      await callAI([isPdf?{type:"document",source:{type:"base64",media_type:mt,data:b64}}:{type:"image",source:{type:"base64",media_type:mt,data:b64}}]);
-    };
-    reader.readAsDataURL(file);
+  const fillWeek=(dow,code)=>{
+    // Remplir tous les jours de semaine (dow) du mois
+    const next={...jours};
+    daysList.forEach(d=>{
+      if(d.dow===dow) next[d.dk]=code||undefined;
+    });
+    setJours(next);
   };
 
-  const daysInMonth=new Date(manualYear,manualMonth+1,0).getDate();
+  const handleSave=()=>{
+    const result=Object.entries(jours)
+      .filter(([,c])=>c)
+      .map(([dk,equipe])=>{
+        const eq=EQUIPES_DISPONIBLES.find(e=>e.c===equipe);
+        return {date:dk,equipe,prive:eq?.prive||false,
+          impressionAt:new Date().toISOString()};
+      });
+    onImport(result);
+    setSaved(true);
+    setTimeout(onClose,1000);
+  };
 
-  return(<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.65)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
-    <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(0,0,0,.25)",overflow:"hidden"}}>
-      <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,padding:"16px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
-        <Av initials={agent.initials} size={38} famille={agent.famille}/>
-        <div style={{flex:1}}><div style={{color:"#fff",fontSize:14,fontWeight:700}}>Déroulé Prévisionnel · {agent.prenom} {agent.nom}</div></div>
-        <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:14}}>✕</button>
-      </div>
-      <div style={{overflowY:"auto",flex:1,padding:20}}>
-        {step==="choice"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {[{icon:"📷",label:"Photo du Déroulé",sub:"L'IA lit le document photographié",go:"photo"},{icon:"📄",label:"PDF",sub:"Upload PDF — extraction automatique",go:"pdf"},{icon:"✏️",label:"Saisie manuelle",sub:"Mois par mois",go:"manual"}].map(o=>(
-            <button key={o.go} onClick={()=>setStep(o.go)} style={{display:"flex",alignItems:"center",gap:12,padding:"13px 15px",border:"1.5px solid #e2e8f0",borderRadius:12,background:"#f8fafc",cursor:"pointer",textAlign:"left"}}>
-              <span style={{fontSize:22}}>{o.icon}</span><div><div style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>{o.label}</div><div style={{fontSize:11,color:"#94a3b8"}}>{o.sub}</div></div>
-            </button>))}
-          <div style={{background:"#f0fdf4",borderRadius:10,padding:"9px 12px",fontSize:11,color:"#065f46"}}>💡 Journées travail = visibles par tous · RP/RU/Congés = protégés par PIN</div>
-        </div>)}
+  const JOURS_S=["Di","Lu","Ma","Me","Je","Ve","Sa"];
 
-        {(step==="photo"||step==="pdf")&&(<div style={{display:"flex",flexDirection:"column",gap:14,alignItems:"center"}}>
-          <label style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8,border:"2px dashed #cbd5e1",borderRadius:14,padding:"22px 28px",cursor:"pointer",background:"#f8fafc",width:"100%",boxSizing:"border-box"}}>
-            <span style={{fontSize:30}}>{step==="photo"?"📸":"⬆️"}</span>
-            <span style={{fontSize:13,fontWeight:600,color:"#475569"}}>{step==="photo"?"Photo ou image":"PDF"}</span>
-            <input type="file" accept={step==="pdf"?".pdf":"image/*"} capture={step==="photo"?"environment":undefined} style={{display:"none"}} onChange={e=>handleFile(e,step==="pdf")}/>
-          </label>
-          <button onClick={()=>setStep("choice")} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13}}>← Retour</button>
-        </div>)}
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",zIndex:600,
+      display:"flex",alignItems:"center",justifyContent:"center",padding:12,backdropFilter:"blur(4px)"}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:560,
+        maxHeight:"92vh",display:"flex",flexDirection:"column",
+        boxShadow:"0 24px 60px rgba(0,0,0,.3)",overflow:"hidden"}}>
 
-        {step==="loading"&&(<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:16,padding:"32px 0"}}>
-          <div style={{width:44,height:44,border:"4px solid #e2e8f0",borderTopColor:fam?.accent||"#3b82f6",borderRadius:"50%",animation:"spin 1s linear infinite"}}/>
-          <p style={{fontSize:13,color:"#475569",textAlign:"center",margin:0}}>Extraction de tous les jours du planning…</p>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        </div>)}
-
-        {step==="result"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {error?<div style={{background:"#fee2e2",borderRadius:10,padding:12,color:"#991b1b",fontSize:13}}>{error}</div>
-          :aiResult?(<>
-            <div style={{background:"#d1fae5",borderRadius:10,padding:11,color:"#065f46",fontSize:13,fontWeight:600}}>✅ {aiResult.jours?.length} jours extraits</div>
-            <div style={{background:"#f8fafc",borderRadius:10,padding:11,fontSize:12,color:"#475569"}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                <span>🟡 Travail : <strong>{aiResult.jours?.filter(j=>!j.prive).length}</strong></span>
-                <span>🔒 Privé : <strong>{aiResult.jours?.filter(j=>j.prive).length}</strong></span>
-              </div>
-              <div style={{maxHeight:150,overflowY:"auto",display:"flex",flexWrap:"wrap",gap:4}}>
-                {aiResult.jours?.slice(0,24).map((j,i)=>{const e=EQ[j.equipe];return(<span key={i} style={{fontSize:9,background:e?.color||"#f1f5f9",color:e?.textColor||"#475569",borderRadius:5,padding:"1px 5px",fontFamily:"monospace"}}>{j.date.slice(5)} {j.jsCode}</span>);})}
-              </div>
-            </div>
-            <button onClick={()=>{onImport(aiResult.jours);onClose();}} style={{background:"#1e293b",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",cursor:"pointer",fontSize:14,fontWeight:700}}>✓ Importer {aiResult.jours?.length} jours</button>
-          </>):null}
-          <button onClick={()=>setStep("choice")} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13}}>← Retour</button>
-        </div>)}
-
-        {step==="manual"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{display:"flex",gap:8}}>
-            <select value={manualYear} onChange={e=>setManualYear(Number(e.target.value))} style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 9px",fontSize:13,outline:"none"}}>
-              {[2024,2025,2026,2027].map(y=><option key={y}>{y}</option>)}
-            </select>
-            <select value={manualMonth} onChange={e=>setManualMonth(Number(e.target.value))} style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"6px 9px",fontSize:13,outline:"none",flex:1}}>
-              {MOIS_L.map((m,i)=><option key={i} value={i}>{m}</option>)}
-            </select>
+        {/* Header */}
+        <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,
+          padding:"16px 20px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          <span style={{fontSize:22}}>📅</span>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontSize:14,fontWeight:800}}>Saisie du planning</div>
+            <div style={{color:"rgba(255,255,255,.6)",fontSize:11}}>{agent?.prenom} {agent?.nom}</div>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-            {DAYS_S.map(d=><div key={d} style={{textAlign:"center",fontSize:9,fontWeight:700,color:"#94a3b8",padding:"3px 0"}}>{d}</div>)}
-            {Array.from({length:(new Date(manualYear,manualMonth,1).getDay()||7)-1},(_,i)=><div key={`e${i}`}/>)}
-            {Array.from({length:daysInMonth},(_,i)=>{
-              const d=i+1;const code=manualDays[d];const e=code?EQ[DP_MAP[code]||code]:null;
-              return(<div key={d} onClick={()=>{const codes=allCodes.map(x=>x.c);const cur=codes.indexOf(code);setManualDays(p=>({...p,[d]:allCodes[(cur+1)%allCodes.length].c}));}} style={{background:e?.color||"#f8fafc",border:"1px solid rgba(0,0,0,.06)",borderRadius:5,padding:"3px 2px",textAlign:"center",cursor:"pointer",userSelect:"none"}}>
-                <div style={{fontSize:10,fontWeight:700,color:e?.textColor||"#64748b"}}>{d}</div>
-                <div style={{fontSize:7,color:e?.textColor||"#94a3b8",fontFamily:"monospace",overflow:"hidden",whiteSpace:"nowrap"}}>{code||""}</div>
-              </div>);
+          <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",
+            color:"#fff",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:14}}>✕</button>
+        </div>
+
+        {/* Sélecteur mois/année */}
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 16px",
+          borderBottom:"1px solid #f1f5f9",flexShrink:0,background:"#f8fafc"}}>
+          <button onClick={()=>{
+            if(month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1);
+          }} style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>‹</button>
+          <div style={{flex:1,textAlign:"center",fontWeight:800,fontSize:14,color:"#1e293b"}}>
+            {MOIS_L[month]} {year}
+          </div>
+          <button onClick={()=>{
+            if(month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1);
+          }} style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>›</button>
+        </div>
+
+        {/* Remplissage rapide par jour de semaine */}
+        <div style={{padding:"8px 16px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:6,letterSpacing:.5}}>REMPLISSAGE RAPIDE PAR JOUR</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {[1,2,3,4,5].map(dow=>(
+              <select key={dow} onChange={e=>fillWeek(dow,e.target.value)}
+                style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 6px",
+                  fontSize:11,cursor:"pointer",background:"#fff",color:"#1e293b"}}>
+                <option value="">{JOURS_S[dow]}</option>
+                {EQUIPES_DISPONIBLES.map(eq=><option key={eq.c} value={eq.c}>{eq.l}</option>)}
+                <option value="">— Vider</option>
+              </select>
+            ))}
+          </div>
+        </div>
+
+        {/* Grille des jours */}
+        <div style={{overflowY:"auto",flex:1,padding:"10px 16px"}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:6}}>
+            {["Di","Lu","Ma","Me","Je","Ve","Sa"].map(d=>(
+              <div key={d} style={{textAlign:"center",fontSize:9,fontWeight:700,color:"#94a3b8",padding:"3px 0"}}>{d}</div>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+            {/* Cases vides avant le 1er */}
+            {Array.from({length:daysList[0]?.dow||0}).map((_,i)=>(
+              <div key={`e${i}`}/>
+            ))}
+            {daysList.map(({dk,dow,num})=>{
+              const code=jours[dk];
+              const eq=code?EQUIPES_DISPONIBLES.find(e=>e.c===code):null;
+              const isWE=dow===0||dow===6;
+              return(
+                <div key={dk} style={{borderRadius:8,overflow:"hidden",
+                  border:`1.5px solid ${code?eq?.dot||"#e2e8f0":"#e2e8f0"}`,
+                  background:code?eq?.bg:isWE?"#f8fafc":"#fff"}}>
+                  <div style={{textAlign:"center",fontSize:9,fontWeight:700,
+                    color:isWE?"#94a3b8":"#1e293b",padding:"2px 0",
+                    background:"rgba(0,0,0,.04)"}}>{num}</div>
+                  <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
+                    style={{width:"100%",border:"none",background:"transparent",
+                      fontSize:8,textAlign:"center",cursor:"pointer",
+                      color:eq?.tc||"#94a3b8",fontWeight:code?700:400,
+                      outline:"none",padding:"2px 1px"}}>
+                    <option value="">—</option>
+                    {EQUIPES_DISPONIBLES.map(e=><option key={e.c} value={e.c}>{e.l}</option>)}
+                  </select>
+                </div>
+              );
             })}
           </div>
-          <p style={{fontSize:10,color:"#94a3b8",margin:0}}>Clique sur un jour pour faire défiler les codes.</p>
-          <button onClick={()=>{
-            const jours=Object.entries(manualDays).map(([d,jsCode])=>{const eq=DP_MAP[jsCode]||jsCode;const prive=["RP","RU","RQ","TC","RN","CP","FOR","ABS","FERIE","NU",...Object.keys(CODES_FETES)].includes(eq);return{date:dKey(manualYear,manualMonth+1,parseInt(d)),jsCode,equipe:eq,prive};}).filter(j=>j.jsCode);
-            onImport(jours);onClose();
-          }} style={{background:"#1e293b",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",cursor:"pointer",fontSize:14,fontWeight:700}}>✓ Enregistrer {Object.keys(manualDays).length} jours</button>
-          <button onClick={()=>setStep("choice")} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13}}>← Retour</button>
-        </div>)}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"12px 16px",borderTop:"1px solid #e2e8f0",
+          display:"flex",gap:8,flexShrink:0}}>
+          <button onClick={onClose}
+            style={{flex:1,background:"#f1f5f9",color:"#475569",border:"none",
+              borderRadius:10,padding:"11px 0",cursor:"pointer",fontSize:13,fontWeight:700}}>
+            Annuler
+          </button>
+          <button onClick={handleSave} disabled={Object.values(jours).filter(Boolean).length===0}
+            style={{flex:2,background:Object.values(jours).filter(Boolean).length>0?"#0f4c81":"#e2e8f0",
+              color:Object.values(jours).filter(Boolean).length>0?"#fff":"#94a3b8",
+              border:"none",borderRadius:10,padding:"11px 0",cursor:"pointer",fontSize:13,fontWeight:800}}>
+            {saved?"✅ Enregistré !`":"💾 Enregistrer "+Object.values(jours).filter(Boolean).length+" jour(s)"}
+          </button>
+        </div>
       </div>
     </div>
-  </div>);
+  );
 }
-
-// ─── HABILITATIONS ────────────────────────────────────────────────────────────
 function HabilitationsModal({agent,habilitations,onSave,onClose,suggestedPostes}){
   const [hab,setHab]=useState(()=>JSON.parse(JSON.stringify(habilitations)));
   const toggle=(code,niveau)=>setHab(prev=>{const next={...prev};if(next[code]===niveau)delete next[code];else next[code]=niveau;return next;});
