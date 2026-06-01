@@ -835,10 +835,10 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
         <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
           {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"CP",l:"Congé"}].map(({c,l})=>{
             const eq=EQ_COLORS[c];
-            return <button key={c} onClick={()=>weekDates.forEach(dk=>setDay(dk,c))}
+            return <button key={c} onClick={() => { weekDates.forEach(dk => setDay(dk, c)) }}
               style={{border:`1.5px solid ${eq?.dot}`,background:eq?.bg,color:eq?.tc,borderRadius:14,padding:"3px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>{l}</button>;
           })}
-          <button onClick={()=>weekDates.forEach(dk=>setDay(dk,null))} style={{border:"1.5px solid #e2e8f0",background:"#fff",color:"#94a3b8",borderRadius:14,padding:"3px 10px",cursor:"pointer",fontSize:10}}>Effacer</button>
+         <button onClick={() => { weekDates.forEach(dk => setDay(dk, null)) }} style={{border:"1.5px solid #e2e8f0",background:"#fff",color:"#94a3b8",borderRadius:14,padding:"3px 10px",cursor:"pointer",fontSize:10}}>Effacer</button>
         </div>
       </div>
     </>}
