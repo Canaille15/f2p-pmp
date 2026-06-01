@@ -155,6 +155,22 @@ const EQ_COLORS = Object.fromEntries(
   }])
 );
 const TODAY=new Date().toISOString().slice(0,10);
+
+const DAYS_L=["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+const DAYS_S=["Di","Lu","Ma","Me","Je","Ve","Sa"];
+const MOIS_L=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+function getWeekDates(offset=0){
+  const d=new Date();
+  d.setDate(d.getDate()-d.getDay()+1+(offset*7)); // lundi
+  return Array.from({length:7},(_,i)=>{
+    const day=new Date(d);
+    day.setDate(d.getDate()+i);
+    return day.toISOString().slice(0,10);
+  });
+}
+
+
 function dKey(y,m,d){return`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
 
 // Archive cleanup : supprimer entrées > 3 ans
