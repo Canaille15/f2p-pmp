@@ -1,6 +1,33 @@
 import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
+
+// ─── PERSISTANCE LOCALE (localStorage) ───────────────────────────────────────
+function usePersist(key, defaultValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem("f2ppmp_" + key);
+      return stored ? JSON.parse(stored) : defaultValue;
+    } catch { return defaultValue; }
+  });
+  const setPersist = useCallback((next) => {
+    setValue(prev => {
+      const val = typeof next === "function" ? next(prev) : next;
+      try { localStorage.setItem("f2ppmp_" + key, JSON.stringify(val)); } catch {}
+      return val;
+    });
+  }, [key]);
+  return [value, setPersist];
+}
+
+// ─── MIGRATION DONNÉES ────────────────────────────────────────────────────────
+const DATA_VERSION = "1.0";
+try {
+  if (localStorage.getItem("f2ppmp_version") !== DATA_VERSION) {
+    localStorage.setItem("f2ppmp_version", DATA_VERSION);
+  }
+} catch {}
+
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "VOTRE_URL_SUPABASE";
 const SUPABASE_ANON_KEY = "VOTRE_CLE_ANON";
