@@ -821,7 +821,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
         <span style={{fontSize:13,fontWeight:700,color:"#1e293b",flex:1,textAlign:"center"}}>{MOIS_L[curMonth]} {curYear}</span>
         <button onClick={()=>setMonthOff(m=>m+1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>›</button>
         {monthOff!==0&&<button onClick={()=>setMonthOff(0)} style={{border:"1.5px solid #6366f1",background:"#eef2ff",color:"#4f46e5",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:700}}>Auj.</button>}
-      </>}
+      </>`);
     </div>
 
     {/* ── VUE SEMAINE ── */}
