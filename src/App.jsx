@@ -840,10 +840,10 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
       </div>
       {/* Nav selon la vue */}
       {calView==="semaine"?<>
-        <button onClick={()=>setWeekOff(w=>w-1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>‹</button>
+        <button onClick={()=>setWeekOffset(w=>w-1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>‹</button>
         <span style={{fontSize:12,fontWeight:600,color:"#475569",flex:1,textAlign:"center"}}>{weekDates[0]?.slice(8)}/{weekDates[0]?.slice(5,7)} – {weekDates[6]?.slice(8)}/{weekDates[6]?.slice(5,7)}/{weekDates[6]?.slice(0,4)}</span>
-        <button onClick={()=>setWeekOff(w=>w+1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>›</button>
-        {weekOff!==0&&<button onClick={()=>setWeekOff(0)} style={{border:"1.5px solid #6366f1",background:"#eef2ff",color:"#4f46e5",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:700}}>Auj.</button>}
+        <button onClick={()=>setWeekOffset(w=>w+1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>›</button>
+        {weekOffset!==0&&<button onClick={()=>setWeekOffset(0)} style={{border:"1.5px solid #6366f1",background:"#eef2ff",color:"#4f46e5",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:700}}>Auj.</button>}
       </>:<>
         <button onClick={()=>setMonthOff(m=>m-1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>‹</button>
         <span style={{fontSize:13,fontWeight:700,color:"#1e293b",flex:1,textAlign:"center"}}>{MOIS_L[curMonth]} {curYear}</span>
@@ -2265,7 +2265,7 @@ export default function App(){
   const [view,setView]=useState("personal");
   const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
   const [currentAgent,setCurrentAgent]=useState(null);
-  const [weekOff,setWeekOff]=useState(0);
+  const [weekOffset,setWeekOffset]=useState(0);
   const [profileOpen,setProfileOpen]=useState(false);
   const [profileSearch,setProfileSearch]=useState("");
   const [schedule,setSchedule]=usePersist("schedule",{});
@@ -2427,7 +2427,7 @@ export default function App(){
 
     {/* CONTENU */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
-      {view==="global"&&<GlobalView agents={agents} schedule={schedule} setSchedule={setSchedule} currentAgent={currentAgent} weekOff={weekOff} setWeekOff={setWeekOff}
+      {view==="global"&&<GlobalView agents={agents} schedule={schedule} setSchedule={setSchedule} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset}
         onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
         onAddAgent={()=>setAddAgentOpen(true)}
         onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
@@ -2435,7 +2435,7 @@ export default function App(){
       {view==="personal"&&<PersonalView
         agent={currentAgent||currentUser?.agent}
         schedule={schedule} setSchedule={setSchedule}
-        weekOffset={weekOff} setWeekOffset={setWeekOff}
+        weekOffset={weekOffset} setWeekOffset={setWeekOffset}
         onImportDP={setImportDPTarget}
         agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
         pinUnlocked={pinUnlocked}
