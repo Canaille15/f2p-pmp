@@ -299,7 +299,7 @@ const AGENTS_INIT = [
   {id:"R23",nom:"SAURY",           prenom:"Stéphane",  grade:"CP5NIV2",poste:"AC PAR",       fam:"PAR"},
   // Nouveaux agents détectés feuilles 30/05 – 01/06/2026
   {id:"P54",nom:"LEGOGUELIN",       prenom:"Antoine",   grade:"CP5NIV2",poste:"AC LC",         fam:"PRCI"},
-].map(a=>].map(a=>({...a,initials:a.prenom[0]+(a.nom.replace(/[\s-]/g,"")[0]||"")}));
+].map(a=>({...a,initials:a.prenom[0]+(a.nom.replace(/[\s-]/g,"")[0]||"")}));
 
 // ─── COMPOSANTS DE BASE ───────────────────────────────────────────────────────
 function EqBadge({code,small,showHours}){
