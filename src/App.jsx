@@ -1022,78 +1022,125 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
           const isPrive=en?.prive||eq?.prive||false;
           const showData=pinUnlocked||!isPrive;
           const isToday=dk===TODAY;
-          const isWE=new Date(dk).getDay()===0||new Date(dk).getDay()===6;
-          let bg=isWE?"#f8fafc":"#f8fafc"; // blanc cassé par défaut
-          if(en?.finNuit&&!en?.equipe) bg="#eff6ff";
-          else if(en&&showData&&code) bg=getColor(code);
-          // Couleurs pour la carte avec dégradé
+          const dow=new Date(dk).getDay();
+          const isWE=dow===0||dow===6;
           const hasNuit2=en?.equipe2==="N";
           const isFinNuit2=en?.finNuit;
-          // Bordure colorée selon état
-          const cardBorder=isToday?"2px solid #6366f1":hasNuit2?"2px solid #1e3a8a":isFinNuit2?"2px solid #1e3a8a":"1.5px solid #e2e8f0";
-          // Header : couleur fin de nuit si J+1, sinon couleur normale
-          const headerBg=isFinNuit2?"#1e3a8a":isToday?"#1e293b":isWE?"#f1f5f9":"rgba(0,0,0,.04)";
-          const headerColor=isFinNuit2?"#fff":isToday?"#fff":isWE?"#94a3b8":"#1e293b";
-          return <div key={dk} style={{border:cardBorder,borderRadius:10,overflow:"hidden",
-            background:bg,boxShadow:isToday?"0 0 0 3px #eef2ff":hasNuit2||isFinNuit2?"0 0 0 2px #bfdbfe":"none",
-            display:"flex",flexDirection:"column"}}>
-            {/* HEADER — couleur fin de nuit si J+1 */}
-            <div style={{padding:"5px 7px",background:headerBg,borderBottom:"1px solid rgba(0,0,0,.06)"}}>
-              {isFinNuit2&&<div style={{fontSize:7,fontWeight:800,color:"#bfdbfe",letterSpacing:.3}}>🌙 NUIT → MATIN</div>}
-              <div style={{fontSize:10,fontWeight:700,color:headerColor}}>{DAYS_L[i].slice(0,3)}</div>
-              <div style={{fontSize:8,color:isFinNuit2?"#93c5fd":"#94a3b8"}}>{dk?.slice(8)}/{dk?.slice(5,7)}</div>
+          const barColor=isFinNuit2?"#1e3a8a":code&&showData?getColor(code):isWE?"#e2e8f0":"#f1f5f9";
+
+          return <div key={dk} style={{
+            borderRadius:12,
+            overflow:"hidden",
+            background:"#fff",
+            border:isToday?"2px solid #6366f1":"1.5px solid #e2e8f0",
+            boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.06)",
+            display:"flex",
+            flexDirection:"column",
+            minHeight:110,
+          }}>
+            {/* Barre colorée en haut */}
+            <div style={{
+              height:6,
+              background:barColor,
+              borderRadius:"10px 10px 0 0",
+            }}/>
+
+            {/* Header jour */}
+            <div style={{
+              padding:"6px 8px 4px",
+              borderBottom:"1px solid #f1f5f9",
+              background:isToday?"#f5f3ff":isWE?"#f8fafc":"#fff",
+            }}>
+              <div style={{fontSize:11,fontWeight:isToday?800:600,
+                color:isToday?"#6366f1":isWE?"#94a3b8":"#475569"}}>
+                {DAYS_L[i].slice(0,3)}
+              </div>
+              <div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>
+                {dk?.slice(8)}/{dk?.slice(5,7)}
+              </div>
             </div>
-            <div style={{padding:"5px 5px",minHeight:52,display:"flex",flexDirection:"column",gap:3}}>
-              {en&&showData&&<>
-                {/* Fin de nuit J+1 */}
-                {en.finNuit&&<div style={{background:"#dbeafe",borderRadius:6,padding:"3px 5px",
-                  fontSize:8,fontWeight:700,color:"#1e3a8a",textAlign:"center",lineHeight:1.3}}>
-                  🌙 Nuit jusqu'au matin<br/>
-                  <span style={{fontWeight:400,color:"#3b82f6"}}>Libre ensuite</span>
-                </div>}
-                {/* Période principale */}
-                {code&&<span style={{display:"inline-flex",alignItems:"center",gap:3,
-                  background:getColor(code),color:getTc(code),
-                  borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
-                  {eq?.label||code}
-                </span>}
-                {/* Période 2 (RP+N ou UNU+N) */}
-                {en.equipe2&&(()=>{
-                  const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];
-                  return <span style={{display:"inline-flex",alignItems:"center",gap:3,background:eq2?.color||eq2?.bg||"#dbeafe",color:eq2?.textColor||eq2?.tc||"#1e3a8a",borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap",marginTop:2}}>
-                    <span style={{width:5,height:5,borderRadius:"50%",background:eq2?.dot,flexShrink:0}}/>{eq2?.label||en.equipe2}
-                  </span>;
-                })()}
-                {en.jsCode&&en.jsCode!==code&&<div style={{fontSize:8,color:"#475569",fontFamily:"monospace",fontWeight:600}}>{en.jsCode}</div>}
-              </>}
-              {en&&!showData&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,paddingTop:4}}>
-                <span style={{fontSize:14}}>🔒</span>
-                <span style={{fontSize:8,color:"#94a3b8",textAlign:"center"}}>PIN requis</span>
-              </div>}
-              {!en&&<span style={{fontSize:9,color:"#e2e8f0",fontStyle:"italic"}}>—</span>}
-              {/* Sélecteur période principale */}
-              <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
-                style={{fontSize:8,border:"1px solid #e2e8f0",borderRadius:4,padding:"1px 2px",background:"rgba(255,255,255,.85)",color:"#475569",marginTop:"auto",cursor:"pointer",outline:"none"}}>
-                <option value="">—</option>
-                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"NU",l:"NU"},{c:"CA",l:"Congé Ann."},{c:"MA",l:"Maladie"},{c:"VT",l:"VT"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
-              </select>
-              {/* Bouton prise de nuit — bas de carte coloré en bleu nuit si actif */}
-              {code&&<div style={{
-                background:hasNuit2?"#1e3a8a":"transparent",
-                borderTop:hasNuit2?"none":"1px solid #f1f5f9",
-                marginTop:"auto",padding:"2px 4px",
-                borderBottomLeftRadius:8,borderBottomRightRadius:8,
+
+            {/* Contenu */}
+            <div style={{padding:"6px 7px",flex:1,display:"flex",flexDirection:"column",gap:4}}>
+              {/* Fin de nuit J+1 */}
+              {isFinNuit2&&<div style={{
+                background:"#eff6ff",borderRadius:6,padding:"3px 6px",
+                fontSize:9,fontWeight:700,color:"#1e3a8a",lineHeight:1.3,
+                border:"1px solid #bfdbfe",
               }}>
-                <select value={en?.equipe2||""} onChange={e=>setDay(dk,e.target.value||null,true)}
-                  style={{width:"100%",fontSize:8,border:"none",
-                    background:"transparent",
-                    color:hasNuit2?"#bfdbfe":"#94a3b8",
-                    cursor:"pointer",outline:"none",fontWeight:hasNuit2?700:400}}>
-                  <option value="">🌙 + prise de nuit</option>
-                  <option value="N">🌙 Nuit ce soir ✓</option>
-                </select>
+                🌙 Nuit → matin<br/>
+                <span style={{fontWeight:400,color:"#3b82f6",fontSize:8}}>Libre ensuite</span>
               </div>}
+
+              {/* Badge équipe principale */}
+              {code&&showData&&<div style={{
+                background:getColor(code),
+                color:getTc(code),
+                borderRadius:8,
+                padding:"4px 8px",
+                fontSize:10,
+                fontWeight:700,
+                textAlign:"center",
+              }}>
+                {eq?.label||code}
+              </div>}
+
+              {/* Badge prise de nuit */}
+              {hasNuit2&&showData&&<div style={{
+                background:"#1e3a8a",
+                color:"#fff",
+                borderRadius:8,
+                padding:"3px 8px",
+                fontSize:9,
+                fontWeight:700,
+                textAlign:"center",
+              }}>
+                🌙 Nuit
+              </div>}
+
+              {/* Verrouillé */}
+              {en&&!showData&&<div style={{
+                display:"flex",flexDirection:"column",alignItems:"center",gap:2,paddingTop:4
+              }}>
+                <span style={{fontSize:16}}>🔒</span>
+                <span style={{fontSize:8,color:"#94a3b8"}}>PIN requis</span>
+              </div>}
+
+              {/* Vide */}
+              {!en&&<div style={{
+                flex:1,display:"flex",alignItems:"center",justifyContent:"center",
+                color:"#e2e8f0",fontSize:18,
+              }}>—</div>}
             </div>
+
+            {/* Sélecteur équipe */}
+            <div style={{padding:"4px 6px",borderTop:"1px solid #f1f5f9",background:"#fafafa"}}>
+              <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
+                style={{width:"100%",fontSize:9,border:"1px solid #e2e8f0",borderRadius:6,
+                  padding:"3px 4px",background:"#fff",color:"#475569",cursor:"pointer",outline:"none"}}>
+                <option value="">— choisir —</option>
+                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
+                  {c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},{c:"NU",l:"NU"},
+                  {c:"CA",l:"Congé Ann."},{c:"MA",l:"Maladie"},{c:"VT",l:"VT"},
+                  {c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}
+                ].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
+              </select>
+            </div>
+
+            {/* Bouton prise de nuit */}
+            {code&&<div style={{
+              padding:"3px 6px",
+              background:hasNuit2?"#1e3a8a":"#f8fafc",
+              borderTop:"1px solid #f1f5f9",
+            }}>
+              <select value={en?.equipe2||""} onChange={e=>setDay(dk,e.target.value||null,true)}
+                style={{width:"100%",fontSize:9,border:"none",background:"transparent",
+                  color:hasNuit2?"#bfdbfe":"#94a3b8",cursor:"pointer",outline:"none",
+                  fontWeight:hasNuit2?700:400}}>
+                <option value="">🌙 + prise de nuit</option>
+                <option value="N">🌙 Nuit ce soir ✓</option>
+              </select>
+            </div>}
           </div>;
         })}
       </div>
