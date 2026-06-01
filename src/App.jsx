@@ -1147,9 +1147,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
             const isWE=dow===0||dow===6;
             let bg=isWE?"#f8fafc":"#f8fafc";
             if(en?.finNuit&&!en?.equipe) bg="#eff6ff";
-            else if(en&&showData&&code) bg=getColor(code);de==="RQ")bg="#fef9c3";
-              else bg=eq.bg;
-            }
+            else if(en&&showData&&code) bg=getColor(code);
             return <div key={dk} style={{background:bg,border:isToday?"2px solid #6366f1":"1px solid #e2e8f0",borderRadius:8,padding:"4px 5px",minHeight:52,cursor:"pointer",position:"relative",boxShadow:isToday?"0 0 0 2px #eef2ff":"none"}}
               onClick={()=>{
                 const codes=["","M","AM","N","J","RP","RU","NU","CA","MA","VT","FOR","DISPO"];
@@ -1159,7 +1157,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
               }}>
               <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
               {en?.finNuit&&showData&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center",lineHeight:1.4}}>🌙 fin nuit<br/><span style={{fontWeight:400,fontSize:6}}>libre</span></div>}
-              {code&&<div style={{fontSize:8,fontWeight:700,color:eq?.color:getTc(code),background:getColor(code),borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{(eq?.label||code)?.slice(0,4)}</div>}
+              {code&&<div style={{fontSize:8,fontWeight:700,color:getTc(code),background:getColor(code),borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{(eq?.label||code)?.slice(0,4)}</div>}
               {en?.equipe2&&(()=>{const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];return <div style={{fontSize:7,fontWeight:700,color:eq2?.textColor||eq2?.tc,background:eq2?.color||eq2?.bg,borderRadius:4,padding:"1px 3px",display:"inline-block",marginTop:1}}>🌙N</div>;})()} 
               {en?.jsCode&&en.jsCode!==code&&<div style={{fontSize:7,color:"#94a3b8",fontFamily:"monospace",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{en.jsCode}</div>}
             </div>;
