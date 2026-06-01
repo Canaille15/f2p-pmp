@@ -665,10 +665,164 @@ function firstDayOfMonth(year,month){
 
 // ─── VUE PERSONNELLE
 // ─── VUE PERSONNELLE ──────────────────────────────────────────────────────────
+
+// ─── COULEURS PERSONNALISÉES PAR AGENT ───────────────────────────────────────
+// Couleurs par défaut
+const DEFAULT_COLORS = {
+  // Travail = rouge vif
+  M:"#ef4444", AM:"#ef4444", N:"#ef4444", J:"#ef4444", JF:"#ef4444",
+  // Non travaillé = blanc cassé par défaut (personnalisable)
+  RP:"#f8fafc", RU:"#f8fafc", RQ:"#f8fafc", NU:"#f8fafc",
+  CA:"#f8fafc", CP:"#f8fafc", MA:"#f8fafc", VT:"#f8fafc",
+  ABS:"#f8fafc", FOR:"#f8fafc", DISPO:"#f8fafc", TC:"#f8fafc",
+  RN:"#f8fafc", VM:"#f8fafc",
+};
+
+// Texte blanc sur fonds sombres, noir sur fonds clairs
+function getTextColor(bg){
+  const hex=bg.replace('#','');
+  const r=parseInt(hex.substr(0,2),16);
+  const g=parseInt(hex.substr(2,2),16);
+  const b=parseInt(hex.substr(4,2),16);
+  const luminance=(0.299*r+0.587*g+0.114*b)/255;
+  return luminance>0.5?'#1e293b':'#ffffff';
+}
+
+// Panneau de personnalisation des couleurs
+function ColorCustomizer({agentColors, setAgentColors, onClose}){
+  const GROUPES=[
+    {label:"🔴 Travail (toutes équipes)",codes:["M","AM","N","J"],note:"Même couleur pour toutes les journées travaillées"},
+    {label:"🟢 Repos",codes:["RP","RU","RQ","TC","RN"],note:""},
+    {label:"⚪ Non utilisé / Disponible",codes:["NU","DISPO"],note:""},
+    {label:"🏖️ Congés",codes:["CA","CP"],note:""},
+    {label:"🤒 Absences",codes:["MA","ABS","VT","VM"],note:""},
+    {label:"📚 Formation",codes:["FOR"],note:""},
+  ];
+
+  const handleWorkColor=(color)=>{
+    // Appliquer la même couleur à tous les codes de travail
+    setAgentColors(prev=>({
+      ...prev, M:color, AM:color, N:color, J:color, JF:color
+    }));
+  };
+
+  const PALETTES=[
+    "#ef4444","#dc2626","#c0392b","#f97316","#ea580c",
+    "#eab308","#ca8a04","#22c55e","#16a34a","#14b8a6",
+    "#06b6d4","#3b82f6","#1d4ed8","#8b5cf6","#7c3aed",
+    "#ec4899","#db2777","#f43f5e","#64748b","#334155",
+    "#1e293b","#000000","#ffffff","#f8fafc","#e2e8f0",
+  ];
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",zIndex:700,
+      display:"flex",alignItems:"center",justifyContent:"center",padding:12,backdropFilter:"blur(4px)"}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:480,
+        maxHeight:"90vh",display:"flex",flexDirection:"column",
+        boxShadow:"0 24px 60px rgba(0,0,0,.3)",overflow:"hidden"}}>
+        
+        <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",
+          padding:"16px 20px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          <span style={{fontSize:20}}>🎨</span>
+          <div style={{flex:1,color:"#fff",fontSize:14,fontWeight:800}}>Mes couleurs personnalisées</div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",
+            color:"#fff",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:14}}>✕</button>
+        </div>
+
+        <div style={{overflowY:"auto",flex:1,padding:16,display:"flex",flexDirection:"column",gap:16}}>
+          <div style={{background:"#eff6ff",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#1e40af"}}>
+            💡 Choisis une couleur pour chaque type. Les modifications sont sauvegardées automatiquement.
+          </div>
+
+          {/* Travail — contrôle unique pour toutes les équipes */}
+          <div style={{border:"1.5px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
+            <div style={{background:"#f8fafc",padding:"10px 14px",borderBottom:"1px solid #e2e8f0"}}>
+              <div style={{fontSize:12,fontWeight:800,color:"#1e293b"}}>🔴 Journées travaillées</div>
+              <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>Matinée, Soirée, Nuit, Journée — même couleur</div>
+            </div>
+            <div style={{padding:"10px 14px"}}>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                {PALETTES.map(c=>(
+                  <button key={c} onClick={()=>handleWorkColor(c)}
+                    style={{width:28,height:28,borderRadius:6,background:c,cursor:"pointer",
+                      border:(agentColors.M||DEFAULT_COLORS.M)===c?"3px solid #1e293b":"2px solid transparent",
+                      boxShadow:(agentColors.M||DEFAULT_COLORS.M)===c?"0 0 0 2px #fff inset":"none"}}>
+                  </button>
+                ))}
+                <input type="color" value={agentColors.M||DEFAULT_COLORS.M}
+                  onChange={e=>handleWorkColor(e.target.value)}
+                  style={{width:28,height:28,borderRadius:6,cursor:"pointer",border:"2px solid #e2e8f0",padding:1}}
+                  title="Couleur personnalisée"/>
+              </div>
+              {/* Aperçu */}
+              <div style={{display:"flex",gap:6}}>
+                {["M","AM","N","J"].map(c=>(
+                  <div key={c} style={{flex:1,background:agentColors[c]||DEFAULT_COLORS[c],
+                    borderRadius:8,padding:"6px 0",textAlign:"center",
+                    color:getTextColor(agentColors[c]||DEFAULT_COLORS[c]),
+                    fontSize:10,fontWeight:700}}>
+                    {c==="M"?"Matin":c==="AM"?"Soir":c==="N"?"Nuit":"Jour"}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Autres types */}
+          {GROUPES.slice(1).map(groupe=>(
+            <div key={groupe.label} style={{border:"1.5px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
+              <div style={{background:"#f8fafc",padding:"10px 14px",borderBottom:"1px solid #e2e8f0"}}>
+                <div style={{fontSize:12,fontWeight:800,color:"#1e293b"}}>{groupe.label}</div>
+              </div>
+              <div style={{padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
+                {groupe.codes.map(code=>(
+                  <div key={code} style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:60,background:agentColors[code]||DEFAULT_COLORS[code],
+                      borderRadius:6,padding:"4px 8px",textAlign:"center",
+                      color:getTextColor(agentColors[code]||DEFAULT_COLORS[code]),
+                      fontSize:10,fontWeight:700,flexShrink:0}}>
+                      {code}
+                    </div>
+                    <div style={{display:"flex",gap:4,flexWrap:"wrap",flex:1}}>
+                      {PALETTES.slice(0,12).map(c=>(
+                        <button key={c} onClick={()=>setAgentColors(prev=>({...prev,[code]:c}))}
+                          style={{width:22,height:22,borderRadius:4,background:c,cursor:"pointer",
+                            border:(agentColors[code]||DEFAULT_COLORS[code])===c?"2px solid #1e293b":"1.5px solid transparent"}}>
+                        </button>
+                      ))}
+                      <input type="color" value={agentColors[code]||DEFAULT_COLORS[code]}
+                        onChange={e=>setAgentColors(prev=>({...prev,[code]:e.target.value}))}
+                        style={{width:22,height:22,borderRadius:4,cursor:"pointer",border:"1.5px solid #e2e8f0",padding:1}}/>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Reset */}
+          <button onClick={()=>setAgentColors({})}
+            style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,
+              padding:"10px 0",cursor:"pointer",fontSize:12,fontWeight:600}}>
+            ↺ Réinitialiser les couleurs par défaut
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,pinUnlocked,onRequestPin,onFetePaye,isAdmin}){
   const [showHab,setShowHab]=useState(false);
   const [calView,setCalView]=useState("semaine");
   const [monthOff,setMonthOff]=useState(0);
+  const [showColorPicker,setShowColorPicker]=useState(false);
+  const [agentColors,setAgentColors]=usePersist(`colors_${agent?.id}`,{});
+  
+  // Couleur effective pour un code
+  const getColor=(code)=>agentColors[code]||DEFAULT_COLORS[code]||EQ[code]?.color||"#f8fafc";
+  const getTc=(code)=>getTextColor(getColor(code));
 
   // Modifier l'équipe d'un jour (supporte equipe2 pour double période)
   const setDay=(dk,code,isSecond=false)=>{
@@ -738,6 +892,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <button onClick={()=>onImportDP(agent)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>📋 Déroulé Prévisionnel</button>
         <button onClick={()=>setShowDemandeConges(true)} style={{background:"rgba(234,88,12,.3)",border:"1px solid rgba(253,186,116,.5)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>📝 Demande congés</button>
+        <button onClick={()=>setShowColorPicker(true)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>🎨 Mes couleurs</button>
         <button onClick={()=>setShowQuit(true)} style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",color:"#fca5a5",borderRadius:9,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>🚪 Quitter</button>
         {!hasPin
           ?<button onClick={()=>onRequestPin("set",agent)} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.4)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>🔐 Créer PIN</button>
@@ -868,9 +1023,9 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
           const showData=pinUnlocked||!isPrive;
           const isToday=dk===TODAY;
           const isWE=new Date(dk).getDay()===0||new Date(dk).getDay()===6;
-          let bg=isWE?"#f8fafc":"#fff";
-          if(en?.finNuit&&!en?.equipe) bg="#eff6ff"; // bleu très clair pour fin de nuit pure
-          else if(en&&showData&&eq) bg=eq.bg||eq.color||"#fff";
+          let bg=isWE?"#f8fafc":"#f8fafc"; // blanc cassé par défaut
+          if(en?.finNuit&&!en?.equipe) bg="#eff6ff";
+          else if(en&&showData&&code) bg=getColor(code);
           // Couleurs pour la carte avec dégradé
           const hasNuit2=en?.equipe2==="N";
           const isFinNuit2=en?.finNuit;
@@ -897,8 +1052,10 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
                   <span style={{fontWeight:400,color:"#3b82f6"}}>Libre ensuite</span>
                 </div>}
                 {/* Période principale */}
-                {code&&<span style={{display:"inline-flex",alignItems:"center",gap:3,background:eq?.bg||"#f1f5f9",color:eq?.tc||eq?.textColor||"#475569",borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
-                  <span style={{width:5,height:5,borderRadius:"50%",background:eq?.dot,flexShrink:0}}/>{eq?.label||code}
+                {code&&<span style={{display:"inline-flex",alignItems:"center",gap:3,
+                  background:getColor(code),color:getTc(code),
+                  borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
+                  {eq?.label||code}
                 </span>}
                 {/* Période 2 (RP+N ou UNU+N) */}
                 {en.equipe2&&(()=>{
@@ -988,11 +1145,9 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
             const dayNum=parseInt(dk.slice(8));
             const dow=new Date(dk).getDay();
             const isWE=dow===0||dow===6;
-            let bg=isWE?"#f8fafc":"#fff";
-            if(en&&eq){
-              if(!eq.prive)bg=eq.bg; // vraie couleur équipe
-              else if(code==="RP")bg="#dcfce7";
-              else if(code==="RU"||code==="RQ")bg="#fef9c3";
+            let bg=isWE?"#f8fafc":"#f8fafc";
+            if(en?.finNuit&&!en?.equipe) bg="#eff6ff";
+            else if(en&&showData&&code) bg=getColor(code);de==="RQ")bg="#fef9c3";
               else bg=eq.bg;
             }
             return <div key={dk} style={{background:bg,border:isToday?"2px solid #6366f1":"1px solid #e2e8f0",borderRadius:8,padding:"4px 5px",minHeight:52,cursor:"pointer",position:"relative",boxShadow:isToday?"0 0 0 2px #eef2ff":"none"}}
@@ -1004,7 +1159,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
               }}>
               <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
               {en?.finNuit&&showData&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center",lineHeight:1.4}}>🌙 fin nuit<br/><span style={{fontWeight:400,fontSize:6}}>libre</span></div>}
-              {code&&<div style={{fontSize:8,fontWeight:700,color:eq?.tc,background:eq?.bg,borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{eq?.label?.slice(0,4)}</div>}
+              {code&&<div style={{fontSize:8,fontWeight:700,color:eq?.color:getTc(code),background:getColor(code),borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{(eq?.label||code)?.slice(0,4)}</div>}
               {en?.equipe2&&(()=>{const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];return <div style={{fontSize:7,fontWeight:700,color:eq2?.textColor||eq2?.tc,background:eq2?.color||eq2?.bg,borderRadius:4,padding:"1px 3px",display:"inline-block",marginTop:1}}>🌙N</div>;})()} 
               {en?.jsCode&&en.jsCode!==code&&<div style={{fontSize:7,color:"#94a3b8",fontFamily:"monospace",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{en.jsCode}</div>}
             </div>;
@@ -2708,5 +2863,9 @@ export default function App(){
         </div>
       </div>;
     })()}
+    {showColorPicker&&<ColorCustomizer
+      agentColors={agentColors}
+      setAgentColors={v=>{setAgentColors(v);}}
+      onClose={()=>setShowColorPicker(false)}/>}
   </div>);
 }
