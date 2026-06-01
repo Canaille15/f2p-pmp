@@ -1449,8 +1449,10 @@ function AccordCongesModal({agent, demande, onClose, onAccord}) {
       const b64 = reader.result.split(",")[1];
       const mt = file.type === "application/pdf" ? "application/pdf" : file.type;
       try {
-        const res = await fetch("/api/claude", {
-          method:"POST", headers:{"Content-Type":"application/json"},
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method:"POST", headers:{"Content-Type":"application/json",
+            "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+            "anthropic-version":"2023-06-01"},
           body: JSON.stringify({
             model:"claude-sonnet-4-20250514", max_tokens:500,
             messages:[{role:"user",content:[
@@ -1606,7 +1608,7 @@ function CpsView({agents, schedule, setSchedule, notifications, setNotifications
     reader.onload=async()=>{
       const b64=reader.result.split(",")[1];const mt=file.type==="application/pdf"?"application/pdf":file.type;
       try{
-        const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
+        const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"},
           body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[
             {type:"document",source:{type:"base64",media_type:mt,data:b64}},
             {type:"text",text:`Tu analyses une feuille de présence officielle SNCF (CPS).
@@ -1833,7 +1835,7 @@ function ImportDeroulement({agent,onClose,onImport}){
   const callAI=async(content)=>{
     setStep("loading");
     try{
-      const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[...content,{type:"text",
           text:`Tu analyses un Déroulé Prévisionnel SNCF pour ${agent.prenom} ${agent.nom}.
 Extrais TOUTES les affectations jour par jour pour chaque mois visible.
@@ -1987,7 +1989,7 @@ function AddAgentModal({onClose,onAdd}){
     const reader=new FileReader();
     reader.onload=async()=>{
       const b64=reader.result.split(",")[1];const mt=isPdf?"application/pdf":file.type;
-      try{const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,messages:[{role:"user",content:[isPdf?{type:"document",source:{type:"base64",media_type:mt,data:b64}}:{type:"image",source:{type:"base64",media_type:mt,data:b64}},{type:"text",text:`Extrais les infos agent. Retourne UNIQUEMENT JSON: {"prenom":"...","nom":"...","grade":"...","poste":"...","famille":"PRCI ou PAR"}`}]}]})});
+      try{const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,messages:[{role:"user",content:[isPdf?{type:"document",source:{type:"base64",media_type:mt,data:b64}}:{type:"image",source:{type:"base64",media_type:mt,data:b64}},{type:"text",text:`Extrais les infos agent. Retourne UNIQUEMENT JSON: {"prenom":"...","nom":"...","grade":"...","poste":"...","famille":"PRCI ou PAR"}`}]}]})});
       const data=await res.json();const raw=data.content?.map(c=>c.text||"").join("")||"";const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());setForm(p=>({...p,...parsed}));setAiStep("done");}catch(e){setAiStep("choice");}
     };reader.readAsDataURL(file);
   };
