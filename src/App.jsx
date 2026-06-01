@@ -140,6 +140,18 @@ const EQUIPES = [
 ];
 const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
 
+// EQ_COLORS — alias de EQ avec mapping bg/tc/dot pour compatibilité
+const EQ_COLORS = Object.fromEntries(
+  Object.entries(EQ).map(([k,v])=>[k,{
+    ...v,
+    bg: v.color||v.bg,
+    tc: v.textColor||v.tc,
+    dot: v.dot,
+    label: v.label,
+    prive: v.prive||false,
+  }])
+);
+
 const DP_MAP = {
   "PICCL-":"M","PICCLO":"AM","PICCLX":"N",
   "PIADJ-":"M","PIADJO":"AM","PIADJX":"N",
