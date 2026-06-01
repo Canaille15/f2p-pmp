@@ -326,7 +326,7 @@ const AGENTS_INIT = [
   {id:"R23",nom:"SAURY",           prenom:"Stéphane",  grade:"CP5NIV2",poste:"AC PAR",       fam:"PAR"},
   // Nouveaux agents détectés feuilles 30/05 – 01/06/2026
   {id:"P54",nom:"LEGOGUELIN",       prenom:"Antoine",   grade:"CP5NIV2",poste:"AC LC",         fam:"PRCI"},
-].map(a=>({...a,initials:a.prenom[0]+(a.nom.replace(/[\s-]/g,"")[0]||"")}));
+].map(a=>({...a,famille:a.fam||a.famille,fam:a.fam||a.famille,initials:a.prenom[0]+(a.nom.replace(/[\s-]/g,"")[0]||"")}));
 
 // ─── COMPOSANTS DE BASE ───────────────────────────────────────────────────────
 function EqBadge({code,small,showHours}){
@@ -356,7 +356,8 @@ function PinModal({agent,onSuccess,onClose,mode="verify",currentPin}){
   const initStep = mode==="set"||mode==="reset" ? "enter" : mode==="change" ? "old" : "verify";
   const [step,setStep]=useState(initStep);
   const [error,setError]=useState("");
-  const refs=[useRef(),useRef(),useRef(),useRef()];
+  const p0=useRef(),p1=useRef(),p2=useRef(),p3=useRef();
+  const refs=[p0,p1,p2,p3];
   useEffect(()=>{refs[0].current?.focus();},[step]);
 
   const handleDigit=(i,v,arr,setArr)=>{
@@ -1997,11 +1998,16 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   const [pinConfirm, setPinConfirm] = useState(["","","","",""]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const pinRefs = [useRef(),useRef(),useRef(),useRef(),useRef()];
-  const confRefs = [useRef(),useRef(),useRef(),useRef(),useRef()];
+  const r0=useRef(),r1=useRef(),r2=useRef(),r3=useRef(),r4=useRef();
+  const c0=useRef(),c1=useRef(),c2=useRef(),c3=useRef(),c4=useRef();
+  const pinRefs=[r0,r1,r2,r3,r4];
+  const confRefs=[c0,c1,c2,c3,c4];
 
   const pinStr = pin.join("");
   const confStr = pinConfirm.join("");
+  
+  // Focus automatique sur le premier champ PIN au montage
+  useEffect(()=>{ pinRefs[0].current?.focus(); },[]);
 
   const handlePinDigit = (i, v, arr, setArr, refs) => {
     if (!/^\d?$/.test(v)) return;
@@ -2450,7 +2456,8 @@ export default function App(){
       const [mat,setMat]=React.useState("");
       const [pin,setPin]=React.useState(["","","","",""]);
       const [err,setErr]=React.useState("");
-      const pinRefs=[React.useRef(),React.useRef(),React.useRef(),React.useRef(),React.useRef()];
+      const lt0=React.useRef(),lt1=React.useRef(),lt2=React.useRef(),lt3=React.useRef(),lt4=React.useRef();
+      const pinRefs=[lt0,lt1,lt2,lt3,lt4];
       const pinStr=pin.join("");
       const tryLogin=()=>{
         const m=mat.trim().toUpperCase();
