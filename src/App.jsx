@@ -119,11 +119,11 @@ const COMPTEUR_COLORS = {
 // Équipes avec flag prive et couleur agenda perso
 const EQUIPES = [
   // ── TRAVAIL — fond intense, texte blanc ──────────────────────────────────
-  { code:"M",    label:"Matinée",    heures:"06h10–14h17", color:"#ca8a04", textColor:"#fff", dot:"#fef08a", prive:false, compteur:"travail", bg:"#ca8a04" },
-  { code:"AM",   label:"Soirée",     heures:"14h05–22h17", color:"#7c3aed", textColor:"#fff", dot:"#ddd6fe", prive:false, compteur:"travail", bg:"#7c3aed" },
-  { code:"N",    label:"Nuit",       heures:"22h15–06h17", color:"#1e3a8a", textColor:"#fff", dot:"#bfdbfe", prive:false, compteur:"travail", bg:"#1e3a8a" },
-  { code:"J",    label:"Journée",    heures:"08h00–17h45", color:"#ea580c", textColor:"#fff", dot:"#fed7aa", prive:false, compteur:"travail", bg:"#ea580c" },
-  { code:"JF",   label:"Jour/Fête",  heures:"",            color:"#ea580c", textColor:"#fff", dot:"#fed7aa", prive:false, compteur:"travail", bg:"#ea580c" },
+  { code:"M",    label:"Matinée",    heures:"06h10–14h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"AM",   label:"Soirée",     heures:"14h05–22h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"N",    label:"Nuit",       heures:"22h15–06h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"J",    label:"Journée",    heures:"08h00–17h45", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"JF",   label:"Jour/Fête",  heures:"",            color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
   // ── REPOS / RÉSERVISTE — fond coloré, texte blanc ────────────────────────
   { code:"RP",   label:"RP",         heures:"",            color:"#16a34a", textColor:"#fff", dot:"#bbf7d0", prive:true,  compteur:"RP",      bg:"#16a34a" },
   { code:"RU",   label:"RU",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
@@ -134,12 +134,12 @@ const EQUIPES = [
   { code:"CA",   label:"Congé Ann.", heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
   { code:"CP",   label:"Congé",      heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
   { code:"MA",   label:"Maladie",    heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
-  { code:"VT",   label:"Tps Partiel",heures:"",            color:"#9333ea", textColor:"#fff", dot:"#e9d5ff", prive:true,  compteur:"ABS",     bg:"#9333ea" },
+  { code:"VT",   label:"VT",         heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3",  prive:true,  compteur:"ABS",     bg:"#eab308" },
   { code:"ABS",  label:"Absent",     heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
   { code:"FOR",  label:"Formation",  heures:"",            color:"#b45309", textColor:"#fff", dot:"#fef9c3", prive:false, compteur:"FOR",     bg:"#b45309" },
   { code:"DISPO",label:"Dispo",      heures:"",            color:"#059669", textColor:"#fff", dot:"#d1fae5", prive:false, compteur:"DISPO",   bg:"#059669" },
   { code:"VM",   label:"VM",         heures:"",            color:"#6b7280", textColor:"#fff", dot:"#f3f4f6", prive:true,  compteur:"ABS",     bg:"#6b7280" },
-  ...Object.keys(CODES_FETES).map(k=>({ code:k, label:k, heures:"", color:"#be185d", textColor:"#fff", dot:"#fdf2f8", prive:true, compteur:"FETE", bg:"#be185d" })),
+  ...Object.keys(CODES_FETES).map(k=>({ code:k, label:k, heures:"", color:"#ec4899", textColor:"#fff", dot:"#fce7f3", prive:true, compteur:"FETE", bg:"#ec4899" })),
 ];
 const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
 
@@ -670,7 +670,7 @@ function firstDayOfMonth(year,month){
 // Couleurs par défaut
 const DEFAULT_COLORS = {
   // Travail = rouge vif
-  M:"#ef4444", AM:"#ef4444", N:"#ef4444", J:"#ef4444", JF:"#ef4444",
+  M:"#8B0000", AM:"#8B0000", N:"#8B0000", J:"#8B0000", JF:"#8B0000",
   // Non travaillé = blanc cassé par défaut (personnalisable)
   RP:"#16a34a", RU:"#eab308", RQ:"#eab308", NU:"#f8fafc",
   CA:"#eab308", CP:"#eab308", MA:"#f8fafc", VT:"#f8fafc",
@@ -1075,7 +1075,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
               <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
                 style={{fontSize:8,border:"1px solid #e2e8f0",borderRadius:4,padding:"1px 2px",background:"rgba(255,255,255,.85)",color:"#475569",marginTop:"auto",cursor:"pointer",outline:"none"}}>
                 <option value="">—</option>
-                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"NU",l:"NU"},{c:"CA",l:"Congé Ann."},{c:"MA",l:"Maladie"},{c:"VT",l:"Tps Partiel"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
+                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"NU",l:"NU"},{c:"CA",l:"Congé Ann."},{c:"MA",l:"Maladie"},{c:"VT",l:"VT"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
               </select>
               {/* Bouton prise de nuit — bas de carte coloré en bleu nuit si actif */}
               {code&&<div style={{
@@ -2028,10 +2028,10 @@ function ImportDeroulement({agent,onClose,onImport}){
 
   const EQUIPES_DISPO=[
     // Travail — fond intense, texte blanc
-    {c:"M",    l:"Matinée",    bg:"#ca8a04",tc:"#fff",dot:"#fef08a"},
-    {c:"AM",   l:"Soirée",     bg:"#7c3aed",tc:"#fff",dot:"#ddd6fe"},
-    {c:"N",    l:"Nuit",       bg:"#1e3a8a",tc:"#fff",dot:"#bfdbfe"},
-    {c:"J",    l:"Journée",    bg:"#ea580c",tc:"#fff",dot:"#fed7aa"},
+    {c:"M",    l:"Matinée",    bg:"#8B0000",tc:"#fff",dot:"#fca5a5"},
+    {c:"AM",   l:"Soirée",     bg:"#8B0000",tc:"#fff",dot:"#fca5a5"},
+    {c:"N",    l:"Nuit",       bg:"#8B0000",tc:"#fff",dot:"#fca5a5"},
+    {c:"J",    l:"Journée",    bg:"#8B0000",tc:"#fff",dot:"#fca5a5"},
     // Repos / Réserviste — fond coloré, texte blanc
     {c:"RP",   l:"RP",         bg:"#16a34a",tc:"#fff",dot:"#bbf7d0",prive:true},
     {c:"RU",   l:"RU",         bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
@@ -2039,7 +2039,7 @@ function ImportDeroulement({agent,onClose,onImport}){
     {c:"NU",   l:"NU",         bg:"#475569",tc:"#fff",dot:"#cbd5e1"},
     {c:"CA",   l:"Congé Ann.", bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
     {c:"MA",   l:"Maladie",    bg:"#dc2626",tc:"#fff",dot:"#fecaca",prive:true},
-    {c:"VT",   l:"Tps Partiel",bg:"#9333ea",tc:"#fff",dot:"#e9d5ff",prive:true},
+    {c:"VT",   l:"VT",          bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
     {c:"ABS",  l:"Absent",     bg:"#dc2626",tc:"#fff",dot:"#fecaca",prive:true},
     {c:"FOR",  l:"Formation",  bg:"#b45309",tc:"#fff",dot:"#fef9c3"},
     {c:"DISPO",l:"Dispo",      bg:"#059669",tc:"#fff",dot:"#d1fae5"},
@@ -2705,7 +2705,7 @@ export default function App(){
     {k:"cps",     l:"📋 CPS"+(activeNotifCount>0?` (${activeNotifCount})`:"")}
   ];
 
-  return(<div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
+  return(<div style={{minHeight:"100vh",background:"#ffffff",fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
     <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;}button:hover{opacity:.85;}`}</style>
 
     {/* HEADER */}
