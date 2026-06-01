@@ -691,11 +691,11 @@ function getTextColor(bg){
 // Panneau de personnalisation des couleurs
 function ColorCustomizer({agentColors, setAgentColors, onClose}){
   const GROUPES=[
-    {label:"🔴 Travail (toutes équipes)",codes:["M","AM","N","J"],note:"Même couleur pour toutes les journées travaillées"},
-    {label:"🟢 Repos",codes:["RP","RU","RQ","TC","RN"],note:""},
-    {label:"⚪ Non utilisé / Disponible",codes:["NU","DISPO"],note:""},
+    {label:"🟥 Travail",codes:["M","AM","N","J"],note:"Personnaliser chaque équipe individuellement"},
+    {label:"🟢 Repos périodiques",codes:["RP","RU","RQ","TC","RN"],note:""},
+    {label:"⬜ Non utilisé / Disponible",codes:["NU","DISPO"],note:""},
     {label:"🏖️ Congés",codes:["CA","CP"],note:""},
-    {label:"🤒 Absences",codes:["MA","ABS","VT","VM"],note:""},
+    {label:"🤒 Absences / Santé",codes:["MA","ABS","VT","VM"],note:""},
     {label:"📚 Formation",codes:["FOR"],note:""},
   ];
 
@@ -735,54 +735,33 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
             💡 Choisis une couleur pour chaque type. Les modifications sont sauvegardées automatiquement.
           </div>
 
-          {/* Travail — contrôle unique pour toutes les équipes */}
-          <div style={{border:"1.5px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
-            <div style={{background:"#f8fafc",padding:"10px 14px",borderBottom:"1px solid #e2e8f0"}}>
-              <div style={{fontSize:12,fontWeight:800,color:"#1e293b"}}>🔴 Journées travaillées</div>
-              <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>Matinée, Soirée, Nuit, Journée — même couleur</div>
-            </div>
-            <div style={{padding:"10px 14px"}}>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-                {PALETTES.map(c=>(
-                  <button key={c} onClick={()=>handleWorkColor(c)}
-                    style={{width:28,height:28,borderRadius:6,background:c,cursor:"pointer",
-                      border:(agentColors.M||DEFAULT_COLORS.M)===c?"3px solid #1e293b":"2px solid transparent",
-                      boxShadow:(agentColors.M||DEFAULT_COLORS.M)===c?"0 0 0 2px #fff inset":"none"}}>
-                  </button>
-                ))}
-                <input type="color" value={agentColors.M||DEFAULT_COLORS.M}
-                  onChange={e=>handleWorkColor(e.target.value)}
-                  style={{width:28,height:28,borderRadius:6,cursor:"pointer",border:"2px solid #e2e8f0",padding:1}}
-                  title="Couleur personnalisée"/>
-              </div>
-              {/* Aperçu */}
-              <div style={{display:"flex",gap:6}}>
-                {["M","AM","N","J"].map(c=>(
-                  <div key={c} style={{flex:1,background:agentColors[c]||DEFAULT_COLORS[c],
-                    borderRadius:8,padding:"6px 0",textAlign:"center",
-                    color:getTextColor(agentColors[c]||DEFAULT_COLORS[c]),
-                    fontSize:10,fontWeight:700}}>
-                    {c==="M"?"Matin":c==="AM"?"Soir":c==="N"?"Nuit":"Jour"}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Autres types */}
-          {GROUPES.slice(1).map(groupe=>(
+          {/* Tous les groupes avec contrôle individuel */}
+          {GROUPES.map(groupe=>(
             <div key={groupe.label} style={{border:"1.5px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
-              <div style={{background:"#f8fafc",padding:"10px 14px",borderBottom:"1px solid #e2e8f0"}}>
+              <div style={{background:"#f8fafc",padding:"10px 14px",borderBottom:"1px solid #e2e8f0",
+                display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                 <div style={{fontSize:12,fontWeight:800,color:"#1e293b"}}>{groupe.label}</div>
+                {groupe.label.includes("Travail")&&<button
+                  onClick={()=>{const c=agentColors[groupe.codes[0]]||DEFAULT_COLORS[groupe.codes[0]];
+                    setAgentColors(prev=>({...prev,...Object.fromEntries(groupe.codes.map(k=>[k,c]))}));}}
+                  style={{fontSize:9,background:"#1e293b",color:"#fff",border:"none",borderRadius:6,
+                    padding:"3px 8px",cursor:"pointer"}}>
+                  Même couleur pour tous
+                </button>}
               </div>
               <div style={{padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
                 {groupe.codes.map(code=>(
                   <div key={code} style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{width:60,background:agentColors[code]||DEFAULT_COLORS[code],
+                    <div style={{width:70,background:agentColors[code]||DEFAULT_COLORS[code],
                       borderRadius:6,padding:"4px 8px",textAlign:"center",
                       color:getTextColor(agentColors[code]||DEFAULT_COLORS[code]),
                       fontSize:10,fontWeight:700,flexShrink:0}}>
-                      {code}
+                      {code==="M"?"Matinée":code==="AM"?"Soirée":code==="N"?"Nuit":
+                       code==="J"?"Journée":code==="RP"?"RP":code==="RU"?"RU":
+                       code==="RQ"?"RQ":code==="TC"?"TC":code==="RN"?"RN":
+                       code==="NU"?"NU":code==="CA"?"Congé A.":code==="CP"?"Congé":
+                       code==="MA"?"Maladie":code==="ABS"?"Absent":code==="VT"?"VT":
+                       code==="VM"?"VM":code==="FOR"?"Formation":code==="DISPO"?"Dispo":code}
                     </div>
                     <div style={{display:"flex",gap:4,flexWrap:"wrap",flex:1}}>
                       {PALETTES.slice(0,12).map(c=>(
