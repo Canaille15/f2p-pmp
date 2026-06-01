@@ -250,7 +250,7 @@ function computeCompteurs(schedule, agentId, year) {
 const AGENTS_INIT = [
   {id:"P01",nom:"BELLISSENT",      prenom:"Christophe",grade:"CP6NIV2",poste:"CCL",          fam:"PRCI"},
   {id:"P02",nom:"CHAHMI",          prenom:"Rochdi",    grade:"CP6NIV2",poste:"CCL",          fam:"PRCI"},
-  {id:"P03",immatriculation:"168401861B",nom:"BEFFARAL",        prenom:"Olivier",   grade:"CP6NIV2",poste:"CCL",          fam:"PRCI"},
+  {id:"P03",immatriculation:"6810186B",nom:"BEFFARAL",        prenom:"Olivier",   grade:"CP6NIV2",poste:"CCL",          fam:"PRCI"},
   {id:"P04",nom:"COIRRE",          prenom:"Yannick",   grade:"CP6NIV1",poste:"CCL",          fam:"PRCI"},
   {id:"P05",nom:"EL ADRAOUI",      prenom:"Mounir",    grade:"CO6",    poste:"CCL",          fam:"PRCI"},
   {id:"P06",nom:"HUTIN",           prenom:"Thomas",    grade:"CP5NIV2",poste:"Adj CCL",      fam:"PRCI"},
@@ -1965,14 +1965,14 @@ function AddAgentModal({onClose,onAdd}){
 
 
 // ─── AUTHENTIFICATION ────────────────────────────────────────────────────────
-// Matricules admin par défaut (à personnaliser)
+// CPs admin par défaut (à personnaliser)
 
-const ADMIN_MATRICULES_DEFAULT = ["68101861B"]; // BEFFARAL Olivier — premier admin
-const ADMIN_MATRICULES_DEFAULT = ["168401861B", "MATRICULE_ADJOINT"];
+const ADMIN_MATRICULES_DEFAULT = ["6810186B"]; // BEFFARAL Olivier // BEFFARAL Olivier — premier admin
+
 // Hash simple pour PIN (en prod utiliser bcrypt via Supabase Edge Function)
-function hashPin(matricule, pin) {
-  // Combine matricule + pin pour un hash unique par agent
-  const str = `${matricule}-${pin}-f2ppmp2026`;
+function hashPin(CP, pin) {
+  // Combine CP + pin pour un hash unique par agent
+  const str = `${CP}-${pin}-f2ppmp2026`;
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
@@ -1982,18 +1982,18 @@ function hashPin(matricule, pin) {
   return Math.abs(hash).toString(36).padStart(8, '0');
 }
 
-// Trouver un agent par matricule dans AGENTS_INIT
-function findAgentByMatricule(matricule) {
+// Trouver un agent par CP dans AGENTS_INIT
+function findAgentByCP(CP) {
   return AGENTS_INIT.find(a =>
-    a.immatriculation === matricule ||
-    a.immatriculation?.toUpperCase() === matricule?.toUpperCase()
+    a.immatriculation === CP ||
+    a.immatriculation?.toUpperCase() === CP?.toUpperCase()
   );
 }
 
 // Page de connexion
 function LoginPage({ onLogin, authData, setAuthData }) {
   const [step, setStep] = useState("login"); // "login" | "first_time" | "forgot"
-  const [matricule, setMatricule] = useState("");
+  const [CP, setCP] = useState("");
   const [pin, setPin] = useState(["","","","",""]);
   const [pinConfirm, setPinConfirm] = useState(["","","","",""]);
   const [error, setError] = useState("");
@@ -2025,13 +2025,13 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     setError("");
     setLoading(true);
     setTimeout(() => {
-      const mat = matricule.trim().toUpperCase();
-      // Vérifier que le matricule existe dans la liste
+      const mat = CP.trim().toUpperCase();
+      // Vérifier que le CP existe dans la liste
       const agent = AGENTS_INIT.find(a =>
         a.immatriculation?.toUpperCase() === mat
       );
       if (!agent) {
-        setError("Matricule non reconnu. Vérifiez votre saisie ou contactez l'administrateur.");
+        setError("CP non reconnu. Vérifiez votre saisie ou contactez l'administrateur.");
         setLoading(false); return;
       }
       const stored = authData[mat];
@@ -2053,7 +2053,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   const handleFirstTime = () => {
     if (pinStr.length < 5) { setError("5 chiffres requis"); return; }
     if (pinStr !== confStr) { setError("Les codes ne correspondent pas"); return; }
-    const mat = matricule.trim().toUpperCase();
+    const mat = CP.trim().toUpperCase();
     const isAdmin = ADMIN_MATRICULES_DEFAULT.includes(mat) ||
       Object.values(authData).some(d => d.isAdmin && d.grantedAdmin?.includes(mat));
     const newAuth = {
@@ -2108,12 +2108,12 @@ function LoginPage({ onLogin, authData, setAuthData }) {
           {step === "login" && <>
             <div style={{textAlign:"center"}}>
               <div style={{fontSize:16,fontWeight:800,color:"#1e293b"}}>Connexion</div>
-              <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Entre ton matricule et ton code PIN</div>
+              <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Entre ton CP et ton code PIN</div>
             </div>
 
             <div>
-              <label style={{fontSize:11,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,letterSpacing:.5}}>MATRICULE S.N.C.F.</label>
-              <input value={matricule} onChange={e=>{setMatricule(e.target.value.toUpperCase());setError("");}}
+              <label style={{fontSize:11,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,letterSpacing:.5}}>CP SNCF</label>
+              <input value={CP} onChange={e=>{setCP(e.target.value.toUpperCase());setError("");}}
                 placeholder="Ex: 168401861B"
                 onKeyDown={e=>e.key==="Enter"&&pinRefs[0].current?.focus()}
                 style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:14,fontFamily:"'DM Mono',monospace",fontWeight:700,outline:"none",letterSpacing:2,textAlign:"center",boxSizing:"border-box"}}/>
@@ -2123,13 +2123,13 @@ function LoginPage({ onLogin, authData, setAuthData }) {
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={handleLogin} disabled={!matricule||pinStr.length<5||loading}
-              style={{background:matricule&&pinStr.length===5?"#0f4c81":"#e2e8f0",color:matricule&&pinStr.length===5?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:matricule&&pinStr.length===5?"pointer":"not-allowed",fontSize:14,fontWeight:800,transition:"all .15s"}}>
+            <button onClick={handleLogin} disabled={!CP||pinStr.length<5||loading}
+              style={{background:CP&&pinStr.length===5?"#0f4c81":"#e2e8f0",color:CP&&pinStr.length===5?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:CP&&pinStr.length===5?"pointer":"not-allowed",fontSize:14,fontWeight:800,transition:"all .15s"}}>
               {loading?"Connexion…":"Se connecter →"}
             </button>
 
             <div style={{textAlign:"center",fontSize:11,color:"#94a3b8"}}>
-              Première connexion ? Entre ton matricule et ton PIN sera créé.
+              Première connexion ? Entre ton CP et ton PIN sera créé.
             </div>
           </>}
 
@@ -2137,10 +2137,10 @@ function LoginPage({ onLogin, authData, setAuthData }) {
           {step === "first_time" && <>
             <div style={{textAlign:"center"}}>
               <div style={{fontSize:16,fontWeight:800,color:"#1e293b"}}>Première connexion</div>
-              <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Matricule : <strong style={{color:"#0f4c81",fontFamily:"monospace"}}>{matricule}</strong></div>
-              {AGENTS_INIT.find(a=>a.immatriculation?.toUpperCase()===matricule.trim().toUpperCase())&&(
+              <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>CP : <strong style={{color:"#0f4c81",fontFamily:"monospace"}}>{CP}</strong></div>
+              {AGENTS_INIT.find(a=>a.immatriculation?.toUpperCase()===CP.trim().toUpperCase())&&(
                 <div style={{fontSize:12,color:"#065f46",marginTop:4,fontWeight:600}}>
-                  ✓ {AGENTS_INIT.find(a=>a.immatriculation?.toUpperCase()===matricule.trim().toUpperCase())?.prenom} {AGENTS_INIT.find(a=>a.immatriculation?.toUpperCase()===matricule.trim().toUpperCase())?.nom}
+                  ✓ {AGENTS_INIT.find(a=>a.immatriculation?.toUpperCase()===CP.trim().toUpperCase())?.prenom} {AGENTS_INIT.find(a=>a.immatriculation?.toUpperCase()===CP.trim().toUpperCase())?.nom}
                 </div>
               )}
             </div>
@@ -2466,7 +2466,7 @@ export default function App(){
       const pinStr=pin.join("");
       const tryLogin=()=>{
         const m=mat.trim().toUpperCase();
-        if(m!==(loginTarget.immatriculation||"").toUpperCase()){setErr("Matricule incorrect");return;}
+        if(m!==(loginTarget.immatriculation||"").toUpperCase()){setErr("CP incorrect");return;}
         const stored=authData[m];
         if(!stored?.pinHash){setErr("Aucun compte créé pour cet agent");return;}
         if(hashPin(m,pinStr)!==stored.pinHash){setErr("Code PIN incorrect");return;}
@@ -2486,7 +2486,7 @@ export default function App(){
               Seul(e) <strong>{loginTarget.prenom} {loginTarget.nom}</strong> peut accéder à son planning.
             </div>
             <input value={mat} onChange={e=>{setMat(e.target.value.toUpperCase());setErr("");}}
-              placeholder="Matricule S.N.C.F."
+              placeholder="CP SNCF"
               style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:"monospace",fontWeight:700,letterSpacing:2,textAlign:"center",outline:"none",boxSizing:"border-box"}}/>
             <div style={{display:"flex",justifyContent:"center",gap:8}}>
               {[0,1,2,3,4].map(i=>(
