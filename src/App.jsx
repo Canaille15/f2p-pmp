@@ -913,7 +913,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
         </div>
       </div>
     </>}
-  </div>;
+  </div>
 }
 
 
