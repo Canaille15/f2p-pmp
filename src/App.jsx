@@ -1564,9 +1564,7 @@ Règles :
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
       {view==="global"&&<GlobalView agents={agents} schedule={schedule} setSchedule={setSchedule} currentAgent={currentAgent} weekOff={weekOff} setWeekOff={setWeekOff}
           onDeleteSchedule={(ag)=>{
-            if(window.confirm(`Supprimer tout le planning de ${ag.prenom} ${ag.nom} ?
-
-Cette action libère sa place (1/90). Son profil reste dans la liste.`)){
+            if(window.confirm(`Supprimer tout le planning de ${ag.prenom} ${ag.nom} ?\n\nCette action libère sa place (1/90). Son profil reste dans la liste.`)){
               setSchedule(prev=>{const next={...prev};Object.keys(next).filter(k=>k.startsWith(ag.id+"-")).forEach(k=>delete next[k]);return next;});
               setDepartDates(prev=>({...prev,[ag.id]:TODAY}));
             }
@@ -2521,7 +2519,7 @@ export default function App(){
                 <input key={i} ref={pinRefs[i]} type="password" inputMode="numeric" maxLength={1}
                   value={pin[i]}
                   onChange={e=>{
-                    if(!/\d?/.test(e.target.value))return;
+                    if(!/^\d?$/.test(e.target.value))return;
                     const next=[...pin];next[i]=e.target.value;setPin(next);
                     if(e.target.value&&i<4)pinRefs[i+1].current?.focus();
                     if(!e.target.value&&i>0)pinRefs[i-1].current?.focus();
