@@ -707,6 +707,21 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
   const [showHab,setShowHab]=useState(false);
   const [calView,setCalView]=useState("semaine");
   const [monthOff,setMonthOff]=useState(0);
+
+  // Modifier l'équipe d'un jour
+  const setDay=(dk,code)=>{
+    if(!agent)return;
+    setSchedule(prev=>{
+      const next={...prev};
+      if(code){
+        const eq=Object.values(EQ).find(e=>e.code===code)||{prive:false};
+        next[`${agent.id}-${dk}`]={equipe:code,jsCode:code,horaires:eq.heures||"",prive:eq.prive||false};
+      } else {
+        delete next[`${agent.id}-${dk}`];
+      }
+      return next;
+    });
+  };
   const _today=new Date();
   const _monthDate=new Date(_today.getFullYear(),_today.getMonth()+monthOff,1);
   const curYear=_monthDate.getFullYear();
