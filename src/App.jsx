@@ -1181,11 +1181,12 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
         </div>
       </div>
     </>}
+    {showColorPicker&&<ColorCustomizer
+      agentColors={agentColors}
+      setAgentColors={setAgentColors}
+      onClose={()=>setShowColorPicker(false)}/>}
   </div>);
-}
-
-
-// ─── MODULE DEMANDE DE CONGÉS ────────────────────────────────────────────────
+}─ MODULE DEMANDE DE CONGÉS ────────────────────────────────────────────────
 
 const NATURES_ABSENCE = [
   "Congé Annuel","Congé de Maladie","Congé Maternité/Paternité",
@@ -2861,9 +2862,5 @@ export default function App(){
         </div>
       </div>;
     })()}
-    {showColorPicker&&<ColorCustomizer
-      agentColors={agentColors}
-      setAgentColors={v=>{setAgentColors(v);}}
-      onClose={()=>setShowColorPicker(false)}/>}
   </div>);
 }
