@@ -855,7 +855,41 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
     {/* ── VUE SEMAINE ── */}
     {calView==="semaine"&&<>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
-        {weekDates.map((dk,i)=><DayCard key={dk} dk={dk}/>)}
+        {weekDates.map((dk,i)=>{
+          const en=schedule[`${agent.id}-${dk}`];
+          const code=en?.equipe;
+          const eq=EQ_COLORS[code]||EQ[code];
+          const isPrive=en?.prive||eq?.prive||false;
+          const showData=pinUnlocked||!isPrive;
+          const isToday=dk===TODAY;
+          const isWE=new Date(dk).getDay()===0||new Date(dk).getDay()===6;
+          let bg=isWE?"#f8fafc":"#fff";
+          if(en&&showData&&eq) bg=eq.bg||eq.color||"#fff";
+          return <div key={dk} style={{border:isToday?"2px solid #6366f1":"1.5px solid #e2e8f0",borderRadius:10,overflow:"hidden",background:bg,boxShadow:isToday?"0 0 0 3px #eef2ff":"none"}}>
+            <div style={{padding:"5px 7px",background:isToday?"#1e293b":isWE?"#f1f5f9":"rgba(0,0,0,.04)",borderBottom:"1px solid rgba(0,0,0,.06)"}}>
+              <div style={{fontSize:10,fontWeight:700,color:isToday?"#fff":isWE?"#94a3b8":"#1e293b"}}>{DAYS_L[i].slice(0,3)}</div>
+              <div style={{fontSize:8,color:"#94a3b8"}}>{dk?.slice(8)}/{dk?.slice(5,7)}</div>
+            </div>
+            <div style={{padding:"5px 5px",minHeight:52,display:"flex",flexDirection:"column",gap:3}}>
+              {en&&showData&&<>
+                <span style={{display:"inline-flex",alignItems:"center",gap:3,background:eq?.bg||"#f1f5f9",color:eq?.tc||eq?.textColor||"#475569",borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
+                  <span style={{width:5,height:5,borderRadius:"50%",background:eq?.dot,flexShrink:0}}/>{eq?.label||code}
+                </span>
+                {en.jsCode&&en.jsCode!==code&&<div style={{fontSize:8,color:"#475569",fontFamily:"monospace",fontWeight:600}}>{en.jsCode}</div>}
+              </>}
+              {en&&!showData&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,paddingTop:4}}>
+                <span style={{fontSize:14}}>🔒</span>
+                <span style={{fontSize:8,color:"#94a3b8",textAlign:"center"}}>PIN requis</span>
+              </div>}
+              {!en&&<span style={{fontSize:9,color:"#e2e8f0",fontStyle:"italic"}}>—</span>}
+              <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
+                style={{fontSize:8,border:"1px solid #e2e8f0",borderRadius:4,padding:"1px 2px",background:"rgba(255,255,255,.85)",color:"#475569",marginTop:"auto",cursor:"pointer",outline:"none"}}>
+                <option value="">—</option>
+                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
+              </select>
+            </div>
+          </div>;
+        })}
       </div>
       {/* Remplissage rapide semaine */}
       <div style={{background:"#f8fafc",borderRadius:10,padding:"11px 13px",border:"1px solid #e2e8f0"}}>
