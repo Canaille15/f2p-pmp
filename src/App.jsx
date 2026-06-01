@@ -137,6 +137,7 @@ const EQUIPES = [
   { code:"RPA",  label:"RPA",           heures:"",            color:"#fef0ff", textColor:"#7e22ce", dot:"#a855f7", prive:true,  compteur:null      },
   { code:"DISPO",label:"Disponible",    heures:"",            color:"#ecfdf5", textColor:"#065f46", dot:"#10b981", prive:false, compteur:null      },
   ...Object.keys(CODES_FETES).map(k=>({ code:k, label:k, heures:"", color:"#fdf2f8", textColor:"#9d174d", dot:"#ec4899", prive:true, compteur:"FETE" })),
+  { code:"UNU", label:"UNU", heures:"", color:"#f5f3ff", textColor:"#5b21b6", dot:"#8b5cf6", prive:false, compteur:"RU" },
 ];
 const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
 
@@ -708,16 +709,26 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
   const [calView,setCalView]=useState("semaine");
   const [monthOff,setMonthOff]=useState(0);
 
-  // Modifier l'équipe d'un jour
-  const setDay=(dk,code)=>{
+  // Modifier l'équipe d'un jour (supporte equipe2 pour double période)
+  const setDay=(dk,code,isSecond=false)=>{
     if(!agent)return;
     setSchedule(prev=>{
       const next={...prev};
-      if(code){
-        const eq=Object.values(EQ).find(e=>e.code===code)||{prive:false};
-        next[`${agent.id}-${dk}`]={equipe:code,jsCode:code,horaires:eq.heures||"",prive:eq.prive||false};
+      const key=`${agent.id}-${dk}`;
+      if(isSecond){
+        // Modifier la 2ème période (prise de nuit)
+        if(code){
+          next[key]={...(next[key]||{}),equipe2:code};
+        } else {
+          if(next[key]){const {equipe2,...rest}=next[key];next[key]=rest;}
+        }
       } else {
-        delete next[`${agent.id}-${dk}`];
+        if(code){
+          const eq=EQ[code]||EQ_COLORS[code]||{prive:false,heures:""};
+          next[key]={...(next[key]||{}),equipe:code,jsCode:code,horaires:eq.heures||"",prive:eq.prive||false};
+        } else {
+          delete next[key];
+        }
       }
       return next;
     });
@@ -905,9 +916,17 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
             </div>
             <div style={{padding:"5px 5px",minHeight:52,display:"flex",flexDirection:"column",gap:3}}>
               {en&&showData&&<>
+                {/* Période principale */}
                 <span style={{display:"inline-flex",alignItems:"center",gap:3,background:eq?.bg||"#f1f5f9",color:eq?.tc||eq?.textColor||"#475569",borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
                   <span style={{width:5,height:5,borderRadius:"50%",background:eq?.dot,flexShrink:0}}/>{eq?.label||code}
                 </span>
+                {/* Période 2 (RP+N ou UNU+N) */}
+                {en.equipe2&&(()=>{
+                  const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];
+                  return <span style={{display:"inline-flex",alignItems:"center",gap:3,background:eq2?.color||eq2?.bg||"#dbeafe",color:eq2?.textColor||eq2?.tc||"#1e3a8a",borderRadius:14,padding:"2px 7px",fontSize:9,fontWeight:700,whiteSpace:"nowrap",marginTop:2}}>
+                    <span style={{width:5,height:5,borderRadius:"50%",background:eq2?.dot,flexShrink:0}}/>{eq2?.label||en.equipe2}
+                  </span>;
+                })()}
                 {en.jsCode&&en.jsCode!==code&&<div style={{fontSize:8,color:"#475569",fontFamily:"monospace",fontWeight:600}}>{en.jsCode}</div>}
               </>}
               {en&&!showData&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,paddingTop:4}}>
@@ -915,11 +934,18 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
                 <span style={{fontSize:8,color:"#94a3b8",textAlign:"center"}}>PIN requis</span>
               </div>}
               {!en&&<span style={{fontSize:9,color:"#e2e8f0",fontStyle:"italic"}}>—</span>}
+              {/* Sélecteur période principale */}
               <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
                 style={{fontSize:8,border:"1px solid #e2e8f0",borderRadius:4,padding:"1px 2px",background:"rgba(255,255,255,.85)",color:"#475569",marginTop:"auto",cursor:"pointer",outline:"none"}}>
                 <option value="">—</option>
-                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
+                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"UNU",l:"UNU"},{c:"CP",l:"Congé"},{c:"ABS",l:"Absent"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
               </select>
+              {/* Sélecteur prise de nuit (si RP, RU ou UNU) */}
+              {(code==="RP"||code==="RU"||code==="UNU")&&<select value={en?.equipe2||""} onChange={e=>setDay(dk,e.target.value||null,true)}
+                style={{fontSize:8,border:"1px solid #bfdbfe",borderRadius:4,padding:"1px 2px",background:"#eff6ff",color:"#1e3a8a",cursor:"pointer",outline:"none"}}>
+                <option value="">+ Nuit ?</option>
+                <option value="N">🌙 Prise de nuit</option>
+              </select>}
             </div>
           </div>;
         })}
@@ -986,6 +1012,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
               }}>
               <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
               {code&&<div style={{fontSize:8,fontWeight:700,color:eq?.tc,background:eq?.bg,borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{eq?.label?.slice(0,4)}</div>}
+              {en?.equipe2&&(()=>{const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];return <div style={{fontSize:7,fontWeight:700,color:eq2?.textColor||eq2?.tc,background:eq2?.color||eq2?.bg,borderRadius:4,padding:"1px 3px",display:"inline-block",marginTop:1}}>🌙N</div>;})()} 
               {en?.jsCode&&en.jsCode!==code&&<div style={{fontSize:7,color:"#94a3b8",fontFamily:"monospace",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{en.jsCode}</div>}
             </div>;
           })}
