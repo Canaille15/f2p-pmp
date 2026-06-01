@@ -982,6 +982,8 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
           {monthDates.map(dk=>{
             const en=schedule[`${agent.id}-${dk}`];
             const code=en?.equipe;const eq=code?EQ_COLORS[code]:null;
+            const isPrive=en?.prive||eq?.prive||false;
+            const showData=pinUnlocked||!isPrive;
             const isToday=dk===TODAY;
             const dayNum=parseInt(dk.slice(8));
             const dow=new Date(dk).getDay();
