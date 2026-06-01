@@ -154,7 +154,6 @@ const EQ_COLORS = Object.fromEntries(
     prive: v.prive||false,
   }])
 );
-}
 const TODAY=new Date().toISOString().slice(0,10);
 function dKey(y,m,d){return`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
 
