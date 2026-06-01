@@ -1967,8 +1967,8 @@ function AddAgentModal({onClose,onAdd}){
 // ─── AUTHENTIFICATION ────────────────────────────────────────────────────────
 // Matricules admin par défaut (à personnaliser)
 
-const ADMIN_MATRICULES_DEFAULT = ["168401861B"]; // BEFFARAL Olivier — premier admin
-
+const ADMIN_MATRICULES_DEFAULT = ["68101861B"]; // BEFFARAL Olivier — premier admin
+const ADMIN_MATRICULES_DEFAULT = ["168401861B", "MATRICULE_ADJOINT"];
 // Hash simple pour PIN (en prod utiliser bcrypt via Supabase Edge Function)
 function hashPin(matricule, pin) {
   // Combine matricule + pin pour un hash unique par agent
