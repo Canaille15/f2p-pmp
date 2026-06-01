@@ -2001,7 +2001,7 @@ function AddAgentModal({onClose,onAdd}){
 // ─── AUTHENTIFICATION ────────────────────────────────────────────────────────
 // CPs admin par défaut (à personnaliser)
 
-const ADMIN_MATRICULES_DEFAULT = ["6810186B"]; // BEFFARAL Olivier // BEFFARAL Olivier — premier admin
+const ADMIN_MATRICULES_DEFAULT = ["6810186B"]; // BEFFARAL Olivierlivier — premier admin
 
 // Hash simple pour PIN (en prod utiliser bcrypt via Supabase Edge Function)
 function hashPin(CP, pin) {
