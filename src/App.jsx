@@ -913,7 +913,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
         </div>
       </div>
     </>}
-  </div>;
+  </div>);
 }
 
 
@@ -1515,154 +1515,7 @@ Règles :
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
 
-export default function App(){
-  const [view,setView]=useState("global");
-  const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
-  const [currentAgent,setCurrentAgent]=useState(null);
-  const [weekOffset,setWeekOffset]=useState(0);
-  const [profileOpen,setProfileOpen]=useState(false);
-  const [profileSearch,setProfileSearch]=useState("");
-  const [schedule,setSchedule]=usePersist("schedule",{});
-  const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
-  const [pinModal,setPinModal]=useState(null);
-  const [unlockedAgents,setUnlockedAgents]=useState({});
-  const [importDPTarget,setImportDPTarget]=useState(null);
-  const [addAgentOpen,setAddAgentOpen]=useState(false);
-  const [notifications,setNotifications]=usePersist("notifications",[]);
-  // ── AUTH ───────────────────────────────────────────────────────────────
-  const [authData,setAuthData]=usePersist("authData",{});
-  const [currentUser,setCurrentUser]=usePersist("currentUser",null);
-  const [showAuthAdmin,setShowAuthAdmin]=useState(false);
-  const [loginTarget,setLoginTarget]=useState(null);
-  const isAdmin=currentUser?.isAdmin||false;
 
-  const handleLogin=(user)=>{
-    setCurrentUser(user);
-    setCurrentAgent(user.agent);
-    setView("personal");
-  };
-  const handleLogout=()=>{
-    setCurrentUser(null);
-    setCurrentAgent(null);
-    setProfileOpen(false);
-  };
-
-  // Nettoyage archives > 3 ans
-  useEffect(()=>{
-    setSchedule(prev=>cleanOldEntries(prev));
-  },[]);
-
-  // Redirection si non connecté
-  if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
-
-  const handleImportSchedule=useCallback((agentId,jours)=>{
-    setSchedule(prev=>{
-      const next={...prev};
-      jours.forEach(j=>{
-        const existing=next[`${agentId}-${j.date}`];
-        // Garder la plus récente si impressionAt renseigné
-        if(!existing||!existing.impressionAt||(j.impressionAt&&j.impressionAt>existing.impressionAt)){
-          next[`${agentId}-${j.date}`]={equipe:j.equipe,horaires:EQ[j.equipe]?.heures||"",poste:j.jsCode||"",jsCode:j.jsCode||"",prive:j.prive||false,impressionAt:j.impressionAt||null};
-        }
-      });
-      return next;
-    });
-  },[]);
-
-  const handlePinSuccess=(pin)=>{
-    if(!pinModal)return;
-    if(pinModal.mode==="set"&&pin){
-      // Création PIN
-      setAgentProfiles(p=>({...p,[pinModal.agent.id]:{...(p[pinModal.agent.id]||{}),pinHash:pin}}));
-      setUnlockedAgents(p=>({...p,[pinModal.agent.id]:true}));
-    } else if(pinModal.mode==="change"&&pin){
-      // Modification PIN (ancien vérifié dans PinModal)
-      setAgentProfiles(p=>({...p,[pinModal.agent.id]:{...(p[pinModal.agent.id]||{}),pinHash:pin}}));
-      setUnlockedAgents(p=>({...p,[pinModal.agent.id]:true}));
-    } else if(pinModal.mode==="reset"&&pin){
-      // Réinitialisation Admin : nouveau PIN défini, agent déverrouillé
-      setAgentProfiles(p=>({...p,[pinModal.agent.id]:{...(p[pinModal.agent.id]||{}),pinHash:pin}}));
-      setUnlockedAgents(p=>({...p,[pinModal.agent.id]:false})); // Force re-saisie par l'agent
-    } else if(pinModal.mode==="verify"){
-      setUnlockedAgents(p=>({...p,[pinModal.agent.id]:true}));
-    }
-    setPinModal(null);
-  };
-
-  const handleFetePaye=(agentId,date,code,paye)=>{
-    setSchedule(prev=>{const next={...prev};const key=`${agentId}-${date}`;if(next[key])next[key]={...next[key],fetePaye:paye};return next;});
-  };
-
-  const pinUnlocked=currentAgent?unlockedAgents[currentAgent.id]||false:false;
-  const profils=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(profileSearch.toLowerCase()));
-  const activeNotifCount=notifications.filter(n=>!n.acquitte&&(currentAgent?n.agentId===currentAgent.id:true)).length;
-
-  const VIEWS=[
-    {k:"global",l:"🏢 Vue globale"},
-    {k:"personal",l:"👤 Mon agenda"},
-    {k:"echanges",l:"🔄 Échanges"},
-    {k:"cps",l:"📋 CPS"+(activeNotifCount>0?` (${activeNotifCount})`:"")},
-  ];
-
-  return(<div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
-    <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');*{box-sizing:border-box;}button:hover{opacity:.85;}`}</style>
-
-    {/* HEADER */}
-    <div style={{background:"#fff",borderBottom:"1.5px solid #e2e8f0",position:"sticky",top:0,zIndex:50}}>
-      <div style={{maxWidth:1300,margin:"0 auto",display:"flex",alignItems:"center",gap:10,height:54,padding:"0 16px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginRight:4}}>
-          <div style={{width:32,height:32,background:"linear-gradient(135deg,#0f4c81,#1e3a5f)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:16}}>🚄</span></div>
-          <div><div style={{fontSize:13,fontWeight:800,color:"#0f4c81",letterSpacing:-.3}}>PlanniRail</div><div style={{fontSize:8,color:"#94a3b8",letterSpacing:.8,fontFamily:"monospace"}}>PRCI · PAR</div></div>
-        </div>
-        <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:10,padding:3}}>
-          {VIEWS.map(({k,l})=>(<button key={k} onClick={()=>setView(k)} style={{border:"none",borderRadius:8,padding:"5px 11px",cursor:"pointer",background:view===k?"#fff":"transparent",color:view===k?"#1e293b":"#94a3b8",fontSize:11,fontWeight:view===k?700:400,boxShadow:view===k?"0 1px 4px rgba(0,0,0,.08)":"none",whiteSpace:"nowrap",position:"relative"}}>
-            {l}{k==="cps"&&activeNotifCount>0&&<span style={{position:"absolute",top:-3,right:-3,width:8,height:8,borderRadius:"50%",background:"#ef4444"}}/>}
-          </button>))}
-        </div>
-        {isAdmin&&<div style={{background:"#fff8e1",border:"1px solid #fde68a",borderRadius:7,padding:"2px 8px",fontSize:10,fontWeight:700,color:"#92400e"}}>👑 Admin</div>}
-        <div style={{flex:1}}/>
-        <div style={{position:"relative"}}>
-          <button onClick={()=>setProfileOpen(p=>!p)} style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"5px 11px",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontSize:11,color:currentAgent?"#1e293b":"#94a3b8",fontWeight:currentAgent?700:400}}>
-            {currentAgent?<Av initials={currentAgent.initials} size={20} famille={currentAgent.famille}/>:<span>👤</span>}
-            {currentAgent?`${currentAgent.prenom} ${currentAgent.nom}`:"Mon profil"}
-            {pinUnlocked&&<span style={{fontSize:9,color:"#10b981"}}>🔓</span>}
-            <span style={{fontSize:9,opacity:.4}}>▼</span>
-          </button>
-          {profileOpen&&(<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,width:280,background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,boxShadow:"0 8px 32px rgba(0,0,0,.12)",zIndex:100,overflow:"hidden"}}>
-            <div style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9"}}><input autoFocus placeholder="Rechercher…" value={profileSearch} onChange={e=>setProfileSearch(e.target.value)} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"5px 8px",fontSize:12,outline:"none"}}/></div>
-            {["PRCI","PAR"].map(fKey=>{const rows=profils.filter(a=>a.famille===fKey);if(!rows.length)return null;return(<div key={fKey}><div style={{padding:"4px 12px",fontSize:9,fontWeight:800,color:"#94a3b8",letterSpacing:.8,background:FAMILLES[fKey].color+"11",borderBottom:"1px solid #f1f5f9"}}>{FAMILLES[fKey].label.toUpperCase()}</div><div style={{maxHeight:155,overflowY:"auto"}}>{rows.map(a=>{const ap=agentProfiles[a.id]||{};return(<button key={a.id} onClick={()=>{
-                    if(currentUser&&a.id===currentUser.agent?.id){
-                      setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
-                    } else if(isAdmin){
-                      setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
-                    } else {
-                      setLoginTarget(a);setProfileOpen(false);setProfileSearch("");
-                    }
-                  }} style={{width:"100%",border:"none",background:currentAgent?.id===a.id?"#eff6ff":"transparent",padding:"6px 11px",cursor:"pointer",display:"flex",alignItems:"center",gap:8,textAlign:"left"}}><Av initials={a.initials} size={22} famille={a.famille}/><div style={{flex:1}}><div style={{fontSize:11,fontWeight:600,color:"#1e293b"}}>{a.prenom} {a.nom}</div><div style={{fontSize:9,color:"#94a3b8"}}>{a.poste}{ap.pinHash?" · 🔐":""}</div></div>{currentAgent?.id===a.id&&<span style={{color:FAMILLES[fKey].accent,fontSize:12}}>✓</span>}</button>);})}</div></div>);
-            })}
-          </div>)}
-        </div>
-      </div>
-    </div>
-
-    {/* CONTENU */}
-    <div style={{maxWidth:1300,margin:"0 auto",padding:"16px"}}>
-      {view==="global"&&<GlobalView agents={agents} schedule={schedule} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}} currentAgent={currentAgent} onAddAgent={()=>setAddAgentOpen(true)} onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}} isAdmin={isAdmin}/>}
-      {view==="personal"&&<PersonalView agent={currentAgent} schedule={schedule} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImportDP={setImportDPTarget} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} pinUnlocked={pinUnlocked} onRequestPin={(mode,ag)=>setPinModal({mode,agent:ag||currentAgent})} onFetePaye={handleFetePaye} isAdmin={isAdmin}/>}
-      {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
-      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications}/>}
-    </div>
-
-    {pinModal&&<PinModal agent={pinModal.agent} mode={pinModal.mode} currentPin={agentProfiles[pinModal.agent?.id]?.pinHash} onSuccess={handlePinSuccess} onClose={()=>setPinModal(null)}/>}
-    {importDPTarget&&<ImportDeroulement agent={importDPTarget} onClose={()=>setImportDPTarget(null)} onImport={jours=>handleImportSchedule(importDPTarget.id,jours)}/>}
-    {addAgentOpen&&<AddAgentModal onClose={()=>setAddAgentOpen(false)} onAdd={ag=>{setAgents(p=>[...p,ag]);}}/>}
-    {profileOpen&&<div onClick={()=>setProfileOpen(false)} style={{position:"fixed",inset:0,zIndex:49}}/>}
-    {showAuthAdmin&&<AdminAuthPanel authData={authData} setAuthData={setAuthData} agents={agents} onClose={()=>setShowAuthAdmin(false)}/>}
-  </div>);
-}{isAdmin&&<div style={{display:"flex",alignItems:"center",gap:5}}>
-          <div style={{background:"#fff8e1",border:"1px solid #fde68a",borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:700,color:"#92400e"}}>👑 Admin</div>
-          <button onClick={()=>setShowAuthAdmin(true)} style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:6,padding:"2px 8px",fontSize:9,fontWeight:700,color:"#7c3aed",cursor:"pointer"}}>⚙️ Comptes</button>
-        </div>}
         <div style={{flex:1}}/>
 
         {/* Déconnexion */}
@@ -1725,12 +1578,9 @@ Cette action libère sa place (1/90). Son profil reste dans la liste.`)){
     </div>
 
     {profileOpen&&<div onClick={()=>setProfileOpen(false)} style={{position:"fixed",inset:0,zIndex:49}}/>}
-  </div>;
-}
-
-    {showHab&&<HabilitationsModal agent={agent} habilitations={profile.habilitations||{}} suggestedPostes={postesDetectes} onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);}} onClose={()=>setShowHab(false)}/>}
   </div>);
 }
+
 
 // ─── ONGLET CPS ───────────────────────────────────────────────────────────────
 function CpsView({agents, schedule, setSchedule, notifications, setNotifications}){
@@ -2438,3 +2288,258 @@ function AdminAuthPanel({ authData, setAuthData, agents, onClose }) {
 }
 
 // ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
+
+export default function App(){
+  // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
+  const [view,setView]=useState("personal");
+  const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
+  const [currentAgent,setCurrentAgent]=useState(null);
+  const [weekOff,setWeekOff]=useState(0);
+  const [profileOpen,setProfileOpen]=useState(false);
+  const [profileSearch,setProfileSearch]=useState("");
+  const [schedule,setSchedule]=usePersist("schedule",{});
+  const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
+  const [pinModal,setPinModal]=useState(null);
+  const [unlockedAgents,setUnlockedAgents]=useState({});
+  const [importDPTarget,setImportDPTarget]=useState(null);
+  const [addAgentOpen,setAddAgentOpen]=useState(false);
+  const [notifications,setNotifications]=usePersist("notifications",[]);
+  const [departDates,setDepartDates]=usePersist("departDates",{});
+  // ── AUTH ──────────────────────────────────────────────────────────────────
+  const [authData,setAuthData]=usePersist("authData",{});
+  const [currentUser,setCurrentUser]=usePersist("currentUser",null);
+  const [showAuthAdmin,setShowAuthAdmin]=useState(false);
+  const [loginTarget,setLoginTarget]=useState(null);
+  const isAdmin=currentUser?.isAdmin||false;
+
+  const handleLogin=(user)=>{
+    setCurrentUser(user);
+    setCurrentAgent(user.agent);
+    setView("personal");
+  };
+  const handleLogout=()=>{
+    setCurrentUser(null);
+    setCurrentAgent(null);
+    setProfileOpen(false);
+  };
+
+  // Nettoyage archives > 3 ans
+  useEffect(()=>{ setSchedule(prev=>cleanOldEntries(prev)); },[]);
+
+  // Redirection si non connecté
+  if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
+
+  const handleImportSchedule=useCallback((agentId,jours)=>{
+    setSchedule(prev=>{
+      const next={...prev};
+      jours.forEach(j=>{
+        const existing=next[`${agentId}-${j.date}`];
+        if(!existing||!existing.impressionAt||(j.impressionAt&&j.impressionAt>existing.impressionAt)){
+          next[`${agentId}-${j.date}`]={equipe:j.equipe,horaires:EQ[j.equipe]?.heures||"",poste:j.jsCode||"",jsCode:j.jsCode||"",prive:j.prive||false,impressionAt:j.impressionAt||null};
+        }
+      });
+      return next;
+    });
+  },[]);
+
+  const handlePinSuccess=(pin)=>{
+    if(!pinModal)return;
+    if((pinModal.mode==="set"||pinModal.mode==="change"||pinModal.mode==="reset")&&pin){
+      setAgentProfiles(p=>({...p,[pinModal.agent.id]:{...(p[pinModal.agent.id]||{}),pinHash:pin}}));
+      if(pinModal.mode!=="reset") setUnlockedAgents(p=>({...p,[pinModal.agent.id]:true}));
+    } else if(pinModal.mode==="verify"){
+      setUnlockedAgents(p=>({...p,[pinModal.agent.id]:true}));
+    }
+    setPinModal(null);
+  };
+
+  const handleFetePaye=(agentId,date,code,paye)=>{
+    setSchedule(prev=>{const next={...prev};const key=`${agentId}-${date}`;if(next[key])next[key]={...next[key],fetePaye:paye};return next;});
+  };
+
+  // Nettoyage auto agents absents > 1 an
+  useMemo(()=>{
+    const cutoff=new Date();cutoff.setFullYear(cutoff.getFullYear()-1);
+    const cutStr=cutoff.toISOString().slice(0,10);
+    const toDelete=Object.entries(departDates).filter(([,d])=>d<=cutStr).map(([id])=>id);
+    if(toDelete.length>0){
+      setTimeout(()=>{
+        setAgents(prev=>prev.filter(a=>!toDelete.includes(a.id)));
+        setDepartDates(prev=>{const n={...prev};toDelete.forEach(id=>delete n[id]);return n;});
+        setCurrentAgent(prev=>prev&&toDelete.includes(prev.id)?null:prev);
+      },0);
+    }
+  },[departDates]);
+
+  const pinUnlocked=currentAgent?unlockedAgents[currentAgent.id]||false:false;
+  const profils=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(profileSearch.toLowerCase()));
+  const activeNotifCount=notifications.filter(n=>!n.acquitte&&(currentAgent?n.agentId===currentAgent.id:true)).length;
+
+  const VIEWS=[
+    {k:"personal",l:"📊 Mon planning"},
+    {k:"global",  l:"🏢 Vue équipe"},
+    {k:"echanges",l:"🔄 Échanges"},
+    {k:"cps",     l:"📋 CPS"+(activeNotifCount>0?` (${activeNotifCount})`:"")}
+  ];
+
+  return(<div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
+    <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;}button:hover{opacity:.85;}`}</style>
+
+    {/* HEADER */}
+    <div style={{background:"#fff",borderBottom:"1.5px solid #e2e8f0",position:"sticky",top:0,zIndex:50}}>
+      <div style={{maxWidth:1100,margin:"0 auto",display:"flex",alignItems:"center",gap:8,height:52,padding:"0 14px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,marginRight:4}}>
+          <div style={{width:30,height:30,background:"linear-gradient(135deg,#0f4c81,#1e3a5f)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:15}}>🚄</span>
+          </div>
+          <div>
+            <div style={{fontSize:13,fontWeight:800,color:"#0f4c81",letterSpacing:-.3}}>F2P.PMP</div>
+            <div style={{fontSize:8,color:"#94a3b8",letterSpacing:.5,fontFamily:"monospace"}}>PRCI · PAR · PMP</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:9,padding:3}}>
+          {VIEWS.map(({k,l})=>(
+            <button key={k} onClick={()=>setView(k)} style={{border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",background:view===k?"#fff":"transparent",color:view===k?"#1e293b":"#94a3b8",fontSize:11,fontWeight:view===k?700:400,boxShadow:view===k?"0 1px 4px rgba(0,0,0,.08)":"none",whiteSpace:"nowrap",position:"relative"}}>
+              {l}{k==="cps"&&activeNotifCount>0&&<span style={{position:"absolute",top:-2,right:-2,width:7,height:7,borderRadius:"50%",background:"#ef4444"}}/>}
+            </button>
+          ))}
+        </div>
+        {isAdmin&&<div style={{display:"flex",alignItems:"center",gap:5}}>
+          <div style={{background:"#fff8e1",border:"1px solid #fde68a",borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:700,color:"#92400e"}}>👑 Admin</div>
+          <button onClick={()=>setShowAuthAdmin(true)} style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:6,padding:"2px 8px",fontSize:9,fontWeight:700,color:"#7c3aed",cursor:"pointer"}}>⚙️ Comptes</button>
+        </div>}
+        <div style={{flex:1}}/>
+        <button onClick={handleLogout} title="Se déconnecter" style={{border:"1.5px solid #fee2e2",borderRadius:9,padding:"5px 9px",background:"#fff",cursor:"pointer",fontSize:11,color:"#ef4444",fontWeight:600}}>🚪 Déco.</button>
+        <div style={{position:"relative"}}>
+          <button onClick={()=>setProfileOpen(p=>!p)} style={{border:"1.5px solid #e2e8f0",borderRadius:9,padding:"5px 10px",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#1e293b",fontWeight:700}}>
+            {currentAgent&&<Av initials={currentAgent.initials} size={18} famille={currentAgent.famille}/>}
+            <span>{currentAgent?.prenom||"Profil"}</span>
+            {pinUnlocked&&<span style={{fontSize:9,color:"#10b981"}}>🔓</span>}
+            <span style={{fontSize:9,opacity:.4}}>▼</span>
+          </button>
+          {profileOpen&&(<div style={{position:"absolute",top:"calc(100% + 5px)",right:0,width:260,background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:13,boxShadow:"0 8px 30px rgba(0,0,0,.12)",zIndex:100,overflow:"hidden"}}>
+            <div style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9"}}>
+              <input autoFocus placeholder="Rechercher…" value={profileSearch} onChange={e=>setProfileSearch(e.target.value)}
+                style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11,outline:"none"}}/>
+            </div>
+            {["PRCI","PAR"].map(fKey=>{
+              const rows=profils.filter(a=>a.famille===fKey);if(!rows.length)return null;
+              const fam=FAMILLES[fKey];
+              return(<div key={fKey}>
+                <div style={{padding:"4px 11px",fontSize:8,fontWeight:800,color:"#94a3b8",letterSpacing:.8,background:fam.color+"11",borderBottom:"1px solid #f1f5f9"}}>{fam.label.toUpperCase()}</div>
+                <div style={{maxHeight:150,overflowY:"auto"}}>
+                  {rows.map(a=>(
+                    <button key={a.id} onClick={()=>{
+                      if(currentUser&&a.id===currentUser.agent?.id){
+                        setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
+                      } else if(isAdmin){
+                        setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
+                      } else {
+                        setLoginTarget(a);setProfileOpen(false);setProfileSearch("");
+                      }
+                    }} style={{width:"100%",border:"none",background:currentAgent?.id===a.id?"#eff6ff":"transparent",padding:"6px 11px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,textAlign:"left"}}>
+                      <Av initials={a.initials} size={22} famille={a.famille}/>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:11,fontWeight:600,color:"#1e293b"}}>{a.prenom} {a.nom}</div>
+                        <div style={{fontSize:9,color:"#94a3b8"}}>{a.poste}</div>
+                      </div>
+                      {currentAgent?.id===a.id&&<span style={{color:fam.accent,fontSize:11}}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>);
+            })}
+          </div>)}
+        </div>
+      </div>
+    </div>
+
+    {/* CONTENU */}
+    <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
+      {view==="global"&&<GlobalView agents={agents} schedule={schedule} setSchedule={setSchedule} currentAgent={currentAgent} weekOff={weekOff} setWeekOff={setWeekOff}
+        onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
+        onAddAgent={()=>setAddAgentOpen(true)}
+        onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
+        isAdmin={isAdmin}/>}
+      {view==="personal"&&<PersonalView
+        agent={currentAgent||currentUser?.agent}
+        schedule={schedule} setSchedule={setSchedule}
+        weekOffset={weekOff} setWeekOffset={setWeekOff}
+        onImportDP={setImportDPTarget}
+        agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
+        pinUnlocked={pinUnlocked}
+        onRequestPin={(mode,ag)=>setPinModal({mode,agent:ag||currentAgent})}
+        onFetePaye={handleFetePaye}
+        onDepart={(id)=>setDepartDates(prev=>({...prev,[id]:TODAY}))}
+        departDates={departDates}
+        isAdmin={isAdmin}/>}
+      {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
+      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications}/>}
+    </div>
+
+    {/* MODALS */}
+    {pinModal&&<PinModal agent={pinModal.agent} mode={pinModal.mode} currentPin={agentProfiles[pinModal.agent?.id]?.pinHash} onSuccess={handlePinSuccess} onClose={()=>setPinModal(null)}/>}
+    {importDPTarget&&<ImportDeroulement agent={importDPTarget} onClose={()=>setImportDPTarget(null)} onImport={jours=>handleImportSchedule(importDPTarget.id,jours)}/>}
+    {addAgentOpen&&<AddAgentModal onClose={()=>setAddAgentOpen(false)} onAdd={ag=>{setAgents(p=>[...p,ag]);}}/>}
+    {profileOpen&&<div onClick={()=>setProfileOpen(false)} style={{position:"fixed",inset:0,zIndex:49}}/>}
+    {showAuthAdmin&&<AdminAuthPanel authData={authData} setAuthData={setAuthData} agents={agents} onClose={()=>setShowAuthAdmin(false)}/>}
+
+    {/* Modale login pour accéder au profil d'un autre agent */}
+    {loginTarget&&(()=>{
+      const fam=FAMILLES[loginTarget.famille];
+      const [mat,setMat]=React.useState("");
+      const [pin,setPin]=React.useState(["","","","",""]);
+      const [err,setErr]=React.useState("");
+      const pinRefs=[React.useRef(),React.useRef(),React.useRef(),React.useRef(),React.useRef()];
+      const pinStr=pin.join("");
+      const tryLogin=()=>{
+        const m=mat.trim().toUpperCase();
+        if(m!==(loginTarget.immatriculation||"").toUpperCase()){setErr("Matricule incorrect");return;}
+        const stored=authData[m];
+        if(!stored?.pinHash){setErr("Aucun compte créé pour cet agent");return;}
+        if(hashPin(m,pinStr)!==stored.pinHash){setErr("Code PIN incorrect");return;}
+        const user={agent:loginTarget,isAdmin:stored.isAdmin||ADMIN_MATRICULES_DEFAULT.includes(m)};
+        setCurrentUser(user);setCurrentAgent(loginTarget);
+        setLoginTarget(null);setView("personal");
+      };
+      return <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(6px)"}}>
+        <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:380,boxShadow:"0 24px 60px rgba(0,0,0,.35)",overflow:"hidden"}}>
+          <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,padding:"20px 22px",textAlign:"center"}}>
+            <div style={{fontSize:28,marginBottom:6}}>🔐</div>
+            <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Connexion requise</div>
+            <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginTop:3}}>{loginTarget.prenom} {loginTarget.nom}</div>
+          </div>
+          <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{background:"#eff6ff",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#1e40af"}}>
+              Seul(e) <strong>{loginTarget.prenom} {loginTarget.nom}</strong> peut accéder à son planning.
+            </div>
+            <input value={mat} onChange={e=>{setMat(e.target.value.toUpperCase());setErr("");}}
+              placeholder="Matricule S.N.C.F."
+              style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:"monospace",fontWeight:700,letterSpacing:2,textAlign:"center",outline:"none",boxSizing:"border-box"}}/>
+            <div style={{display:"flex",justifyContent:"center",gap:8}}>
+              {[0,1,2,3,4].map(i=>(
+                <input key={i} ref={pinRefs[i]} type="password" inputMode="numeric" maxLength={1}
+                  value={pin[i]}
+                  onChange={e=>{
+                    if(!/\d?/.test(e.target.value))return;
+                    const next=[...pin];next[i]=e.target.value;setPin(next);
+                    if(e.target.value&&i<4)pinRefs[i+1].current?.focus();
+                    if(!e.target.value&&i>0)pinRefs[i-1].current?.focus();
+                    setErr("");
+                  }}
+                  onKeyDown={e=>{if(e.key==="Enter"&&pin.every(d=>d))tryLogin();if(e.key==="Backspace"&&!pin[i]&&i>0)pinRefs[i-1].current?.focus();}}
+                  style={{width:46,height:54,textAlign:"center",fontSize:22,fontWeight:800,border:`2px solid ${err?"#ef4444":"#e2e8f0"}`,borderRadius:9,outline:"none"}}/>
+              ))}
+            </div>
+            {err&&<div style={{background:"#fee2e2",borderRadius:9,padding:"8px 12px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{err}</div>}
+            <button onClick={tryLogin} disabled={!mat||pinStr.length<5}
+              style={{background:mat&&pinStr.length===5?(fam?.color||"#1e293b"):"#e2e8f0",color:mat&&pinStr.length===5?"#fff":"#94a3b8",border:"none",borderRadius:10,padding:"12px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
+              Se connecter →
+            </button>
+            <button onClick={()=>setLoginTarget(null)} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:12,textAlign:"center"}}>Annuler</button>
+          </div>
+        </div>
+      </div>;
+    })()}
+  </div>);
+}
