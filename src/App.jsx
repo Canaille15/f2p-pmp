@@ -2,6 +2,80 @@ import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
 
+// ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
+
+// Sauvegarder le profil agent dans Supabase
+async function sbSaveProfile(agentId, data) {
+  return sbFetch(`agent_profiles?agent_id=eq.${agentId}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      agent_id: agentId,
+      pin_hash: data.pinHash||null,
+      is_admin: data.isAdmin||false,
+      roulement: data.roulement||null,
+      is_reserve: data.isReserve||false,
+      familles_hab: data.famillesHab||null,
+      habilitations: data.habilitations||{},
+      agent_colors: data.agentColors||{},
+      depart_date: data.departDate||null,
+      updated_at: new Date().toISOString(),
+    }),
+    headers: { 'Prefer': 'resolution=merge-duplicates' }
+  });
+}
+
+// Charger le profil agent depuis Supabase
+async function sbLoadProfile(agentId) {
+  const data = await sbFetch(`agent_profiles?agent_id=eq.${agentId}&select=*`);
+  return data?.[0] || null;
+}
+
+// Sauvegarder une entrée de planning
+async function sbSaveEntry(agentId, dk, entry) {
+  return sbFetch(`schedule_entries?agent_id=eq.${agentId}&date=eq.${dk}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      agent_id: agentId,
+      date: dk,
+      equipe: entry.equipe||null,
+      equipe2: entry.equipe2||null,
+      js_code: entry.jsCode||null,
+      horaires: entry.horaires||null,
+      prive: entry.prive||false,
+      fin_nuit: entry.finNuit||false,
+      impression_at: entry.impressionAt||null,
+      updated_at: new Date().toISOString(),
+    }),
+    headers: { 'Prefer': 'resolution=merge-duplicates' }
+  });
+}
+
+// Charger tout le planning d'un agent
+async function sbLoadSchedule(agentId) {
+  const data = await sbFetch(`schedule_entries?agent_id=eq.${agentId}&select=*`);
+  if (!data) return {};
+  const result = {};
+  data.forEach(row => {
+    result[`${row.agent_id}-${row.date}`] = {
+      equipe: row.equipe,
+      equipe2: row.equipe2,
+      jsCode: row.js_code,
+      horaires: row.horaires,
+      prive: row.prive,
+      finNuit: row.fin_nuit,
+      impressionAt: row.impression_at,
+    };
+  });
+  return result;
+}
+
+// Supprimer une entrée de planning
+async function sbDeleteEntry(agentId, dk) {
+  return sbFetch(`schedule_entries?agent_id=eq.${agentId}&date=eq.${dk}`, {
+    method: 'DELETE'
+  });
+}
+
 // ─── PERSISTANCE LOCALE (localStorage) ───────────────────────────────────────
 function usePersist(key, defaultValue) {
   const [value, setValue] = useState(() => {
@@ -29,10 +103,10 @@ try {
 } catch {}
 
 // ─── SUPABASE ────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "VOTRE_URL_SUPABASE";
-const SUPABASE_ANON_KEY = "VOTRE_CLE_ANON";
+const SUPABASE_URL = "https://vrhykmrbdakjycfqbzpt.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHlrbXJiZGFranljZnFienB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTM0MTAsImV4cCI6MjA5NTgyOTQxMH0.LMAwtDR3hSliWV89KO9cRIaC3Wy2QGDh5r8Hl_G_4pY";
 async function sbFetch(path, opts={}) {
-  if (SUPABASE_URL==="VOTRE_URL_SUPABASE") return null;
+  if (!SUPABASE_URL || SUPABASE_URL==="VOTRE_URL_SUPABASE") return null;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":`Bearer ${SUPABASE_ANON_KEY}`,"Content-Type":"application/json","Prefer":"return=representation",...opts.headers},
     ...opts,
@@ -2665,6 +2739,58 @@ export default function App(){
 
   // Nettoyage archives > 3 ans
   useEffect(()=>{ setSchedule(prev=>cleanOldEntries(prev)); },[]);
+
+  // Charger le planning depuis Supabase au login
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    const agentId = currentUser.agent.id;
+    // Charger le profil
+    sbLoadProfile(agentId).then(profile=>{
+      if(!profile) return;
+      setAgentProfiles(prev=>({...prev,[agentId]:{
+        ...(prev[agentId]||{}),
+        pinHash: profile.pin_hash,
+        isAdmin: profile.is_admin,
+        roulement: profile.roulement,
+        isReserve: profile.is_reserve,
+        famillesHab: profile.familles_hab,
+        habilitations: profile.habilitations||{},
+        agentColors: profile.agent_colors||{},
+      }}));
+    });
+    // Charger le planning
+    sbLoadSchedule(agentId).then(entries=>{
+      if(!entries||Object.keys(entries).length===0) return;
+      setSchedule(prev=>({...prev,...entries}));
+    });
+  },[currentUser?.agent?.id]);
+
+  // Sauvegarder dans Supabase quand le schedule change
+  const scheduleRef = React.useRef(schedule);
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    const agentId = currentUser.agent.id;
+    const prev = scheduleRef.current;
+    const curr = schedule;
+    // Détecter les clés modifiées pour cet agent
+    const agentKeys = Object.keys(curr).filter(k=>k.startsWith(agentId+"-"));
+    agentKeys.forEach(key=>{
+      const dk = key.slice(agentId.length+1);
+      if(JSON.stringify(curr[key])!==JSON.stringify(prev[key])){
+        if(curr[key]) sbSaveEntry(agentId, dk, curr[key]);
+        else sbDeleteEntry(agentId, dk);
+      }
+    });
+    scheduleRef.current = curr;
+  },[schedule]);
+
+  // Sauvegarder le profil dans Supabase quand il change
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    const agentId = currentUser.agent.id;
+    const profile = agentProfiles[agentId];
+    if(profile) sbSaveProfile(agentId, profile);
+  },[agentProfiles]);
 
   // Redirection si non connecté
   if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
