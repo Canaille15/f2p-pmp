@@ -2444,8 +2444,8 @@ function findAgentByCP(CP) {
 function LoginPage({ onLogin, authData, setAuthData }) {
   const [step, setStep] = useState("login"); // "login" | "first_time" | "forgot"
   const [CP, setCP] = useState("");
-  const [pin, setPin] = useState(["","","","",""]);
-  const [pinConfirm, setPinConfirm] = useState(["","","","",""]);
+  const [pin, setPin] = useState(["","","",""]);
+  const [pinConfirm, setPinConfirm] = useState(["","","","""]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const r0=useRef(),r1=useRef(),r2=useRef(),r3=useRef();
@@ -2562,7 +2562,8 @@ function LoginPage({ onLogin, authData, setAuthData }) {
             </div>
 
             <div>
-              placeholder="CP SNCF"
+              <input value={CP} onChange={e=>{setCP(e.target.value.toUpperCase());setError("");}}
+                placeholder="CP SNCF"
                 onKeyDown={e=>e.key==="Enter"&&pinRefs[0].current?.focus()}
                 style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:14,fontFamily:"'DM Mono',monospace",fontWeight:700,outline:"none",letterSpacing:2,textAlign:"center",boxSizing:"border-box"}}/>
             </div>
