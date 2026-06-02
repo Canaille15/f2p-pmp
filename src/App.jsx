@@ -2449,9 +2449,9 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   const [pinConfirm, setPinConfirm] = useState(["","","","",""]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const r0=useRef(),r1=useRef(),r2=useRef(),r3=useRef(),r4=useRef();
+  const r0=useRef(),r1=useRef(),r2=useRef(),r3=useRef();
   const c0=useRef(),c1=useRef(),c2=useRef(),c3=useRef(),c4=useRef();
-  const pinRefs=[r0,r1,r2,r3,r4];
+  const pinRefs=[r0,r1,r2,r3];
   const confRefs=[c0,c1,c2,c3,c4];
 
   const pinStr = pin.join("");
@@ -2502,7 +2502,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   };
 
   const handleFirstTime = () => {
-    if (pinStr.length < 5) { setError("5 chiffres requis"); return; }
+    if (pinStr.length < 5) { setError("4 chiffres requis"); return; }
     if (pinStr !== confStr) { setError("Les codes ne correspondent pas"); return; }
     const mat = CP.trim().toUpperCase();
     const isAdmin = ADMIN_MATRICULES_DEFAULT.includes(mat) ||
@@ -2524,7 +2524,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
       <div style={{fontSize:11,color:"#64748b",fontWeight:600}}>{label}</div>
       <div style={{display:"flex",gap:10}}>
-        {[0,1,2,3,4].map(i=>(
+        {[0,1,2,3].map(i=>(
           <input key={i} ref={refs[i]} type="password" inputMode="numeric" maxLength={1}
             value={arr[i]}
             onChange={e=>handlePinDigit(i,e.target.value,arr,setArr,refs)}
@@ -2570,12 +2570,12 @@ function LoginPage({ onLogin, authData, setAuthData }) {
                 style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:14,fontFamily:"'DM Mono',monospace",fontWeight:700,outline:"none",letterSpacing:2,textAlign:"center",boxSizing:"border-box"}}/>
             </div>
 
-            <PinInput arr={pin} setArr={setPin} refs={pinRefs} label="CODE PIN (5 chiffres)"/>
+            <PinInput arr={pin} setArr={setPin} refs={pinRefs} label="CODE PIN (4 chiffres)"/>
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={handleLogin} disabled={!CP||pinStr.length<5||loading}
-              style={{background:CP&&pinStr.length===5?"#0f4c81":"#e2e8f0",color:CP&&pinStr.length===5?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:CP&&pinStr.length===5?"pointer":"not-allowed",fontSize:14,fontWeight:800,transition:"all .15s"}}>
+            <button onClick={handleLogin} disabled={!CP||pinStr.length<4||loading}
+              style={{background:CP&&pinStr.length===4?"#0f4c81":"#e2e8f0",color:CP&&pinStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:CP&&pinStr.length===4?"pointer":"not-allowed",fontSize:14,fontWeight:800,transition:"all .15s"}}>
               {loading?"Connexion…":"Se connecter →"}
             </button>
 
@@ -2597,7 +2597,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
             </div>
 
             <div style={{background:"#eff6ff",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#1e40af"}}>
-              🔐 Choisis un code PIN à <strong>5 chiffres</strong>. Il protégera ton planning personnel (RP, congés…). Note-le quelque part.
+              🔐 Choisis un code PIN à <strong>4 chiffres</strong>. Il protégera ton planning personnel (RP, congés…). Note-le quelque part.
             </div>
 
             <PinInput arr={pin} setArr={setPin} refs={pinRefs} label="NOUVEAU CODE PIN"/>
@@ -2605,8 +2605,8 @@ function LoginPage({ onLogin, authData, setAuthData }) {
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={handleFirstTime} disabled={pinStr.length<5||confStr.length<5}
-              style={{background:pinStr.length===5&&confStr.length===5?"#065f46":"#e2e8f0",color:pinStr.length===5&&confStr.length===5?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
+            <button onClick={handleFirstTime} disabled={pinStr.length<4||confStr.length<5}
+              style={{background:pinStr.length===4&&confStr.length===5?"#065f46":"#e2e8f0",color:pinStr.length===4&&confStr.length===5?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
               ✓ Créer mon compte
             </button>
 
@@ -2985,8 +2985,8 @@ export default function App(){
       const [mat,setMat]=React.useState("");
       const [pin,setPin]=React.useState(["","","","",""]);
       const [err,setErr]=React.useState("");
-      const lt0=React.useRef(),lt1=React.useRef(),lt2=React.useRef(),lt3=React.useRef(),lt4=React.useRef();
-      const pinRefs=[lt0,lt1,lt2,lt3,lt4];
+      const lt0=React.useRef(),lt1=React.useRef(),lt2=React.useRef(),lt3=React.useRef();
+      const pinRefs=[lt0,lt1,lt2,lt3];
       const pinStr=pin.join("");
       const tryLogin=()=>{
         const m=mat.trim().toUpperCase();
@@ -3013,13 +3013,13 @@ export default function App(){
               placeholder="CP SNCF"
               style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:"monospace",fontWeight:700,letterSpacing:2,textAlign:"center",outline:"none",boxSizing:"border-box"}}/>
             <div style={{display:"flex",justifyContent:"center",gap:8}}>
-              {[0,1,2,3,4].map(i=>(
+              {[0,1,2,3].map(i=>(
                 <input key={i} ref={pinRefs[i]} type="password" inputMode="numeric" maxLength={1}
                   value={pin[i]}
                   onChange={e=>{
                     const digit=e.target.value.replace(/[^0-9]/g,'').slice(-1);
                     const next=[...pin];next[i]=digit;setPin(next);
-                    if(digit&&i<4) setTimeout(()=>pinRefs[i+1].current?.focus(),10);
+                    if(digit&&i<3) setTimeout(()=>pinRefs[i+1].current?.focus(),10);
                     if(!digit&&i>0) setTimeout(()=>pinRefs[i-1].current?.focus(),10);
                     setErr("");
                   }}
@@ -3028,8 +3028,8 @@ export default function App(){
               ))}
             </div>
             {err&&<div style={{background:"#fee2e2",borderRadius:9,padding:"8px 12px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{err}</div>}
-            <button onClick={tryLogin} disabled={!mat||pinStr.length<5}
-              style={{background:mat&&pinStr.length===5?(fam?.color||"#1e293b"):"#e2e8f0",color:mat&&pinStr.length===5?"#fff":"#94a3b8",border:"none",borderRadius:10,padding:"12px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
+            <button onClick={tryLogin} disabled={!mat||pinStr.length<4}
+              style={{background:mat&&pinStr.length===4?(fam?.color||"#1e293b"):"#e2e8f0",color:mat&&pinStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:10,padding:"12px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
               Se connecter →
             </button>
             <button onClick={()=>setLoginTarget(null)} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:12,textAlign:"center"}}>Annuler</button>
