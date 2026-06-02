@@ -2772,23 +2772,6 @@ export default function App(){
     });
   },[currentUser?.agent?.id]); // eslint-disable-line
 
-  // Sauvegarder dans Supabase quand le schedule change
-  useEffect(()=>{
-    if(!currentUser?.agent?.id) return;
-    const agentId = currentUser.agent.id;
-    const prev = scheduleRef.current || {};
-    const curr = schedule;
-    // Détecter les clés modifiées pour cet agent
-    const agentKeys = Object.keys(curr).filter(k=>k.startsWith(agentId+"-"));
-    agentKeys.forEach(key=>{
-      const dk = key.slice(agentId.length+1);
-      if(JSON.stringify(curr[key])!==JSON.stringify(prev[key])){
-        if(curr[key]) sbSaveEntry(agentId, dk, curr[key]);
-        else sbDeleteEntry(agentId, dk);
-      }
-    });
-    scheduleRef.current = curr;
-  },[schedule]);
 
   // Sauvegarder le profil dans Supabase quand il change
   useEffect(()=>{
