@@ -2449,9 +2449,9 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const r0=useRef(),r1=useRef(),r2=useRef(),r3=useRef();
-  const c0=useRef(),c1=useRef(),c2=useRef(),c3=useRef(),c4=useRef();
+  const c0=useRef(),c1=useRef(),c2=useRef(),c3=useRef();
   const pinRefs=[r0,r1,r2,r3];
-  const confRefs=[c0,c1,c2,c3,c4];
+  const confRefs=[c0,c1,c2,c3];
 
   const pinStr = pin.join("");
   const confStr = pinConfirm.join("");
@@ -2463,7 +2463,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     // Prendre seulement le dernier chiffre saisi (cas collage)
     const digit = v.replace(/\D/g, '').slice(-1);
     const next = [...arr]; next[i] = digit; setArr(next);
-    if (digit && i < 4) {
+    if (digit && i < 3) {
       setTimeout(() => refs[i+1].current?.focus(), 10);
     }
     if (!digit && i > 0) {
