@@ -2801,6 +2801,7 @@ export default function App(){
 
   // Ref pour tracker les changements de schedule
   const scheduleRef = useRef(schedule);
+  const loadedRef = useRef(false);
 
   // Hooks qui doivent être avant tout return conditionnel
   const handleImportSchedule=useCallback((agentId,jours)=>{
