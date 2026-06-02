@@ -1043,7 +1043,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
 }
 
 
-function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,pinUnlocked,onRequestPin,onFetePaye,isAdmin}){
+function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser}){
   const [showHab,setShowHab]=useState(false);
   const [calView,setCalView]=useState("semaine");
   const [monthOff,setMonthOff]=useState(0);
@@ -1053,6 +1053,9 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
   // Couleur effective pour un code
   const getColor=(code)=>agentColors[code]||DEFAULT_COLORS[code]||EQ[code]?.color||"#f8fafc";
   const getTc=(code)=>getTextColor(getColor(code));
+
+  // Accès aux données privées = agent connecté uniquement
+  const isOwnProfile = currentUser?.agent?.id === agent?.id;
 
   // Modifier l'équipe d'un jour (supporte equipe2 pour double période)
   const setDay=(dk,code,isSecond=false)=>{
@@ -1116,25 +1119,18 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
       <div style={{flex:1}}>
         <div style={{fontSize:18,fontWeight:800}}>{agent.prenom} {agent.nom}</div>
         <div style={{fontSize:11,opacity:.65}}>{agent.grade} · {agent.poste} · {fam?.label}</div>
-        <div style={{fontSize:10,marginTop:2,opacity:.7}}>{hasPin?"🔐 Planning protégé":"🔓 Aucun PIN"}</div>
+
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <button onClick={()=>onImportDP(agent)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>📋 Déroulé Prévisionnel</button>
         <button onClick={()=>setShowDemandeConges(true)} style={{background:"rgba(234,88,12,.3)",border:"1px solid rgba(253,186,116,.5)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>📝 Demande congés</button>
         <button onClick={()=>setShowColorPicker(true)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>🎨 Mes couleurs</button>
         <button onClick={()=>setShowQuit(true)} style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.35)",color:"#fca5a5",borderRadius:9,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>🚪 Quitter</button>
-        {!hasPin
-          ?<button onClick={()=>onRequestPin("set",agent)} style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.4)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>🔐 Créer PIN</button>
-          :<>
-            {!pinUnlocked&&<button onClick={()=>onRequestPin("verify",agent)} style={{background:"rgba(255,200,0,.2)",border:"1px solid rgba(255,200,0,.5)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>🔓 Déverrouiller</button>}
-            {pinUnlocked&&<button onClick={()=>onRequestPin("change",agent)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.3)",color:"#fff",borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>🔑 Modifier PIN</button>}
-          </>
-        }
       </div>
     </div>
 
     {/* Compteurs */}
-    {pinUnlocked&&(<div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:"14px 18px"}}>
+    {isOwnProfile&&(<div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:"14px 18px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
         <div style={{fontSize:11,fontWeight:800,color:"#64748b",letterSpacing:.5}}>📊 COMPTEURS {compteurYear}</div>
         <div style={{display:"flex",gap:4}}>
@@ -1249,7 +1245,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
           const code=en?.equipe;
           const eq=EQ_COLORS[code]||EQ[code];
           const isPrive=en?.prive||eq?.prive||false;
-          const showData=pinUnlocked||!isPrive;
+          const showData=isOwnProfile||!isPrive;
           const isToday=dk===TODAY;
           const dow=new Date(dk).getDay();
           const isWE=dow===0||dow===6;
@@ -1328,12 +1324,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
               </div>}
 
               {/* Verrouillé */}
-              {en&&!showData&&<div style={{
-                display:"flex",flexDirection:"column",alignItems:"center",gap:2,paddingTop:4
-              }}>
-                <span style={{fontSize:16}}>🔒</span>
-                <span style={{fontSize:8,color:"#94a3b8"}}>PIN requis</span>
-              </div>}
+
 
               {/* Vide */}
               {!en&&<div style={{
@@ -1416,7 +1407,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
             const en=schedule[`${agent.id}-${dk}`];
             const code=en?.equipe;const eq=code?EQ_COLORS[code]:null;
             const isPrive=en?.prive||eq?.prive||false;
-            const showData=pinUnlocked||!isPrive;
+            const showData=isOwnProfile||!isPrive;
             const isToday=dk===TODAY;
             const dayNum=parseInt(dk.slice(8));
             const dow=new Date(dk).getDay();
@@ -2891,8 +2882,6 @@ export default function App(){
   const [profileSearch,setProfileSearch]=useState("");
   const [schedule,setSchedule]=usePersist("schedule",{});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
-  const [pinModal,setPinModal]=useState(null);
-  const [unlockedAgents,setUnlockedAgents]=useState({});
   const [importDPTarget,setImportDPTarget]=useState(null);
   const [addAgentOpen,setAddAgentOpen]=useState(false);
   const [notifications,setNotifications]=usePersist("notifications",[]);
@@ -3002,23 +2991,13 @@ export default function App(){
   }
 
 
-  const handlePinSuccess=(pin)=>{
-    if(!pinModal)return;
-    if((pinModal.mode==="set"||pinModal.mode==="change"||pinModal.mode==="reset")&&pin){
-      setAgentProfiles(p=>({...p,[pinModal.agent.id]:{...(p[pinModal.agent.id]||{}),pinHash:pin}}));
-      if(pinModal.mode!=="reset") setUnlockedAgents(p=>({...p,[pinModal.agent.id]:true}));
-    } else if(pinModal.mode==="verify"){
-      setUnlockedAgents(p=>({...p,[pinModal.agent.id]:true}));
-    }
-    setPinModal(null);
-  };
 
   const handleFetePaye=(agentId,date,code,paye)=>{
     setSchedule(prev=>{const next={...prev};const key=`${agentId}-${date}`;if(next[key])next[key]={...next[key],fetePaye:paye};return next;});
   };
 
 
-  const pinUnlocked=currentAgent?unlockedAgents[currentAgent.id]||false:false;
+  const isOwnProfile=currentAgent?unlockedAgents[currentAgent.id]||false:false;
   const profils=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(profileSearch.toLowerCase()));
   const activeNotifCount=notifications.filter(n=>!n.acquitte&&(currentAgent?n.agentId===currentAgent.id:true)).length;
 
@@ -3061,7 +3040,7 @@ export default function App(){
           <button onClick={()=>setProfileOpen(p=>!p)} style={{border:"1.5px solid #e2e8f0",borderRadius:9,padding:"5px 10px",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#1e293b",fontWeight:700}}>
             {currentAgent&&<Av initials={currentAgent.initials} size={18} famille={currentAgent.famille}/>}
             <span>{currentAgent?.prenom||"Profil"}</span>
-            {pinUnlocked&&<span style={{fontSize:9,color:"#10b981"}}>🔓</span>}
+            {isOwnProfile&&<span style={{fontSize:9,color:"#10b981"}}>🔓</span>}
             <span style={{fontSize:9,opacity:.4}}>▼</span>
           </button>
           {profileOpen&&(<div style={{position:"absolute",top:"calc(100% + 5px)",right:0,width:260,background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:13,boxShadow:"0 8px 30px rgba(0,0,0,.12)",zIndex:100,overflow:"hidden"}}>
@@ -3114,19 +3093,17 @@ export default function App(){
         weekOffset={weekOffset} setWeekOffset={setWeekOffset}
         onImportDP={setImportDPTarget}
         agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
-        pinUnlocked={pinUnlocked}
-        onRequestPin={(mode,ag)=>setPinModal({mode,agent:ag||currentAgent})}
         onFetePaye={handleFetePaye}
         onDepart={(id)=>setDepartDates(prev=>({...prev,[id]:TODAY}))}
         departDates={departDates}
-        isAdmin={isAdmin}/>}
+        isAdmin={isAdmin}
+        currentUser={currentUser}/>}}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications}/>}
     </div>
 
     {/* MODALS */}
-    {pinModal&&<PinModal agent={pinModal.agent} mode={pinModal.mode} currentPin={agentProfiles[pinModal.agent?.id]?.pinHash} onSuccess={handlePinSuccess} onClose={()=>setPinModal(null)}/>}
-    {importDPTarget&&<ImportDeroulement agent={importDPTarget} onClose={()=>setImportDPTarget(null)} onImport={jours=>handleImportSchedule(importDPTarget.id,jours)}/>}
+      {importDPTarget&&<ImportDeroulement agent={importDPTarget} onClose={()=>setImportDPTarget(null)} onImport={jours=>handleImportSchedule(importDPTarget.id,jours)}/>}
     {addAgentOpen&&<AddAgentModal onClose={()=>setAddAgentOpen(false)} onAdd={ag=>{setAgents(p=>[...p,ag]);}}/>}
     {profileOpen&&<div onClick={()=>setProfileOpen(false)} style={{position:"fixed",inset:0,zIndex:49}}/>}
     {showAuthAdmin&&<AdminAuthPanel authData={authData} setAuthData={setAuthData} agents={agents} onClose={()=>setShowAuthAdmin(false)}/>}
