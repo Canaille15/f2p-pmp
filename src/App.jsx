@@ -2838,8 +2838,7 @@ export default function App(){
   // Redirection si non connecté
   if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
 
-  // Charger les données Supabase si pas encore fait
-  const loadedRef = useRef(false);
+  // Charger les données Supabase si pas encore fait (au premier rendu après login)
   if(currentUser?.agent?.id && !loadedRef.current){
     loadedRef.current = true;
     const agentId = currentUser.agent.id;
