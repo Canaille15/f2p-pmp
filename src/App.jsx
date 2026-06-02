@@ -2486,7 +2486,8 @@ function LoginPage({ onLogin, authData, setAuthData }) {
       }
       const stored = authData[mat];
       if (!stored || !stored.pinHash) {
-        // Première connexion
+        // Première connexion — vider le pin pour repartir proprement
+        setPin(["","","",""]);
         setStep("first_time");
         setLoading(false); return;
       }
@@ -2572,7 +2573,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={handleLogin} disabled={!CP||pinStr.length<4||loading}
+            <button onClick={handleLogin} disabled={!CP||pinStr.length!==4||loading}
               style={{background:CP&&pinStr.length===4?"#0f4c81":"#e2e8f0",color:CP&&pinStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:CP&&pinStr.length===4?"pointer":"not-allowed",fontSize:14,fontWeight:800,transition:"all .15s"}}>
               {loading?"Connexion…":"Se connecter →"}
             </button>
