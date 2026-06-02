@@ -1077,11 +1077,18 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
 
-  // Dates enregistrées pour l'année sélectionnée
+  // Toutes les dates enregistrées (toutes années)
   const allDates = agentProfiles[agent?.id]?.pauseFigee || {};
-  const yearDates = Object.keys(allDates).filter(d=>d.startsWith(year+"-")).sort();
-
-  const totalMinutes = yearDates.length * 90; // 1h30 = 90 min par jour
+  const allDatesSorted = Object.keys(allDates).sort();
+  
+  // Dates de l'année calendrier affichée (pour le total affiché)
+  const yearDates = allDatesSorted.filter(d=>d.startsWith(calYear+"-"));
+  
+  const totalMinutesAll = allDatesSorted.length * 90;
+  const totalHAll = Math.floor(totalMinutesAll/60);
+  const totalMAll = totalMinutesAll%60;
+  
+  const totalMinutes = yearDates.length * 90;
   const totalH = Math.floor(totalMinutes/60);
   const totalM = totalMinutes%60;
 
@@ -1124,7 +1131,7 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
         <div style={{flex:1}}>
           <div style={{color:"#fff",fontSize:13,fontWeight:800}}>Pauses figées {year}</div>
           <div style={{color:"rgba(255,255,255,.7)",fontSize:10,marginTop:1}}>
-            {yearDates.length} jour(s) · {totalH}h{totalM>0?String(totalM).padStart(2,'0'):"00"} cumulées (1h30/jour)
+            Total : {allDatesSorted.length} jour(s) · {totalHAll}h{totalMAll>0?String(totalMAll).padStart(2,'0'):"00"} cumulées
           </div>
         </div>
         <button onClick={()=>setShowCal(v=>!v)}
@@ -1173,10 +1180,10 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
       </div>}
 
       {/* Liste des dates enregistrées */}
-      {yearDates.length>0&&<div style={{padding:"10px 14px"}}>
+      {allDatesSorted.length>0&&<div style={{padding:"10px 14px"}}>
         <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:6}}>Jours enregistrés :</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {yearDates.map(dk=>(
+          {allDatesSorted.map(dk=>(
             <div key={dk} style={{background:"#eff6ff",border:"1px solid #bfdbfe",
               borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:600,color:"#1e40af",
               display:"flex",alignItems:"center",gap:6}}>
@@ -1189,14 +1196,14 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
         </div>
         <div style={{marginTop:10,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,
           border:"1px solid #bbf7d0",fontSize:11,color:"#065f46",fontWeight:600}}>
-          Total TC généré : <strong>{totalH}h{totalM>0?String(totalM).padStart(2,'0'):"00"}</strong>
-          &nbsp;({yearDates.length} × 1h30)
+          Total TC généré : <strong>{totalHAll}h{totalMAll>0?String(totalMAll).padStart(2,'0'):"00"}</strong>
+          &nbsp;({allDatesSorted.length} × 1h30)
         </div>
       </div>}
 
-      {yearDates.length===0&&!showCal&&<div style={{padding:"14px",textAlign:"center",
+      {allDatesSorted.length===0&&!showCal&&<div style={{padding:"14px",textAlign:"center",
         fontSize:11,color:"#94a3b8"}}>
-        Aucune pause figée enregistrée pour {year}
+        Aucune pause figée enregistrée
       </div>}
     </div>
   );
