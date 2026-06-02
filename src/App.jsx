@@ -105,6 +105,7 @@ const SUPABASE_URL = "https://vrhykmrbdakjycfqbzpt.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHlrbXJiZGFranljZnFienB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTM0MTAsImV4cCI6MjA5NTgyOTQxMH0.LMAwtDR3hSliWV89KO9cRIaC3Wy2QGDh5r8Hl_G_4pY";
 async function sbFetch(path, opts={}) {
   if (!SUPABASE_URL || SUPABASE_URL==="VOTRE_URL_SUPABASE") return null;
+  console.log("📡 Supabase:", opts.method||"GET", path);
   const {headers:extraHeaders, ...restOpts} = opts;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     ...restOpts,
@@ -2752,6 +2753,7 @@ export default function App(){
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.id;
+    console.log("🔄 Chargement Supabase pour:", agentId);
     // Charger le profil
     sbLoadProfile(agentId).then(profile=>{
       if(!profile) return;
@@ -2771,7 +2773,7 @@ export default function App(){
       if(!entries||Object.keys(entries).length===0) return;
       setSchedule(prev=>({...prev,...entries}));
     });
-  },[currentUser?.agent?.id]);
+  },[currentUser?.agent?.id]); // eslint-disable-line
 
   // Sauvegarder dans Supabase quand le schedule change
   useEffect(()=>{
@@ -2784,6 +2786,7 @@ export default function App(){
     agentKeys.forEach(key=>{
       const dk = key.slice(agentId.length+1);
       if(JSON.stringify(curr[key])!==JSON.stringify(prev[key])){
+        console.log("💾 Sync Supabase:", agentId, dk, curr[key]);
         if(curr[key]) sbSaveEntry(agentId, dk, curr[key]);
         else sbDeleteEntry(agentId, dk);
       }
@@ -2836,6 +2839,20 @@ export default function App(){
 
   // Redirection si non connecté
   if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
+
+  // Charger les données Supabase si pas encore fait
+  const loadedRef = useRef(false);
+  if(currentUser?.agent?.id && !loadedRef.current){
+    loadedRef.current = true;
+    const agentId = currentUser.agent.id;
+    console.log("🔄 Chargement initial Supabase:", agentId);
+    sbLoadSchedule(agentId).then(entries=>{
+      if(entries && Object.keys(entries).length>0){
+        console.log("✅ Planning chargé:", Object.keys(entries).length, "entrées");
+        setSchedule(prev=>({...prev,...entries}));
+      }
+    });
+  }
 
 
   const handlePinSuccess=(pin)=>{
