@@ -931,7 +931,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
     {key:"RQ",      label:"RQ",              color:"#d97706", icon:"🟡", subtitle:"Repos qualif."},
     {key:"RN",      label:"RN",              color:"#4338ca", icon:"🔵", subtitle:"Repos nuit"},
     {key:"TC",      label:"TC",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
-    {key:"conges",  label:"Congés pris",     color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5, noEdit:true},
+    {key:"conges",  label:"Congés pris",     color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
     {key:"MA",      label:"Maladie",         color:"#dc2626", icon:"🤒", subtitle:"Jours maladie"},
     {key:"VT",      label:"VT",              color:"#eab308", icon:"⏱️", subtitle:"Temps partiel"},
     {key:"FOR",     label:"Formation",       color:"#b45309", icon:"📚", subtitle:"Jours formation"},
