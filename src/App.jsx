@@ -2445,7 +2445,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   const [step, setStep] = useState("login"); // "login" | "first_time" | "forgot"
   const [CP, setCP] = useState("");
   const [pin, setPin] = useState(["","","",""]);
-  const [pinConfirm, setPinConfirm] = useState(["","","","""]);
+  const [pinConfirm, setPinConfirm] = useState(["","","",""]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const r0=useRef(),r1=useRef(),r2=useRef(),r3=useRef();
