@@ -2562,9 +2562,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
             </div>
 
             <div>
-              <label style={{fontSize:11,fontWeight:700,color:"#64748b",display:"block",marginBottom:6,letterSpacing:.5}}>CP SNCF</label>
-              <input value={CP} onChange={e=>{setCP(e.target.value.toUpperCase());setError("");}}
-                placeholder="Ex: 168401861B"
+              placeholder="CP SNCF"
                 onKeyDown={e=>e.key==="Enter"&&pinRefs[0].current?.focus()}
                 style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:14,fontFamily:"'DM Mono',monospace",fontWeight:700,outline:"none",letterSpacing:2,textAlign:"center",boxSizing:"border-box"}}/>
             </div>
