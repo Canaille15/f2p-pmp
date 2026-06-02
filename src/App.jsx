@@ -212,6 +212,7 @@ const EQUIPES = [
   { code:"RU",   label:"RU",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
   { code:"RQ",   label:"RQ",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
   { code:"TC",   label:"TC",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
+  { code:"TY",   label:"TY",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
   { code:"RN",   label:"RN",         heures:"",            color:"#4338ca", textColor:"#fff", dot:"#e0e7ff", prive:true,  compteur:"RN",      bg:"#4338ca" },
   { code:"NU",   label:"NU",         heures:"",            color:"#475569", textColor:"#fff", dot:"#cbd5e1", prive:false, compteur:"RU",      bg:"#475569" },
   { code:"CA",   label:"Congé Ann.", heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
@@ -886,7 +887,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
   // Compteurs calculés depuis le planning
   const computed = useMemo(()=>{
     if(!agent) return {};
-    const c = {travail:0,RP:0,RU:0,RQ:0,RN:0,TC:0,CA:0,CP:0,MA:0,VT:0,ABS:0,FOR:0,NU:0};
+    const c = {travail:0,RP:0,RU:0,RQ:0,RN:0,TC:0,TY:0,CA:0,CP:0,MA:0,VT:0,ABS:0,FOR:0,NU:0};
     Object.entries(schedule).forEach(([key,val])=>{
       if(!key.startsWith(agent.id+"-")) return;
       const dk = key.slice(agent.id.length+1);
@@ -953,6 +954,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
     {key:"RQ",      label:"RQ",              color:"#d97706", icon:"🟡", subtitle:"Repos qualif."},
     {key:"RN",      label:"RN",              color:"#4338ca", icon:"🔵", subtitle:"Repos nuit"},
     {key:"TC",      label:"TC",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
+    {key:"TY",      label:"TY",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
     {key:"MA",      label:"Maladie",         color:"#dc2626", icon:"🤒", subtitle:"Jours maladie"},
     {key:"VT",      label:"VT",              color:"#eab308", icon:"⏱️", subtitle:"Temps partiel"},
     {key:"FOR",     label:"Formation",       color:"#b45309", icon:"📚", subtitle:"Jours formation"},
@@ -1349,7 +1351,7 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
                 {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
                   {c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},{c:"NU",l:"NU"},
                   {c:"CA",l:"Congé Ann."},{c:"MA",l:"Maladie"},{c:"VT",l:"VT"},
-                  {c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}
+                  {c:"TY",l:"TY"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}
                 ].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
               </select>
             </div>
