@@ -6,7 +6,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
 // Sauvegarder le profil agent dans Supabase
 async function sbSaveProfile(agentId, data) {
-  return sbFetch(`agent_profiles?agent_id=eq.${agentId}`, {
+  return sbFetch(`agent_profiles?on_conflict=agent_id`, {
     method: 'POST',
     body: JSON.stringify({
       agent_id: agentId,
@@ -20,7 +20,6 @@ async function sbSaveProfile(agentId, data) {
       depart_date: data.departDate||null,
       updated_at: new Date().toISOString(),
     }),
-    headers: { 'Prefer': 'resolution=merge-duplicates' }
   });
 }
 
@@ -32,7 +31,7 @@ async function sbLoadProfile(agentId) {
 
 // Sauvegarder une entrée de planning
 async function sbSaveEntry(agentId, dk, entry) {
-  return sbFetch(`schedule_entries?agent_id=eq.${agentId}&date=eq.${dk}`, {
+  return sbFetch(`schedule_entries?on_conflict=agent_id,date`, {
     method: 'POST',
     body: JSON.stringify({
       agent_id: agentId,
@@ -46,7 +45,6 @@ async function sbSaveEntry(agentId, dk, entry) {
       impression_at: entry.impressionAt||null,
       updated_at: new Date().toISOString(),
     }),
-    headers: { 'Prefer': 'resolution=merge-duplicates' }
   });
 }
 
@@ -107,11 +105,21 @@ const SUPABASE_URL = "https://vrhykmrbdakjycfqbzpt.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHlrbXJiZGFranljZnFienB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTM0MTAsImV4cCI6MjA5NTgyOTQxMH0.LMAwtDR3hSliWV89KO9cRIaC3Wy2QGDh5r8Hl_G_4pY";
 async function sbFetch(path, opts={}) {
   if (!SUPABASE_URL || SUPABASE_URL==="VOTRE_URL_SUPABASE") return null;
+  const {headers:extraHeaders, ...restOpts} = opts;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":`Bearer ${SUPABASE_ANON_KEY}`,"Content-Type":"application/json","Prefer":"return=representation",...opts.headers},
-    ...opts,
+    ...restOpts,
+    headers:{
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": restOpts.method==="POST"?"resolution=merge-duplicates":"",
+      ...(extraHeaders||{}),
+    },
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.error("Supabase error:", res.status, path);
+    return null;
+  }
   return res.json().catch(()=>null);
 }
 const sb = {
