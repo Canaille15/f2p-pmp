@@ -892,20 +892,19 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
       const next={...prev};
       const key=`${agent.id}-${dk}`;
       if(isSecond){
-        // Modifier la 2ème période (prise de nuit)
-        if(code){
-          next[key]={...(next[key]||{}),equipe2:code};
-        } else {
-          if(next[key]){const {equipe2,...rest}=next[key];next[key]=rest;}
-        }
+        if(code){ next[key]={...(next[key]||{}),equipe2:code}; }
+        else { if(next[key]){const {equipe2,...rest}=next[key];next[key]=rest;} }
       } else {
         if(code){
           const eq=EQ[code]||EQ_COLORS[code]||{prive:false,heures:""};
           next[key]={...(next[key]||{}),equipe:code,jsCode:code,horaires:eq.heures||"",prive:eq.prive||false};
-        } else {
-          delete next[key];
-        }
+        } else { delete next[key]; }
       }
+      // Sync Supabase directe
+      setTimeout(()=>{
+        if(next[key]) sbSaveEntry(agent.id, dk, next[key]);
+        else sbDeleteEntry(agent.id, dk);
+      }, 0);
       return next;
     });
   };
@@ -2799,9 +2798,8 @@ export default function App(){
     if(profile) sbSaveProfile(agentId, profile);
   },[agentProfiles]);
 
-  // Ref pour tracker les changements de schedule
-  const scheduleRef = useRef(schedule);
-  const loadedRef = useRef(false);
+  // Ref pour chargement initial
+  const loadedRef = useRef({});
 
   // Hooks qui doivent être avant tout return conditionnel
   const handleImportSchedule=useCallback((agentId,jours)=>{
@@ -2839,8 +2837,8 @@ export default function App(){
   if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
 
   // Charger les données Supabase si pas encore fait (au premier rendu après login)
-  if(currentUser?.agent?.id && !loadedRef.current){
-    loadedRef.current = true;
+  if(currentUser?.agent?.id && !loadedRef.current[currentUser.agent.id]){
+    loadedRef.current[currentUser.agent.id] = true;
     const agentId = currentUser.agent.id;
     sbLoadSchedule(agentId).then(entries=>{
       if(entries && Object.keys(entries).length>0){
