@@ -2501,7 +2501,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   };
 
   const handleFirstTime = () => {
-    if (pinStr.length < 5) { setError("4 chiffres requis"); return; }
+    if (pinStr.length < 4) { setError("4 chiffres requis"); return; }
     if (pinStr !== confStr) { setError("Les codes ne correspondent pas"); return; }
     const mat = CP.trim().toUpperCase();
     const isAdmin = ADMIN_MATRICULES_DEFAULT.includes(mat) ||
@@ -2528,7 +2528,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
             value={arr[i]}
             onChange={e=>handlePinDigit(i,e.target.value,arr,setArr,refs)}
             onKeyDown={e=>{
-              if(e.key==="Enter"&&arr.every(d=>d)) step==="login"?handleLogin():step==="first_time"&&confStr.length===5?handleFirstTime():setStep("confirm");
+              if(e.key==="Enter"&&arr.every(d=>d)) step==="login"?handleLogin():step==="first_time"&&confStr.length===4?handleFirstTime():setStep("confirm");
               if(e.key==="Backspace"&&!arr[i]&&i>0)refs[i-1].current?.focus();
             }}
             style={{width:48,height:56,textAlign:"center",fontSize:24,fontWeight:800,
@@ -2604,8 +2604,8 @@ function LoginPage({ onLogin, authData, setAuthData }) {
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={handleFirstTime} disabled={pinStr.length<4||confStr.length<5}
-              style={{background:pinStr.length===4&&confStr.length===5?"#065f46":"#e2e8f0",color:pinStr.length===4&&confStr.length===5?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
+            <button onClick={handleFirstTime} disabled={pinStr.length<4||confStr.length<4}
+              style={{background:pinStr.length===4&&confStr.length===4?"#065f46":"#e2e8f0",color:pinStr.length===4&&confStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
               ✓ Créer mon compte
             </button>
 
