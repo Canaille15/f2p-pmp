@@ -907,18 +907,39 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
   const val = (key) => (computed[key]||0) + (corrections[key]||0);
 
   const saveCorrections = (newCorr) => {
-    setCorrections(newCorr);
+    const withDate = {...newCorr, _updatedAt: new Date().toISOString()};
+    setCorrections(withDate);
     setAgentProfiles(prev=>({
       ...prev,
       [agent.id]:{
         ...(prev[agent.id]||{}),
         compteurCorrections:{
           ...(prev[agent.id]?.compteurCorrections||{}),
-          [year]: newCorr,
+          [year]: withDate,
         }
       }
     }));
   };
+
+  // Détecter changement de planning → mettre à jour la date
+  const computedStr = JSON.stringify(computed);
+  useEffect(()=>{
+    if(!agent||Object.keys(computed).length===0) return;
+    setCorrections(prev=>{
+      const updated = {...prev, _updatedAt: new Date().toISOString()};
+      setAgentProfiles(pp=>({
+        ...pp,
+        [agent.id]:{
+          ...(pp[agent.id]||{}),
+          compteurCorrections:{
+            ...(pp[agent.id]?.compteurCorrections||{}),
+            [year]: updated,
+          }
+        }
+      }));
+      return updated;
+    });
+  },[computedStr]);
 
   const CONGES_ANNUELS = 28;
   const congesPris = val("CA") + val("CP");
@@ -982,20 +1003,20 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
                 fontWeight:card.alert?700:400,lineHeight:1.3}}>
                 {card.subtitle}
               </div>
+              {corrections._updatedAt&&<div style={{fontSize:8,color:"#cbd5e1",marginTop:2}}>
+                Mis à jour le {new Date(corrections._updatedAt).toLocaleDateString("fr-FR")}
+              </div>}
               {/* Contrôles de correction */}
-              {editMode&&!card.noEdit&&<div style={{
+              {editMode&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
                 <button onClick={()=>saveCorrections({...corrections,[card.key]:(corrections[card.key]||0)-1})}
-                  style={{width:24,height:24,borderRadius:6,border:"1px solid #e2e8f0",
-                    background:"#fee2e2",color:"#dc2626",cursor:"pointer",fontSize:14,fontWeight:800,
+                  style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
+                    background:"#fee2e2",color:"#dc2626",cursor:"pointer",fontSize:16,fontWeight:800,
                     display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                <span style={{fontSize:10,color:"#64748b",alignSelf:"center",minWidth:20,textAlign:"center"}}>
-                  {computed[card.key]||0}
-                </span>
                 <button onClick={()=>saveCorrections({...corrections,[card.key]:(corrections[card.key]||0)+1})}
-                  style={{width:24,height:24,borderRadius:6,border:"1px solid #e2e8f0",
-                    background:"#dcfce7",color:"#16a34a",cursor:"pointer",fontSize:14,fontWeight:800,
+                  style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
+                    background:"#dcfce7",color:"#16a34a",cursor:"pointer",fontSize:16,fontWeight:800,
                     display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
               </div>}
             </div>
