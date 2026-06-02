@@ -1003,8 +1003,11 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
                 fontWeight:card.alert?700:400,lineHeight:1.3}}>
                 {card.subtitle}
               </div>
-              {corrections._updatedAt&&<div style={{fontSize:8,color:"#cbd5e1",marginTop:2}}>
-                Mis à jour le {new Date(corrections._updatedAt).toLocaleDateString("fr-FR")}
+              {corrections._updatedAt&&<div style={{
+                fontSize:9,color:"#94a3b8",marginTop:4,
+                borderTop:"1px solid #f1f5f9",paddingTop:3,
+              }}>
+                🕐 {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"})}
               </div>}
               {/* Contrôles de correction */}
               {editMode&&<div style={{
