@@ -874,6 +874,88 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
   );
 }
 
+
+// ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
+function DashboardCompteurs({agent, schedule}){
+  const year = new Date().getFullYear();
+  const start = `${year}-01-01`;
+  const end   = `${year}-12-31`;
+
+  // Calculer les compteurs sur l'année civile
+  const compteurs = useMemo(()=>{
+    if(!agent) return {};
+    const c = { travail:0, M:0, AM:0, N:0, J:0, RP:0, RU:0, RQ:0, RN:0, TC:0, CA:0, CP:0, MA:0, VT:0, ABS:0, FOR:0, NU:0 };
+    Object.entries(schedule).forEach(([key, val])=>{
+      if(!key.startsWith(agent.id+"-")) return;
+      const dk = key.slice(agent.id.length+1);
+      if(dk < start || dk > end) return;
+      const eq = val?.equipe;
+      if(!eq) return;
+      // Travail
+      if(["M","AM","N","J","JF"].includes(eq)){
+        c.travail++;
+        if(c[eq]!==undefined) c[eq]++;
+      }
+      // Repos & autres
+      if(c[eq]!==undefined) c[eq]++;
+    });
+    return c;
+  },[agent, schedule, year]);
+
+  const CONGES_ANNUELS = 28;
+  const congesPris = (compteurs.CA||0) + (compteurs.CP||0);
+  const soldeConges = CONGES_ANNUELS - congesPris;
+
+  const CARDS = [
+    { label:"Jours travaillés", value:compteurs.travail, color:"#8B0000", icon:"💼", subtitle:`sur l'année ${year}` },
+    { label:"RP", value:compteurs.RP, color:"#16a34a", icon:"🟢", subtitle:"Repos périodiques" },
+    { label:"RU", value:compteurs.RU, color:"#d97706", icon:"🟡", subtitle:"Repos utilisation" },
+    { label:"RQ", value:compteurs.RQ, color:"#d97706", icon:"🟡", subtitle:"Repos qualif." },
+    { label:"RN", value:compteurs.RN, color:"#4338ca", icon:"🔵", subtitle:"Repos nuit" },
+    { label:"TC", value:compteurs.TC, color:"#0284c7", icon:"🔵", subtitle:"Temps compensé" },
+    { label:"Congés pris", value:congesPris, color:"#eab308", icon:"🏖️", subtitle:`Solde : ${soldeConges} / ${CONGES_ANNUELS} jours`, alert: soldeConges < 5 },
+    { label:"Maladie", value:compteurs.MA, color:"#dc2626", icon:"🤒", subtitle:"Jours maladie" },
+    { label:"VT", value:compteurs.VT, color:"#eab308", icon:"⏱️", subtitle:"Temps partiel" },
+    { label:"Formation", value:compteurs.FOR, color:"#b45309", icon:"📚", subtitle:"Jours formation" },
+  ];
+
+  return(
+    <div style={{margin:"20px 0",padding:"0 4px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <div style={{fontSize:16}}>📊</div>
+        <div style={{fontSize:14,fontWeight:800,color:"#1e293b"}}>Compteurs {year}</div>
+        <div style={{flex:1,height:1,background:"#e2e8f0",marginLeft:4}}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>
+        {CARDS.map(card=>(
+          <div key={card.label} style={{
+            background:"#fff",
+            borderRadius:12,
+            border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
+            padding:"12px 14px",
+            boxShadow:"0 1px 3px rgba(0,0,0,.06)",
+            position:"relative",
+            overflow:"hidden",
+          }}>
+            {/* Barre couleur en haut */}
+            <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:card.color,borderRadius:"10px 10px 0 0"}}/>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6,marginTop:2}}>
+              <span style={{fontSize:14}}>{card.icon}</span>
+              <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>{card.label}</span>
+            </div>
+            <div style={{fontSize:28,fontWeight:900,color:card.color,lineHeight:1}}>
+              {card.value}
+            </div>
+            <div style={{fontSize:9,color:card.alert?"#ef4444":"#94a3b8",marginTop:4,fontWeight:card.alert?700:400}}>
+              {card.subtitle}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,pinUnlocked,onRequestPin,onFetePaye,isAdmin}){
   const [showHab,setShowHab]=useState(false);
   const [calView,setCalView]=useState("semaine");
@@ -1292,6 +1374,8 @@ function PersonalView({agent,schedule,weekOffset,setWeekOffset,onImportDP,agentP
       agentColors={agentColors}
       setAgentColors={setAgentColors}
       onClose={()=>setShowColorPicker(false)}/>}
+    {/* Tableau de bord compteurs */}
+    {agent&&<DashboardCompteurs agent={agent} schedule={schedule}/>}
   </div>);
 }
 
