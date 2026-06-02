@@ -946,13 +946,13 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
   const solde = CONGES_ANNUELS - congesPris;
 
   const CARDS = [
+    {key:"conges",  label:"Congés pris",     color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", icon:"💼", subtitle:`Année ${year}`},
     {key:"RP",      label:"RP",              color:"#16a34a", icon:"🟢", subtitle:"Repos périodiques"},
     {key:"RU",      label:"RU",              color:"#d97706", icon:"🟡", subtitle:"Repos utilisation"},
     {key:"RQ",      label:"RQ",              color:"#d97706", icon:"🟡", subtitle:"Repos qualif."},
     {key:"RN",      label:"RN",              color:"#4338ca", icon:"🔵", subtitle:"Repos nuit"},
     {key:"TC",      label:"TC",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
-    {key:"conges",  label:"Congés pris",     color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
     {key:"MA",      label:"Maladie",         color:"#dc2626", icon:"🤒", subtitle:"Jours maladie"},
     {key:"VT",      label:"VT",              color:"#eab308", icon:"⏱️", subtitle:"Temps partiel"},
     {key:"FOR",     label:"Formation",       color:"#b45309", icon:"📚", subtitle:"Jours formation"},
