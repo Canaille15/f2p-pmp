@@ -2766,11 +2766,10 @@ export default function App(){
   },[currentUser?.agent?.id]);
 
   // Sauvegarder dans Supabase quand le schedule change
-  const scheduleRef = React.useRef(schedule);
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.id;
-    const prev = scheduleRef.current;
+    const prev = scheduleRef.current || {};
     const curr = schedule;
     // Détecter les clés modifiées pour cet agent
     const agentKeys = Object.keys(curr).filter(k=>k.startsWith(agentId+"-"));
@@ -2791,6 +2790,9 @@ export default function App(){
     const profile = agentProfiles[agentId];
     if(profile) sbSaveProfile(agentId, profile);
   },[agentProfiles]);
+
+  // Ref pour tracker les changements de schedule
+  const scheduleRef = useRef(schedule);
 
   // Redirection si non connecté
   if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
