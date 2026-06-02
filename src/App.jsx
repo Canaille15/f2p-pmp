@@ -993,21 +993,19 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
                 <span style={{fontSize:12}}>{card.icon}</span>
                 <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>{card.label}</span>
               </div>
-              <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-                <div style={{fontSize:26,fontWeight:900,color:card.color,lineHeight:1}}>{v}</div>
-                {corr!==0&&<div style={{fontSize:9,color:corr>0?"#16a34a":"#ef4444",fontWeight:700}}>
-                  {corr>0?"+":""}{corr}
-                </div>}
-              </div>
+              <div style={{fontSize:26,fontWeight:900,color:card.color,lineHeight:1}}>{v}</div>
               <div style={{fontSize:9,color:card.alert?"#ef4444":"#94a3b8",marginTop:3,
                 fontWeight:card.alert?700:400,lineHeight:1.3}}>
                 {card.subtitle}
               </div>
               {corrections._updatedAt&&<div style={{
-                fontSize:9,color:"#94a3b8",marginTop:4,
-                borderTop:"1px solid #f1f5f9",paddingTop:3,
+                fontSize:9,fontWeight:600,color:"#475569",marginTop:5,
+                borderTop:"1px solid #e2e8f0",paddingTop:4,lineHeight:1.4,
               }}>
-                🕐 {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"})}
+                Mis à jour le<br/>
+                <span style={{fontWeight:700,color:"#1e293b"}}>
+                  {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}
+                </span>
               </div>}
               {/* Contrôles de correction */}
               {editMode&&<div style={{
