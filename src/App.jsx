@@ -1011,11 +1011,17 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
               {editMode&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
-                <button onClick={()=>saveCorrections({...corrections,[card.key]:(corrections[card.key]||0)-1})}
+                <button onClick={()=>{
+                  const k=card.key==="conges"?"CA":card.key;
+                  saveCorrections({...corrections,[k]:(corrections[k]||0)-1});
+                }}
                   style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
                     background:"#fee2e2",color:"#dc2626",cursor:"pointer",fontSize:16,fontWeight:800,
                     display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                <button onClick={()=>saveCorrections({...corrections,[card.key]:(corrections[card.key]||0)+1})}
+                <button onClick={()=>{
+                  const k=card.key==="conges"?"CA":card.key;
+                  saveCorrections({...corrections,[k]:(corrections[k]||0)+1});
+                }}
                   style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
                     background:"#dcfce7",color:"#16a34a",cursor:"pointer",fontSize:16,fontWeight:800,
                     display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
