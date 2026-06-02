@@ -2794,9 +2794,7 @@ export default function App(){
   // Ref pour tracker les changements de schedule
   const scheduleRef = useRef(schedule);
 
-  // Redirection si non connecté
-  if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
-
+  // Hooks qui doivent être avant tout return conditionnel
   const handleImportSchedule=useCallback((agentId,jours)=>{
     setSchedule(prev=>{
       const next={...prev};
@@ -2804,20 +2802,33 @@ export default function App(){
         const existing=next[`${agentId}-${j.date}`];
         if(!existing||!existing.impressionAt||(j.impressionAt&&j.impressionAt>existing.impressionAt)){
           next[`${agentId}-${j.date}`]={
-            equipe:j.equipe,
-            equipe2:j.equipe2||null,
-            finNuit:j.finNuit||false,
-            horaires:EQ[j.equipe]?.heures||"",
-            poste:j.jsCode||"",
-            jsCode:j.jsCode||"",
-            prive:j.prive||false,
-            impressionAt:j.impressionAt||null,
+            equipe:j.equipe, equipe2:j.equipe2||null, finNuit:j.finNuit||false,
+            horaires:EQ[j.equipe]?.heures||"", poste:j.jsCode||"",
+            jsCode:j.jsCode||"", prive:j.prive||false, impressionAt:j.impressionAt||null,
           };
         }
       });
       return next;
     });
   },[]);
+
+  // Nettoyage auto agents absents > 1 an
+  useMemo(()=>{
+    const cutoff=new Date();cutoff.setFullYear(cutoff.getFullYear()-1);
+    const cutStr=cutoff.toISOString().slice(0,10);
+    const toDelete=Object.entries(departDates).filter(([,d])=>d<=cutStr).map(([id])=>id);
+    if(toDelete.length>0){
+      setTimeout(()=>{
+        setAgents(prev=>prev.filter(a=>!toDelete.includes(a.id)));
+        setDepartDates(prev=>{const n={...prev};toDelete.forEach(id=>delete n[id]);return n;});
+        setCurrentAgent(prev=>prev&&toDelete.includes(prev.id)?null:prev);
+      },0);
+    }
+  },[departDates]);
+
+  // Redirection si non connecté
+  if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
+
 
   const handlePinSuccess=(pin)=>{
     if(!pinModal)return;
@@ -2834,19 +2845,6 @@ export default function App(){
     setSchedule(prev=>{const next={...prev};const key=`${agentId}-${date}`;if(next[key])next[key]={...next[key],fetePaye:paye};return next;});
   };
 
-  // Nettoyage auto agents absents > 1 an
-  useMemo(()=>{
-    const cutoff=new Date();cutoff.setFullYear(cutoff.getFullYear()-1);
-    const cutStr=cutoff.toISOString().slice(0,10);
-    const toDelete=Object.entries(departDates).filter(([,d])=>d<=cutStr).map(([id])=>id);
-    if(toDelete.length>0){
-      setTimeout(()=>{
-        setAgents(prev=>prev.filter(a=>!toDelete.includes(a.id)));
-        setDepartDates(prev=>{const n={...prev};toDelete.forEach(id=>delete n[id]);return n;});
-        setCurrentAgent(prev=>prev&&toDelete.includes(prev.id)?null:prev);
-      },0);
-    }
-  },[departDates]);
 
   const pinUnlocked=currentAgent?unlockedAgents[currentAgent.id]||false:false;
   const profils=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(profileSearch.toLowerCase()));
