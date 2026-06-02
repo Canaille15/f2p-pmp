@@ -17,6 +17,7 @@ async function sbSaveProfile(agentId, data) {
       familles_hab: data.famillesHab||null,
       habilitations: data.habilitations||{},
       agent_colors: data.agentColors||{},
+      pause_figee: data.pauseFigee||{},
       compteur_corrections: data.compteurCorrections||{},
       depart_date: data.departDate||null,
       updated_at: new Date().toISOString(),
@@ -1058,6 +1059,144 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
         fontSize:10,color:"#1e40af",fontWeight:500,
       }}>
         💡 Le chiffre central = calculé depuis votre planning. Utilisez +/− pour corriger si votre planning n'est pas à jour. Les corrections sont sauvegardées automatiquement.
+      </div>}
+
+      {/* ── PAUSE FIGÉE ─────────────────────────────────────── */}
+      <PauseFigeeSection
+        agent={agent}
+        year={selectedYear}
+        agentProfiles={agentProfiles}
+        setAgentProfiles={setAgentProfiles}/>
+    </div>
+  );
+}
+
+// ─── SECTION PAUSE FIGÉE ─────────────────────────────────────────────────────
+function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
+  const [showCal, setShowCal] = useState(false);
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+
+  // Dates enregistrées pour l'année sélectionnée
+  const allDates = agentProfiles[agent?.id]?.pauseFigee || {};
+  const yearDates = Object.keys(allDates).filter(d=>d.startsWith(year+"-")).sort();
+
+  const totalMinutes = yearDates.length * 90; // 1h30 = 90 min par jour
+  const totalH = Math.floor(totalMinutes/60);
+  const totalM = totalMinutes%60;
+
+  const toggleDate = (dk) => {
+    const current = agentProfiles[agent?.id]?.pauseFigee || {};
+    let updated;
+    if(current[dk]){
+      // Supprimer (décocher)
+      const {[dk]:_, ...rest} = current;
+      updated = rest;
+    } else {
+      // Ajouter avec confirmation
+      updated = {...current, [dk]: new Date().toISOString()};
+    }
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{...(prev[agent.id]||{}), pauseFigee: updated}
+    }));
+  };
+
+  // Générer les jours du mois calendrier
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const firstDow = new Date(calYear, calMonth, 1).getDay();
+  const daysList = Array.from({length:daysInMonth},(_,i)=>{
+    const d = i+1;
+    const dk = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dow = new Date(calYear,calMonth,d).getDay();
+    return {dk, d, dow};
+  });
+
+  const JOURS = ["Di","Lu","Ma","Me","Je","Ve","Sa"];
+
+  return(
+    <div style={{marginTop:16,background:"#fff",borderRadius:14,border:"1.5px solid #e2e8f0",
+      overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",padding:"12px 16px",
+        display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:16}}>⏸️</span>
+        <div style={{flex:1}}>
+          <div style={{color:"#fff",fontSize:13,fontWeight:800}}>Pauses figées {year}</div>
+          <div style={{color:"rgba(255,255,255,.7)",fontSize:10,marginTop:1}}>
+            {yearDates.length} jour(s) · {totalH}h{totalM>0?String(totalM).padStart(2,'0'):"00"} cumulées (1h30/jour)
+          </div>
+        </div>
+        <button onClick={()=>setShowCal(v=>!v)}
+          style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.3)",
+            color:"#fff",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>
+          {showCal?"✕ Fermer":"📅 Ajouter"}
+        </button>
+      </div>
+
+      {/* Calendrier */}
+      {showCal&&<div style={{padding:"12px 14px",borderBottom:"1px solid #f1f5f9"}}>
+        {/* Nav mois */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}
+            style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",cursor:"pointer",background:"#f8fafc",fontSize:13}}>‹</button>
+          <div style={{flex:1,textAlign:"center",fontWeight:700,fontSize:13,color:"#1e293b"}}>
+            {MOIS_L[calMonth]} {calYear}
+          </div>
+          <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}}
+            style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",cursor:"pointer",background:"#f8fafc",fontSize:13}}>›</button>
+        </div>
+        {/* Grille */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+          {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:9,fontWeight:700,color:"#94a3b8"}}>{j}</div>)}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+          {Array.from({length:firstDow}).map((_,i)=><div key={`e${i}`}/>)}
+          {daysList.map(({dk,d,dow})=>{
+            const isWE=dow===0||dow===6;
+            const isSelected=!!allDates[dk];
+            return(
+              <button key={dk} onClick={()=>toggleDate(dk)}
+                style={{borderRadius:7,border:isSelected?"2px solid #0284c7":"1.5px solid #e2e8f0",
+                  background:isSelected?"#0284c7":isWE?"#f8fafc":"#fff",
+                  color:isSelected?"#fff":isWE?"#94a3b8":"#1e293b",
+                  cursor:"pointer",padding:"6px 0",fontSize:11,fontWeight:isSelected?700:400,
+                  textAlign:"center"}}>
+                {d}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{fontSize:10,color:"#94a3b8",marginTop:8,textAlign:"center"}}>
+          Clique sur un jour pour l'ajouter/retirer · 1h30 par jour sélectionné
+        </div>
+      </div>}
+
+      {/* Liste des dates enregistrées */}
+      {yearDates.length>0&&<div style={{padding:"10px 14px"}}>
+        <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:6}}>Jours enregistrés :</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {yearDates.map(dk=>(
+            <div key={dk} style={{background:"#eff6ff",border:"1px solid #bfdbfe",
+              borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:600,color:"#1e40af",
+              display:"flex",alignItems:"center",gap:6}}>
+              {new Date(dk).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})}
+              <button onClick={()=>toggleDate(dk)}
+                style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",
+                  fontSize:12,padding:0,lineHeight:1}}>×</button>
+            </div>
+          ))}
+        </div>
+        <div style={{marginTop:10,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,
+          border:"1px solid #bbf7d0",fontSize:11,color:"#065f46",fontWeight:600}}>
+          Total TC généré : <strong>{totalH}h{totalM>0?String(totalM).padStart(2,'0'):"00"}</strong>
+          &nbsp;({yearDates.length} × 1h30)
+        </div>
+      </div>}
+
+      {yearDates.length===0&&!showCal&&<div style={{padding:"14px",textAlign:"center",
+        fontSize:11,color:"#94a3b8"}}>
+        Aucune pause figée enregistrée pour {year}
       </div>}
     </div>
   );
