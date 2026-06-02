@@ -879,10 +879,14 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
 
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
 function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
-  const year = new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [editMode, setEditMode] = useState(false);
+  const year = selectedYear;
   const start = `${year}-01-01`;
   const end   = `${year}-12-31`;
-  const [editMode, setEditMode] = useState(false);
+  // 3 années disponibles : année en cours + 2 précédentes
+  const availableYears = [currentYear, currentYear-1, currentYear-2];
 
   // Compteurs calculés depuis le planning
   const computed = useMemo(()=>{
@@ -901,8 +905,15 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
   },[agent,schedule,year]);
 
   // Corrections manuelles sauvegardées
-  const savedCorrections = agentProfiles[agent?.id]?.compteurCorrections?.[year] || {};
+  const savedCorrections = agentProfiles[agent?.id]?.compteurCorrections?.[selectedYear] || {};
   const [corrections, setCorrections] = useState(savedCorrections);
+  
+  // Recharger les corrections quand on change d'année
+  useEffect(()=>{
+    const c = agentProfiles[agent?.id]?.compteurCorrections?.[selectedYear] || {};
+    setCorrections(c);
+    setEditMode(false);
+  },[selectedYear, agent?.id]);
 
   // Valeur finale = calculée + correction manuelle
   const val = (key) => (computed[key]||0) + (corrections[key]||0);
@@ -916,7 +927,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
         ...(prev[agent.id]||{}),
         compteurCorrections:{
           ...(prev[agent.id]?.compteurCorrections||{}),
-          [year]: withDate,
+          [selectedYear]: withDate,
         }
       }
     }));
@@ -963,13 +974,23 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
   return(
     <div style={{margin:"20px 0 8px",padding:"0 2px"}}>
       {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
         <span style={{fontSize:16}}>📊</span>
-        <span style={{fontSize:14,fontWeight:800,color:"#1e293b"}}>Compteurs {year}</span>
-        <div style={{flex:1,height:1,background:"#e2e8f0"}}/>
-        <div style={{fontSize:9,color:"#94a3b8",textAlign:"right",maxWidth:160}}>
-          ⚠️ Mis à jour selon votre planning saisi
+        <span style={{fontSize:14,fontWeight:800,color:"#1e293b"}}>Compteurs</span>
+        {/* Onglets années */}
+        <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:8,padding:2}}>
+          {availableYears.map(y=>(
+            <button key={y} onClick={()=>{setSelectedYear(y);setEditMode(false);}}
+              style={{border:"none",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:700,
+                background:y===selectedYear?"#fff":"transparent",
+                color:y===selectedYear?"#1e293b":"#94a3b8",
+                boxShadow:y===selectedYear?"0 1px 3px rgba(0,0,0,.08)":"none"}}>
+              {y}
+            </button>
+          ))}
         </div>
+        <div style={{flex:1}}/>
+        <div style={{fontSize:9,color:"#94a3b8"}}>⚠️ Selon planning saisi</div>
         <button onClick={()=>setEditMode(e=>!e)}
           style={{background:editMode?"#1e293b":"#f1f5f9",color:editMode?"#fff":"#475569",
             border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>
