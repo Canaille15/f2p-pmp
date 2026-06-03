@@ -2142,6 +2142,103 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
 }
 
 
+// ─── BARRE DE SAISIE RAPIDE ──────────────────────────────────────────────────
+function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif,
+  getColor, getTc, showConfig, setShowConfig, CODES_BARRE}){
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {/* Barre principale */}
+      <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+        {barreConfig.map(c=>{
+          const couleur = getColor(c);
+          const tc = getTc(c);
+          const isActif = codeActif===c;
+          const label = CODES_BARRE.find(x=>x.c===c)?.l||c;
+          return(
+            <button key={c}
+              onClick={()=>setCodeActif(isActif?null:c)}
+              style={{
+                display:"inline-flex",alignItems:"center",gap:5,
+                background: isActif ? couleur : couleur+"22",
+                color: isActif ? tc : couleur,
+                border:`2px solid ${couleur}`,
+                borderRadius:10,
+                padding:"7px 13px",
+                cursor:"pointer",
+                fontSize:12,fontWeight:800,
+                minHeight:38, // facile à tapper sur mobile
+                boxShadow: isActif?"0 0 0 3px "+couleur+"44":"none",
+                transition:"all .15s",
+                position:"relative",
+              }}>
+              {isActif&&<span style={{
+                position:"absolute",top:-4,right:-4,
+                width:10,height:10,borderRadius:"50%",
+                background:"#6366f1",border:"2px solid #fff",
+              }}/>}
+              {label}
+            </button>
+          );
+        })}
+
+        {/* Bouton effacer si mode actif */}
+        {codeActif&&<button onClick={()=>setCodeActif(null)}
+          style={{background:"#fef2f2",color:"#dc2626",border:"2px solid #fecaca",
+            borderRadius:10,padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
+            minHeight:38}}>
+          ✕ Annuler
+        </button>}
+
+        {/* Bouton config */}
+        <button onClick={()=>setShowConfig(v=>!v)}
+          title="Configurer la barre"
+          style={{background:showConfig?"#1e293b":"#f1f5f9",
+            color:showConfig?"#fff":"#64748b",
+            border:"1.5px solid #e2e8f0",borderRadius:10,
+            padding:"7px 10px",cursor:"pointer",fontSize:13,
+            marginLeft:"auto",minHeight:38,fontWeight:700}}>
+          ⚙️
+        </button>
+      </div>
+
+      {/* Panneau de configuration */}
+      {showConfig&&<div style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",
+        borderRadius:12,padding:"12px 14px"}}>
+        <div style={{fontSize:11,fontWeight:800,color:"#1e293b",marginBottom:8}}>
+          Choisir les codes à afficher dans la barre :
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {CODES_BARRE.map(({c,l})=>{
+            const sel = barreConfig.includes(c);
+            const couleur = getColor(c);
+            const tc = getTc(c);
+            return(
+              <button key={c}
+                onClick={()=>setBarreConfig(prev=>
+                  sel ? prev.filter(x=>x!==c) : [...prev,c]
+                )}
+                style={{
+                  display:"inline-flex",alignItems:"center",gap:4,
+                  background: sel ? couleur : "#fff",
+                  color: sel ? tc : "#64748b",
+                  border:`1.5px solid ${sel?couleur:"#e2e8f0"}`,
+                  borderRadius:8,padding:"5px 11px",cursor:"pointer",
+                  fontSize:11,fontWeight:sel?800:500,minHeight:34,
+                }}>
+                {sel&&"✓ "}{l}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{fontSize:9,color:"#94a3b8",marginTop:8}}>
+          {barreConfig.length} code{barreConfig.length>1?"s":""} sélectionné{barreConfig.length>1?"s":""}
+        </div>
+      </div>}
+    </div>
+  );
+}
+
 // ─── HELPER RC FÊTES AGENDA ──────────────────────────────────────────────────
 // Retourne la liste des codes fêtes dont ce jour est soit :
 //   - le jour de la fête elle-même (code Fx saisi directement)
@@ -2259,6 +2356,23 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const monthDates=useMemo(()=>getMonthDates(curYear,curMonth),[curYear,curMonth]);
   const firstDay=useMemo(()=>firstDayOfMonth(curYear,curMonth),[curYear,curMonth]);
   const [showQuit,setShowQuit]=useState(false);
+  // ── SAISIE RAPIDE ──────────────────────────────────────────────────────────
+  // codeActif : code en cours de saisie (null = mode cycle classique)
+  const [codeActif, setCodeActif] = useState(null);
+  // barreConfig : codes affichés dans la barre (persisté par agent)
+  const barreConfigKey = `barreRapide_${agent?.id}`;
+  const [barreConfig, setBarreConfig] = usePersist(barreConfigKey,
+    ["M","AM","N","J","RP","RU","CA","CP"]);
+  const [showBarreConfig, setShowBarreConfig] = useState(false);
+  // Tous les codes disponibles pour la barre
+  const CODES_BARRE = [
+    {c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
+    {c:"JF",l:"Jour Fête"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},
+    {c:"TC",l:"TC"},{c:"TY",l:"TY"},{c:"RN",l:"RN"},{c:"NU",l:"NU"},
+    {c:"CA",l:"Congé Ann."},{c:"CP",l:"Congé"},{c:"MA",l:"Maladie"},
+    {c:"ABS",l:"Absent"},{c:"VT",l:"VT"},{c:"VM",l:"VM"},
+    {c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"},
+  ];
   const [showDemandeConges,setShowDemandeConges]=useState(false);
   const [showAccordConges,setShowAccordConges]=useState(false);
   const [demandeCourante,setDemandeCourante]=useState(null);
@@ -2461,6 +2575,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     {/* ── VUE SEMAINE ── */}
     {calView==="semaine"&&<>
+      {/* ── BARRE DE SAISIE RAPIDE ── */}
+      <BarreSaisieRapide
+        barreConfig={barreConfig} setBarreConfig={setBarreConfig}
+        codeActif={codeActif} setCodeActif={setCodeActif}
+        getColor={getColor} getTc={getTc}
+        showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
+        CODES_BARRE={CODES_BARRE}
+      />
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
         {weekDates.map((dk,i)=>{
           const en=schedule[`${agent.id}-${dk}`];
@@ -2475,15 +2597,19 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
           const isFinNuit2=en?.finNuit;
           const barColor=isFinNuit2?"#1e3a8a":code&&showData?getColor(code):isWE?"#e2e8f0":"#f1f5f9";
 
-          return <div key={dk} style={{
+          return <div key={dk}
+            onClick={()=>{if(codeActif) setDay(dk, code===codeActif?null:codeActif);}}
+            style={{
             borderRadius:12,
             overflow:"hidden",
-            background:"#fff",
-            border:isToday?"2px solid #6366f1":"1.5px solid #e2e8f0",
+            background:codeActif&&code===codeActif?"#fafafa":"#fff",
+            border:codeActif?(code===codeActif?"2px solid #6366f1":"1.5px solid rgba(99,102,241,.3)")
+              :isToday?"2px solid #6366f1":"1.5px solid #e2e8f0",
             boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.06)",
             display:"flex",
             flexDirection:"column",
             minHeight:110,
+            cursor:codeActif?"pointer":"default",
           }}>
             {/* Barre colorée en haut */}
             <div style={{
@@ -2575,7 +2701,10 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
             {/* Sélecteur équipe */}
             <div style={{padding:"4px 6px",borderTop:"1px solid #f1f5f9",background:"#fafafa"}}>
-              <select value={code||""} onChange={e=>setDay(dk,e.target.value||null)}
+              <select value={code||""} onChange={e=>{
+                  if(codeActif) setCodeActif(null); // désactive la saisie rapide si on utilise le select
+                  setDay(dk,e.target.value||null);
+                }}
                 style={{width:"100%",fontSize:9,border:"1px solid #e2e8f0",borderRadius:6,
                   padding:"3px 4px",background:"#fff",color:"#475569",cursor:"pointer",outline:"none"}}>
                 <option value="">— choisir —</option>
@@ -2608,15 +2737,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     {/* ── VUE MOIS ── */}
     {calView==="mois"&&<>
-      {/* Légende couleurs */}
-      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-        {[{c:"M",l:"Mat."},{c:"AM",l:"Soir."},{c:"N",l:"Nuit"},{c:"J",l:"Jour."},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"CP",l:"Congé"},{c:"ABS",l:"Abs."}].map(({c,l})=>{
-          const eq=EQ_COLORS[c];
-          return <span key={c} style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:9,background:eq?.bg,color:eq?.tc,borderRadius:8,padding:"2px 7px",fontWeight:700}}>
-            <span style={{width:5,height:5,borderRadius:"50%",background:eq?.dot}}/>{l}
-          </span>;
-        })}
-      </div>
+      {/* ── BARRE DE SAISIE RAPIDE ── */}
+      <BarreSaisieRapide
+        barreConfig={barreConfig} setBarreConfig={setBarreConfig}
+        codeActif={codeActif} setCodeActif={setCodeActif}
+        getColor={getColor} getTc={getTc}
+        showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
+        CODES_BARRE={CODES_BARRE}
+      />
 
       {/* Grille mensuelle */}
       <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
@@ -2645,10 +2773,16 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
             else if(en&&showData&&code) bg=getColor(code);
             return <div key={dk} style={{background:bg,border:isToday?"2px solid #6366f1":"1px solid #e2e8f0",borderRadius:8,padding:"4px 5px",minHeight:52,cursor:"pointer",position:"relative",boxShadow:isToday?"0 0 0 2px #eef2ff":"none"}}
               onClick={()=>{
-                const codes=["","M","AM","N","J","RP","RU","NU","CA","MA","VT","FOR","DISPO"];
-                const cur=codes.indexOf(code||"");
-                const next=codes[(cur+1)%codes.length];
-                setDay(dk,next||null);
+                if(codeActif){
+                  // Mode saisie rapide : applique ou efface le code actif
+                  setDay(dk, code===codeActif ? null : codeActif);
+                } else {
+                  // Mode cycle classique
+                  const codes=["","M","AM","N","J","RP","RU","NU","CA","MA","VT","FOR","DISPO"];
+                  const cur=codes.indexOf(code||"");
+                  const next=codes[(cur+1)%codes.length];
+                  setDay(dk,next||null);
+                }
               }}>
               <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
               {en?.finNuit&&showData&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center",lineHeight:1.4}}>🌙 fin nuit<br/><span style={{fontWeight:400,fontSize:6}}>libre</span></div>}
@@ -2685,7 +2819,12 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       </div>
 
       {/* Info tap */}
-      <div style={{fontSize:10,color:"#94a3b8",textAlign:"center"}}>💡 Clique sur un jour pour faire défiler les statuts</div>
+      <div style={{fontSize:10,color:codeActif?"#6366f1":"#94a3b8",textAlign:"center",fontWeight:codeActif?700:400}}>
+        {codeActif
+          ? `✏️ Mode saisie : tap sur un jour pour appliquer "${codeActif}" — tap à nouveau pour effacer`
+          : "💡 Tap sur un jour pour faire défiler les statuts · Ou sélectionne un code ci-dessus"
+        }
+      </div>
 
 
     </>}
