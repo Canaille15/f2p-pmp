@@ -2903,6 +2903,7 @@ function detectFamillesReserviste(agentId, schedule){
 
 function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser}){
   const [showHab,setShowHab]=useState(false);
+  const [showHabRoul,setShowHabRoul]=useState(false);
   const [calView,setCalView]=useState("mois");
   const [monthOff,setMonthOff]=useState(0);
   const [showColorPicker,setShowColorPicker]=useState(false);
@@ -3070,6 +3071,18 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
                 </button>
               );
             })}
+            {/* Bouton postes habilités roulement */}
+            <button onClick={()=>setShowHabRoul(true)}
+              style={{display:"flex",alignItems:"center",gap:6,
+                border:"1.5px solid rgba(255,255,255,.2)",
+                background:"rgba(255,255,255,.07)",
+                color:"#fff",borderRadius:8,padding:"5px 10px",
+                cursor:"pointer",fontSize:11,fontWeight:400,textAlign:"left",marginTop:2}}>
+              <span style={{fontSize:12}}>⚙️</span>
+              Postes {profile.habilitations&&Object.keys(profile.habilitations).length>0
+                ? `(${Object.keys(profile.habilitations).length})`
+                : ""}
+            </button>
           </div>
         </div>
 
@@ -3484,6 +3497,12 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       suggestedPostes={postesDetectes}
       onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);}}
       onClose={()=>setShowHab(false)}/>}
+
+    {showHabRoul&&<HabilitationsRoulementModal
+      agent={agent}
+      habilitations={profile.habilitations||{}}
+      onSave={hab=>{setProfile({habilitations:hab});setShowHabRoul(false);}}
+      onClose={()=>setShowHabRoul(false)}/>}
     {/* ── VUE PLANNING ── */}
     {calView==="planning"&&<>
       {/* ── BARRE DE SAISIE RAPIDE ── */}
@@ -4780,6 +4799,223 @@ function HabilitationsModal({agent,habilitations,onSave,onClose,suggestedPostes}
               cursor:"pointer",fontSize:14,fontWeight:800,
               boxShadow:"0 2px 8px rgba(30,41,59,.3)"}}>
             ✓ Enregistrer ({nbHab} habilitation{nbHab>1?"s":""})
+          </button>
+          <button onClick={onClose}
+            style={{background:"#fff",color:"#475569",border:"1.5px solid #e2e8f0",
+              borderRadius:12,padding:"12px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>
+            Annuler
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL HABILITATIONS ROULEMENT ──────────────────────────────────────────
+function HabilitationsRoulementModal({agent, habilitations, onSave, onClose}){
+  const [hab, setHab] = useState(()=>({...habilitations}));
+  const [onglet, setOnglet] = useState("PRCI"); // "PRCI" | "PAR"
+  const fam = FAMILLES[agent.famille];
+
+  const toggle = (code) => setHab(prev=>{
+    const next = {...prev};
+    if(next[code]) delete next[code];
+    else next[code] = "HC";
+    return next;
+  });
+
+  // Tous les postes PRCI et PAR (3×8 + journée ensemble)
+  const POSTES = {
+    PRCI: [
+      // 3×8
+      ...POSTES_PRCI_3x8.map(p=>({
+        code: p.M?.replace("-",""), label: p.label,
+        subtitle: `3×8 · M:${p.M||"—"} AM:${p.AM||"—"} N:${p.N||"—"}`,
+        groupe:"3×8", jsCodeM: p.M, jsCodeAM: p.AM, jsCodeN: p.N,
+      })),
+      // Journée
+      ...POSTES_JOURNEE.filter(p=>p.famille==="PRCI").map(p=>({
+        code: p.jsCode, label: p.label,
+        subtitle: `Journée · ${p.horaires||"Variable"}${p.subtitle?" · "+p.subtitle:""}`,
+        groupe:"Journée",
+      })),
+    ],
+    PAR: [
+      // 3×8
+      ...POSTES_PAR_3x8.map(p=>({
+        code: p.N||p.M||p.code, label: p.label,
+        subtitle: `3×8 · M:${p.M||"—"} AM:${p.AM||"—"} N:${p.N||"—"}`,
+        groupe:"3×8",
+      })),
+      // Journée
+      ...POSTES_JOURNEE.filter(p=>p.famille==="PAR").map(p=>({
+        code: p.jsCode, label: p.label,
+        subtitle: `Journée · ${p.horaires||"Variable"}${p.subtitle?" · "+p.subtitle:""}`,
+        groupe:"Journée",
+      })),
+    ],
+  };
+
+  const postesActifs = POSTES[onglet]||[];
+  const nbHab = Object.keys(hab).length;
+  const nbPRCI = POSTES.PRCI.filter(p=>hab[p.code]).length;
+  const nbPAR  = POSTES.PAR.filter(p=>hab[p.code]).length;
+
+  const COLORS = {
+    PRCI:{header:"#0f4c81",light:"#eff6ff",text:"#0f4c81",bg3x8:"#dbeafe",bgJ:"#eff6ff"},
+    PAR: {header:"#065f46",light:"#f0fdf4",text:"#065f46",bg3x8:"#d1fae5",bgJ:"#ecfdf5"},
+  };
+  const C = COLORS[onglet];
+
+  // Grouper par 3×8 / Journée
+  const groupes3x8 = postesActifs.filter(p=>p.groupe==="3×8");
+  const groupesJ   = postesActifs.filter(p=>p.groupe==="Journée");
+
+  const renderPoste = (p) => {
+    const isHab = !!hab[p.code];
+    return(
+      <button key={p.code} onClick={()=>toggle(p.code)}
+        style={{
+          display:"flex",alignItems:"center",gap:12,
+          background: isHab ? C.light : "#f8fafc",
+          border:`2px solid ${isHab ? C.header : "#e2e8f0"}`,
+          borderRadius:12,padding:"10px 14px",cursor:"pointer",
+          textAlign:"left",width:"100%",
+          boxShadow: isHab ? `0 2px 8px ${C.header}33` : "none",
+          transition:"all .15s",
+        }}>
+        {/* Checkbox */}
+        <div style={{
+          width:22,height:22,borderRadius:6,flexShrink:0,
+          background: isHab ? C.header : "#fff",
+          border:`2px solid ${isHab ? C.header : "#e2e8f0"}`,
+          display:"flex",alignItems:"center",justifyContent:"center",
+        }}>
+          {isHab&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
+        </div>
+        {/* Info */}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{
+              fontFamily:"monospace",fontSize:9,fontWeight:800,
+              background: isHab ? C.header+"22" : "#f1f5f9",
+              color: isHab ? C.header : "#64748b",
+              borderRadius:4,padding:"1px 5px",
+            }}>{p.code}</span>
+            <span style={{fontSize:13,fontWeight:isHab?800:600,
+              color: isHab ? C.header : "#1e293b"}}>{p.label}</span>
+          </div>
+          <div style={{fontSize:9,color: isHab ? C.header : "#94a3b8",
+            marginTop:2,opacity:.8}}>{p.subtitle}</div>
+        </div>
+        {isHab&&<span style={{
+          background:C.header,color:"#fff",
+          borderRadius:20,padding:"2px 10px",
+          fontSize:10,fontWeight:700,flexShrink:0,
+        }}>Habilité</span>}
+      </button>
+    );
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:400,
+      display:"flex",alignItems:"flex-end",justifyContent:"center",
+      backdropFilter:"blur(6px)"}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+
+      <div style={{background:"#fff",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:560,
+        maxHeight:"92vh",display:"flex",flexDirection:"column",
+        boxShadow:"0 -8px 40px rgba(0,0,0,.25)"}}>
+
+        {/* Header */}
+        <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,
+          padding:"16px 20px",display:"flex",alignItems:"center",gap:12,
+          borderRadius:"20px 20px 0 0",flexShrink:0}}>
+          <Av initials={agent.initials} size={40} famille={agent.famille}/>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Postes habilités — Roulement</div>
+            <div style={{color:"rgba(255,255,255,.7)",fontSize:11,marginTop:1}}>
+              {agent.prenom} {agent.nom} · {nbHab} poste{nbHab>1?"s":""}
+            </div>
+          </div>
+          <button onClick={onClose}
+            style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",
+              borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:18,
+              display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        {/* Onglets PRCI / PAR */}
+        <div style={{display:"flex",borderBottom:"2px solid #e2e8f0",flexShrink:0}}>
+          {["PRCI","PAR"].map(o=>{
+            const nb = o==="PRCI" ? nbPRCI : nbPAR;
+            const col = COLORS[o];
+            const actif = onglet===o;
+            return(
+              <button key={o} onClick={()=>setOnglet(o)}
+                style={{flex:1,border:"none",
+                  background: actif ? col.light : "#fff",
+                  borderBottom: actif ? `3px solid ${col.header}` : "3px solid transparent",
+                  padding:"12px 16px",cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                  marginBottom:-2,
+                }}>
+                <span style={{fontSize:13,fontWeight:actif?800:500,
+                  color: actif ? col.header : "#94a3b8"}}>{o}</span>
+                {nb>0&&<span style={{
+                  background: actif ? col.header : "#e2e8f0",
+                  color: actif ? "#fff" : "#94a3b8",
+                  borderRadius:20,padding:"1px 7px",fontSize:10,fontWeight:700,
+                }}>{nb}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Corps */}
+        <div style={{overflowY:"auto",flex:1,padding:"14px 16px",
+          display:"flex",flexDirection:"column",gap:14,
+          WebkitOverflowScrolling:"touch"}}>
+
+          {/* 3×8 */}
+          {groupes3x8.length>0&&<div>
+            <div style={{background:C.bg3x8,borderRadius:8,
+              padding:"6px 12px",marginBottom:8,
+              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:11,fontWeight:800,color:C.header}}>3×8</span>
+              <span style={{fontSize:10,color:C.header,opacity:.7}}>
+                {groupes3x8.filter(p=>hab[p.code]).length}/{groupes3x8.length}
+              </span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {groupes3x8.map(renderPoste)}
+            </div>
+          </div>}
+
+          {/* Journée */}
+          {groupesJ.length>0&&<div>
+            <div style={{background:C.bgJ,borderRadius:8,
+              padding:"6px 12px",marginBottom:8,
+              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:11,fontWeight:800,color:C.header}}>Journée</span>
+              <span style={{fontSize:10,color:C.header,opacity:.7}}>
+                {groupesJ.filter(p=>hab[p.code]).length}/{groupesJ.length}
+              </span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {groupesJ.map(renderPoste)}
+            </div>
+          </div>}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"14px 16px",borderTop:"1px solid #e2e8f0",
+          display:"flex",gap:8,flexShrink:0,background:"#f8fafc"}}>
+          <button onClick={()=>onSave(hab)}
+            style={{flex:1,background:"linear-gradient(135deg,#1e293b,#334155)",
+              color:"#fff",border:"none",borderRadius:12,padding:"12px 0",
+              cursor:"pointer",fontSize:14,fontWeight:800,
+              boxShadow:"0 2px 8px rgba(30,41,59,.3)"}}>
+            ✓ Enregistrer ({nbHab} poste{nbHab>1?"s":""})
           </button>
           <button onClick={onClose}
             style={{background:"#fff",color:"#475569",border:"1.5px solid #e2e8f0",
