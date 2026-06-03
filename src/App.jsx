@@ -2462,7 +2462,16 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   },[agent?.id, setAgentProfiles]);
 
   // Couleur effective pour un code
-  const getColor=(code)=>agentColors[code]||DEFAULT_COLORS[code]||EQ[code]?.color||"#f8fafc";
+  const getColor=(code)=>{
+    // Couleur perso agent en priorité
+    if(agentColors[code]) return agentColors[code];
+    // Couleur par défaut connue
+    if(DEFAULT_COLORS[code]) return DEFAULT_COLORS[code];
+    // Fêtes légales (F1, F2, FV, F3…) → même couleur que F1 perso ou défaut rose
+    if(CODES_FETES[code]) return agentColors["F1"]||"#ec4899";
+    // Fallback EQUIPES
+    return EQ[code]?.color||"#f8fafc";
+  };
   const getTc=(code)=>getTextColor(getColor(code));
 
   // Accès aux données privées = agent connecté uniquement
@@ -2790,8 +2799,8 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
               {/* Badge équipe principale */}
               {code&&showData&&<div style={{
-                background: CODES_FETES[code] ? "#ec4899" : getColor(code),
-                color: CODES_FETES[code] ? "#fff" : getTc(code),
+                background: getColor(code),
+                color: getTc(code),
                 borderRadius:8,
                 padding:"4px 8px",
                 fontSize:10,
@@ -2930,8 +2939,8 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
               <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
               {en?.finNuit&&showData&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center",lineHeight:1.4}}>🌙 fin nuit<br/><span style={{fontWeight:400,fontSize:6}}>libre</span></div>}
               {code&&<div style={{fontSize:8,fontWeight:700,
-                color:CODES_FETES[code]?"#fff":getTc(code),
-                background:CODES_FETES[code]?"#ec4899":getColor(code),
+                color:getTc(code),
+                background:getColor(code),
                 borderRadius:4,padding:"1px 4px",display:"inline-block"}}>
                 {CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)?.slice(0,4)}
               </div>}
