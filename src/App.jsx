@@ -923,8 +923,8 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
   };
   const setColor = (code, color) => {
     if(code==="FETE"){
-      // Appliquer à tous les codes fête
-      const feteKeys = Object.keys(CODES_FETES);
+      // Appliquer à tous les codes fête F1, F2, FV... + JF
+      const feteKeys = [...Object.keys(CODES_FETES), "JF"];
       setAgentColors(prev=>({...prev,...Object.fromEntries(feteKeys.map(k=>[k,color]))}));
     } else {
       setAgentColors(prev=>({...prev,[code]:color}));
@@ -1574,9 +1574,12 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
   };
 
-  const notifCount = lignes.filter(l=>l.notifActive).length;
+  const notifCount   = lignes.filter(l=>l.notifActive).length;
+  const nbPrises     = lignes.filter(l=>l.statut==="prise").length;
+  const nbPayees     = lignes.filter(l=>l.statut==="payee"||l.statut==="payee_auto").length;
+  const nbTotal      = lignes.filter(l=>l.statut!=="futur").length; // fêtes passées ou en cours
   const [ouvert, setOuvert] = useState(true);
-  const [motifOuvert, setMotifOuvert] = useState(null); // code dont le motif est déroulé
+  const [motifOuvert, setMotifOuvert] = useState(null);
 
   // Couleurs par statut
   const statutStyle = {
@@ -1607,18 +1610,43 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
       {/* ── HEADER cliquable ── */}
       <div onClick={()=>setOuvert(o=>!o)}
         style={{background:"linear-gradient(135deg,#9d174d,#be185d)",padding:"11px 16px",
-          display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none"}}>
-        <span style={{fontSize:15}}>🩷</span>
-        <span style={{fontSize:13,fontWeight:800,color:"#fff",flex:1}}>
+          display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none",flexWrap:"wrap"}}>
+
+        {/* Titre */}
+        <span style={{fontSize:15,flexShrink:0}}>🩷</span>
+        <span style={{fontSize:13,fontWeight:800,color:"#fff",flex:1,minWidth:120}}>
           Suivi des fêtes légales {year}
         </span>
-        {notifCount>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,
-          padding:"2px 9px",fontSize:11,fontWeight:700,flexShrink:0}}>
-          {notifCount} rappel{notifCount>1?"s":""}
-        </span>}
-        <span style={{fontSize:9,color:"rgba(255,255,255,.4)",fontStyle:"italic",marginRight:4}}>GRH00143</span>
+
+        {/* Compteurs inline */}
+        <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+          {/* Fêtes prises */}
+          {nbPrises>0&&<span style={{
+            background:"rgba(22,163,74,.85)",color:"#fff",
+            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}>
+            ✅ {nbPrises} prise{nbPrises>1?"s":""}
+          </span>}
+
+          {/* Fêtes payées */}
+          {nbPayees>0&&<span style={{
+            background:"rgba(59,130,246,.85)",color:"#fff",
+            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}>
+            💶 {nbPayees} payée{nbPayees>1?"s":""}
+          </span>}
+
+          {/* Rappels */}
+          {notifCount>0&&<span style={{
+            background:"#ef4444",color:"#fff",
+            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,flexShrink:0}}>
+            ⚠️ {notifCount} rappel{notifCount>1?"s":""}
+          </span>}
+        </div>
+
+        <span style={{fontSize:9,color:"rgba(255,255,255,.35)",fontStyle:"italic",flexShrink:0}}>GRH00143</span>
         <span style={{color:"#fff",fontSize:14,fontWeight:700,transition:"transform .2s",
-          display:"inline-block",transform:ouvert?"rotate(0deg)":"rotate(-90deg)"}}>
+          display:"inline-block",transform:ouvert?"rotate(0deg)":"rotate(-90deg)",flexShrink:0}}>
           ▼
         </span>
       </div>
@@ -2977,7 +3005,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     </>}
     {showColorPicker&&<ColorCustomizer
-      agentColors={agentColors}
+      agentColors={agentProfiles[agent?.id]?.agentColors||{}}
       setAgentColors={setAgentColors}
       onClose={()=>setShowColorPicker(false)}/>}
     {/* Tableau de bord compteurs */}
