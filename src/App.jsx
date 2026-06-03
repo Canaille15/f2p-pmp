@@ -184,10 +184,18 @@ const POSTES_JOURNEE = [
 
 // Codes fêtes légales SNCF
 const CODES_FETES = {
-  "F1":"1er Janvier","F2":"Lundi de Pâques","F3":"1er Mai","F4":"8 Mai",
-  "F5":"Ascension","FV":"Vendredi Saint (Alsace)","F6":"Lundi de Pentecôte",
-  "F7":"14 Juillet","F8":"15 Août","F9":"1er Novembre","F0":"11 Novembre",
-  "VN":"Noël (Vendredi Saint)",
+  "F1":"1er Janvier",
+  "F2":"Lundi de Pâques",
+  "F3":"1er Mai",
+  "F4":"Ascension",
+  "FV":"8 Mai",
+  "F5":"Lundi de Pentecôte",
+  "F6":"14 Juillet",
+  "F7":"15 Août",
+  "F8":"1er Novembre",
+  "F9":"11 Novembre",
+  "F0":"Noël",
+  "VN":"Samedi veille de Noël (si Noël = dimanche)",
 };
 
 // Couleurs compteurs agenda perso
@@ -879,7 +887,7 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
 
 
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
-function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
+function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [editMode, setEditMode] = useState(false);
@@ -1061,12 +1069,523 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles}){
         💡 Le chiffre central = calculé depuis votre planning. Utilisez +/− pour corriger si votre planning n'est pas à jour. Les corrections sont sauvegardées automatiquement.
       </div>}
 
+      {/* Référence réglementaire congés */}
+      <div style={{marginTop:6,textAlign:"right"}}>
+        <span style={{fontSize:9,color:"#cbd5e1",fontStyle:"italic",userSelect:"text",cursor:"text"}}>
+          Réf. congés : CONGÉS DU PERSONNEL DE LA SNCF — GRH00143
+        </span>
+      </div>
+
+      {/* ── FÊTES LÉGALES ─────────────────────────────────────── */}
+      {(isOwnProfile||isAdmin)&&<FetesSection
+        agent={agent}
+        schedule={schedule}
+        agentProfiles={agentProfiles}
+        setAgentProfiles={setAgentProfiles}
+        isAdmin={isAdmin}
+        isOwnProfile={isOwnProfile}
+        year={selectedYear}/>}
+
       {/* ── PAUSE FIGÉE ─────────────────────────────────────── */}
       <PauseFigeeSection
         agent={agent}
         year={selectedYear}
         agentProfiles={agentProfiles}
         setAgentProfiles={setAgentProfiles}/>
+    </div>
+  );
+}
+
+// ─── HELPERS RÈGLES FÊTES ────────────────────────────────────────────────────
+
+// Retourne trimestre (1-4) d'un mois (1-12)
+function getTrimestre(mois){ return mois<=3?1:mois<=6?2:mois<=9?3:4; }
+
+// Retourne les règles de délai pour une fête donnée sa date réelle (string YYYY-MM-DD)
+function getFeteRegles(dateFete){
+  const d = new Date(dateFete);
+  const mois = d.getMonth()+1;
+  const annee = d.getFullYear();
+  const t = getTrimestre(mois);
+  let tSuiv = t+1; let aSuiv = annee;
+  if(tSuiv>4){tSuiv=1;aSuiv=annee+1;}
+  const finT = {1:`${aSuiv}-03-31`,2:`${aSuiv}-06-30`,3:`${aSuiv}-09-30`,4:`${aSuiv}-12-31`};
+  const limiteDate = finT[tSuiv];
+  // Notif = 10 du mois M-1 avant fin trimestre
+  const dernierMoisT = {1:3,2:6,3:9,4:12};
+  let moisNotif = dernierMoisT[tSuiv]-1; let anneeNotif = aSuiv;
+  if(moisNotif<=0){moisNotif+=12;anneeNotif--;}
+  const notifDate = `${anneeNotif}-${String(moisNotif).padStart(2,'0')}-10`;
+  // Paye si non pris = mois suivant la limite
+  const moisLim = parseInt(limiteDate.slice(5,7));
+  let moisPaye = moisLim+1; let anneePaye = aSuiv;
+  if(moisPaye>12){moisPaye=1;anneePaye++;}
+  return {limiteDate, notifDate, moisPaye, anneePaye};
+}
+
+// Retourne les dates réelles des fêtes légales pour une année donnée
+// (calculs fixes + mobiles Pâques par algorithme de Butcher-Meeus)
+function getDatesFetesAnnee(annee){
+  // Pâques (algorithme Butcher-Meeus)
+  const a=annee%19,b=Math.floor(annee/100),c=annee%100;
+  const d2=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25);
+  const g=Math.floor((b-f+1)/3),h=(19*a+b-d2-g+15)%30;
+  const i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7;
+  const m=Math.floor((a+11*h+22*l)/451);
+  const moisPaq=Math.floor((h+l-7*m+114)/31);
+  const jourPaq=((h+l-7*m+114)%31)+1;
+  const paques=new Date(annee,moisPaq-1,jourPaq);
+
+  const fmt=(d)=>d.toISOString().slice(0,10);
+
+  // Fêtes mobiles depuis Pâques
+  const lunPaques=new Date(paques); lunPaques.setDate(paques.getDate()+1);       // F2
+  const ascension=new Date(paques); ascension.setDate(paques.getDate()+39);      // F4 (jeudi)
+  const lunPentecote=new Date(paques); lunPentecote.setDate(paques.getDate()+50); // F5
+
+  // Noël : le 25 décembre
+  const noel=new Date(annee,11,25);
+  const noelDow=noel.getDay(); // 0=dim
+
+  // VN = samedi veille de Noël, UNIQUEMENT si Noël tombe un dimanche
+  // (les agents chôment aussi ce jour-là selon le règlement)
+  const vnDate = noelDow===0 ? `${annee}-12-24` : null;
+
+  // F3 = 1er mai : cas particulier si dimanche → seuls agents de service bénéficient d'un RC
+  // On garde la date réelle, la règle est gérée dans FetesSection via estDimanche
+  const f3Date = `${annee}-05-01`;
+  const f3Dow = new Date(annee,4,1).getDay();
+
+  const dates = {
+    F1: `${annee}-01-01`,   // 1er Janvier
+    F2: fmt(lunPaques),     // Lundi de Pâques
+    F3: f3Date,             // 1er Mai
+    F4: fmt(ascension),     // Ascension (jeudi)
+    FV: `${annee}-05-08`,   // 8 Mai
+    F5: fmt(lunPentecote),  // Lundi de Pentecôte
+    F6: `${annee}-07-14`,   // 14 Juillet
+    F7: `${annee}-08-15`,   // 15 Août
+    F8: `${annee}-11-01`,   // 1er Novembre
+    F9: `${annee}-11-11`,   // 11 Novembre
+    F0: `${annee}-12-25`,   // Noël
+  };
+
+  // VN n'apparaît que si Noël tombe un dimanche
+  if(vnDate) dates.VN = vnDate;
+
+  return dates;
+}
+
+// Indique si la fête F3 (1er mai) tombe un dimanche pour l'année donnée
+function isF3Dimanche(annee){ return new Date(annee,4,1).getDay()===0; }
+
+const MOIS_NOMS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+// ─── SECTION TABLEAU FÊTES ───────────────────────────────────────────────────
+function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin, isOwnProfile, year}){
+  const today = new Date().toISOString().slice(0,10);
+  const todayDate = new Date();
+
+  // Corrections manuelles fêtes (stockées dans agentProfiles)
+  const fetesData = agentProfiles[agent?.id]?.fetesTracking?.[year] || {};
+  
+  const setFetesData = (updater) => {
+    setAgentProfiles(prev=>{
+      const curr = prev[agent.id]?.fetesTracking?.[year] || {};
+      const next = typeof updater === 'function' ? updater(curr) : updater;
+      return {...prev, [agent.id]:{
+        ...(prev[agent.id]||{}),
+        fetesTracking:{
+          ...(prev[agent.id]?.fetesTracking||{}),
+          [year]: next,
+        }
+      }};
+    });
+  };
+
+  const datesFetes = getDatesFetesAnnee(year);
+  
+  // Pour chaque fête, calculer son statut
+  const lignes = Object.entries(CODES_FETES).map(([code, label])=>{
+    // VN n'existe que si Noël tombe un dimanche pour cette année
+    const dateFete = datesFetes[code];
+    if(!dateFete) return null; // VN absent si Noël ne tombe pas un dimanche
+
+    const dateFeteObj = new Date(dateFete);
+    const dow = dateFeteObj.getDay(); // 0=dim
+
+    // F2 (Lundi de Pâques) et F5 (Lundi de Pentecôte) sont TOUJOURS des lundis
+    // par construction — ils ne peuvent jamais tomber un dimanche
+    const jamaisDimanche = code === "F2" || code === "F5";
+    const estDimanche = !jamaisDimanche && dow === 0;
+    const estF3Dimanche = code === "F3" && estDimanche;
+
+    // Cas particulier VN : samedi veille de Noël quand Noël = dimanche
+    // → mêmes règles de délai que F0 (Noël) donc T4 → limite 31 mars A+1
+    // Les agents dont l'utilisation est imposée OU en RP ce jour bénéficient d'un RC
+
+    const {limiteDate, notifDate, moisPaye, anneePaye} = getFeteRegles(dateFete);
+
+    // Détection prise : code fête dans planning OU RP dans le trimestre suivant
+    const moisLim = parseInt(limiteDate.slice(5,7));
+    const anneeLim = parseInt(limiteDate.slice(0,4));
+    const debutRecherche = dateFete; // à partir du jour de la fête
+    const finRecherche = limiteDate;
+
+    let priseLe = null;
+    let priseType = null;
+    // 1. Code fête saisi directement
+    Object.entries(schedule).forEach(([k,v])=>{
+      if(!k.startsWith(agent.id+"-")) return;
+      const dk = k.slice(agent.id.length+1);
+      if(dk < debutRecherche || dk > finRecherche) return;
+      if(v?.equipe === code){ priseLe = dk; priseType = "code"; }
+    });
+    // 2. RP dans le trimestre suivant (si pas déjà trouvé par code)
+    if(!priseLe){
+      const trimestreSuiv = getTrimestre(parseInt(dateFete.slice(5,7)))+1;
+      const anneeSuiv = trimestreSuiv > 4 ? year+1 : year;
+      const tReal = trimestreSuiv > 4 ? 1 : trimestreSuiv;
+      const debutT = {1:`${anneeSuiv}-01-01`,2:`${anneeSuiv}-04-01`,3:`${anneeSuiv}-07-01`,4:`${anneeSuiv}-10-01`};
+      const debutTrimSuiv = debutT[tReal];
+      Object.entries(schedule).forEach(([k,v])=>{
+        if(!k.startsWith(agent.id+"-")) return;
+        const dk = k.slice(agent.id.length+1);
+        if(dk < debutTrimSuiv || dk > finRecherche) return;
+        if(v?.equipe === "RP"){ priseLe = dk; priseType = "RP"; }
+      });
+    }
+
+    // ── DÉTECTION PLANNING + ROULEMENT ──────────────────────────────────────────
+    const entryJour = schedule[`${agent.id}-${dateFete}`];
+    const equipeJour = entryJour?.equipe || null;
+
+    // Planning saisi ce jour
+    const estRPCeJour       = equipeJour === "RP";
+    const estTravaillePlanning = ["M","AM","N","J","JF"].includes(equipeJour||"");
+
+    // Profil agent
+    const profil = agentProfiles[agent.id] || {};
+    const estReserviste = profil.isReserve || false;
+    const roulement = profil.roulement || null; // ex: "Roulement A", "Roulement B"…
+
+    // Roulement prévisionnel : si pas de planning saisi, on regarde le roulement
+    // Les roulements 3x8 SNCF tournent sur 5 semaines (M/AM/N/RP/RP…)
+    // On utilise le roulement enregistré dans le profil comme indicateur d'équipe habituelle
+    // Pour un dimanche : en roulement 3x8, le dimanche peut être M, AM, N ou RP selon la semaine
+    // Sans table de roulement complète, on se base sur le planning saisi
+    // Si planning non saisi ET fête dans le futur : on marque "indéterminé"
+    const estFutur = dateFete > today;
+    const planningRenseigneCeJour = !!equipeJour;
+
+    // Travail prévisionnel (planning OU réserviste)
+    // Pour F3 dimanche : réserviste = potentiellement utilisé → RC possible
+    const estUtiliseOuReserviste = estTravaillePlanning || (estF3Dimanche && estReserviste);
+
+    // ── RÈGLES PAR CAS ────────────────────────────────────────────────────────
+
+    // Toutes fêtes dimanche (hors F2/F5 jamais dimanche, hors F3 cas particulier) :
+    // → RC accordé si agent travaillait OU était en RP ce jour (règlement al.2 et al.3)
+    // → Si planning non saisi + fête future → statut "indéterminé" (on anticipe PERDUE par défaut
+    //   mais on laisse l'agent corriger)
+    // → Si planning non saisi + fête passée → PERDUE (on ne sait pas → défavorable)
+
+    // F3 dimanche : PERDUE sauf si service imposé (planning M/AM/N/J) OU réserviste
+    // → réserviste = "en attente de confirmation" (peut être appelé)
+    // → on affiche "PERDUE probable" si réserviste sans planning saisi
+    // → on affiche "PERDUE" si ni travail ni réserviste
+
+    let estPerdue = false;
+    let estPerdueProbable = false; // fête dimanche future sans planning saisi
+    let estRCAccorde = false;      // fête dimanche avec RC confirmé (RP ou travail)
+    let estIndetermine = false;    // fête future dimanche, planning non saisi
+
+    if(estDimanche){
+      if(estF3Dimanche){
+        // F3 = 1er mai dimanche
+        if(estTravaillePlanning){
+          estRCAccorde = true; // Service imposé confirmé → RC
+        } else if(estReserviste && !planningRenseigneCeJour){
+          estIndetermine = true; // Réserviste sans planning → peut être appelé → indéterminé
+        } else if(estRPCeJour){
+          estRCAccorde = true; // RP ce jour → RC accordé (al.3)
+        } else if(!planningRenseigneCeJour && estFutur){
+          estPerdueProbable = true; // Futur non renseigné → probable perdue
+        } else {
+          estPerdue = true; // Ni travail, ni RP, ni réserviste → PERDUE
+        }
+      } else {
+        // Toutes les autres fêtes dimanche (hors F2/F5)
+        if(estTravaillePlanning || estRPCeJour){
+          estRCAccorde = true; // Service imposé ou RP → RC accordé
+        } else if(!planningRenseigneCeJour && estFutur){
+          // Futur non renseigné → on anticipe PERDUE
+          // Mais si l'agent a un roulement, on peut affiner :
+          // Sans table de roulement détaillée, on marque comme PERDUE par anticipation
+          // (l'agent peut corriger manuellement)
+          estPerdue = true; // Anticipé PERDUE — corrigeable manuellement
+        } else if(!planningRenseigneCeJour && !estFutur){
+          estPerdue = true; // Passé non renseigné → PERDUE
+        } else {
+          // Planning renseigné mais pas travail ni RP (ex: CA, MA…) → pas de RC
+          estPerdue = true;
+        }
+      }
+    }
+
+    // Motif réglementaire
+    let motifReglementaire = null;
+    if(estPerdue && estF3Dimanche){
+      motifReglementaire = "Lorsque le 1er mai tombe un dimanche, seuls les agents dont l'utilisation est imposée par les nécessités du service bénéficient d'un RC. Aucun service imposé ni RP détecté. (Réf. GRH00143)";
+    } else if(estPerdueProbable && estF3Dimanche){
+      motifReglementaire = "1er mai dimanche — Agent réserviste : RC possible si appelé en service. En attente de confirmation du planning. (Réf. GRH00143)";
+    } else if(estIndetermine && estF3Dimanche){
+      motifReglementaire = "1er mai dimanche — Agent réserviste : RC possible si service imposé. Programmez votre planning pour confirmer. (Réf. GRH00143)";
+    } else if(estPerdue && !estF3Dimanche && estFutur){
+      motifReglementaire = "Fête tombant un dimanche — aucun planning saisi. PERDUE par anticipation si ni service imposé ni RP ce jour. Corrigeable si planning mis à jour. (Réf. GRH00143)";
+    } else if(estPerdue && !estF3Dimanche && !estFutur){
+      motifReglementaire = "Fête tombant un dimanche — aucun service imposé ni RP détecté dans le planning. (Réf. GRH00143)";
+    } else if(estRCAccorde && estDimanche){
+      motifReglementaire = estRPCeJour
+        ? "Agent en repos périodique ce jour : RC accordé dans le trimestre civil suivant. (Réf. GRH00143)"
+        : "Agent utilisé ce jour : RC accordé dans le trimestre civil suivant. (Réf. GRH00143)";
+    } else if(estIndetermine){
+      motifReglementaire = "Planning non saisi — statut indéterminé. (Réf. GRH00143)";
+    } else if(code === "VN"){
+      motifReglementaire = "Les agents chôment le samedi veille de Noël lorsque cette fête tombe un dimanche. Ceux utilisés ou en RP bénéficient d'un RC dans le trimestre suivant. (Réf. GRH00143)";
+    }
+
+    // Override manuel
+    const override = fetesData[code] || {};
+    const priseLeFinal = override.priseLe !== undefined ? override.priseLe : priseLe;
+    const priseTypeFinal = override.priseType || priseType;
+    const estPayee = override.estPayee || (!priseLeFinal && !estPerdue && !estIndetermine && today > limiteDate);
+    const snoozeJusquau = override.snoozeJusquau || null;
+
+    // Statut final
+    let statut = "attente";
+    if(estPerdue)         statut = "perdue";
+    else if(estPerdueProbable) statut = "perdue_probable";
+    else if(estIndetermine)    statut = "indetermine";
+    else if(dateFete > today)  statut = "futur";
+    else if(priseLeFinal)      statut = "prise";
+    else if(estPayee)          statut = "payee";
+    else if(today > limiteDate)statut = "payee_auto";
+    else                       statut = "attente";
+
+    // Notif active ? (pas pour perdues/indéterminées)
+    const notifActive = !estPerdue && !estIndetermine && !priseLeFinal && !estPayee
+      && today >= notifDate && today <= limiteDate
+      && (!snoozeJusquau || today >= snoozeJusquau);
+
+    return {
+      code, label, dateFete, estDimanche, estF3Dimanche,
+      estPerdue, estPerdueProbable, estIndetermine, estRCAccorde,
+      estRPCeJour, estTravaillePlanning, estReserviste, motifReglementaire,
+      limiteDate, notifDate, moisPaye, anneePaye,
+      priseLe: priseLeFinal, priseType: priseTypeFinal,
+      estPayee, statut, notifActive, override,
+    };
+  }).filter(Boolean);
+
+  const [editingCode, setEditingCode] = useState(null);
+  const [editVal, setEditVal] = useState("");
+
+  const prendreEnCompte = (code) => {
+    setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:null,priseLe:today,priseType:"manuel"}}));
+  };
+  const snooze10j = (code) => {
+    const d = new Date(); d.setDate(d.getDate()+10);
+    setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:d.toISOString().slice(0,10)}}));
+  };
+  const setManualDate = (code, val) => {
+    setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),priseLe:val||null,priseType:val?"manuel":null}}));
+    setEditingCode(null);
+  };
+  const setManualPayee = (code, val) => {
+    setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
+  };
+
+  const notifCount = lignes.filter(l=>l.notifActive).length;
+
+  // Couleurs par statut
+  const statutStyle = {
+    futur:          {bg:"#f8fafc", border:"#e2e8f0", badge:"#e2e8f0", badgeTc:"#94a3b8", icon:"🔜"},
+    prise:          {bg:"#f0fdf4", border:"#86efac", badge:"#22c55e", badgeTc:"#fff",     icon:"✅"},
+    attente:        {bg:"#fffbeb", border:"#fde68a", badge:"#f59e0b", badgeTc:"#fff",     icon:"⏳"},
+    payee:          {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶"},
+    payee_auto:     {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶"},
+    perdue:         {bg:"#fef2f2", border:"#fecaca", badge:"#dc2626", badgeTc:"#fff",     icon:"❌"},
+    perdue_probable:{bg:"#fff7ed", border:"#fed7aa", badge:"#ea580c", badgeTc:"#fff",     icon:"⚠️"},
+    indetermine:    {bg:"#faf5ff", border:"#e9d5ff", badge:"#7c3aed", badgeTc:"#fff",     icon:"❓"},
+  };
+
+  const canEdit = isOwnProfile || isAdmin;
+
+  return(
+    <div style={{marginTop:14,border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden",background:"#fff"}}>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#9d174d,#be185d)",padding:"11px 16px",display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:16}}>🩷</span>
+        <span style={{fontSize:13,fontWeight:800,color:"#fff",flex:1}}>Suivi des fêtes légales {year}</span>
+        {notifCount>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700}}>{notifCount} rappel{notifCount>1?"s":""}</span>}
+        <span style={{fontSize:9,color:"rgba(255,255,255,.5)",fontStyle:"italic"}}>Réf. GRH00143</span>
+      </div>
+
+      {/* Alertes actives */}
+      {lignes.filter(l=>l.notifActive).map(l=>{
+        const s = statutStyle[l.statut]||statutStyle.attente;
+        return(
+          <div key={"alert-"+l.code} style={{background:"#fff7ed",borderBottom:"1px solid #fed7aa",padding:"10px 14px",display:"flex",alignItems:"flex-start",gap:10}}>
+            <span style={{fontSize:18,flexShrink:0}}>⚠️</span>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:800,color:"#c2410c"}}>{l.code} — {l.label}</div>
+              <div style={{fontSize:11,color:"#92400e",marginTop:2}}>
+                À prendre avant le <strong>{new Date(l.limiteDate).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined})}</strong>
+              </div>
+            </div>
+            {canEdit&&<div style={{display:"flex",gap:5,flexShrink:0}}>
+              <button onClick={()=>prendreEnCompte(l.code)}
+                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>✓ Pris en compte</button>
+              <button onClick={()=>snooze10j(l.code)}
+                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:10}}>⏰ +10j</button>
+            </div>}
+          </div>
+        );
+      })}
+
+      {/* Tableau */}
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead>
+            <tr style={{background:"#f8fafc",borderBottom:"1.5px solid #e2e8f0"}}>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>CODE</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10}}>FÊTE</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>DATE FÊTE</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>DATE LIMITE</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>PRISE LE</th>
+              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10}}>STATUT</th>
+              {canEdit&&<th style={{padding:"7px 10px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:10}}>✏️</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {lignes.map((l,i)=>{
+              const s = statutStyle[l.statut]||statutStyle.futur;
+              const isEditing = editingCode===l.code;
+              return(
+                <tr key={l.code} style={{background:i%2===0?s.bg:"#fff",borderBottom:"1px solid #f1f5f9"}}>
+                  <td style={{padding:"7px 10px"}}>
+                    <span style={{background:"#fce7f3",color:"#9d174d",borderRadius:6,padding:"2px 7px",fontFamily:"monospace",fontSize:10,fontWeight:800}}>{l.code}</span>
+                  </td>
+                  <td style={{padding:"7px 10px",fontWeight:600,color:"#1e293b",maxWidth:200}}>
+                    <div style={{fontWeight:700}}>{l.label}</div>
+                    {/* Motif réglementaire selon situation */}
+                    {l.motifReglementaire&&<div style={{
+                      fontSize:8,marginTop:3,lineHeight:1.4,
+                      color:l.estPerdue?"#dc2626":l.code==="VN"?"#7c3aed":"#64748b",
+                      fontStyle:"italic",
+                      background:l.estPerdue?"#fef2f2":l.code==="VN"?"#faf5ff":"#f8fafc",
+                      borderRadius:4,padding:"2px 5px",
+                    }}>
+                      {l.estPerdue&&<span style={{fontWeight:800,fontStyle:"normal"}}>❌ PERDUE — </span>}
+                      {l.motifReglementaire}
+                    </div>}
+                  </td>
+                  <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
+                    <div style={{fontFamily:"monospace",fontSize:10,color:"#475569",fontWeight:600}}>
+                      {new Date(l.dateFete).toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit",year:"2-digit"})}
+                    </div>
+                    {l.estDimanche&&<div style={{fontSize:8,fontWeight:700,color:"#dc2626",marginTop:1}}>⚠️ Dimanche</div>}
+                  </td>
+                  <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
+                    <span style={{fontSize:10,fontWeight:700,color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#475569"}}>
+                      {new Date(l.limiteDate).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined})}
+                    </span>
+                  </td>
+                  <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
+                    {isEditing?(
+                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                        <input type="date" defaultValue={l.priseLe||""} autoFocus
+                          onChange={e=>setEditVal(e.target.value)}
+                          style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"2px 6px",fontSize:10,outline:"none",width:110}}/>
+                        <button onClick={()=>setManualDate(l.code,editVal)}
+                          style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:10}}>✓</button>
+                        <button onClick={()=>setEditingCode(null)}
+                          style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:10}}>✕</button>
+                      </div>
+                    ):(
+                      l.priseLe
+                        ? <span style={{fontSize:10,fontWeight:700,color:"#16a34a",display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                            <span>{new Date(l.priseLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})}</span>
+                            {l.priseType==="RP"&&<span style={{
+                              fontSize:8,fontWeight:800,
+                              background:"#fce7f3",color:"#9d174d",
+                              borderRadius:6,padding:"1px 5px",
+                              border:"1px solid #fbcfe8",
+                            }}>🩷 RC-{l.code}</span>}
+                            {l.priseType==="code"&&<span style={{
+                              fontSize:8,fontWeight:800,
+                              background:"#ec4899",color:"#fff",
+                              borderRadius:6,padding:"1px 5px",
+                            }}>🩷 {l.code}</span>}
+                            {l.priseType==="manuel"&&<span style={{fontSize:8,color:"#6366f1",fontWeight:600}}>(manuel)</span>}
+                          </span>
+                        : (l.statut==="payee"||l.statut==="payee_auto")
+                          ? <span style={{fontSize:10,color:"#3b82f6",fontWeight:600}}>
+                              Payé — fiche {MOIS_NOMS[l.moisPaye-1]} {l.anneePaye!==year?l.anneePaye:""}
+                            </span>
+                          : <span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>—</span>
+                    )}
+                  </td>
+                  <td style={{padding:"7px 10px"}}>
+                    <span style={{background:s.badge,color:s.badgeTc,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>
+                      {s.icon} {
+                        l.statut==="futur"           ? "À venir"       :
+                        l.statut==="prise"           ? "Prise"         :
+                        l.statut==="attente"         ? "En attente"    :
+                        l.statut==="perdue"          ? "PERDUE"        :
+                        l.statut==="perdue_probable" ? "Probab. perdue":
+                        l.statut==="indetermine"     ? "Indéterminé"   :
+                        `Payé ${MOIS_NOMS[l.moisPaye-1]}`
+                      }
+                    </span>
+                  </td>
+                  {canEdit&&<td style={{padding:"7px 10px",textAlign:"center"}}>
+                    <div style={{display:"flex",gap:3,justifyContent:"center"}}>
+                      <button onClick={()=>{setEditingCode(l.code);setEditVal(l.priseLe||"");}}
+                        title="Modifier la date de prise"
+                        style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"2px 6px",cursor:"pointer",fontSize:10}}>📅</button>
+                      <button onClick={()=>setManualPayee(l.code,!l.estPayee)}
+                        title={l.estPayee?"Marquer non payé":"Marquer payé"}
+                        style={{background:l.estPayee?"#eff6ff":"#f1f5f9",border:`1px solid ${l.estPayee?"#bfdbfe":"#e2e8f0"}`,borderRadius:5,padding:"2px 6px",cursor:"pointer",fontSize:10}}>💶</button>
+                    </div>
+                  </td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Légende */}
+      <div style={{padding:"8px 14px",borderTop:"1px solid #f1f5f9",display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+        {[
+          {bg:"#22c55e",tc:"#fff",l:"Prise"},
+          {bg:"#f59e0b",tc:"#fff",l:"En attente"},
+          {bg:"#3b82f6",tc:"#fff",l:"Payée sur fiche"},
+          {bg:"#dc2626",tc:"#fff",l:"PERDUE"},
+          {bg:"#ea580c",tc:"#fff",l:"Probab. perdue"},
+          {bg:"#7c3aed",tc:"#fff",l:"Indéterminé"},
+          {bg:"#e2e8f0",tc:"#94a3b8",l:"À venir"},
+        ].map(({bg,tc,l})=>(
+          <span key={l} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:9}}>
+            <span style={{width:8,height:8,borderRadius:"50%",background:bg,flexShrink:0}}/>
+            <span style={{color:"#64748b"}}>{l}</span>
+          </span>
+        ))}
+        <span style={{flex:1}}/>
+        <span style={{fontSize:8,color:"#e2e8f0",fontStyle:"italic"}}>Réf. JOURS FÉRIÉS SNCF — GRH00143</span>
+      </div>
     </div>
   );
 }
@@ -1209,6 +1728,71 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
   );
 }
 
+
+// ─── HELPER RC FÊTES AGENDA ──────────────────────────────────────────────────
+// Retourne la liste des codes fêtes dont ce jour est soit :
+//   - le jour de la fête elle-même (code Fx saisi directement)
+//   - le RC pris (RP dans le trimestre suivant détecté pour une fête donnée)
+// Utilisé pour afficher la pastille RC-Fx dans l'agenda
+function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
+  const year = parseInt(dk.slice(0,4));
+  const result = []; // [{code, label, type: "fete"|"RC"}]
+
+  // 1. Ce jour est-il le jour exact d'une fête avec le code saisi ?
+  const entry = schedule[`${agentId}-${dk}`];
+  if(entry?.equipe && CODES_FETES[entry.equipe]){
+    result.push({code: entry.equipe, label: CODES_FETES[entry.equipe], type:"fete"});
+  }
+
+  // 2. Ce jour est-il un RC pris (RP détecté dans le trimestre suivant) pour une fête ?
+  // On recalcule les fêtes de l'année du jour
+  const datesFetes = getDatesFetesAnnee(year);
+  Object.entries(datesFetes).forEach(([code, dateFete])=>{
+    if(!dateFete) return;
+    if(dk === dateFete) return; // déjà géré au-dessus si code saisi
+
+    const {limiteDate} = getFeteRegles(dateFete);
+    // Le trimestre suivant commence après le trimestre de la fête
+    const moisFete = parseInt(dateFete.slice(5,7));
+    const t = getTrimestre(moisFete);
+    let tSuiv = t+1; let aSuiv = year;
+    if(tSuiv>4){tSuiv=1;aSuiv=year+1;}
+    const debutT={1:`${aSuiv}-01-01`,2:`${aSuiv}-04-01`,3:`${aSuiv}-07-01`,4:`${aSuiv}-10-01`};
+    const debutTrimSuiv = debutT[tSuiv];
+
+    // Ce jour est dans la fenêtre RC (trimestre suivant → limite) ET c'est un RP ?
+    if(dk >= debutTrimSuiv && dk <= limiteDate){
+      const e = schedule[`${agentId}-${dk}`];
+      if(e?.equipe === "RP"){
+        // Vérifier que la fête n'a pas déjà été prise par code avant ce jour
+        let dejaPrisParCode = false;
+        Object.entries(schedule).forEach(([k,v])=>{
+          if(!k.startsWith(agentId+"-")) return;
+          const d2 = k.slice(agentId.length+1);
+          if(d2 >= dateFete && d2 < dk && v?.equipe === code) dejaPrisParCode = true;
+        });
+        // Vérifier aussi les overrides manuels dans agentProfiles
+        const tracking = agentProfiles[agentId]?.fetesTracking?.[year]?.[code];
+        if(tracking?.priseLe && tracking.priseLe < dk) dejaPrisParCode = true;
+
+        if(!dejaPrisParCode){
+          // Vérifier que c'est bien le PREMIER RP dans la fenêtre (évite les doublons)
+          let premierRP = true;
+          Object.entries(schedule).forEach(([k,v])=>{
+            if(!k.startsWith(agentId+"-")) return;
+            const d2 = k.slice(agentId.length+1);
+            if(d2 >= debutTrimSuiv && d2 < dk && v?.equipe === "RP") premierRP = false;
+          });
+          if(premierRP){
+            result.push({code, label: CODES_FETES[code], type:"RC"});
+          }
+        }
+      }
+    }
+  });
+
+  return result;
+}
 
 function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser}){
   const [showHab,setShowHab]=useState(false);
@@ -1490,8 +2074,26 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
                 🌙 Nuit
               </div>}
 
-              {/* Verrouillé */}
-
+              {/* Pastilles RC fêtes */}
+              {(()=>{
+                const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));
+                if(!rcFetes.length) return null;
+                return <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:2}}>
+                  {rcFetes.map(f=>(
+                    <span key={f.code} title={`${f.type==="RC"?"RC":"Fête"} : ${f.label}`}
+                      style={{
+                        display:"inline-flex",alignItems:"center",gap:2,
+                        background:f.type==="RC"?"#fce7f3":"#ec4899",
+                        color:f.type==="RC"?"#9d174d":"#fff",
+                        borderRadius:6,padding:"1px 5px",
+                        fontSize:8,fontWeight:800,
+                        border:`1px solid ${f.type==="RC"?"#fbcfe8":"#db2777"}`,
+                      }}>
+                      🩷 {f.type==="RC"?"RC-":""}{f.code}
+                    </span>
+                  ))}
+                </div>;
+              })()}
 
               {/* Vide */}
               {!en&&<div style={{
@@ -1530,18 +2132,6 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
             </div>}
           </div>;
         })}
-      </div>
-      {/* Remplissage rapide semaine */}
-      <div style={{background:"#f8fafc",borderRadius:10,padding:"11px 13px",border:"1px solid #e2e8f0"}}>
-        <div style={{fontSize:9,fontWeight:800,color:"#94a3b8",marginBottom:7,letterSpacing:.5}}>⚡ REMPLISSAGE RAPIDE — semaine</div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"CP",l:"Congé"}].map(({c,l})=>{
-            const eq=EQ_COLORS[c];
-            return <button key={c} onClick={()=>weekDates.forEach(dk=>setDay(dk,c))}
-              style={{border:`1.5px solid ${eq?.dot}`,background:eq?.bg,color:eq?.tc,borderRadius:14,padding:"3px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>{l}</button>;
-          })}
-          <button onClick={()=>weekDates.forEach(dk=>setDay(dk,null))} style={{border:"1.5px solid #e2e8f0",background:"#fff",color:"#94a3b8",borderRadius:14,padding:"3px 10px",cursor:"pointer",fontSize:10}}>Effacer</button>
-        </div>
       </div>
     </>}
 
@@ -1594,6 +2184,25 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
               {code&&<div style={{fontSize:8,fontWeight:700,color:getTc(code),background:getColor(code),borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{(eq?.label||code)?.slice(0,4)}</div>}
               {en?.equipe2&&(()=>{const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];return <div style={{fontSize:7,fontWeight:700,color:eq2?.textColor||eq2?.tc,background:eq2?.color||eq2?.bg,borderRadius:4,padding:"1px 3px",display:"inline-block",marginTop:1}}>🌙N</div>;})()} 
               {en?.jsCode&&en.jsCode!==code&&<div style={{fontSize:7,color:"#94a3b8",fontFamily:"monospace",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{en.jsCode}</div>}
+              {(()=>{
+                const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));
+                if(!rcFetes.length) return null;
+                return <div style={{display:"flex",flexWrap:"wrap",gap:1,marginTop:1}}>
+                  {rcFetes.map(f=>(
+                    <span key={f.code} title={`${f.type==="RC"?"RC":"Fête"} : ${f.label}`}
+                      style={{
+                        fontSize:7,fontWeight:800,
+                        background:f.type==="RC"?"#fce7f3":"#ec4899",
+                        color:f.type==="RC"?"#9d174d":"#fff",
+                        borderRadius:4,padding:"0px 3px",
+                        border:`1px solid ${f.type==="RC"?"#fbcfe8":"#db2777"}`,
+                        whiteSpace:"nowrap",
+                      }}>
+                      {f.type==="RC"?"RC-":""}{f.code}
+                    </span>
+                  ))}
+                </div>;
+              })()}
             </div>;
           })}
         </div>
@@ -1602,25 +2211,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       {/* Info tap */}
       <div style={{fontSize:10,color:"#94a3b8",textAlign:"center"}}>💡 Clique sur un jour pour faire défiler les statuts</div>
 
-      {/* Remplissage rapide mois */}
-      <div style={{background:"#f8fafc",borderRadius:10,padding:"11px 13px",border:"1px solid #e2e8f0"}}>
-        <div style={{fontSize:9,fontWeight:800,color:"#94a3b8",marginBottom:7,letterSpacing:.5}}>⚡ REMPLISSAGE RAPIDE — mois entier</div>
-        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},{c:"RP",l:"RP"}].map(({c,l})=>{
-            const eq=EQ_COLORS[c];
-            return <button key={c} onClick={()=>monthDates.forEach(dk=>setDay(dk,c))}
-              style={{border:`1.5px solid ${eq?.dot}`,background:eq?.bg,color:eq?.tc,borderRadius:14,padding:"3px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>{l}</button>;
-          })}
-          <button onClick={()=>monthDates.forEach(dk=>setDay(dk,null))} style={{border:"1.5px solid #e2e8f0",background:"#fff",color:"#94a3b8",borderRadius:14,padding:"3px 10px",cursor:"pointer",fontSize:10}}>Effacer le mois</button>
-        </div>
-      </div>
+
     </>}
     {showColorPicker&&<ColorCustomizer
       agentColors={agentColors}
       setAgentColors={setAgentColors}
       onClose={()=>setShowColorPicker(false)}/>}
     {/* Tableau de bord compteurs */}
-    {agent&&<DashboardCompteurs agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
+    {agent&&<DashboardCompteurs agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
   </div>);
 }
 
@@ -2311,7 +2909,9 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
   };
 
   const acquitter=(id)=>setNotifications(prev=>prev.map(n=>n.id===id?{...n,acquitte:true}:n));
-  const activeNotifs=notifications.filter(n=>!n.acquitte);
+  const activeNotifs=notifications.filter(n=>!n.acquitte&&n.type!=="protocole"&&n.type!=="reliquats");
+  const notifsProtocole=notifications.filter(n=>!n.acquitte&&n.type==="protocole");
+  const notifsReliquats=notifications.filter(n=>!n.acquitte&&n.type==="reliquats");
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
     <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",borderRadius:14,padding:"16px 20px",color:"#fff"}}>
@@ -2334,6 +2934,41 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
         ✅ {results.length} affectation(s) importée(s) · {notifications.filter(n=>!n.acquitte).length} écart(s) détecté(s)
       </div>)}
     </div>
+
+    {/* Rappels congés protocolaires */}
+    {notifsProtocole.map(n=>(
+      <div key={n.id} style={{background:n.bgCouleur,border:`1.5px solid ${n.borderCouleur}`,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{fontSize:26,flexShrink:0}}>📅</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:800,color:n.textCouleur,marginBottom:4}}>{n.titre}</div>
+          <div style={{fontSize:12,color:n.textCouleur,opacity:.85}}>{n.message}</div>
+        </div>
+        <button onClick={()=>acquitter(n.id)}
+          style={{background:"rgba(0,0,0,.08)",border:"none",borderRadius:8,padding:"4px 10px",
+            cursor:"pointer",fontSize:11,fontWeight:700,color:n.textCouleur,flexShrink:0,whiteSpace:"nowrap"}}>
+          ✓ Fermer
+        </button>
+      </div>
+    ))}
+
+    {/* Rappels reliquats congés annuels */}
+    {notifsReliquats.map(n=>(
+      <div key={n.id} style={{background:n.bgCouleur,border:`1.5px solid ${n.borderCouleur}`,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{fontSize:26,flexShrink:0}}>🏖️</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:800,color:n.textCouleur,marginBottom:4}}>{n.titre}</div>
+          <div style={{fontSize:12,color:n.textCouleur,opacity:.9,marginBottom:6}}>{n.message}</div>
+          <div style={{fontSize:10,color:n.textCouleur,opacity:.7,fontStyle:"italic"}}>
+            Réf. : PROGRAMMATION DE L'ATTRIBUTION DES RELIQUATS DE CONGÉS RÉGLEMENTAIRES — IN01458
+          </div>
+        </div>
+        <button onClick={()=>acquitter(n.id)}
+          style={{background:"rgba(0,0,0,.08)",border:"none",borderRadius:8,padding:"4px 10px",
+            cursor:"pointer",fontSize:11,fontWeight:700,color:n.textCouleur,flexShrink:0,whiteSpace:"nowrap"}}>
+          ✓ Fermer
+        </button>
+      </div>
+    ))}
 
     {/* Notifications écarts */}
     {activeNotifs.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -2508,14 +3143,6 @@ function ImportDeroulement({agent,onClose,onImport}){
     });
   };
 
-  const fillWeek=(dow,equipe)=>{
-    const next={...jours};
-    daysList.forEach(d=>{
-      if(d.dow===dow) next[d.dk]=equipe?{...(next[d.dk]||{}),equipe}:undefined;
-    });
-    setJours(next);
-  };
-
   const handleSave=()=>{
     const result=[];
     Object.entries(jours).forEach(([dk,val])=>{
@@ -2570,20 +3197,6 @@ function ImportDeroulement({agent,onClose,onImport}){
             style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>›</button>
         </div>
 
-        {/* Remplissage rapide */}
-        <div style={{padding:"8px 16px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
-          <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:6,letterSpacing:.5}}>REMPLISSAGE RAPIDE</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {[1,2,3,4,5].map(dow=>(
-              <select key={dow} onChange={e=>fillWeek(dow,e.target.value||null)}
-                style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"3px 5px",fontSize:11,cursor:"pointer",background:"#fff"}}>
-                <option value="">{JOURS_S[dow]}</option>
-                {EQUIPES_DISPO.map(eq=><option key={eq.c} value={eq.c}>{eq.l}</option>)}
-                <option value="">— Vider</option>
-              </select>
-            ))}
-          </div>
-        </div>
 
         {/* Grille des jours */}
         <div style={{overflowY:"auto",flex:1,padding:"10px 14px"}}>
@@ -3107,6 +3720,115 @@ export default function App(){
     const profile = agentProfiles[agentId];
     if(profile) sbSaveProfile(agentId, profile);
   },[agentProfiles]);
+
+  // ── RAPPEL CONGÉS PROTOCOLAIRES ─────────────────────────────────────────────
+  // Injecte une notif de rappel le 20 janvier (1er rappel) et 15 février (dernier rappel)
+  // Identifiée par une clé unique année+type+agent pour éviter les doublons
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    const agentId = currentUser.agent.id;
+    const now = new Date();
+    const month = now.getMonth()+1;
+    const day   = now.getDate();
+    const year  = now.getFullYear();
+
+    const rappels = [];
+    // 1er rappel : du 20 janvier au 14 février inclus
+    if((month===1&&day>=20)||(month===2&&day<=14)){
+      rappels.push({
+        id:`protocole-rappel1-${year}-${agentId}`,
+        type:"protocole",
+        agentId,
+        titre:"\ud83d\udcc5 Congés protocolaires — à programmer",
+        message:`Pensez à programmer vos congés protocolaires avant le 28 février ${year}.`,
+        couleur:"#f59e0b",borderCouleur:"#fde68a",bgCouleur:"#fffbeb",textCouleur:"#92400e",
+        acquitte:false,
+      });
+    }
+    // Dernier rappel : du 15 au 28 février inclus
+    if(month===2&&day>=15){
+      rappels.push({
+        id:`protocole-rappel2-${year}-${agentId}`,
+        type:"protocole",
+        agentId,
+        titre:"\u26a0\ufe0f DERNIER RAPPEL — Congés protocolaires",
+        message:`Date limite : 28 février ${year}. Programmez vos congés protocolaires avant cette date.`,
+        couleur:"#dc2626",borderCouleur:"#fca5a5",bgCouleur:"#fff1f2",textCouleur:"#991b1b",
+        acquitte:false,
+      });
+    }
+    if(rappels.length===0) return;
+    setNotifications(prev=>{
+      const existingIds = new Set(prev.map(n=>n.id));
+      const nouveaux = rappels.filter(r=>!existingIds.has(r.id));
+      if(nouveaux.length===0) return prev;
+      return [...nouveaux,...prev];
+    });
+  },[currentUser?.agent?.id]); // eslint-disable-line
+
+  // ── RAPPEL RELIQUATS CONGÉS ANNUELS ─────────────────────────────────────────
+  // Le 10 octobre : si l'agent n'a pas 28 CA programmés pour l'année en cours,
+  // notif indiquant le nombre de CA restants à prendre avant le 31 décembre.
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    const agentId = currentUser.agent.id;
+    const now = new Date();
+    const month = now.getMonth()+1;
+    const day   = now.getDate();
+    const year  = now.getFullYear();
+
+    // Actif du 10 octobre au 31 décembre
+    if(!(month===10&&day>=10) && !(month===11) && !(month===12)) return;
+
+    // Compter les CA programmés dans le planning pour l'année en cours
+    // CA = code equipe "CA" + jours des demandes de congés (CA/CP) programmés
+    const prefix = agentId + "-" + year;
+    let caPlanning = 0;
+    Object.entries(schedule).forEach(([k,v])=>{
+      if(!k.startsWith(agentId+"-")) return;
+      const dk = k.slice(agentId.length+1);
+      if(!dk.startsWith(String(year))) return;
+      if(v?.equipe==="CA") caPlanning++;
+    });
+
+    // Compter aussi les demandes de congés via le formulaire (statut DEMANDE ou ACCORDE)
+    const demandes = agentProfiles[agentId]?.demandesConges||[];
+    let caFormulaire = 0;
+    demandes.forEach(d=>{
+      if(!d.debut1) return;
+      if(!d.debut1.startsWith(String(year))) return;
+      // Compter uniquement si la nature est Congé Annuel
+      if((d.nature||"").includes("Annuel")||(d.nature||"").includes("annuel")){
+        caFormulaire += d.nb_jours||0;
+      }
+    });
+
+    const totalCA = Math.max(caPlanning, caFormulaire);
+    const QUOTA = 28;
+    const restant = QUOTA - totalCA;
+
+    if(restant <= 0) return; // Quota atteint, pas de notif
+
+    const notifId = `reliquats-ca-${year}-${agentId}`;
+    setNotifications(prev=>{
+      const existingIds = new Set(prev.map(n=>n.id));
+      if(existingIds.has(notifId)) return prev;
+      return [{
+        id: notifId,
+        type: "reliquats",
+        agentId,
+        titre: "⚠️ Reliquats de congés annuels à programmer",
+        message: `Au 31 octobre ${year}, il vous reste ${restant} jour${restant>1?"s":""} de congés annuels à prendre avant le 31 décembre ${year}. Pensez à les programmer rapidement.`,
+        restant,
+        year,
+        couleur:"#ea580c",
+        borderCouleur:"#fed7aa",
+        bgCouleur:"#fff7ed",
+        textCouleur:"#c2410c",
+        acquitte:false,
+      }, ...prev];
+    });
+  },[currentUser?.agent?.id, schedule, agentProfiles]); // eslint-disable-line
 
   // Ref pour chargement initial
   const loadedRef = useRef({});
