@@ -2436,33 +2436,18 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const [calView,setCalView]=useState("mois");
   const [monthOff,setMonthOff]=useState(0);
   const [showColorPicker,setShowColorPicker]=useState(false);
-  // agentColors : fusion localStorage (réactivité immédiate) + agentProfiles (sync Supabase)
-  const [agentColorsLocal, setAgentColorsLocal] = usePersist(`colors_${agent?.id}`,{});
-  // Stabiliser agentColorsProfile pour éviter recréation objet à chaque render
-  const agentColorsProfileRaw = agentProfiles[agent?.id]?.agentColors;
-  const agentColorsProfile = agentColorsProfileRaw||{};
-  // Priorité : local (modif en cours) sur profil (chargé de Supabase)
-  // On sérialise les dépendances pour que useMemo détecte bien les changements
-  const agentColors = useMemo(()=>({
-    ...agentColorsProfile,
-    ...agentColorsLocal,
-  }),[
-    JSON.stringify(agentColorsLocal),
-    JSON.stringify(agentColorsProfile),
-  ]);
+  // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate
+  // Source unique de vérité : agentProfiles[agent.id].agentColors
+  const agentColors = agentProfiles[agent?.id]?.agentColors || {};
 
-  // Setter unifié : met à jour localStorage ET agentProfiles (→ Supabase via useEffect)
-  // Le prev passé à l'updater est l'état FUSIONNÉ (local + profil) pour ne rien perdre
+  // Setter : met à jour agentProfiles directement (→ Supabase via useEffect save)
   const setAgentColors = useCallback((updater)=>{
-    setAgentColorsLocal(prevLocal=>{
-      // Construire le prev fusionné pour que l'updater voie toutes les couleurs
-      const prevFused = {...agentColorsProfile, ...prevLocal};
-      const next = typeof updater==="function" ? updater(prevFused) : updater;
-      // Sync vers agentProfiles pour Supabase
-      setAgentProfiles(p=>({...p,[agent.id]:{...(p[agent.id]||{}),agentColors:next}}));
-      return next;
+    setAgentProfiles(p=>{
+      const prev = p[agent.id]?.agentColors || {};
+      const next = typeof updater==="function" ? updater(prev) : updater;
+      return {...p, [agent.id]:{...(p[agent.id]||{}), agentColors:next}};
     });
-  },[agent?.id, agentColorsProfile, setAgentProfiles]);
+  },[agent?.id, setAgentProfiles]);
 
   // Couleur effective pour un code
   const getColor=(code)=>{
