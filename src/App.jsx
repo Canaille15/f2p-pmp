@@ -844,101 +844,203 @@ function getTextColor(bg){
 
 // Panneau de personnalisation des couleurs
 function ColorCustomizer({agentColors, setAgentColors, onClose}){
-  const GROUPES=[
-    {label:"🟥 Travail",codes:["M","AM","N","J"],note:"Personnaliser chaque équipe individuellement"},
-    {label:"🟢 Repos périodiques",codes:["RP","RU","RQ","TC","RN"],note:""},
-    {label:"⬜ Non utilisé / Disponible",codes:["NU","DISPO"],note:""},
-    {label:"🏖️ Congés",codes:["CA","CP"],note:""},
-    {label:"🤒 Absences / Santé",codes:["MA","ABS","VT","VM"],note:""},
-    {label:"📚 Formation",codes:["FOR"],note:""},
-  ];
 
-  const handleWorkColor=(color)=>{
-    // Appliquer la même couleur à tous les codes de travail
-    setAgentColors(prev=>({
-      ...prev, M:color, AM:color, N:color, J:color, JF:color
-    }));
+  // Labels lisibles pour chaque code
+  const CODE_LABELS = {
+    M:"Matinée", AM:"Soirée", N:"Nuit", J:"Journée", JF:"Jour Fête",
+    RP:"RP", RU:"RU", RQ:"RQ", TC:"TC", TY:"TY", RN:"RN",
+    NU:"NU", CA:"Congé Ann.", CP:"Congé", MA:"Maladie",
+    ABS:"Absent", VT:"VT", VM:"Visite méd.", FOR:"Formation", DISPO:"Dispo",
+    FETE:"Fêtes légales",
   };
 
-  const PALETTES=[
-    "#ef4444","#dc2626","#c0392b","#f97316","#ea580c",
-    "#eab308","#ca8a04","#22c55e","#16a34a","#14b8a6",
-    "#06b6d4","#3b82f6","#1d4ed8","#8b5cf6","#7c3aed",
-    "#ec4899","#db2777","#f43f5e","#64748b","#334155",
-    "#1e293b","#000000","#ffffff","#f8fafc","#e2e8f0",
+  // Tous les groupes complets — incluant JF, TY, CP, FETE
+  const GROUPES=[
+    {
+      id:"travail",
+      label:"🟥 Travail",
+      codes:["M","AM","N","J","JF"],
+      syncAll:true, // bouton "même couleur pour tous"
+      note:"M = Matinée · AM = Soirée · N = Nuit · J = Journée · JF = Jour de Fête travaillé",
+    },
+    {
+      id:"repos",
+      label:"🟢 Repos",
+      codes:["RP","RU","RQ","TC","TY","RN"],
+      note:"RP = Repos Périodique · RU/RQ = Repos Utilisation · TC/TY = Temps Compensé · RN = Repos Nuit",
+    },
+    {
+      id:"dispo",
+      label:"⬜ Disponible / NU",
+      codes:["NU","DISPO"],
+      note:"",
+    },
+    {
+      id:"conges",
+      label:"🏖️ Congés",
+      codes:["CA","CP"],
+      note:"CA = Congé Annuel · CP = Congé",
+    },
+    {
+      id:"absences",
+      label:"🤒 Absences / Santé",
+      codes:["MA","ABS","VT","VM"],
+      note:"MA = Maladie · ABS = Absent · VT = Temps Partiel · VM = Visite médicale",
+    },
+    {
+      id:"formation",
+      label:"📚 Formation",
+      codes:["FOR"],
+      note:"",
+    },
+    {
+      id:"fetes",
+      label:"🩷 Fêtes légales",
+      codes:["FETE"],
+      note:"Couleur appliquée à tous les codes F1, F2… dans l'agenda",
+    },
   ];
 
+  // Palette élargie — boutons plus grands pour mobile
+  const PALETTES=[
+    "#ef4444","#dc2626","#c0392b","#f97316","#ea580c","#d97706",
+    "#eab308","#84cc16","#22c55e","#16a34a","#14b8a6","#06b6d4",
+    "#3b82f6","#1d4ed8","#6366f1","#8b5cf6","#7c3aed","#a855f7",
+    "#ec4899","#db2777","#f43f5e","#64748b","#334155","#1e293b",
+    "#000000","#ffffff","#f8fafc","#e2e8f0","#fef9c3","#fce7f3",
+  ];
+
+  // Lire/écrire une couleur (FETE = clé spéciale pour toutes les fêtes)
+  const getColor = (code) => {
+    if(code==="FETE") return agentColors["F1"]||"#ec4899";
+    return agentColors[code]||DEFAULT_COLORS[code]||"#f8fafc";
+  };
+  const setColor = (code, color) => {
+    if(code==="FETE"){
+      // Appliquer à tous les codes fête
+      const feteKeys = Object.keys(CODES_FETES);
+      setAgentColors(prev=>({...prev,...Object.fromEntries(feteKeys.map(k=>[k,color]))}));
+    } else {
+      setAgentColors(prev=>({...prev,[code]:color}));
+    }
+  };
+  const syncAll = (codes) => {
+    const ref = getColor(codes[0]);
+    setAgentColors(prev=>({...prev,...Object.fromEntries(codes.map(k=>[k,ref]))}));
+  };
+
+  const [activeGroup, setActiveGroup] = useState("travail");
+  const groupe = GROUPES.find(g=>g.id===activeGroup)||GROUPES[0];
+
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",zIndex:700,
-      display:"flex",alignItems:"center",justifyContent:"center",padding:12,backdropFilter:"blur(4px)"}}
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:700,
+      display:"flex",alignItems:"flex-end",justifyContent:"center",
+      backdropFilter:"blur(4px)"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:480,
-        maxHeight:"90vh",display:"flex",flexDirection:"column",
-        boxShadow:"0 24px 60px rgba(0,0,0,.3)",overflow:"hidden"}}>
-        
+
+      {/* Panneau type bottom-sheet — pleine largeur, hauteur adaptative */}
+      <div style={{background:"#fff",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:600,
+        maxHeight:"92vh",display:"flex",flexDirection:"column",
+        boxShadow:"0 -8px 40px rgba(0,0,0,.25)"}}>
+
+        {/* Header */}
         <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",
-          padding:"16px 20px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          padding:"16px 20px",display:"flex",alignItems:"center",gap:10,
+          borderRadius:"20px 20px 0 0",flexShrink:0}}>
           <span style={{fontSize:20}}>🎨</span>
           <div style={{flex:1,color:"#fff",fontSize:14,fontWeight:800}}>Mes couleurs personnalisées</div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",
-            color:"#fff",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:14}}>✕</button>
+            color:"#fff",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:18,
+            display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
 
-        <div style={{overflowY:"auto",flex:1,padding:16,display:"flex",flexDirection:"column",gap:16}}>
-          <div style={{background:"#eff6ff",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#1e40af"}}>
-            💡 Choisis une couleur pour chaque type. Les modifications sont sauvegardées automatiquement.
-          </div>
-
-          {/* Tous les groupes avec contrôle individuel */}
-          {GROUPES.map(groupe=>(
-            <div key={groupe.label} style={{border:"1.5px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
-              <div style={{background:"#f8fafc",padding:"10px 14px",borderBottom:"1px solid #e2e8f0",
-                display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{fontSize:12,fontWeight:800,color:"#1e293b"}}>{groupe.label}</div>
-                {groupe.label.includes("Travail")&&<button
-                  onClick={()=>{const c=agentColors[groupe.codes[0]]||DEFAULT_COLORS[groupe.codes[0]];
-                    setAgentColors(prev=>({...prev,...Object.fromEntries(groupe.codes.map(k=>[k,c]))}));}}
-                  style={{fontSize:9,background:"#1e293b",color:"#fff",border:"none",borderRadius:6,
-                    padding:"3px 8px",cursor:"pointer"}}>
-                  Même couleur pour tous
-                </button>}
-              </div>
-              <div style={{padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
-                {groupe.codes.map(code=>(
-                  <div key={code} style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{width:70,background:agentColors[code]||DEFAULT_COLORS[code],
-                      borderRadius:6,padding:"4px 8px",textAlign:"center",
-                      color:getTextColor(agentColors[code]||DEFAULT_COLORS[code]),
-                      fontSize:10,fontWeight:700,flexShrink:0}}>
-                      {code==="M"?"Matinée":code==="AM"?"Soirée":code==="N"?"Nuit":
-                       code==="J"?"Journée":code==="RP"?"RP":code==="RU"?"RU":
-                       code==="RQ"?"RQ":code==="TC"?"TC":code==="RN"?"RN":
-                       code==="NU"?"NU":code==="CA"?"Congé A.":code==="CP"?"Congé":
-                       code==="MA"?"Maladie":code==="ABS"?"Absent":code==="VT"?"VT":
-                       code==="VM"?"VM":code==="FOR"?"Formation":code==="DISPO"?"Dispo":code}
-                    </div>
-                    <div style={{display:"flex",gap:4,flexWrap:"wrap",flex:1}}>
-                      {PALETTES.slice(0,12).map(c=>(
-                        <button key={c} onClick={()=>setAgentColors(prev=>({...prev,[code]:c}))}
-                          style={{width:22,height:22,borderRadius:4,background:c,cursor:"pointer",
-                            border:(agentColors[code]||DEFAULT_COLORS[code])===c?"2px solid #1e293b":"1.5px solid transparent"}}>
-                        </button>
-                      ))}
-                      <input type="color" value={agentColors[code]||DEFAULT_COLORS[code]}
-                        onChange={e=>setAgentColors(prev=>({...prev,[code]:e.target.value}))}
-                        style={{width:22,height:22,borderRadius:4,cursor:"pointer",border:"1.5px solid #e2e8f0",padding:1}}/>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* Onglets groupes — scrollable horizontal */}
+        <div style={{display:"flex",gap:0,overflowX:"auto",borderBottom:"2px solid #f1f5f9",
+          flexShrink:0,WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
+          {GROUPES.map(g=>(
+            <button key={g.id} onClick={()=>setActiveGroup(g.id)}
+              style={{border:"none",background:"transparent",padding:"10px 14px",
+                cursor:"pointer",fontSize:12,fontWeight:activeGroup===g.id?800:500,
+                color:activeGroup===g.id?"#1e293b":"#94a3b8",
+                borderBottom:activeGroup===g.id?"2.5px solid #1e293b":"2.5px solid transparent",
+                whiteSpace:"nowrap",flexShrink:0,marginBottom:-2}}>
+              {g.label}
+            </button>
           ))}
+        </div>
+
+        {/* Contenu scrollable */}
+        <div style={{overflowY:"auto",flex:1,padding:"16px 16px 32px",
+          display:"flex",flexDirection:"column",gap:14,WebkitOverflowScrolling:"touch"}}>
+
+          {/* Note explicative */}
+          {groupe.note&&<div style={{background:"#f0f9ff",borderRadius:10,padding:"8px 12px",
+            fontSize:11,color:"#0369a1",lineHeight:1.5}}>
+            ℹ️ {groupe.note}
+          </div>}
+
+          {/* Bouton sync tous */}
+          {groupe.syncAll&&groupe.codes.length>1&&<button
+            onClick={()=>syncAll(groupe.codes)}
+            style={{background:"#1e293b",color:"#fff",border:"none",borderRadius:10,
+              padding:"10px 0",cursor:"pointer",fontSize:12,fontWeight:700,width:"100%"}}>
+            🔄 Appliquer la même couleur à tous ({groupe.codes.join(", ")})
+          </button>}
+
+          {/* Ligne par code */}
+          {groupe.codes.map(code=>{
+            const couleur = getColor(code);
+            const tc = getTextColor(couleur);
+            return(
+              <div key={code} style={{border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+                {/* Aperçu + label */}
+                <div style={{background:couleur,padding:"12px 16px",
+                  display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:800,color:tc}}>{CODE_LABELS[code]||code}</div>
+                    <div style={{fontSize:10,opacity:.7,color:tc,fontFamily:"monospace"}}>{code} · {couleur}</div>
+                  </div>
+                  {/* Input color natif — bien visible et cliquable */}
+                  <label style={{position:"relative",cursor:"pointer",flexShrink:0}}>
+                    <div style={{width:44,height:44,borderRadius:10,
+                      background:"rgba(255,255,255,.25)",
+                      border:"2px solid rgba(255,255,255,.5)",
+                      display:"flex",alignItems:"center",justifyContent:"center",
+                      fontSize:20}}>🎨</div>
+                    <input type="color" value={couleur}
+                      onChange={e=>setColor(code,e.target.value)}
+                      style={{position:"absolute",inset:0,opacity:0,cursor:"pointer",
+                        width:"100%",height:"100%"}}/>
+                  </label>
+                </div>
+
+                {/* Palette de couleurs — boutons 36×36 pour mobile */}
+                <div style={{padding:"10px 12px",background:"#fafafa"}}>
+                  <div style={{display:"grid",
+                    gridTemplateColumns:"repeat(auto-fill,minmax(36px,1fr))",gap:5}}>
+                    {PALETTES.map(c=>{
+                      const isSel = couleur===c;
+                      return(
+                        <button key={c} onClick={()=>setColor(code,c)}
+                          style={{width:"100%",aspectRatio:"1",borderRadius:8,background:c,
+                            cursor:"pointer",border:isSel?"2.5px solid #1e293b":"1.5px solid rgba(0,0,0,.1)",
+                            boxShadow:isSel?"0 0 0 2px #fff,0 0 0 4px #1e293b":"none",
+                            minWidth:36,minHeight:36}}>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
 
           {/* Reset */}
           <button onClick={()=>setAgentColors({})}
-            style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,
-              padding:"10px 0",cursor:"pointer",fontSize:12,fontWeight:600}}>
-            ↺ Réinitialiser les couleurs par défaut
+            style={{background:"#fef2f2",color:"#dc2626",border:"1.5px solid #fecaca",
+              borderRadius:12,padding:"12px 0",cursor:"pointer",fontSize:13,fontWeight:700,
+              marginTop:4}}>
+            ↺ Réinitialiser toutes les couleurs par défaut
           </button>
         </div>
       </div>
