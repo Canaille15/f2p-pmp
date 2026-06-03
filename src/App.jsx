@@ -2474,6 +2474,225 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
   );
 }
 
+// ─── VUE PLANNING (style Google Calendar) ────────────────────────────────────
+// Grille 0h-24h scrollable verticalement, un bloc par jour en colonne
+
+// Parse "06h10" → minutes depuis minuit
+function parseHeures(h) {
+  if(!h) return null;
+  const m = h.match(/(\d{1,2})h(\d{2})/);
+  if(!m) return null;
+  return parseInt(m[1])*60 + parseInt(m[2]);
+}
+
+// Retourne {debut, fin} en minutes pour un code équipe
+function getPlageMinutes(code) {
+  const heures = EQ[code]?.heures || "";
+  if(!heures) return null;
+  const parts = heures.split("–");
+  if(parts.length !== 2) return null;
+  const debut = parseHeures(parts[0].trim());
+  let fin   = parseHeures(parts[1].trim());
+  if(debut===null||fin===null) return null;
+  // Nuit : fin < debut → fin le lendemain (ex 22h15-06h17)
+  if(fin < debut) fin += 1440;
+  return {debut, fin};
+}
+
+function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile}){
+  const TOTAL_MINUTES = 24*60;
+  const PX_PER_HOUR   = 50; // pixels par heure
+  const PX_PER_MIN    = PX_PER_HOUR / 60;
+  const GRID_HEIGHT   = TOTAL_MINUTES * PX_PER_MIN; // 1200px
+  const HOURS         = Array.from({length:25},(_,i)=>i); // 0..24
+
+  // Colonnes : tous les jours de la période
+  const cols = dates.map(dk=>{
+    const en  = schedule[`${agent.id}-${dk}`];
+    const code= en?.equipe;
+    const eq  = code ? EQ[code] : null;
+    const isPrive = en?.prive||eq?.prive||false;
+    const showData= isOwnProfile||!isPrive;
+    const dow = new Date(dk).getDay();
+    const isWE= dow===0||dow===6;
+    const isToday = dk===TODAY;
+
+    // Calcul bloc
+    let bloc = null;
+    if(code && showData){
+      const plage = getPlageMinutes(code);
+      if(plage){
+        bloc = {
+          top:  plage.debut * PX_PER_MIN,
+          height: (plage.fin - plage.debut) * PX_PER_MIN,
+          code, label: eq?.label||code,
+          heures: eq?.heures||"",
+          color: getColor(code),
+          tc: getTc(code),
+          depasse: plage.fin > TOTAL_MINUTES, // nuit → dépasse minuit
+        };
+      } else {
+        // Pas d'horaire → bloc journée complète
+        bloc = {
+          top: 6*60*PX_PER_MIN, // commence à 6h
+          height: 12*60*PX_PER_MIN, // 12h de bloc
+          code, label: eq?.label||code,
+          heures: "",
+          color: getColor(code),
+          tc: getTc(code),
+          depasse: false,
+          journee: true,
+        };
+      }
+    }
+
+    return {dk, code, bloc, isWE, isToday, dow, en, showData};
+  });
+
+  // Scroll auto vers 6h au mount
+  const scrollRef = React.useRef(null);
+  useEffect(()=>{
+    if(scrollRef.current){
+      scrollRef.current.scrollTop = 5 * PX_PER_HOUR; // positionne sur 5h
+    }
+  },[]);
+
+  const dayLabel = (dk) => {
+    const d = new Date(dk);
+    return {
+      jourSemaine: d.toLocaleDateString("fr-FR",{weekday:"short"}),
+      jourNum:     d.getDate(),
+      mois:        d.toLocaleDateString("fr-FR",{month:"short"}),
+    };
+  };
+
+  return(
+    <div style={{border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden",background:"#fff"}}>
+
+      {/* En-têtes colonnes jours */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns:`48px repeat(${cols.length},1fr)`,
+        borderBottom:"2px solid #e2e8f0",
+        position:"sticky",top:0,zIndex:10,background:"#fff",
+      }}>
+        <div/> {/* coin vide */}
+        {cols.map(({dk,isWE,isToday})=>{
+          const {jourSemaine,jourNum,mois} = dayLabel(dk);
+          return(
+            <div key={dk} style={{
+              textAlign:"center",padding:"8px 2px",
+              background:isToday?"#eef2ff":isWE?"#f8fafc":"#fff",
+              borderLeft:"1px solid #f1f5f9",
+            }}>
+              <div style={{fontSize:9,fontWeight:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#64748b",
+                textTransform:"uppercase"}}>{jourSemaine}</div>
+              <div style={{fontSize:15,fontWeight:isToday?900:700,
+                color:isToday?"#fff":"#1e293b",
+                background:isToday?"#6366f1":"transparent",
+                borderRadius:"50%",width:28,height:28,
+                display:"inline-flex",alignItems:"center",justifyContent:"center",
+                margin:"2px auto 0"}}>
+                {jourNum}
+              </div>
+              <div style={{fontSize:8,color:"#94a3b8"}}>{mois}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Corps scrollable */}
+      <div ref={scrollRef} style={{
+        overflowY:"auto",maxHeight:"70vh",
+        WebkitOverflowScrolling:"touch",
+      }}>
+        <div style={{
+          display:"grid",
+          gridTemplateColumns:`48px repeat(${cols.length},1fr)`,
+          position:"relative",
+          height: GRID_HEIGHT,
+        }}>
+
+          {/* Axe horaire */}
+          <div style={{position:"relative"}}>
+            {HOURS.map(h=>(
+              <div key={h} style={{
+                position:"absolute",
+                top: h*PX_PER_HOUR - 7,
+                right:4,
+                fontSize:9,fontWeight:600,color:"#94a3b8",
+                lineHeight:1,textAlign:"right",
+                width:40,
+              }}>
+                {h<24?`${String(h).padStart(2,"0")}:00`:""}
+              </div>
+            ))}
+          </div>
+
+          {/* Colonnes jours */}
+          {cols.map(({dk,isWE,isToday,bloc,showData})=>(
+            <div key={dk} style={{
+              position:"relative",
+              borderLeft:"1px solid #f1f5f9",
+              background:isWE?"#fafafa":"#fff",
+            }}>
+              {/* Lignes horaires */}
+              {HOURS.map(h=>(
+                <div key={h} style={{
+                  position:"absolute",top:h*PX_PER_HOUR,
+                  left:0,right:0,height:1,
+                  background: h%6===0?"#e2e8f0":"#f8fafc",
+                  zIndex:0,
+                }}/>
+              ))}
+
+              {/* Ligne "maintenant" */}
+              {isToday&&(()=>{
+                const now = new Date();
+                const minuits = now.getHours()*60+now.getMinutes();
+                return <div style={{
+                  position:"absolute",
+                  top: minuits*PX_PER_MIN,
+                  left:0,right:0,height:2,
+                  background:"#ef4444",zIndex:5,
+                }}>
+                  <div style={{position:"absolute",left:-4,top:-4,width:10,height:10,
+                    borderRadius:"50%",background:"#ef4444"}}/>
+                </div>;
+              })()}
+
+              {/* Bloc équipe */}
+              {bloc&&<div style={{
+                position:"absolute",
+                top: Math.min(bloc.top, GRID_HEIGHT-8),
+                height: Math.min(bloc.height, GRID_HEIGHT - Math.min(bloc.top, GRID_HEIGHT-8)),
+                left:2,right:2,
+                background:bloc.color,
+                borderRadius:6,
+                zIndex:2,
+                overflow:"hidden",
+                padding:"3px 5px",
+                boxShadow:"0 1px 3px rgba(0,0,0,.15)",
+                cursor:"default",
+              }}>
+                <div style={{fontSize:9,fontWeight:800,color:bloc.tc,lineHeight:1.3,
+                  overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {CODES_FETES[bloc.code]?"🩷":""}{bloc.label}
+                </div>
+                {bloc.heures&&bloc.height>25&&<div style={{fontSize:8,color:bloc.tc,opacity:.8,
+                  overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {bloc.heures}
+                </div>}
+                {bloc.journee&&<div style={{fontSize:7,color:bloc.tc,opacity:.7}}>Journée</div>}
+              </div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── HELPER RC FÊTES AGENDA ──────────────────────────────────────────────────
 // Retourne la liste des codes fêtes dont ce jour est soit :
 //   - le jour de la fête elle-même (code Fx saisi directement)
@@ -2827,7 +3046,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     {/* Toggle vue semaine / mois */}
     <div style={{display:"flex",alignItems:"center",gap:8}}>
       <div style={{display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,gap:2}}>
-        {[["mois","📆 Mois"],["semaine","📅 Semaine"]].map(([k,l])=>(
+        {[["mois","📆 Mois"],["semaine","📅 Semaine"],["planning","📋 Planning"]].map(([k,l])=>(
           <button key={k} onClick={()=>setCalView(k)} style={{border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",background:calView===k?"#fff":"transparent",color:calView===k?"#1e293b":"#94a3b8",fontSize:12,fontWeight:calView===k?700:400,boxShadow:calView===k?"0 1px 4px rgba(0,0,0,.08)":"none"}}>
             {l}
           </button>
@@ -3106,7 +3325,27 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       agentColors={agentProfiles[agent?.id]?.agentColors||{}}
       setAgentColors={setAgentColors}
       onClose={()=>setShowColorPicker(false)}/>}
-    {/* Tableau de bord compteurs */}
+    {/* ── VUE PLANNING ── */}
+    {calView==="planning"&&<>
+      {/* ── BARRE DE SAISIE RAPIDE ── */}
+      {!profile.isReserve && <BarreSaisieRapide
+        barreConfig={barreConfig} setBarreConfig={setBarreConfig}
+        codeActif={codeActif} setCodeActif={setCodeActif}
+        getColor={getColor} getTc={getTc}
+        showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
+        CODES_BARRE={CODES_BARRE}
+      />}
+      <VuePlanning
+        dates={monthDates}
+        agent={agent}
+        schedule={schedule}
+        getColor={getColor}
+        getTc={getTc}
+        isOwnProfile={isOwnProfile}
+      />
+    </>}
+
+    {/* Tableau de bord compteurs */}}
     {agent&&<DashboardCompteurs agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
   </div>);
 }
