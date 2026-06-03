@@ -221,7 +221,7 @@ const EQUIPES = [
   { code:"AM",   label:"Soirée",     heures:"14h05–22h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
   { code:"N",    label:"Nuit",       heures:"22h15–06h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
   { code:"J",    label:"Journée",    heures:"08h00–17h45", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
-  { code:"JF",   label:"Jour/Fête",  heures:"",            color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"JF",   label:"Fête",  heures:"",            color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
   // ── REPOS / RÉSERVISTE — fond coloré, texte blanc ────────────────────────
   { code:"RP",   label:"RP",         heures:"",            color:"#16a34a", textColor:"#fff", dot:"#bbf7d0", prive:true,  compteur:"RP",      bg:"#16a34a" },
   { code:"RU",   label:"RU",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
@@ -2438,9 +2438,18 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const [showColorPicker,setShowColorPicker]=useState(false);
   // agentColors : fusion localStorage (réactivité immédiate) + agentProfiles (sync Supabase)
   const [agentColorsLocal, setAgentColorsLocal] = usePersist(`colors_${agent?.id}`,{});
-  const agentColorsProfile = agentProfiles[agent?.id]?.agentColors||{};
+  // Stabiliser agentColorsProfile pour éviter recréation objet à chaque render
+  const agentColorsProfileRaw = agentProfiles[agent?.id]?.agentColors;
+  const agentColorsProfile = agentColorsProfileRaw||{};
   // Priorité : local (modif en cours) sur profil (chargé de Supabase)
-  const agentColors = useMemo(()=>({...agentColorsProfile,...agentColorsLocal}),[agentColorsLocal,agentColorsProfile]);
+  // On sérialise les dépendances pour que useMemo détecte bien les changements
+  const agentColors = useMemo(()=>({
+    ...agentColorsProfile,
+    ...agentColorsLocal,
+  }),[
+    JSON.stringify(agentColorsLocal),
+    JSON.stringify(agentColorsProfile),
+  ]);
 
   // Setter unifié : met à jour localStorage ET agentProfiles (→ Supabase via useEffect)
   const setAgentColors = useCallback((updater)=>{
