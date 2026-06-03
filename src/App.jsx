@@ -2288,7 +2288,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     {/* Toggle vue semaine / mois */}
     <div style={{display:"flex",alignItems:"center",gap:8}}>
       <div style={{display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,gap:2}}>
-        {[["semaine","📅 Semaine"],["mois","📆 Mois"]].map(([k,l])=>(
+        {[["mois","📆 Mois"],["semaine","📅 Semaine"]].map(([k,l])=>(
           <button key={k} onClick={()=>setCalView(k)} style={{border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",background:calView===k?"#fff":"transparent",color:calView===k?"#1e293b":"#94a3b8",fontSize:12,fontWeight:calView===k?700:400,boxShadow:calView===k?"0 1px 4px rgba(0,0,0,.08)":"none"}}>
             {l}
           </button>
