@@ -3477,6 +3477,13 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       agentColors={agentProfiles[agent?.id]?.agentColors||{}}
       setAgentColors={setAgentColors}
       onClose={()=>setShowColorPicker(false)}/>}
+
+    {showHab&&<HabilitationsModal
+      agent={agent}
+      habilitations={profile.habilitations||{}}
+      suggestedPostes={postesDetectes}
+      onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);}}
+      onClose={()=>setShowHab(false)}/>}
     {/* ── VUE PLANNING ── */}
     {calView==="planning"&&<>
       {/* ── BARRE DE SAISIE RAPIDE ── */}
