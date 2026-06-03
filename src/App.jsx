@@ -4719,161 +4719,159 @@ const HAB_PAR = [
   // Note : K-PAR, F-PAR = formations suivies → pas des habilitations
 ];
 
+// ── Composant carte poste partagé ─────────────────────────────────────────────
+function PosteHabCard({h, isHab, isSug, color, bg, onToggle}){
+  return(
+    <button onClick={onToggle}
+      style={{
+        display:"flex",alignItems:"center",gap:12,
+        background: isHab ? bg : "#f8fafc",
+        border:`2px solid ${isHab ? color : isSug ? "#fde68a" : "#e2e8f0"}`,
+        borderRadius:12,padding:"10px 14px",cursor:"pointer",
+        textAlign:"left",width:"100%",
+        boxShadow: isHab ? `0 2px 8px ${color}33` : "none",
+        transition:"all .12s",
+      }}>
+      {/* Checkbox */}
+      <div style={{width:24,height:24,borderRadius:7,flexShrink:0,
+        background:isHab?color:"#fff",
+        border:`2px solid ${isHab?color:"#e2e8f0"}`,
+        display:"flex",alignItems:"center",justifyContent:"center",
+        transition:"all .12s",boxShadow:isHab?`0 0 0 3px ${color}22`:"none"}}>
+        {isHab&&<span style={{color:"#fff",fontSize:14,fontWeight:900,lineHeight:1}}>✓</span>}
+      </div>
+      {/* Info */}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+          <span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,
+            background:isHab?color+"22":"#f1f5f9",
+            color:isHab?color:"#64748b",borderRadius:5,padding:"1px 6px"}}>
+            {h.code}
+          </span>
+          <span style={{fontSize:13,fontWeight:isHab?800:600,
+            color:isHab?color:"#1e293b"}}>{h.label}</span>
+          {isSug&&!isHab&&<span style={{fontSize:8,background:"#fef3c7",
+            color:"#92400e",borderRadius:8,padding:"1px 5px",fontWeight:700}}>
+            🔍 détecté
+          </span>}
+        </div>
+        {h.subtitle&&h.subtitle!==h.label&&<div style={{
+          fontSize:10,color:isHab?color:"#94a3b8",marginTop:2,opacity:.8,
+          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {h.subtitle}
+        </div>}
+      </div>
+      {isHab&&<span style={{background:color,color:"#fff",
+        borderRadius:20,padding:"3px 10px",fontSize:10,fontWeight:700,flexShrink:0}}>
+        ✓ Habilité
+      </span>}
+    </button>
+  );
+}
+
 function HabilitationsModal({agent,habilitations,onSave,onClose,suggestedPostes}){
   const [hab,setHab]=useState(()=>({...habilitations}));
-  // Une seule case : habilité (true) ou non (absent)
   const toggle=(code)=>setHab(prev=>{
     const next={...prev};
-    if(next[code]) delete next[code];
-    else next[code]="HC";
+    if(next[code]) delete next[code]; else next[code]="HC";
     return next;
   });
   const fam=FAMILLES[agent.famille];
   const nbHab=Object.keys(hab).length;
   const groupes=[
-    {titre:"PRCI — 3×8",       color:"#0f4c81", bg:"#eff6ff", items:HAB_PRCI.filter(h=>h.type==="3x8")},
-    {titre:"PRCI — Journée",   color:"#0369a1", bg:"#f0f9ff", items:HAB_PRCI.filter(h=>h.type==="J")},
-    {titre:"PAR — 3×8",        color:"#065f46", bg:"#f0fdf4", items:HAB_PAR.filter(h=>h.type==="3x8")},
-    {titre:"PAR — Journée",    color:"#047857", bg:"#ecfdf5", items:HAB_PAR.filter(h=>h.type==="J")},
+    {titre:"PRCI — 3×8",     color:"#0f4c81",bg:"#eff6ff",items:HAB_PRCI.filter(h=>h.type==="3x8")},
+    {titre:"PRCI — Journée", color:"#0369a1",bg:"#f0f9ff",items:HAB_PRCI.filter(h=>h.type==="J")},
+    {titre:"PAR — 3×8",      color:"#065f46",bg:"#f0fdf4",items:HAB_PAR.filter(h=>h.type==="3x8")},
+    {titre:"PAR — Journée",  color:"#047857",bg:"#ecfdf5",items:HAB_PAR.filter(h=>h.type==="J")},
   ];
+  // Responsive : centré sur desktop (>640px), bottom-sheet sur mobile
+  const isDesktop = typeof window!=="undefined" && window.innerWidth>640;
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:400,
-      display:"flex",alignItems:"flex-end",justifyContent:"center",
+      display:"flex",
+      alignItems: isDesktop?"center":"flex-end",
+      justifyContent:"center",padding:isDesktop?24:0,
       backdropFilter:"blur(6px)"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
 
-      <div style={{background:"#fff",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:560,
-        maxHeight:"90vh",display:"flex",flexDirection:"column",
-        boxShadow:"0 -8px 40px rgba(0,0,0,.25)"}}>
+      <div style={{background:"#fff",
+        borderRadius: isDesktop?20:"20px 20px 0 0",
+        width:"100%",maxWidth: isDesktop?640:9999,
+        maxHeight: isDesktop?"88vh":"92vh",
+        display:"flex",flexDirection:"column",
+        boxShadow: isDesktop?"0 24px 60px rgba(0,0,0,.25)":"0 -8px 40px rgba(0,0,0,.25)"}}>
 
         {/* Header */}
         <div style={{background:`linear-gradient(135deg,${fam?.color||"#0f4c81"},#1e40af)`,
           padding:"16px 20px",display:"flex",alignItems:"center",gap:12,
-          borderRadius:"20px 20px 0 0",flexShrink:0}}>
-          <Av initials={agent.initials} size={40} famille={agent.famille}/>
+          borderRadius: isDesktop?"20px 20px 0 0":"20px 20px 0 0",flexShrink:0}}>
+          <Av initials={agent.initials} size={44} famille={agent.famille}/>
           <div style={{flex:1}}>
             <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Habilitations</div>
             <div style={{color:"rgba(255,255,255,.7)",fontSize:11,marginTop:1}}>
               {agent.prenom} {agent.nom} · {nbHab} poste{nbHab>1?"s":""} habilité{nbHab>1?"s":""}
             </div>
           </div>
-          <button onClick={onClose}
-            style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",
-              borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:18,
-              display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,.2)",border:"none",
+            color:"#fff",borderRadius:10,width:38,height:38,cursor:"pointer",fontSize:20,
+            display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
         </div>
 
         {/* Postes détectés */}
-        {suggestedPostes?.length>0&&<div style={{
-          background:"#fef9c3",padding:"8px 16px",
-          borderBottom:"1px solid #fde68a",fontSize:11,color:"#92400e",
-          display:"flex",alignItems:"center",gap:6}}>
+        {suggestedPostes?.length>0&&<div style={{background:"#fef9c3",
+          padding:"8px 16px",borderBottom:"1px solid #fde68a",
+          fontSize:11,color:"#92400e",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
           <span>💡</span>
-          <span>Postes détectés dans le planning : <strong>{suggestedPostes.slice(0,6).join(", ")}</strong></span>
+          <span>Détectés : <strong>{suggestedPostes.slice(0,6).join(", ")}</strong></span>
         </div>}
 
-        {/* Corps scrollable */}
-        <div style={{overflowY:"auto",flex:1,padding:"16px",
-          display:"flex",flexDirection:"column",gap:16,
+        {/* Corps scrollable — 2 colonnes sur desktop */}
+        <div style={{overflowY:"auto",flex:1,padding:isDesktop?"20px 24px":"14px 16px",
           WebkitOverflowScrolling:"touch"}}>
-
-          {groupes.map(g=>(
-            <div key={g.titre}>
-              {/* En-tête groupe */}
-              <div style={{
-                background:g.bg,borderRadius:10,
-                padding:"8px 12px",marginBottom:8,
-                display:"flex",alignItems:"center",justifyContent:"space-between",
-              }}>
-                <span style={{fontSize:12,fontWeight:800,color:g.color,letterSpacing:.3}}>
-                  {g.titre}
-                </span>
-                <span style={{fontSize:10,color:g.color,opacity:.7}}>
-                  {g.items.filter(h=>hab[h.code]).length}/{g.items.length} habilité{g.items.filter(h=>hab[h.code]).length>1?"s":""}
-                </span>
+          <div style={{
+            display: isDesktop?"grid":"flex",
+            gridTemplateColumns: isDesktop?"1fr 1fr":undefined,
+            flexDirection: isDesktop?undefined:"column",
+            gap:16,
+          }}>
+            {groupes.map(g=>(
+              <div key={g.titre}>
+                <div style={{background:g.bg,borderRadius:10,
+                  padding:"7px 12px",marginBottom:8,
+                  display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span style={{fontSize:12,fontWeight:800,color:g.color}}>{g.titre}</span>
+                  <span style={{fontSize:10,color:g.color,opacity:.7}}>
+                    {g.items.filter(h=>hab[h.code]).length}/{g.items.length}
+                  </span>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {g.items.map(h=>(
+                    <PosteHabCard key={h.code} h={h}
+                      isHab={!!hab[h.code]}
+                      isSug={suggestedPostes?.includes(h.label)||suggestedPostes?.includes(h.code)}
+                      color={g.color} bg={g.bg}
+                      onToggle={()=>toggle(h.code)}/>
+                  ))}
+                </div>
               </div>
-
-              {/* Grille de postes */}
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {g.items.map(h=>{
-                  const isHab = !!hab[h.code];
-                  const isSug = suggestedPostes?.includes(h.label)||suggestedPostes?.includes(h.code);
-                  return(
-                    <button key={h.code}
-                      onClick={()=>toggle(h.code)}
-                      style={{
-                        display:"flex",alignItems:"center",gap:12,
-                        background: isHab ? g.bg : "#f8fafc",
-                        border: `2px solid ${isHab ? g.color : isSug ? "#fde68a" : "#e2e8f0"}`,
-                        borderRadius:12,padding:"10px 14px",cursor:"pointer",
-                        textAlign:"left",width:"100%",
-                        boxShadow: isHab ? `0 2px 8px ${g.color}33` : "none",
-                        transition:"all .15s",
-                      }}>
-
-                      {/* Checkbox visuelle */}
-                      <div style={{
-                        width:22,height:22,borderRadius:6,flexShrink:0,
-                        background: isHab ? g.color : "#fff",
-                        border: `2px solid ${isHab ? g.color : "#e2e8f0"}`,
-                        display:"flex",alignItems:"center",justifyContent:"center",
-                        transition:"all .15s",
-                      }}>
-                        {isHab&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
-                      </div>
-
-                      {/* Info poste */}
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                          <span style={{
-                            fontFamily:"monospace",fontSize:10,fontWeight:800,
-                            background: isHab ? g.color+"22" : "#f1f5f9",
-                            color: isHab ? g.color : "#64748b",
-                            borderRadius:5,padding:"1px 6px",
-                          }}>{h.code}</span>
-                          <span style={{fontSize:13,fontWeight:isHab?800:600,
-                            color: isHab ? g.color : "#1e293b"}}>
-                            {h.label}
-                          </span>
-                          {isSug&&!isHab&&<span style={{fontSize:8,background:"#fef3c7",
-                            color:"#92400e",borderRadius:8,padding:"1px 5px",fontWeight:700}}>
-                            🔍 détecté
-                          </span>}
-                        </div>
-                        {h.subtitle&&h.subtitle!==h.label&&<div style={{
-                          fontSize:10,color: isHab ? g.color : "#94a3b8",
-                          marginTop:2,opacity:.8,
-                        }}>{h.subtitle}</div>}
-                      </div>
-
-                      {/* Badge habilité */}
-                      {isHab&&<span style={{
-                        background:g.color,color:"#fff",
-                        borderRadius:20,padding:"2px 10px",
-                        fontSize:10,fontWeight:700,flexShrink:0,
-                      }}>Habilité</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Footer */}
-        <div style={{padding:"14px 16px",borderTop:"1px solid #e2e8f0",
+        <div style={{padding:"14px 20px",borderTop:"1px solid #e2e8f0",
           display:"flex",gap:8,flexShrink:0,background:"#f8fafc"}}>
           <button onClick={()=>onSave(hab)}
             style={{flex:1,background:"linear-gradient(135deg,#1e293b,#334155)",
-              color:"#fff",border:"none",borderRadius:12,padding:"12px 0",
+              color:"#fff",border:"none",borderRadius:12,padding:"13px 0",
               cursor:"pointer",fontSize:14,fontWeight:800,
               boxShadow:"0 2px 8px rgba(30,41,59,.3)"}}>
             ✓ Enregistrer ({nbHab} habilitation{nbHab>1?"s":""})
           </button>
           <button onClick={onClose}
             style={{background:"#fff",color:"#475569",border:"1.5px solid #e2e8f0",
-              borderRadius:12,padding:"12px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>
+              borderRadius:12,padding:"13px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>
             Annuler
           </button>
         </div>
@@ -4950,66 +4948,35 @@ function HabilitationsRoulementModal({agent, habilitations, onSave, onClose}){
   const groupes3x8 = postesActifs.filter(p=>p.groupe==="3×8");
   const groupesJ   = postesActifs.filter(p=>p.groupe==="Journée");
 
-  const renderPoste = (p) => {
-    const isHab = !!hab[p.code];
-    return(
-      <button key={p.code} onClick={()=>toggle(p.code)}
-        style={{
-          display:"flex",alignItems:"center",gap:12,
-          background: isHab ? C.light : "#f8fafc",
-          border:`2px solid ${isHab ? C.header : "#e2e8f0"}`,
-          borderRadius:12,padding:"10px 14px",cursor:"pointer",
-          textAlign:"left",width:"100%",
-          boxShadow: isHab ? `0 2px 8px ${C.header}33` : "none",
-          transition:"all .15s",
-        }}>
-        {/* Checkbox */}
-        <div style={{
-          width:22,height:22,borderRadius:6,flexShrink:0,
-          background: isHab ? C.header : "#fff",
-          border:`2px solid ${isHab ? C.header : "#e2e8f0"}`,
-          display:"flex",alignItems:"center",justifyContent:"center",
-        }}>
-          {isHab&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
-        </div>
-        {/* Info */}
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-            <span style={{
-              fontFamily:"monospace",fontSize:9,fontWeight:800,
-              background: isHab ? C.header+"22" : "#f1f5f9",
-              color: isHab ? C.header : "#64748b",
-              borderRadius:4,padding:"1px 5px",
-            }}>{p.code}</span>
-            <span style={{fontSize:13,fontWeight:isHab?800:600,
-              color: isHab ? C.header : "#1e293b"}}>{p.label}</span>
-          </div>
-          <div style={{fontSize:9,color: isHab ? C.header : "#94a3b8",
-            marginTop:2,opacity:.8}}>{p.subtitle}</div>
-        </div>
-        {isHab&&<span style={{
-          background:C.header,color:"#fff",
-          borderRadius:20,padding:"2px 10px",
-          fontSize:10,fontWeight:700,flexShrink:0,
-        }}>Habilité</span>}
-      </button>
-    );
-  };
+  const renderPoste = (p) => (
+    <PosteHabCard key={p.code} h={p}
+      isHab={!!hab[p.code]} isSug={false}
+      color={C.header} bg={C.light}
+      onToggle={()=>toggle(p.code)}/>
+  );
+
+  const isDesktop2 = typeof window!=="undefined" && window.innerWidth>640;
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:400,
-      display:"flex",alignItems:"flex-end",justifyContent:"center",
+      display:"flex",
+      alignItems:isDesktop2?"center":"flex-end",
+      justifyContent:"center",
+      padding:isDesktop2?24:0,
       backdropFilter:"blur(6px)"}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
 
-      <div style={{background:"#fff",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:560,
-        maxHeight:"92vh",display:"flex",flexDirection:"column",
-        boxShadow:"0 -8px 40px rgba(0,0,0,.25)"}}>
+      <div style={{background:"#fff",
+        borderRadius:isDesktop2?20:"20px 20px 0 0",
+        width:"100%",maxWidth:isDesktop2?600:9999,
+        maxHeight:isDesktop2?"88vh":"92vh",
+        display:"flex",flexDirection:"column",
+        boxShadow:isDesktop2?"0 24px 60px rgba(0,0,0,.25)":"0 -8px 40px rgba(0,0,0,.25)"}}>
 
         {/* Header */}
         <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,
           padding:"16px 20px",display:"flex",alignItems:"center",gap:12,
-          borderRadius:"20px 20px 0 0",flexShrink:0}}>
+          borderRadius:isDesktop2?"20px 20px 0 0":"20px 20px 0 0",flexShrink:0}}>
           <Av initials={agent.initials} size={40} famille={agent.famille}/>
           <div style={{flex:1}}>
             <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Postes habilités — Roulement</div>
