@@ -954,19 +954,21 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
             display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
 
-        {/* Onglets groupes — scrollable horizontal */}
-        <div style={{display:"flex",gap:0,overflowX:"auto",borderBottom:"2px solid #f1f5f9",
-          flexShrink:0,WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
-          {GROUPES.map(g=>(
-            <button key={g.id} onClick={()=>setActiveGroup(g.id)}
-              style={{border:"none",background:"transparent",padding:"10px 14px",
-                cursor:"pointer",fontSize:12,fontWeight:activeGroup===g.id?800:500,
-                color:activeGroup===g.id?"#1e293b":"#94a3b8",
-                borderBottom:activeGroup===g.id?"2.5px solid #1e293b":"2.5px solid transparent",
-                whiteSpace:"nowrap",flexShrink:0,marginBottom:-2}}>
-              {g.label}
-            </button>
-          ))}
+        {/* Sélecteur de groupe — select natif universel */}
+        <div style={{padding:"10px 16px",borderBottom:"1.5px solid #f1f5f9",
+          flexShrink:0,background:"#f8fafc"}}>
+          <select value={activeGroup} onChange={e=>setActiveGroup(e.target.value)}
+            style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:10,
+              padding:"10px 14px",fontSize:13,fontWeight:700,color:"#1e293b",
+              background:"#fff",cursor:"pointer",outline:"none",
+              WebkitAppearance:"none",appearance:"none",
+              backgroundImage:"url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%2364748b' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")",
+              backgroundRepeat:"no-repeat",backgroundPosition:"right 14px center",
+              paddingRight:36}}>
+            {GROUPES.map(g=>(
+              <option key={g.id} value={g.id}>{g.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Contenu scrollable */}
