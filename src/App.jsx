@@ -1155,32 +1155,79 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
     {key:"MA",      label:"Maladie",         color:"#dc2626", icon:"🤒", subtitle:"Jours maladie"},
   ];
 
+  const [ouvert, setOuvert] = useState(false);
+
   return(
-    <div style={{margin:"20px 0 8px",padding:"0 2px"}}>
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
-        <span style={{fontSize:16}}>📊</span>
-        <span style={{fontSize:14,fontWeight:800,color:"#1e293b"}}>Compteurs</span>
-        {/* Onglets années */}
-        <div style={{display:"flex",gap:4,background:"#f1f5f9",borderRadius:8,padding:2}}>
+    <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid #e2e8f0",
+      overflow:"hidden",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+
+      {/* ── Header accordéon cliquable ── */}
+      <div onClick={()=>setOuvert(o=>!o)}
+        style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px",
+          cursor:"pointer",userSelect:"none",
+          background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
+          borderBottom:ouvert?"1.5px solid #818cf8":"none",
+          flexWrap:"wrap",gap:8}}>
+
+        <span style={{fontSize:15}}>📊</span>
+        <span style={{fontSize:13,fontWeight:800,color:"#fff",letterSpacing:-.2}}>
+          Compteurs {selectedYear}
+        </span>
+
+        {/* Résumé rapide quand fermé */}
+        {!ouvert&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {[
+            {k:"travail", icon:"💼"},
+            {k:"RP",      icon:"🟢"},
+            {k:"FETE",    icon:"🩷"},
+            {k:"conges",  icon:"🏖️"},
+          ].map(({k,icon})=>{
+            const v = k==="conges" ? congesPris : val(k);
+            if(!v) return null;
+            return <span key={k} style={{
+              fontSize:10,fontWeight:700,color:"#fff",
+              background:"rgba(255,255,255,.18)",
+              borderRadius:6,padding:"1px 8px",
+            }}>{icon} {v}</span>;
+          })}
+        </div>}
+
+        <div style={{flex:1}}/>
+
+        {/* Sélecteur année — stop propagation */}
+        <div onClick={e=>e.stopPropagation()}
+          style={{display:"flex",gap:2,background:"rgba(255,255,255,.15)",borderRadius:8,padding:2}}>
           {availableYears.map(y=>(
             <button key={y} onClick={()=>{setSelectedYear(y);setEditMode(false);}}
-              style={{border:"none",borderRadius:6,padding:"3px 10px",cursor:"pointer",fontSize:11,fontWeight:700,
-                background:y===selectedYear?"#fff":"transparent",
-                color:y===selectedYear?"#1e293b":"#94a3b8",
-                boxShadow:y===selectedYear?"0 1px 3px rgba(0,0,0,.08)":"none"}}>
+              style={{border:"none",borderRadius:6,padding:"3px 9px",cursor:"pointer",
+                fontSize:11,fontWeight:700,
+                background:y===selectedYear?"rgba(255,255,255,.9)":"transparent",
+                color:y===selectedYear?"#6366f1":"rgba(255,255,255,.7)",
+                boxShadow:y===selectedYear?"0 1px 3px rgba(0,0,0,.12)":"none"}}>
               {y}
             </button>
           ))}
         </div>
-        <div style={{flex:1}}/>
-        <div style={{fontSize:9,color:"#94a3b8"}}>⚠️ Selon planning saisi</div>
-        <button onClick={()=>setEditMode(e=>!e)}
-          style={{background:editMode?"#1e293b":"#f1f5f9",color:editMode?"#fff":"#475569",
-            border:"none",borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>
-          {editMode?"✅ Terminer":"✏️ Corriger"}
-        </button>
+
+        <span style={{fontSize:13,color:"rgba(255,255,255,.8)",fontWeight:700,
+          transform:ouvert?"rotate(0)":"rotate(-90deg)",
+          display:"inline-block",transition:"transform .2s",flexShrink:0}}>▼</span>
       </div>
+
+      {/* ── Contenu dépliable ── */}
+      {ouvert&&<div style={{padding:"12px 14px"}}>
+        {/* Sous-header actions */}
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          <span style={{fontSize:9,color:"#94a3b8"}}>⚠️ Selon planning saisi</span>
+          <div style={{flex:1}}/>
+          <button onClick={e=>{e.stopPropagation();setEditMode(e=>!e);}}
+            style={{background:editMode?"#1e293b":"#f1f5f9",
+              color:editMode?"#fff":"#475569",
+              border:"none",borderRadius:8,padding:"5px 10px",
+              cursor:"pointer",fontSize:11,fontWeight:700}}>
+            {editMode?"✅ Terminer":"✏️ Corriger"}
+          </button>
+        </div>
 
       {/* Grille compteurs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
@@ -1242,6 +1289,8 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
         fontSize:10,color:"#1e40af",fontWeight:500,
       }}>
         💡 Le chiffre central = calculé depuis votre planning. Utilisez +/− pour corriger si votre planning n'est pas à jour. Les corrections sont sauvegardées automatiquement.
+      </div>}
+
       </div>}
 
       {/* ── FÊTES LÉGALES ─────────────────────────────────────── */}
