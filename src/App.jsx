@@ -1647,7 +1647,7 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     prise:          {bg:"#f0fdf4", border:"#86efac", badge:"#16a34a", badgeTc:"#fff",     icon:"✅", label:"Prise"},
     attente:        {bg:"#fffbeb", border:"#fde68a", badge:"#f59e0b", badgeTc:"#fff",     icon:"⏳", label:"En attente"},
     payee:          {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée"},
-    payee_auto:     {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée"},
+    payee_auto:     {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée auto"},
     perdue:         {bg:"#fef2f2", border:"#fecaca", badge:"#dc2626", badgeTc:"#fff",     icon:"❌", label:"PERDUE"},
     perdue_probable:{bg:"#fff7ed", border:"#fed7aa", badge:"#ea580c", badgeTc:"#fff",     icon:"⚠️", label:"Prob. perdue"},
     indetermine:    {bg:"#faf5ff", border:"#e9d5ff", badge:"#7c3aed", badgeTc:"#fff",     icon:"❓", label:"Indéterminé"},
@@ -1825,8 +1825,8 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                     fontSize:9,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
                   }}>
                     {s.icon} {s.label}
-                    {(l.statut==="payee"||l.statut==="payee_auto")&&
-                      ` ${MOIS_NOMS[l.moisPaye-1]}`}
+                    {l.statut==="payee"&&` ${MOIS_NOMS[l.moisPaye-1]}`}
+                    {l.statut==="payee_auto"&&` ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==year?` ${l.anneePaye}`:""}`}
                   </span>
                 </div>
 
@@ -1852,10 +1852,20 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                     <div style={{flex:1,fontSize:10}}>
                       {priseLe
                         ? <span style={{color:"#16a34a",fontWeight:700}}>{priseLe}</span>
-                        : (l.statut==="payee"||l.statut==="payee_auto")
+                        : l.statut==="payee"
                           ? <span style={{color:"#3b82f6",fontWeight:600}}>
-                              💶 Fiche {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                              💶 Fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
                             </span>
+                        : l.statut==="payee_auto"
+                          ? <div>
+                              <div style={{color:"#3b82f6",fontWeight:700,fontSize:10}}>
+                                💶 Paiement fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                              </div>
+                              <div style={{color:"#f59e0b",fontWeight:600,fontSize:9,marginTop:2,
+                                display:"flex",alignItems:"center",gap:3}}>
+                                ⚠️ À vérifier sur votre fiche de paie de {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                              </div>
+                            </div>
                           : <span style={{color:"#94a3b8",fontStyle:"italic"}}>Non renseigné</span>
                       }
                     </div>
