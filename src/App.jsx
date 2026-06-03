@@ -884,8 +884,8 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
     {
       id:"conges",
       label:"🏖️ Congés (CA / CP)",
-      codes:["CA","CP"],
-      note:"CA et CP = Congés (même chose)",
+      codes:["CA"],
+      note:"CA = Congés (le code CP est un alias interne)",
     },
     {
       id:"absences",
@@ -2362,14 +2362,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   // barreConfig : codes affichés dans la barre (persisté par agent)
   const barreConfigKey = `barreRapide_${agent?.id}`;
   const [barreConfig, setBarreConfig] = usePersist(barreConfigKey,
-    ["M","AM","N","J","RP","RU","CA","CP"]);
+    ["M","AM","N","J","RP","RU","CA"]);
   const [showBarreConfig, setShowBarreConfig] = useState(false);
   // Tous les codes disponibles pour la barre
   const CODES_BARRE = [
     {c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
     {c:"JF",l:"Jour Fête"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},
     {c:"TC",l:"TC"},{c:"TY",l:"TY"},{c:"RN",l:"RN"},{c:"NU",l:"NU"},
-    {c:"CA",l:"Congés"},{c:"CP",l:"Congés"},{c:"MA",l:"Maladie"},
+    {c:"CA",l:"Congés"},{c:"MA",l:"Maladie"},
     {c:"ABS",l:"Absent"},{c:"VT",l:"VT"},{c:"VM",l:"VM"},
     {c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"},
   ];
@@ -3319,7 +3319,7 @@ Extrais TOUTES les informations. Retourne UNIQUEMENT un JSON valide sans markdow
 }
 Règles :
 - "periodes_completes" = true si la période accordée correspond exactement à la période demandée par l'agent (${agent?.prenom} ${agent?.nom}).
-- Décompte : CA=Congé Annuel, RP=Repos Périodique, F=Fête, C=Compensateur, SS=Sans Solde, CS=Congé Spécial, RU=Repos Utilisation.
+- Décompte : CA=Congés (Congé Annuel), RP=Repos Périodique, F=Fête, C=Compensateur, SS=Sans Solde, CS=Congé Spécial, RU=Repos Utilisation.
 - Si refusé : {"accorde":false,"motif":"...","dateAccord":"YYYY-MM-DD"}`}
             ]}]
           })
@@ -3368,7 +3368,7 @@ Règles :
               (!demande?.debut1 || result.debut === demande.debut1) &&
               (!demande?.fin1   || result.fin   === demande.fin1);
             const decompte = result.decompte || {};
-            const typeLabels = {CA:"Congé Annuel",RP:"Repos Périodique",F:"Fête",C:"Compensateur",SS:"Sans Solde",CS:"Congé Spécial",RU:"Repos Utilisation"};
+            const typeLabels = {CA:"Congés",RP:"Repos Périodique",F:"Fête",C:"Compensateur",SS:"Sans Solde",CS:"Congé Spécial",RU:"Repos Utilisation"};
             return <>
               {/* Alerte si période partielle */}
               {result.accorde && !periodeOK && <div style={{background:"#fef3c7",borderRadius:10,padding:"10px 14px",border:"1.5px solid #fde68a",fontSize:12,color:"#92400e",marginBottom:8}}>
@@ -3461,7 +3461,7 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
       "prenom": "PRENOM",
       "jsCode": "PICCL-",
       "poste": "CCL",
-      "equipe": "M|AM|N|J",
+      "equipe": "M|AM|N|J|CA|RP|RU|MA (CA=Congés)",
       "horaires": "06h15–14h17",
       "impressionAt": "YYYY-MM-DD HH:MM"
     }
