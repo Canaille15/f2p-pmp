@@ -3037,7 +3037,28 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
         <Av initials={agent.initials} size={48} famille={agent.famille}/>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:16,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{agent.prenom} {agent.nom}</div>
-          <div style={{fontSize:10,opacity:.65,marginTop:1}}>{agent.grade} · {agent.poste} · {fam?.label}</div>
+          <div style={{fontSize:10,opacity:.65,marginTop:1}}>
+            {agent.grade} · {agent.poste} · {fam?.label}
+            {/* Roulement + poste principal habilité */}
+            {profile.roulement&&<>
+              <span style={{opacity:.5}}> · </span>
+              <span style={{fontWeight:700,opacity:.9}}>{profile.roulement}</span>
+            </>}
+            {(()=>{
+              // Afficher le poste principal habilité (premier trouvé)
+              const habs = profile.habilitations||{};
+              const allPostes = [...HAB_PRCI,...HAB_PAR];
+              const premier = Object.keys(habs).find(code=>allPostes.find(p=>p.code===code));
+              const posteLabel = premier ? allPostes.find(p=>p.code===premier)?.label : null;
+              const nbTotal = Object.keys(habs).length;
+              if(!posteLabel) return null;
+              return <>
+                <span style={{opacity:.5}}> · </span>
+                <span style={{fontWeight:700,opacity:.9}}>{posteLabel}</span>
+                {nbTotal>1&&<span style={{opacity:.6}}> +{nbTotal-1}</span>}
+              </>;
+            })()}
+          </div>
         </div>
         {/* Actions principales */}
         <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
