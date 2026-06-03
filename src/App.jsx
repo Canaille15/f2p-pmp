@@ -2199,7 +2199,6 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
           <button onClick={()=>onImportDP(agent)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",color:"#fff",borderRadius:9,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:700}}>📋 Déroulé</button>
           <button onClick={()=>setShowDemandeConges(true)} style={{background:"rgba(234,88,12,.35)",border:"1px solid rgba(253,186,116,.4)",color:"#fff",borderRadius:9,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:700}}>📝 Congés</button>
           <button onClick={()=>setShowColorPicker(true)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",color:"#fff",borderRadius:9,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:700}}>🎨</button>
-          <button onClick={()=>setShowQuit(true)} style={{background:"rgba(239,68,68,.2)",border:"1px solid rgba(239,68,68,.4)",color:"#fca5a5",borderRadius:9,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>🚪</button>
         </div>
       </div>
 
