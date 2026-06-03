@@ -822,14 +822,14 @@ function firstDayOfMonth(year,month){
 
 // ─── COULEURS PERSONNALISÉES PAR AGENT ───────────────────────────────────────
 // Couleurs par défaut
+// DEFAULT_COLORS : couleurs par défaut de l'agenda PERSONNEL uniquement
+// La vue globale utilise toujours les couleurs de EQUIPES (non modifiables)
 const DEFAULT_COLORS = {
-  // Travail = rouge vif
   M:"#8B0000", AM:"#8B0000", N:"#8B0000", J:"#8B0000", JF:"#8B0000",
-  // Non travaillé = blanc cassé par défaut (personnalisable)
-  RP:"#16a34a", RU:"#eab308", RQ:"#eab308", NU:"#f8fafc",
-  CA:"#eab308", CP:"#eab308", MA:"#f8fafc", VT:"#f8fafc",
-  ABS:"#f8fafc", FOR:"#f8fafc", DISPO:"#f8fafc", TC:"#f8fafc",
-  RN:"#f8fafc", VM:"#f8fafc",
+  RP:"#16a34a", RU:"#ca8a04", RQ:"#ca8a04", TC:"#0284c7", TY:"#0284c7", RN:"#4338ca",
+  NU:"#475569", CA:"#eab308", CP:"#eab308",
+  MA:"#dc2626", ABS:"#dc2626", VT:"#eab308", VM:"#6b7280",
+  FOR:"#b45309", DISPO:"#059669",
 };
 
 // Texte blanc sur fonds sombres, noir sur fonds clairs
@@ -2146,31 +2146,108 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
 function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif,
   getColor, getTc, showConfig, setShowConfig, CODES_BARRE}){
 
+  const [showFetesMenu, setShowFetesMenu] = useState(false);
+  const anneeCourante = new Date().getFullYear();
+  // Dates fêtes de l'année courante pour afficher les dates dans le menu
+  const datesFetes = getDatesFetesAnnee(anneeCourante);
+
+  // Est-ce qu'un code fête est actif ?
+  const isFeteActif = codeActif && CODES_FETES[codeActif];
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       {/* Barre principale */}
       <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
         {barreConfig.map(c=>{
+          // Bouton spécial FETES
+          if(c === "FETES"){
+            return(
+              <div key="FETES" style={{position:"relative"}}>
+                <button
+                  onClick={()=>{setShowFetesMenu(v=>!v); if(isFeteActif) setCodeActif(null);}}
+                  style={{
+                    display:"inline-flex",alignItems:"center",gap:5,
+                    background: isFeteActif||showFetesMenu ? "#ec4899" : "#fce7f3",
+                    color: isFeteActif||showFetesMenu ? "#fff" : "#9d174d",
+                    border:"2px solid #ec4899",
+                    borderRadius:10,padding:"7px 13px",cursor:"pointer",
+                    fontSize:12,fontWeight:800,minHeight:38,
+                    boxShadow: isFeteActif?"0 0 0 3px #ec489944":"none",
+                    position:"relative",
+                  }}>
+                  {isFeteActif&&<span style={{
+                    position:"absolute",top:-4,right:-4,
+                    width:10,height:10,borderRadius:"50%",
+                    background:"#6366f1",border:"2px solid #fff",
+                  }}/>}
+                  🩷 {isFeteActif ? codeActif : "Fêtes"} ▾
+                </button>
+
+                {/* Menu déroulant fêtes */}
+                {showFetesMenu&&<div style={{
+                  position:"absolute",top:"calc(100% + 6px)",left:0,
+                  background:"#fff",border:"1.5px solid #fbcfe8",
+                  borderRadius:12,boxShadow:"0 8px 24px rgba(0,0,0,.15)",
+                  zIndex:200,minWidth:220,overflow:"hidden",
+                }}>
+                  <div style={{padding:"7px 12px",background:"#fce7f3",
+                    fontSize:10,fontWeight:800,color:"#9d174d",letterSpacing:.5}}>
+                    SÉLECTIONNER UNE FÊTE
+                  </div>
+                  {Object.entries(CODES_FETES).map(([code, label])=>{
+                    const dateFete = datesFetes[code];
+                    const isActif = codeActif===code;
+                    if(!dateFete) return null; // VN conditionnel
+                    return(
+                      <button key={code}
+                        onClick={()=>{
+                          setCodeActif(isActif?null:code);
+                          setShowFetesMenu(false);
+                        }}
+                        style={{
+                          display:"flex",alignItems:"center",gap:8,
+                          width:"100%",background:isActif?"#fce7f3":"#fff",
+                          border:"none",borderBottom:"1px solid #fdf2f8",
+                          padding:"8px 12px",cursor:"pointer",textAlign:"left",
+                        }}>
+                        <span style={{
+                          background:"#ec4899",color:"#fff",
+                          borderRadius:6,padding:"1px 6px",
+                          fontFamily:"monospace",fontSize:10,fontWeight:800,
+                          flexShrink:0,minWidth:28,textAlign:"center",
+                        }}>🩷{code}</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:11,fontWeight:600,color:"#1e293b"}}>{label}</div>
+                          <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>
+                            {new Date(dateFete).toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"short"})}
+                          </div>
+                        </div>
+                        {isActif&&<span style={{color:"#ec4899",fontWeight:800}}>✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>}
+              </div>
+            );
+          }
+
+          // Bouton standard
           const couleur = getColor(c);
           const tc = getTc(c);
           const isActif = codeActif===c;
           const label = CODES_BARRE.find(x=>x.c===c)?.l||c;
           return(
             <button key={c}
-              onClick={()=>setCodeActif(isActif?null:c)}
+              onClick={()=>{setCodeActif(isActif?null:c); setShowFetesMenu(false);}}
               style={{
                 display:"inline-flex",alignItems:"center",gap:5,
                 background: isActif ? couleur : couleur+"22",
                 color: isActif ? tc : couleur,
                 border:`2px solid ${couleur}`,
-                borderRadius:10,
-                padding:"7px 13px",
-                cursor:"pointer",
-                fontSize:12,fontWeight:800,
-                minHeight:38, // facile à tapper sur mobile
+                borderRadius:10,padding:"7px 13px",cursor:"pointer",
+                fontSize:12,fontWeight:800,minHeight:38,
                 boxShadow: isActif?"0 0 0 3px "+couleur+"44":"none",
-                transition:"all .15s",
-                position:"relative",
+                transition:"all .15s",position:"relative",
               }}>
               {isActif&&<span style={{
                 position:"absolute",top:-4,right:-4,
@@ -2182,16 +2259,16 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
           );
         })}
 
-        {/* Bouton effacer si mode actif */}
-        {codeActif&&<button onClick={()=>setCodeActif(null)}
+        {/* Bouton annuler si mode actif */}
+        {codeActif&&<button onClick={()=>{setCodeActif(null);setShowFetesMenu(false);}}
           style={{background:"#fef2f2",color:"#dc2626",border:"2px solid #fecaca",
             borderRadius:10,padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
             minHeight:38}}>
-          ✕ Annuler
+          ✕
         </button>}
 
         {/* Bouton config */}
-        <button onClick={()=>setShowConfig(v=>!v)}
+        <button onClick={()=>{setShowConfig(v=>!v);setShowFetesMenu(false);}}
           title="Configurer la barre"
           style={{background:showConfig?"#1e293b":"#f1f5f9",
             color:showConfig?"#fff":"#64748b",
@@ -2202,6 +2279,15 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
         </button>
       </div>
 
+      {/* Info mode actif */}
+      {codeActif&&<div style={{fontSize:10,color:"#6366f1",fontWeight:700,
+        background:"#eef2ff",borderRadius:8,padding:"4px 10px"}}>
+        ✏️ Mode saisie : {CODES_FETES[codeActif]
+          ? `🩷 ${codeActif} — ${CODES_FETES[codeActif]}`
+          : `"${CODES_BARRE.find(x=>x.c===codeActif)?.l||codeActif}"`
+        } — tape sur un jour pour appliquer
+      </div>}
+
       {/* Panneau de configuration */}
       {showConfig&&<div style={{background:"#f8fafc",border:"1.5px solid #e2e8f0",
         borderRadius:12,padding:"12px 14px"}}>
@@ -2211,8 +2297,8 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {CODES_BARRE.map(({c,l})=>{
             const sel = barreConfig.includes(c);
-            const couleur = getColor(c);
-            const tc = getTc(c);
+            const couleur = c==="FETES"?"#ec4899":getColor(c);
+            const tc = c==="FETES"?"#fff":getTc(c);
             return(
               <button key={c}
                 onClick={()=>setBarreConfig(prev=>
@@ -2378,7 +2464,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   // barreConfig : codes affichés dans la barre (persisté par agent)
   const barreConfigKey = `barreRapide_${agent?.id}`;
   const [barreConfig, setBarreConfig] = usePersist(barreConfigKey,
-    ["M","AM","N","J","RP","RU","CA"]);
+    ["M","AM","N","J","RP","RU","FETES"]);
   const [showBarreConfig, setShowBarreConfig] = useState(false);
   // Tous les codes disponibles pour la barre
   const CODES_BARRE = [
@@ -2388,6 +2474,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     {c:"CA",l:"Congés"},{c:"MA",l:"Maladie"},
     {c:"ABS",l:"Absent"},{c:"VT",l:"VT"},{c:"VM",l:"VM"},
     {c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"},
+    {c:"FETES",l:"🩷 Fêtes"}, // bouton spécial ouvrant le menu fêtes
   ];
   const [showDemandeConges,setShowDemandeConges]=useState(false);
   const [showAccordConges,setShowAccordConges]=useState(false);
