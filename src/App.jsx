@@ -1069,14 +1069,19 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   // Compteurs calculés depuis le planning
   const computed = useMemo(()=>{
     if(!agent) return {};
-    const c = {travail:0,RP:0,RU:0,RQ:0,RN:0,TC:0,TY:0,CA:0,CP:0,MA:0,VT:0,ABS:0,FOR:0,NU:0};
+    const c = {travail:0,RP:0,RU:0,RQ:0,RN:0,TC:0,TY:0,CA:0,CP:0,MA:0,VT:0,ABS:0,FOR:0,NU:0,FETE:0};
     Object.entries(schedule).forEach(([key,val])=>{
       if(!key.startsWith(agent.id+"-")) return;
       const dk = key.slice(agent.id.length+1);
       if(dk < start || dk > end) return;
       const eq = val?.equipe;
       if(!eq) return;
-      if(["M","AM","N","J","JF"].includes(eq)) c.travail++;
+      // Fêtes légales (F1,F2…) et JF → compteur FETE, pas travail
+      if(CODES_FETES[eq] || eq==="JF"){
+        c.FETE++;
+      } else if(["M","AM","N","J"].includes(eq)){
+        c.travail++;
+      }
       if(c[eq]!==undefined) c[eq]++;
     });
     return c;
@@ -1141,6 +1146,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
     {key:"RP",      label:"RP",              color:"#16a34a", icon:"🟢", subtitle:"Repos périodiques"},
     {key:"RU",      label:"RU",              color:"#d97706", icon:"🟡", subtitle:"Repos utilisation"},
     {key:"RQ",      label:"RQ",              color:"#d97706", icon:"🟡", subtitle:"Repos qualif."},
+    {key:"FETE",    label:"Fêtes",           color:"#ec4899", icon:"🩷", subtitle:"Jours fête"},
     {key:"RN",      label:"RN",              color:"#4338ca", icon:"🔵", subtitle:"Repos nuit"},
     {key:"TC",      label:"TC",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
     {key:"TY",      label:"TY",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
