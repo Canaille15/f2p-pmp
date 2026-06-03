@@ -4585,9 +4585,7 @@ function ImportDeroulement({agent,onClose,onImport}){
 }
 // ─── HABILITATIONS ───────────────────────────────────────────────────────────
 const NIV_HAB = [
-  {code:"HC", label:"HC",  color:"#1e3a5f", textColor:"#fff", dot:"#3b82f6", desc:"Habilité Complet"},
-  {code:"V",  label:"V",   color:"#065f46", textColor:"#fff", dot:"#22c55e", desc:"En cours de validation"},
-  {code:"EA", label:"EA",  color:"#713f12", textColor:"#fff", dot:"#f59e0b", desc:"En attente"},
+  {code:"HC", label:"Habilité", color:"#0f4c81", textColor:"#fff", dot:"#3b82f6"},
 ];
 
 // HAB_PRCI : tous les postes PRCI 3×8 + journée
@@ -4632,47 +4630,166 @@ const HAB_PAR = [
 ];
 
 function HabilitationsModal({agent,habilitations,onSave,onClose,suggestedPostes}){
-  const [hab,setHab]=useState(()=>JSON.parse(JSON.stringify(habilitations)));
-  const toggle=(code,niveau)=>setHab(prev=>{const next={...prev};if(next[code]===niveau)delete next[code];else next[code]=niveau;return next;});
+  const [hab,setHab]=useState(()=>({...habilitations}));
+  // Une seule case : habilité (true) ou non (absent)
+  const toggle=(code)=>setHab(prev=>{
+    const next={...prev};
+    if(next[code]) delete next[code];
+    else next[code]="HC";
+    return next;
+  });
   const fam=FAMILLES[agent.famille];
-  const groupes=[{titre:"PRCI — 3×8",items:HAB_PRCI.filter(h=>h.type==="3x8")},{titre:"PRCI — Journée",items:HAB_PRCI.filter(h=>h.type==="J")},{titre:"PAR — 3×8",items:HAB_PAR.filter(h=>h.type==="3x8")},{titre:"PAR — Journée",items:HAB_PAR.filter(h=>h.type==="J")}];
-  return(<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.65)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
-    <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:520,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(0,0,0,.25)",overflow:"hidden"}}>
-      <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,padding:"16px 20px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-        <Av initials={agent.initials} size={36} famille={agent.famille}/>
-        <div style={{flex:1}}><div style={{color:"#fff",fontSize:14,fontWeight:700}}>Habilitations · {agent.prenom} {agent.nom}</div></div>
-        <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:14}}>✕</button>
-      </div>
-      {suggestedPostes?.length>0&&<div style={{background:"#fef3c7",padding:"8px 16px",borderBottom:"1px solid #fde68a",fontSize:11,color:"#92400e"}}>💡 Détectés : {suggestedPostes.slice(0,5).join(", ")}</div>}
-      <div style={{overflowY:"auto",flex:1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:12}}>
-        {groupes.map(g=>(<div key={g.titre}>
-          <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",letterSpacing:.6,marginBottom:6}}>{g.titre.toUpperCase()}</div>
-          <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {g.items.map(h=>{const current=hab[h.code];const n=NIV_HAB.find(x=>x.code===current);const isSug=suggestedPostes?.includes(h.label);
-              return(<div key={h.code} style={{display:"flex",alignItems:"center",gap:8,background:current?"#f8fafc":isSug?"#fef9c3":"transparent",border:`1px solid ${current?"#e2e8f0":isSug?"#fde68a":"transparent"}`,borderRadius:7,padding:"6px 8px"}}>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                    <span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,color:"#64748b",background:"#f1f5f9",borderRadius:4,padding:"1px 5px"}}>{h.code}</span>
-                    <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{h.label}</span>
-                    {h.subtitle&&h.subtitle!==h.label&&<span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>{h.subtitle}</span>}
-                    {isSug&&!current&&<span style={{fontSize:9,color:"#92400e",background:"#fef3c7",borderRadius:8,padding:"1px 5px"}}>PDF</span>}
-                    {current&&<span style={{fontSize:10,fontWeight:700,color:n?.textColor,background:n?.color,borderRadius:6,padding:"1px 6px"}}>{n?.label}</span>}
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:3}}>
-                  {NIV_HAB.map(nv=>(<button key={nv.code} onClick={()=>toggle(h.code,nv.code)} style={{border:`1.5px solid ${current===nv.code?nv.dot:"#e2e8f0"}`,background:current===nv.code?nv.color:"#fff",color:current===nv.code?nv.textColor:"#94a3b8",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontSize:10,fontWeight:700}}>{nv.label}</button>))}
-                  {current&&<button onClick={()=>toggle(h.code,current)} style={{border:"1px solid #e2e8f0",background:"#fff",color:"#94a3b8",borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:10}}>✕</button>}
-                </div>
-              </div>);})}
+  const nbHab=Object.keys(hab).length;
+  const groupes=[
+    {titre:"PRCI — 3×8",       color:"#0f4c81", bg:"#eff6ff", items:HAB_PRCI.filter(h=>h.type==="3x8")},
+    {titre:"PRCI — Journée",   color:"#0369a1", bg:"#f0f9ff", items:HAB_PRCI.filter(h=>h.type==="J")},
+    {titre:"PAR — 3×8",        color:"#065f46", bg:"#f0fdf4", items:HAB_PAR.filter(h=>h.type==="3x8")},
+    {titre:"PAR — Journée",    color:"#047857", bg:"#ecfdf5", items:HAB_PAR.filter(h=>h.type==="J")},
+  ];
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:400,
+      display:"flex",alignItems:"flex-end",justifyContent:"center",
+      backdropFilter:"blur(6px)"}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+
+      <div style={{background:"#fff",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:560,
+        maxHeight:"90vh",display:"flex",flexDirection:"column",
+        boxShadow:"0 -8px 40px rgba(0,0,0,.25)"}}>
+
+        {/* Header */}
+        <div style={{background:`linear-gradient(135deg,${fam?.color||"#0f4c81"},#1e40af)`,
+          padding:"16px 20px",display:"flex",alignItems:"center",gap:12,
+          borderRadius:"20px 20px 0 0",flexShrink:0}}>
+          <Av initials={agent.initials} size={40} famille={agent.famille}/>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Habilitations</div>
+            <div style={{color:"rgba(255,255,255,.7)",fontSize:11,marginTop:1}}>
+              {agent.prenom} {agent.nom} · {nbHab} poste{nbHab>1?"s":""} habilité{nbHab>1?"s":""}
+            </div>
           </div>
-        </div>))}
-      </div>
-      <div style={{padding:"12px 18px",borderTop:"1px solid #e2e8f0",display:"flex",gap:8,flexShrink:0}}>
-        <button onClick={()=>onSave(hab)} style={{flex:1,background:"#1e293b",color:"#fff",border:"none",borderRadius:9,padding:"10px 0",cursor:"pointer",fontSize:13,fontWeight:700}}>✓ Enregistrer</button>
-        <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:9,padding:"10px 12px",cursor:"pointer",fontSize:13}}>Annuler</button>
+          <button onClick={onClose}
+            style={{background:"rgba(255,255,255,.2)",border:"none",color:"#fff",
+              borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:18,
+              display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        </div>
+
+        {/* Postes détectés */}
+        {suggestedPostes?.length>0&&<div style={{
+          background:"#fef9c3",padding:"8px 16px",
+          borderBottom:"1px solid #fde68a",fontSize:11,color:"#92400e",
+          display:"flex",alignItems:"center",gap:6}}>
+          <span>💡</span>
+          <span>Postes détectés dans le planning : <strong>{suggestedPostes.slice(0,6).join(", ")}</strong></span>
+        </div>}
+
+        {/* Corps scrollable */}
+        <div style={{overflowY:"auto",flex:1,padding:"16px",
+          display:"flex",flexDirection:"column",gap:16,
+          WebkitOverflowScrolling:"touch"}}>
+
+          {groupes.map(g=>(
+            <div key={g.titre}>
+              {/* En-tête groupe */}
+              <div style={{
+                background:g.bg,borderRadius:10,
+                padding:"8px 12px",marginBottom:8,
+                display:"flex",alignItems:"center",justifyContent:"space-between",
+              }}>
+                <span style={{fontSize:12,fontWeight:800,color:g.color,letterSpacing:.3}}>
+                  {g.titre}
+                </span>
+                <span style={{fontSize:10,color:g.color,opacity:.7}}>
+                  {g.items.filter(h=>hab[h.code]).length}/{g.items.length} habilité{g.items.filter(h=>hab[h.code]).length>1?"s":""}
+                </span>
+              </div>
+
+              {/* Grille de postes */}
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {g.items.map(h=>{
+                  const isHab = !!hab[h.code];
+                  const isSug = suggestedPostes?.includes(h.label)||suggestedPostes?.includes(h.code);
+                  return(
+                    <button key={h.code}
+                      onClick={()=>toggle(h.code)}
+                      style={{
+                        display:"flex",alignItems:"center",gap:12,
+                        background: isHab ? g.bg : "#f8fafc",
+                        border: `2px solid ${isHab ? g.color : isSug ? "#fde68a" : "#e2e8f0"}`,
+                        borderRadius:12,padding:"10px 14px",cursor:"pointer",
+                        textAlign:"left",width:"100%",
+                        boxShadow: isHab ? `0 2px 8px ${g.color}33` : "none",
+                        transition:"all .15s",
+                      }}>
+
+                      {/* Checkbox visuelle */}
+                      <div style={{
+                        width:22,height:22,borderRadius:6,flexShrink:0,
+                        background: isHab ? g.color : "#fff",
+                        border: `2px solid ${isHab ? g.color : "#e2e8f0"}`,
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        transition:"all .15s",
+                      }}>
+                        {isHab&&<span style={{color:"#fff",fontSize:13,fontWeight:900}}>✓</span>}
+                      </div>
+
+                      {/* Info poste */}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                          <span style={{
+                            fontFamily:"monospace",fontSize:10,fontWeight:800,
+                            background: isHab ? g.color+"22" : "#f1f5f9",
+                            color: isHab ? g.color : "#64748b",
+                            borderRadius:5,padding:"1px 6px",
+                          }}>{h.code}</span>
+                          <span style={{fontSize:13,fontWeight:isHab?800:600,
+                            color: isHab ? g.color : "#1e293b"}}>
+                            {h.label}
+                          </span>
+                          {isSug&&!isHab&&<span style={{fontSize:8,background:"#fef3c7",
+                            color:"#92400e",borderRadius:8,padding:"1px 5px",fontWeight:700}}>
+                            🔍 détecté
+                          </span>}
+                        </div>
+                        {h.subtitle&&h.subtitle!==h.label&&<div style={{
+                          fontSize:10,color: isHab ? g.color : "#94a3b8",
+                          marginTop:2,opacity:.8,
+                        }}>{h.subtitle}</div>}
+                      </div>
+
+                      {/* Badge habilité */}
+                      {isHab&&<span style={{
+                        background:g.color,color:"#fff",
+                        borderRadius:20,padding:"2px 10px",
+                        fontSize:10,fontWeight:700,flexShrink:0,
+                      }}>Habilité</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"14px 16px",borderTop:"1px solid #e2e8f0",
+          display:"flex",gap:8,flexShrink:0,background:"#f8fafc"}}>
+          <button onClick={()=>onSave(hab)}
+            style={{flex:1,background:"linear-gradient(135deg,#1e293b,#334155)",
+              color:"#fff",border:"none",borderRadius:12,padding:"12px 0",
+              cursor:"pointer",fontSize:14,fontWeight:800,
+              boxShadow:"0 2px 8px rgba(30,41,59,.3)"}}>
+            ✓ Enregistrer ({nbHab} habilitation{nbHab>1?"s":""})
+          </button>
+          <button onClick={onClose}
+            style={{background:"#fff",color:"#475569",border:"1.5px solid #e2e8f0",
+              borderRadius:12,padding:"12px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>
+            Annuler
+          </button>
+        </div>
       </div>
     </div>
-  </div>);
+  );
 }
 
 // ─── AJOUT AGENT ──────────────────────────────────────────────────────────────
