@@ -2695,6 +2695,123 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile}){
 }
 
 
+// ─── BARRE DE SAISIE RÉSERVISTE ──────────────────────────────────────────────
+// Affiche les postes habilités de l'agent réserviste comme boutons de saisie rapide
+// Le clic sur un bouton active le poste → clic sur un jour l'applique dans le planning
+// La saisie écrit le jsCode du poste (visible dans la vue équipe comme jour de travail)
+function BarreSaisieReserviste({habilitations, famillesHab, codeActif, setCodeActif, getColor, getTc}){
+  const [showRP, setShowRP] = useState(false); // panneau codes repos/congés
+
+  // Construire la liste des postes habilités
+  const allPostes = [
+    ...(famillesHab==="PRCI"||famillesHab==="BOTH" ? HAB_PRCI : []),
+    ...(famillesHab==="PAR" ||famillesHab==="BOTH" ? HAB_PAR  : []),
+    // Si pas de famille définie, montrer tout
+    ...(famillesHab ? [] : [...HAB_PRCI,...HAB_PAR]),
+  ];
+
+  // Filtrer aux postes habilités (au moins HC, V ou EA)
+  const postesHabilites = allPostes.filter(p=>habilitations[p.code]);
+
+  // Codes non-travail communs (toujours disponibles)
+  const CODES_NON_TRAVAIL = [
+    {code:"RP", label:"RP"},{code:"RU", label:"RU"},
+    {code:"CA", label:"Congés"},{code:"MA", label:"Maladie"},
+    {code:"ABS",label:"Absent"},{code:"DISPO",label:"Dispo"},
+  ];
+
+  if(postesHabilites.length===0 && !famillesHab){
+    return(
+      <div style={{background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:10,
+        padding:"8px 12px",fontSize:11,color:"#c2410c"}}>
+        ⚠️ Aucune habilitation enregistrée — configurez vos habilitations dans le bandeau réserviste.
+      </div>
+    );
+  }
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+
+      {/* Info mode actif */}
+      {codeActif&&<div style={{fontSize:10,fontWeight:700,color:"#6366f1",
+        background:"#eef2ff",borderRadius:8,padding:"4px 10px",
+        display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span>✏️ Saisie : {[...HAB_PRCI,...HAB_PAR].find(p=>p.code===codeActif)?.label || codeActif} — tap sur un jour</span>
+        <button onClick={()=>setCodeActif(null)}
+          style={{background:"#fef2f2",color:"#dc2626",border:"1px solid #fecaca",
+            borderRadius:6,padding:"2px 7px",cursor:"pointer",fontSize:10,fontWeight:700}}>✕</button>
+      </div>}
+
+      {/* Postes habilités */}
+      {postesHabilites.length>0&&(
+        <div>
+          <div style={{fontSize:9,fontWeight:700,color:"#64748b",marginBottom:4,letterSpacing:.5}}>
+            POSTES HABILITÉS ({postesHabilites.length})
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+            {postesHabilites.map(p=>{
+              const niv = NIV_HAB.find(n=>n.code===habilitations[p.code]);
+              const isActif = codeActif===p.code;
+              const couleur = getColor("M"); // travail = couleur M personnalisée
+              const tc = getTc("M");
+              return(
+                <button key={p.code}
+                  onClick={()=>setCodeActif(isActif?null:p.code)}
+                  style={{
+                    display:"inline-flex",flexDirection:"column",alignItems:"flex-start",gap:1,
+                    background: isActif ? couleur : couleur+"22",
+                    color: isActif ? tc : couleur,
+                    border:`2px solid ${couleur}`,
+                    borderRadius:10,padding:"5px 10px",cursor:"pointer",
+                    minHeight:38,position:"relative",
+                  }}>
+                  {isActif&&<span style={{position:"absolute",top:-4,right:-4,
+                    width:10,height:10,borderRadius:"50%",
+                    background:"#6366f1",border:"2px solid #fff"}}/>}
+                  <span style={{fontSize:11,fontWeight:800,lineHeight:1}}>{p.label}</span>
+                  <span style={{fontSize:8,opacity:.7,lineHeight:1,fontWeight:400}}>
+                    {p.type==="3x8"?"3×8":"J"}{niv?` · ${niv.label}`:""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Codes repos/congés avec toggle */}
+      <div>
+        <button onClick={()=>setShowRP(v=>!v)}
+          style={{fontSize:9,fontWeight:700,color:"#64748b",marginBottom:showRP?4:0,
+            background:"transparent",border:"none",cursor:"pointer",padding:0,
+            letterSpacing:.5}}>
+          {showRP?"▾":"▸"} REPOS / CONGÉS / ABSENCES
+        </button>
+        {showRP&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:4}}>
+          {CODES_NON_TRAVAIL.map(({code,label})=>{
+            const isActif = codeActif===code;
+            const couleur = getColor(code);
+            const tc = getTc(code);
+            return(
+              <button key={code}
+                onClick={()=>setCodeActif(isActif?null:code)}
+                style={{
+                  background: isActif ? couleur : couleur+"22",
+                  color: isActif ? tc : couleur,
+                  border:`2px solid ${couleur}`,
+                  borderRadius:10,padding:"6px 11px",cursor:"pointer",
+                  fontSize:11,fontWeight:800,minHeight:34,
+                }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>}
+      </div>
+    </div>
+  );
+}
+
 // ─── HELPER RC FÊTES AGENDA ──────────────────────────────────────────────────
 // Retourne la liste des codes fêtes dont ce jour est soit :
 //   - le jour de la fête elle-même (code Fx saisi directement)
@@ -2831,8 +2948,25 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
         else { if(next[key]){const {equipe2,...rest}=next[key];next[key]=rest;} }
       } else {
         if(code){
-          const eq=EQ[code]||EQ_COLORS[code]||{prive:false,heures:""};
-          next[key]={...(next[key]||{}),equipe:code,jsCode:code,horaires:eq.heures||"",prive:eq.prive||false};
+          const eq=EQ[code]||EQ_COLORS[code]||null;
+
+          // Poste réserviste : code = jsCode du poste habilité
+          // On cherche si c'est un poste HAB (pas un code équipe standard)
+          const posteHab = [...HAB_PRCI,...HAB_PAR].find(p=>p.code===code);
+          if(posteHab){
+            // Poste habilité → equipe=travail selon type, jsCode=code poste, prive=false
+            const equipeBase = posteHab.type==="J" ? "J" : "M"; // 3x8 → M par défaut
+            next[key]={
+              ...(next[key]||{}),
+              equipe: equipeBase,
+              jsCode: code,
+              horaires: [...POSTES_JOURNEE,...POSTES_PRCI_3x8.map(p=>({jsCode:p.M,horaires:""}))].find(p=>p.jsCode===code)?.horaires||"",
+              prive: false, // travail = visible en vue équipe
+            };
+          } else {
+            const eqData = eq||{prive:false,heures:""};
+            next[key]={...(next[key]||{}),equipe:code,jsCode:code,horaires:eqData.heures||"",prive:eqData.prive||false};
+          }
         } else { delete next[key]; }
       }
       // Sync Supabase directe
@@ -2888,7 +3022,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const ROULEMENTS=["Roulement 3×8","Journée"];
   const counts=useMemo(()=>computeCompteurs(schedule,agent.id,compteurYear,agentProfiles),[schedule,agent.id,compteurYear,agentProfiles]);
   const nbHab=Object.keys(profile.habilitations||{}).length;
-  const nbValid=Object.values(profile.habilitations||{}).filter(v=>v==="VALIDE").length;
+  const nbValid=Object.values(profile.habilitations||{}).filter(v=>v==="HC").length;
   const postesDetectes=[...new Set(Object.entries(schedule).filter(([k])=>k.startsWith(agent.id+"-")).map(([,v])=>v?.poste||v?.jsCode).filter(Boolean))];
 
   return(<div style={{display:"flex",flexDirection:"column",gap:18}}>
@@ -3070,14 +3204,22 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     {/* ── VUE SEMAINE ── */}
     {calView==="semaine"&&<>
-      {/* ── BARRE DE SAISIE RAPIDE (roulement/journée uniquement) ── */}
-      {!profile.isReserve && <BarreSaisieRapide
-        barreConfig={barreConfig} setBarreConfig={setBarreConfig}
-        codeActif={codeActif} setCodeActif={setCodeActif}
-        getColor={getColor} getTc={getTc}
-        showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
-        CODES_BARRE={CODES_BARRE}
-      />}
+      {/* ── BARRE DE SAISIE RAPIDE ── */}
+      {profile.isReserve
+        ? <BarreSaisieReserviste
+            habilitations={profile.habilitations||{}}
+            famillesHab={profile.famillesHab}
+            codeActif={codeActif} setCodeActif={setCodeActif}
+            getColor={getColor} getTc={getTc}
+          />
+        : <BarreSaisieRapide
+            barreConfig={barreConfig} setBarreConfig={setBarreConfig}
+            codeActif={codeActif} setCodeActif={setCodeActif}
+            getColor={getColor} getTc={getTc}
+            showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
+            CODES_BARRE={CODES_BARRE}
+          />
+      }
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
         {weekDates.map((dk,i)=>{
           const en=schedule[`${agent.id}-${dk}`];
@@ -3232,14 +3374,22 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     {/* ── VUE MOIS ── */}
     {calView==="mois"&&<>
-      {/* ── BARRE DE SAISIE RAPIDE (roulement/journée uniquement) ── */}
-      {!profile.isReserve && <BarreSaisieRapide
-        barreConfig={barreConfig} setBarreConfig={setBarreConfig}
-        codeActif={codeActif} setCodeActif={setCodeActif}
-        getColor={getColor} getTc={getTc}
-        showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
-        CODES_BARRE={CODES_BARRE}
-      />}
+      {/* ── BARRE DE SAISIE RAPIDE ── */}
+      {profile.isReserve
+        ? <BarreSaisieReserviste
+            habilitations={profile.habilitations||{}}
+            famillesHab={profile.famillesHab}
+            codeActif={codeActif} setCodeActif={setCodeActif}
+            getColor={getColor} getTc={getTc}
+          />
+        : <BarreSaisieRapide
+            barreConfig={barreConfig} setBarreConfig={setBarreConfig}
+            codeActif={codeActif} setCodeActif={setCodeActif}
+            getColor={getColor} getTc={getTc}
+            showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
+            CODES_BARRE={CODES_BARRE}
+          />
+      }
 
       {/* Grille mensuelle */}
       <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
@@ -4428,46 +4578,50 @@ function ImportDeroulement({agent,onClose,onImport}){
 }
 // ─── HABILITATIONS ───────────────────────────────────────────────────────────
 const NIV_HAB = [
-  {code:"HC",  label:"HC",   color:"#1e3a5f", textColor:"#fff", dot:"#3b82f6"},
-  {code:"V",   label:"V",    color:"#065f46", textColor:"#fff", dot:"#22c55e"},
-  {code:"EA",  label:"EA",   color:"#713f12", textColor:"#fff", dot:"#f59e0b"},
+  {code:"HC", label:"HC",  color:"#1e3a5f", textColor:"#fff", dot:"#3b82f6", desc:"Habilité Complet"},
+  {code:"V",  label:"V",   color:"#065f46", textColor:"#fff", dot:"#22c55e", desc:"En cours de validation"},
+  {code:"EA", label:"EA",  color:"#713f12", textColor:"#fff", dot:"#f59e0b", desc:"En attente"},
 ];
 
-// Postes PRCI — construits depuis POSTES_PRCI_3x8 et POSTES_JOURNEE
+// HAB_PRCI : tous les postes PRCI 3×8 + journée
+// Code = jsCode du poste (utilisé pour sauvegarder l'habilitation)
+// Les postes 3×8 couvrent toutes les équipes M/AM/N — pas de distinction par équipe
 const HAB_PRCI = [
-  // 3×8 — depuis POSTES_PRCI_3x8
-  {code:"PICCL",  label:"CCL",        subtitle:"CCL",                    type:"3x8"},
-  {code:"PIADJ",  label:"Adj CCL",    subtitle:"Adjoint CCL",            type:"3x8"},
-  {code:"PILNE",  label:"AC LNE",     subtitle:"Agent Circulation LNE",  type:"3x8"},
-  {code:"PILNO",  label:"AC LNO",     subtitle:"Agent Circulation LNO",  type:"3x8"},
-  {code:"PILCL",  label:"AC LC",      subtitle:"Agent Circulation LC",   type:"3x8"},
-  {code:"PIVGD",  label:"AC VGD",     subtitle:"Agent Circulation VGD",  type:"3x8"},
-  // Journée — depuis POSTES_JOURNEE famille PRCI
-  {code:"PIPA1J", label:"Pauseur PA1",subtitle:"Pauseur PA1",            type:"J"},
-  {code:"PIPA2J", label:"Pauseur PA2",subtitle:"Pauseur PA2",            type:"J"},
-  {code:"PIPA3J", label:"Pauseur PA3",subtitle:"Pauseur PA3",            type:"J"},
-  {code:"PIDPXJ", label:"DPX PRCI",   subtitle:"DPX PRCI",               type:"J"},
-  {code:"PIASSJ", label:"Adj DPX",    subtitle:"Adjoint DPX PRCI",       type:"J"},
-  {code:"AFOPRCI",label:"AFO PRCI",   subtitle:"AFO PRCI",               type:"J"},
-  {code:"CAF",    label:"CAF",        subtitle:"Cert. Aptitude Fonction", type:"J"},
-  {code:"PPRCI",  label:"PPRCI",      subtitle:"PPRCI",                   type:"J"},
-  {code:"KPRCI",  label:"K-PRCI",     subtitle:"Formation PRCI",          type:"J"},
-  {code:"APRCI",  label:"A-PRCI",     subtitle:"Assistant PRCI",          type:"J"},
+  // ── 3×8 ──
+  {code:"PICCL", label:"CCL",          subtitle:"Chef Circulation Local",      type:"3x8"},
+  {code:"PIADJ", label:"Adj CCL",      subtitle:"Adjoint Chef Circulation",    type:"3x8"},
+  {code:"PILNE", label:"AC LNE",       subtitle:"Agent Circulation LNE",       type:"3x8"},
+  {code:"PILNO", label:"AC LNO",       subtitle:"Agent Circulation LNO",       type:"3x8"},
+  {code:"PILCL", label:"AC LC",        subtitle:"Agent Circulation LC",        type:"3x8"},
+  {code:"PIVGD", label:"AC VGD",       subtitle:"Agent Circulation VGD",       type:"3x8"},
+  // ── Journée ──
+  {code:"PIPA1J", label:"Pauseur PA1", subtitle:"Pauseur PA1 · 08h45–18h15",  type:"J"},
+  {code:"PIPA2J", label:"Pauseur PA2", subtitle:"Pauseur PA2 · 10h15–19h45",  type:"J"},
+  {code:"PIPA3J", label:"Pauseur PA3", subtitle:"Pauseur PA3 · 08h45–16h30",  type:"J"},
+  {code:"PIDPXJ", label:"DPX PRCI",   subtitle:"DPX PRCI · 08h00–16h45",     type:"J"},
+  {code:"PIASSJ", label:"Adj DPX",    subtitle:"Adjoint DPX PRCI",            type:"J"},
+  {code:"AFOPRCI",label:"AFO PRCI",   subtitle:"AFO PRCI · 09h00–16h45",     type:"J"},
+  {code:"CAF",    label:"CAF",         subtitle:"Certificat Aptitude Fonction",type:"J"},
+  {code:"PPRCI",  label:"PPRCI",       subtitle:"PPRCI · 09h00–16h45",        type:"J"},
+  {code:"F-PRCI", label:"K-PRCI",      subtitle:"Formation PRCI · 09h00–17h45",type:"J"},
+  {code:"K-PRCI", label:"K-PRCI (bis)",subtitle:"Formation PRCI",              type:"J"},
+  {code:"A-PRCI", label:"A-PRCI",      subtitle:"Assistant PRCI",              type:"J"},
+  {code:"SD%",    label:"SD",           subtitle:"Service Doux · 08h00–16h43", type:"J"},
 ];
 
-// Postes PAR — depuis POSTES_PAR_3x8 et POSTES_JOURNEE famille PAR
+// HAB_PAR : tous les postes PAR 3×8 + journée
 const HAB_PAR = [
-  // 3×8 — depuis POSTES_PAR_3x8
-  {code:"PAAC1",  label:"AC PAR",         subtitle:"Agent Circulation PAR",    type:"3x8"},
-  {code:"PAAC2",  label:"Aide AC PAR",    subtitle:"Aide Agent Circulation PAR",type:"3x8"},
-  {code:"PAACXX", label:"CT AC Travaux",  subtitle:"Contrôleur AC Travaux",    type:"3x8"},
-  // Journée — depuis POSTES_JOURNEE famille PAR
-  {code:"PAPAUJ", label:"Pauseur PAR",    subtitle:"Pauseur PAR",              type:"J"},
-  {code:"PADPXJ", label:"DPX PAR",        subtitle:"DPX PAR",                  type:"J"},
-  {code:"PAASMJ", label:"ASMTE PAR",      subtitle:"ASMTE PAR",                type:"J"},
-  {code:"AFOPAR", label:"AFO PAR",         subtitle:"AFO PAR",                  type:"J"},
-  {code:"KPAR",   label:"K-PAR",          subtitle:"Formation PAR",             type:"J"},
-  {code:"FPAR",   label:"F-PAR",          subtitle:"Formateur PAR",             type:"J"},
+  // ── 3×8 ──
+  {code:"PAAC1-", label:"AC PAR",        subtitle:"Agent Circulation PAR",      type:"3x8"},
+  {code:"PAAC2-", label:"Aide AC PAR",   subtitle:"Aide Agent Circulation PAR", type:"3x8"},
+  {code:"PAACXX", label:"CT AC Travaux", subtitle:"Contrôleur AC Travaux (nuit)",type:"3x8"},
+  // ── Journée ──
+  {code:"PAPAUJ", label:"Pauseur PAR",   subtitle:"Pauseur PAR · 09h00–17h45",  type:"J"},
+  {code:"PADPXJ", label:"DPX PAR",       subtitle:"DPX PAR · 08h00–16h45",      type:"J"},
+  {code:"PAASMJ", label:"ASMTE PAR",     subtitle:"ASMTE PAR · 08h00–16h45",    type:"J"},
+  {code:"AFO PAR",label:"AFO PAR",        subtitle:"AFO PAR · 09h00–16h45",      type:"J"},
+  {code:"K-PAR",  label:"K-PAR",         subtitle:"Formation PAR · 09h00–17h45",type:"J"},
+  {code:"F-PAR",  label:"F-PAR",         subtitle:"Formateur PAR · 09h00–17h45",type:"J"},
 ];
 
 function HabilitationsModal({agent,habilitations,onSave,onClose,suggestedPostes}){
