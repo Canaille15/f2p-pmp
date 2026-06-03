@@ -2312,6 +2312,22 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   return result;
 }
 
+// Détecte automatiquement la famille habilitée d'un réserviste
+// en analysant les codes jsCode de son planning (PICCL-, PIADJ-, PAAC-, etc.)
+function detectFamillesReserviste(agentId, schedule){
+  let hasPRCI = false, hasPAR = false;
+  Object.entries(schedule).forEach(([k,v])=>{
+    if(!k.startsWith(agentId+"-")) return;
+    const js = v?.jsCode||"";
+    if(js.startsWith("PI") || js.startsWith("PI")) hasPRCI = true;
+    if(js.startsWith("PA")) hasPAR = true;
+  });
+  if(hasPRCI && hasPAR) return "BOTH";
+  if(hasPRCI) return "PRCI";
+  if(hasPAR) return "PAR";
+  return null;
+}
+
 function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser}){
   const [showHab,setShowHab]=useState(false);
   const [calView,setCalView]=useState("mois");
@@ -2575,14 +2591,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     {/* ── VUE SEMAINE ── */}
     {calView==="semaine"&&<>
-      {/* ── BARRE DE SAISIE RAPIDE ── */}
-      <BarreSaisieRapide
+      {/* ── BARRE DE SAISIE RAPIDE (roulement/journée uniquement) ── */}
+      {!profile.isReserve && <BarreSaisieRapide
         barreConfig={barreConfig} setBarreConfig={setBarreConfig}
         codeActif={codeActif} setCodeActif={setCodeActif}
         getColor={getColor} getTc={getTc}
         showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
         CODES_BARRE={CODES_BARRE}
-      />
+      />}
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
         {weekDates.map((dk,i)=>{
           const en=schedule[`${agent.id}-${dk}`];
@@ -2737,14 +2753,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     {/* ── VUE MOIS ── */}
     {calView==="mois"&&<>
-      {/* ── BARRE DE SAISIE RAPIDE ── */}
-      <BarreSaisieRapide
+      {/* ── BARRE DE SAISIE RAPIDE (roulement/journée uniquement) ── */}
+      {!profile.isReserve && <BarreSaisieRapide
         barreConfig={barreConfig} setBarreConfig={setBarreConfig}
         codeActif={codeActif} setCodeActif={setCodeActif}
         getColor={getColor} getTc={getTc}
         showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
         CODES_BARRE={CODES_BARRE}
-      />
+      />}
 
       {/* Grille mensuelle */}
       <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
