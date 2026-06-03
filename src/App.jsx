@@ -2225,19 +2225,21 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
                           border:"none",borderBottom:"1px solid #fdf2f8",
                           padding:"8px 12px",cursor:"pointer",textAlign:"left",
                         }}>
-                        <span style={{
-                          background:"#ec4899",color:"#fff",
-                          borderRadius:6,padding:"1px 6px",
-                          fontFamily:"monospace",fontSize:10,fontWeight:800,
-                          flexShrink:0,minWidth:28,textAlign:"center",
-                        }}>🩷{code}</span>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:11,fontWeight:600,color:"#1e293b"}}>{label}</div>
-                          <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>
-                            {new Date(dateFete).toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"short"})}
+                        <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+                          <span style={{
+                            background:"#ec4899",color:"#fff",
+                            borderRadius:6,padding:"2px 8px",
+                            fontFamily:"monospace",fontSize:11,fontWeight:800,
+                            letterSpacing:.5,
+                          }}>{code}</span>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{label}</div>
+                          <div style={{fontSize:10,color:"#94a3b8"}}>
+                            {new Date(dateFete).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"})}
                           </div>
                         </div>
-                        {isActif&&<span style={{color:"#ec4899",fontWeight:800}}>✓</span>}
+                        {isActif&&<span style={{color:"#ec4899",fontWeight:800,fontSize:16}}>✓</span>}
                       </button>
                     );
                   })}
