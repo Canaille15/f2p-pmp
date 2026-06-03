@@ -4700,8 +4700,9 @@ const HAB_PRCI = [
   {code:"PIASSJ", label:"Adj DPX",    subtitle:"Adjoint DPX PRCI",            type:"J"},
   {code:"PPRCI",  label:"PPRCI",        subtitle:"PPRCI · 09h00–16h45",         type:"J"},
   {code:"AFOPRCI",label:"AFO PRCI",     subtitle:"Accompagnateur Formation · 09h00–16h45", type:"J"},
-  {code:"SD%",    label:"SD",           subtitle:"Service Doux · 08h00–16h43",  type:"J"},
-  // Note : CAF, K-PRCI, A-PRCI = formations → pas des habilitations
+  {code:"A-PRCI", label:"A-PRCI",       subtitle:"Assistant PRCI · 09h00–17h45",               type:"J"},
+  {code:"SD%",    label:"SD",           subtitle:"Service Doux · 08h00–16h43",                  type:"J"},
+  // Note : CAF, K-PRCI = formations suivies → pas des habilitations
 ];
 
 // HAB_PAR : tous les postes PAR 3×8 + journée
@@ -4907,7 +4908,7 @@ function HabilitationsRoulementModal({agent, habilitations, onSave, onClose}){
       ...POSTES_JOURNEE.filter(p=>p.famille==="PRCI"
         // Exclure formations suivies (pas des habilitations) : K-PRCI, A-PRCI, F-PRCI, CAF
         // AFO PRCI = habilitation de formateur → gardé
-        && !["F-PRCI","K-PRCI","A-PRCI","CAF"].includes(p.jsCode)
+        && !["F-PRCI","K-PRCI","CAF"].includes(p.jsCode)
       ).map(p=>({
         code: p.jsCode, label: p.label,
         subtitle: `Journée · ${p.horaires||"Variable"}${p.subtitle?" · "+p.subtitle:""}`,
