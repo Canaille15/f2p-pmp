@@ -294,8 +294,11 @@ function computeFetes(schedule, agentId, year) {
 }
 
 // Compteurs planning perso par année civile
-function computeCompteurs(schedule, agentId, year) {
+// agentProfiles optionnel : si fourni, enrichit les fêtes avec fetesTracking
+function computeCompteurs(schedule, agentId, year, agentProfiles) {
   const counts = { TRAVAIL:0, RP:0, RU:0, TC:0, RN:0, FETE:[] };
+  const fetesDejaVues = new Set(); // éviter doublons fête
+
   Object.entries(schedule).forEach(([k,v])=>{
     if (!k.startsWith(agentId+"-")) return;
     const date=k.slice(agentId.length+1);
@@ -308,8 +311,40 @@ function computeCompteurs(schedule, agentId, year) {
     else if (eq.compteur==="RU") counts.RU++;
     else if (eq.compteur==="TC") counts.TC++;
     else if (eq.compteur==="RN") counts.RN++;
-    else if (eq.compteur==="FETE") counts.FETE.push({date,code,label:CODES_FETES[code]||code,paye:v?.fetePaye||false});
+    else if (eq.compteur==="FETE") {
+      counts.FETE.push({date,code,label:CODES_FETES[code]||code,paye:v?.fetePaye||false,source:"planning"});
+      fetesDejaVues.add(code);
+    }
   });
+
+  // Ajouter les fêtes prises/RC enregistrés dans fetesTracking (manuel ou RC)
+  // Ces fêtes n'ont pas forcément de code F1/F2 saisi dans le planning
+  if(agentProfiles){
+    const tracking = agentProfiles[agentId]?.fetesTracking?.[year] || {};
+    Object.entries(tracking).forEach(([code, data])=>{
+      if(!CODES_FETES[code]) return;
+      if(fetesDejaVues.has(code)) return; // déjà dans le planning
+      if(data?.priseLe) {
+        // La date de prise est-elle dans l'année ?
+        const anneeTracking = parseInt((data.priseLe||"").slice(0,4));
+        counts.FETE.push({
+          date: data.priseLe,
+          code,
+          label: CODES_FETES[code],
+          paye: data.estPayee||false,
+          source: data.priseType==="manuel"?"manuel":"RC",
+        });
+        fetesDejaVues.add(code);
+      } else if(data?.estPayee) {
+        // Fête payée sans date de prise explicite
+        counts.FETE.push({
+          date:"—", code, label:CODES_FETES[code], paye:true, source:"payee"
+        });
+        fetesDejaVues.add(code);
+      }
+    });
+  }
+
   return counts;
 }
 
@@ -720,17 +755,28 @@ function CompteursBadges({counts,year,onFetePaye,schedule,agentId}){
   if(counts.RN>0)badges.push(<span key="RN" style={{background:COMPTEUR_COLORS.RN.bg,color:COMPTEUR_COLORS.RN.text,borderRadius:10,padding:"3px 10px",fontSize:11,fontWeight:700}}>🟣 {counts.RN} RN</span>);
   if(counts.FETE.length>0)badges.push(
     <details key="F" style={{display:"inline-block"}}>
-      <summary style={{background:COMPTEUR_COLORS.FETE.bg,color:COMPTEUR_COLORS.FETE.text,borderRadius:10,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",listStyle:"none"}}>
+      <summary style={{background:"#ec4899",color:"#fff",borderRadius:10,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",listStyle:"none"}}>
         🩷 {counts.FETE.length} fête{counts.FETE.length>1?"s":""}
       </summary>
-      <div style={{background:"#fff",border:"1px solid #fbcfe8",borderRadius:10,padding:"8px 12px",marginTop:4,display:"flex",flexDirection:"column",gap:6,zIndex:10,position:"relative"}}>
+      <div style={{background:"#fff",border:"1px solid #fbcfe8",borderRadius:10,padding:"8px 12px",marginTop:4,display:"flex",flexDirection:"column",gap:6,zIndex:10,position:"relative",minWidth:260}}>
         {counts.FETE.map((f,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11}}>
-            <span style={{fontFamily:"monospace",fontWeight:700,color:"#9d174d"}}>{f.code}</span>
-            <span style={{flex:1,color:"#475569"}}>{f.label} · {f.date}</span>
-            <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer"}}>
+          <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11,borderBottom:i<counts.FETE.length-1?"1px solid #fce7f3":"none",paddingBottom:i<counts.FETE.length-1?5:0}}>
+            {/* Code fête */}
+            <span style={{background:"#ec4899",color:"#fff",borderRadius:6,padding:"1px 6px",fontFamily:"monospace",fontSize:10,fontWeight:800,flexShrink:0}}>🩷 {f.code}</span>
+            {/* Détail */}
+            <div style={{flex:1}}>
+              <div style={{fontSize:10,fontWeight:600,color:"#1e293b"}}>{f.label}</div>
+              <div style={{fontSize:9,color:"#94a3b8",display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+                {f.date&&f.date!=="—"&&<span>📅 {f.date}</span>}
+                {f.source==="RC"&&<span style={{background:"#fce7f3",color:"#9d174d",borderRadius:4,padding:"0px 4px",fontSize:8,fontWeight:700}}>RC auto</span>}
+                {f.source==="manuel"&&<span style={{background:"#ede9fe",color:"#7c3aed",borderRadius:4,padding:"0px 4px",fontSize:8,fontWeight:700}}>Manuel ✎</span>}
+                {f.source==="payee"&&<span style={{background:"#dbeafe",color:"#1e40af",borderRadius:4,padding:"0px 4px",fontSize:8,fontWeight:700}}>Payée</span>}
+                {f.paye&&<span style={{background:"#dbeafe",color:"#1e40af",borderRadius:4,padding:"0px 4px",fontSize:8,fontWeight:700}}>💶 Fiche paye</span>}
+              </div>
+            </div>
+            <label style={{display:"flex",alignItems:"center",gap:4,cursor:"pointer",flexShrink:0}}>
               <input type="checkbox" checked={f.paye||false} onChange={e=>onFetePaye&&onFetePaye(agentId,f.date,f.code,e.target.checked)}/>
-              <span style={{fontSize:10,color:"#9d174d"}}>Payée</span>
+              <span style={{fontSize:9,color:"#9d174d"}}>Payée</span>
             </label>
           </div>
         ))}
@@ -1736,23 +1782,40 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
 // Utilisé pour afficher la pastille RC-Fx dans l'agenda
 function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   const year = parseInt(dk.slice(0,4));
-  const result = []; // [{code, label, type: "fete"|"RC"}]
+  const result = []; // [{code, label, type: "fete"|"RC"|"RC_manuel"}]
+  const dejaPush = new Set(); // éviter doublons
 
-  // 1. Ce jour est-il le jour exact d'une fête avec le code saisi ?
+  // 1. Code fête saisi directement dans le planning ce jour
   const entry = schedule[`${agentId}-${dk}`];
   if(entry?.equipe && CODES_FETES[entry.equipe]){
     result.push({code: entry.equipe, label: CODES_FETES[entry.equipe], type:"fete"});
+    dejaPush.add(entry.equipe);
   }
 
-  // 2. Ce jour est-il un RC pris (RP détecté dans le trimestre suivant) pour une fête ?
-  // On recalcule les fêtes de l'année du jour
   const datesFetes = getDatesFetesAnnee(year);
+
+  // 2. Date de prise saisie MANUELLEMENT dans le tableau des fêtes (fetesTracking)
+  // Si l'agent a saisi ce jour comme date de prise d'une fête → on l'affiche
+  const trackingAnnee = agentProfiles[agentId]?.fetesTracking?.[year] || {};
+  Object.entries(trackingAnnee).forEach(([code, data])=>{
+    if(!CODES_FETES[code]) return;
+    if(data?.priseLe === dk && !dejaPush.has(code)){
+      result.push({
+        code,
+        label: CODES_FETES[code],
+        type: data.priseType === "manuel" ? "RC_manuel" : "RC",
+      });
+      dejaPush.add(code);
+    }
+  });
+
+  // 3. RP automatique détecté dans le trimestre suivant pour une fête
   Object.entries(datesFetes).forEach(([code, dateFete])=>{
     if(!dateFete) return;
-    if(dk === dateFete) return; // déjà géré au-dessus si code saisi
+    if(dejaPush.has(code)) return; // déjà traité ci-dessus
+    if(dk === dateFete) return;
 
     const {limiteDate} = getFeteRegles(dateFete);
-    // Le trimestre suivant commence après le trimestre de la fête
     const moisFete = parseInt(dateFete.slice(5,7));
     const t = getTrimestre(moisFete);
     let tSuiv = t+1; let aSuiv = year;
@@ -1760,32 +1823,23 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
     const debutT={1:`${aSuiv}-01-01`,2:`${aSuiv}-04-01`,3:`${aSuiv}-07-01`,4:`${aSuiv}-10-01`};
     const debutTrimSuiv = debutT[tSuiv];
 
-    // Ce jour est dans la fenêtre RC (trimestre suivant → limite) ET c'est un RP ?
     if(dk >= debutTrimSuiv && dk <= limiteDate){
       const e = schedule[`${agentId}-${dk}`];
       if(e?.equipe === "RP"){
-        // Vérifier que la fête n'a pas déjà été prise par code avant ce jour
-        let dejaPrisParCode = false;
+        // Pas de date manuelle déjà enregistrée pour cette fête
+        const tracking = trackingAnnee[code];
+        if(tracking?.priseLe && tracking.priseLe !== dk) return; // une autre date manuelle existe
+
+        // Premier RP dans la fenêtre pour cette fête ?
+        let premierRP = true;
         Object.entries(schedule).forEach(([k,v])=>{
           if(!k.startsWith(agentId+"-")) return;
           const d2 = k.slice(agentId.length+1);
-          if(d2 >= dateFete && d2 < dk && v?.equipe === code) dejaPrisParCode = true;
+          if(d2 >= debutTrimSuiv && d2 < dk && v?.equipe === "RP") premierRP = false;
         });
-        // Vérifier aussi les overrides manuels dans agentProfiles
-        const tracking = agentProfiles[agentId]?.fetesTracking?.[year]?.[code];
-        if(tracking?.priseLe && tracking.priseLe < dk) dejaPrisParCode = true;
-
-        if(!dejaPrisParCode){
-          // Vérifier que c'est bien le PREMIER RP dans la fenêtre (évite les doublons)
-          let premierRP = true;
-          Object.entries(schedule).forEach(([k,v])=>{
-            if(!k.startsWith(agentId+"-")) return;
-            const d2 = k.slice(agentId.length+1);
-            if(d2 >= debutTrimSuiv && d2 < dk && v?.equipe === "RP") premierRP = false;
-          });
-          if(premierRP){
-            result.push({code, label: CODES_FETES[code], type:"RC"});
-          }
+        if(premierRP){
+          result.push({code, label: CODES_FETES[code], type:"RC"});
+          dejaPush.add(code);
         }
       }
     }
@@ -1856,7 +1910,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const setProfile=u=>setAgentProfiles(p=>({...p,[agent.id]:{...profile,...u}}));
   const hasPin=!!profile.pinHash;
   const ROULEMENTS=["Roulement 3×8","Journée"];
-  const counts=useMemo(()=>computeCompteurs(schedule,agent.id,compteurYear),[schedule,agent.id,compteurYear]);
+  const counts=useMemo(()=>computeCompteurs(schedule,agent.id,compteurYear,agentProfiles),[schedule,agent.id,compteurYear,agentProfiles]);
   const nbHab=Object.keys(profile.habilitations||{}).length;
   const nbValid=Object.values(profile.habilitations||{}).filter(v=>v==="VALIDE").length;
   const postesDetectes=[...new Set(Object.entries(schedule).filter(([k])=>k.startsWith(agent.id+"-")).map(([,v])=>v?.poste||v?.jsCode).filter(Boolean))];
@@ -2050,15 +2104,15 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
               {/* Badge équipe principale */}
               {code&&showData&&<div style={{
-                background:getColor(code),
-                color:getTc(code),
+                background: CODES_FETES[code] ? "#ec4899" : getColor(code),
+                color: CODES_FETES[code] ? "#fff" : getTc(code),
                 borderRadius:8,
                 padding:"4px 8px",
                 fontSize:10,
                 fontWeight:700,
                 textAlign:"center",
               }}>
-                {eq?.label||code}
+                {CODES_FETES[code] ? `🩷 ${code}` : (eq?.label||code)}
               </div>}
 
               {/* Badge prise de nuit */}
@@ -2080,16 +2134,16 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
                 if(!rcFetes.length) return null;
                 return <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:2}}>
                   {rcFetes.map(f=>(
-                    <span key={f.code} title={`${f.type==="RC"?"RC":"Fête"} : ${f.label}`}
+                    <span key={f.code}
+                      title={`${f.type==="fete"?"Fête prise":f.type==="RC_manuel"?"RC manuel":"RC"} : ${f.label}`}
                       style={{
                         display:"inline-flex",alignItems:"center",gap:2,
-                        background:f.type==="RC"?"#fce7f3":"#ec4899",
-                        color:f.type==="RC"?"#9d174d":"#fff",
+                        background:"#ec4899",color:"#fff",
                         borderRadius:6,padding:"1px 5px",
                         fontSize:8,fontWeight:800,
-                        border:`1px solid ${f.type==="RC"?"#fbcfe8":"#db2777"}`,
+                        border:"1px solid #db2777",
                       }}>
-                      🩷 {f.type==="RC"?"RC-":""}{f.code}
+                      🩷 {f.type!=="fete"?"RC-":""}{f.code}{f.type==="RC_manuel"&&<span style={{fontSize:6,opacity:.8}}> ✎</span>}
                     </span>
                   ))}
                 </div>;
@@ -2181,7 +2235,12 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
               }}>
               <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
               {en?.finNuit&&showData&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center",lineHeight:1.4}}>🌙 fin nuit<br/><span style={{fontWeight:400,fontSize:6}}>libre</span></div>}
-              {code&&<div style={{fontSize:8,fontWeight:700,color:getTc(code),background:getColor(code),borderRadius:4,padding:"1px 4px",display:"inline-block"}}>{(eq?.label||code)?.slice(0,4)}</div>}
+              {code&&<div style={{fontSize:8,fontWeight:700,
+                color:CODES_FETES[code]?"#fff":getTc(code),
+                background:CODES_FETES[code]?"#ec4899":getColor(code),
+                borderRadius:4,padding:"1px 4px",display:"inline-block"}}>
+                {CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)?.slice(0,4)}
+              </div>}
               {en?.equipe2&&(()=>{const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];return <div style={{fontSize:7,fontWeight:700,color:eq2?.textColor||eq2?.tc,background:eq2?.color||eq2?.bg,borderRadius:4,padding:"1px 3px",display:"inline-block",marginTop:1}}>🌙N</div>;})()} 
               {en?.jsCode&&en.jsCode!==code&&<div style={{fontSize:7,color:"#94a3b8",fontFamily:"monospace",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{en.jsCode}</div>}
               {(()=>{
@@ -2189,16 +2248,16 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
                 if(!rcFetes.length) return null;
                 return <div style={{display:"flex",flexWrap:"wrap",gap:1,marginTop:1}}>
                   {rcFetes.map(f=>(
-                    <span key={f.code} title={`${f.type==="RC"?"RC":"Fête"} : ${f.label}`}
+                    <span key={f.code}
+                      title={`${f.type==="fete"?"Fête prise":f.type==="RC_manuel"?"RC manuel":"RC"} : ${f.label}`}
                       style={{
                         fontSize:7,fontWeight:800,
-                        background:f.type==="RC"?"#fce7f3":"#ec4899",
-                        color:f.type==="RC"?"#9d174d":"#fff",
+                        background:"#ec4899",color:"#fff",
                         borderRadius:4,padding:"0px 3px",
-                        border:`1px solid ${f.type==="RC"?"#fbcfe8":"#db2777"}`,
+                        border:"1px solid #db2777",
                         whiteSpace:"nowrap",
                       }}>
-                      {f.type==="RC"?"RC-":""}{f.code}
+                      {f.type!=="fete"?"RC-":""}{f.code}{f.type==="RC_manuel"?" ✎":""}
                     </span>
                   ))}
                 </div>;
