@@ -221,7 +221,7 @@ const EQUIPES = [
   { code:"AM",   label:"Soirée",     heures:"14h05–22h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
   { code:"N",    label:"Nuit",       heures:"22h15–06h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
   { code:"J",    label:"Journée",    heures:"08h00–17h45", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
-  { code:"JF",   label:"Fête",  heures:"",            color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"JF",   label:"Fête",  heures:"",            color:"#ec4899", textColor:"#fff", dot:"#fce7f3", prive:false, compteur:"FETE",    bg:"#ec4899" },
   // ── REPOS / RÉSERVISTE — fond coloré, texte blanc ────────────────────────
   { code:"RP",   label:"RP",         heures:"",            color:"#16a34a", textColor:"#fff", dot:"#bbf7d0", prive:true,  compteur:"RP",      bg:"#16a34a" },
   { code:"RU",   label:"RU",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
@@ -312,7 +312,7 @@ function computeCompteurs(schedule, agentId, year, agentProfiles) {
     const code=v?.equipe||v?.jsCode||"";
     const eq=EQ[code];
     if (!eq) return;
-    if (eq.compteur==="TRAVAIL" && code!=="NU") counts.TRAVAIL++;
+    if (eq.compteur==="TRAVAIL" && code!=="NU" && !CODES_FETES[code]) counts.TRAVAIL++;
     else if (eq.compteur==="RP") counts.RP++;
     else if (eq.compteur==="RU") counts.RU++;
     else if (eq.compteur==="TC") counts.TC++;
@@ -2451,12 +2451,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
   // Couleur effective pour un code
   const getColor=(code)=>{
+    // Lire directement agentProfiles pour la réactivité maximale
+    const colors = agentProfiles[agent?.id]?.agentColors || {};
     // Couleur perso agent en priorité
-    if(agentColors[code]) return agentColors[code];
+    if(colors[code]) return colors[code];
+    // Fêtes légales F1..VN → couleur perso de F1 ou défaut rose
+    if(CODES_FETES[code]) return colors["F1"] || "#ec4899";
     // Couleur par défaut connue
     if(DEFAULT_COLORS[code]) return DEFAULT_COLORS[code];
-    // Fêtes légales (F1, F2, FV, F3…) → même couleur que F1 perso ou défaut rose
-    if(CODES_FETES[code]) return agentColors["F1"]||"#ec4899";
     // Fallback EQUIPES
     return EQ[code]?.color||"#f8fafc";
   };
