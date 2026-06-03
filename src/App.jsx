@@ -2116,7 +2116,7 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
 
 function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser}){
   const [showHab,setShowHab]=useState(false);
-  const [calView,setCalView]=useState("semaine");
+  const [calView,setCalView]=useState("mois");
   const [monthOff,setMonthOff]=useState(0);
   const [showColorPicker,setShowColorPicker]=useState(false);
   const [agentColors,setAgentColors]=usePersist(`colors_${agent?.id}`,{});
