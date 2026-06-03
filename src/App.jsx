@@ -20,6 +20,12 @@ async function sbSaveProfile(agentId, data) {
       pause_figee: data.pauseFigee||{},
       compteur_corrections: data.compteurCorrections||{},
       depart_date: data.departDate||null,
+      // Nouveaux champs synchronisés multi-appareils
+      fetes_tracking: data.fetesTracking||{},
+      pause_figee_fia_mois: data.pauseFigeeFiaMois||{},
+      pause_figee_fia_done: data.pauseFigeeFiaDone||{},
+      demandes_conges: data.demandesConges||[],
+      notifications_acquittees: data.notificationsAcquittees||[],
       updated_at: new Date().toISOString(),
     }),
   });
@@ -1758,15 +1764,25 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
 
   const JOURS = ["Di","Lu","Ma","Me","Je","Ve","Sa"];
 
-  // Options mois pour sélecteur FIA (12 mois glissants depuis aujourd'hui)
+  // Options mois pour sélecteur FIA
+  // Depuis janvier 2026 jusqu'à aujourd'hui + 12 mois, sur 3 dernières années max
   const moisOptions = useMemo(()=>{
     const opts = [];
     const now = new Date();
-    for(let i=-2; i<=14; i++){
-      const d = new Date(now.getFullYear(), now.getMonth()+i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      const label = `${MOIS_L[d.getMonth()]} ${d.getFullYear()}`;
+    const limite3ans = new Date(now.getFullYear()-3, now.getMonth(), 1);
+    // Début fixe : janvier 2026 ou il y a 3 ans, le plus récent des deux
+    const debut = new Date(Math.max(
+      new Date(2026, 0, 1).getTime(),
+      limite3ans.getTime()
+    ));
+    // Fin : aujourd'hui + 12 mois
+    const fin = new Date(now.getFullYear(), now.getMonth()+12, 1);
+    let cur = new Date(debut.getFullYear(), debut.getMonth(), 1);
+    while(cur <= fin){
+      const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
+      const label = `${MOIS_L[cur.getMonth()]} ${cur.getFullYear()}`;
       opts.push({key, label});
+      cur.setMonth(cur.getMonth()+1);
     }
     return opts;
   },[]);
@@ -3071,7 +3087,7 @@ Règles :
 }
 
 
-function CpsView({agents, schedule, setSchedule, notifications, setNotifications}){
+function CpsView({agents, schedule, setSchedule, notifications, setNotifications, currentAgentId, setAgentProfiles}){
   const [loading,setLoading]=useState(false);
   const [results,setResults]=useState([]);
   const [uploading,setUploading]=useState(false);
@@ -3160,7 +3176,21 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
     reader.readAsDataURL(file);
   };
 
-  const acquitter=(id)=>setNotifications(prev=>prev.map(n=>n.id===id?{...n,acquitte:true}:n));
+  const acquitter=(id)=>{
+    setNotifications(prev=>prev.map(n=>n.id===id?{...n,acquitte:true}:n));
+    // Persister l'acquittement dans le profil pour sync multi-appareils
+    if(currentAgentId){
+      setAgentProfiles(prev=>{
+        const profile = prev[currentAgentId]||{};
+        const already = profile.notificationsAcquittees||[];
+        if(already.includes(id)) return prev;
+        return {...prev,[currentAgentId]:{
+          ...profile,
+          notificationsAcquittees:[...already,id],
+        }};
+      });
+    }
+  };
   const activeNotifs=notifications.filter(n=>!n.acquitte&&n.type!=="protocole"&&n.type!=="reliquats");
   const notifsProtocole=notifications.filter(n=>!n.acquitte&&n.type==="protocole");
   const notifsReliquats=notifications.filter(n=>!n.acquitte&&n.type==="reliquats");
@@ -3939,6 +3969,57 @@ export default function App(){
   // Nettoyage archives > 3 ans
   useEffect(()=>{ setSchedule(prev=>cleanOldEntries(prev)); },[]);
 
+  // ── SYNC AU FOCUS (multi-appareils) ──────────────────────────────────────────
+  // Quand l'agent revient sur l'appli (depuis un autre onglet ou appareil),
+  // on recharge ses données depuis Supabase pour refléter les dernières modifications
+  useEffect(()=>{
+    const handleFocus = () => {
+      if(!currentUser?.agent?.id) return;
+      const agentId = currentUser.agent.id;
+      // Recharger profil
+      sbLoadProfile(agentId).then(profile=>{
+        if(!profile) return;
+        setAgentProfiles(prev=>({...prev,[agentId]:{
+          ...(prev[agentId]||{}),
+          pinHash:             profile.pin_hash,
+          isAdmin:             profile.is_admin,
+          roulement:           profile.roulement,
+          isReserve:           profile.is_reserve,
+          famillesHab:         profile.familles_hab,
+          habilitations:       profile.habilitations||{},
+          agentColors:         profile.agent_colors||{},
+          pauseFigee:          profile.pause_figee||{},
+          compteurCorrections: profile.compteur_corrections||{},
+          fetesTracking:       profile.fetes_tracking||{},
+          pauseFigeeFiaMois:   profile.pause_figee_fia_mois||{},
+          pauseFigeeFiaDone:   profile.pause_figee_fia_done||{},
+          demandesConges:      profile.demandes_conges||[],
+          notificationsAcquittees: profile.notifications_acquittees||[],
+        }}));
+        // Restaurer acquittements
+        if(profile.notifications_acquittees?.length){
+          setNotifications(prev=>prev.map(n=>
+            profile.notifications_acquittees.includes(n.id)?{...n,acquitte:true}:n
+          ));
+        }
+      });
+      // Recharger planning
+      sbLoadSchedule(agentId).then(entries=>{
+        if(entries&&Object.keys(entries).length>0){
+          setSchedule(prev=>({...prev,...entries}));
+        }
+      });
+    };
+    window.addEventListener('focus', handleFocus);
+    // Aussi sur visibilitychange (mobile : retour depuis une autre app)
+    const handleVisible = () => { if(document.visibilityState==='visible') handleFocus(); };
+    document.addEventListener('visibilitychange', handleVisible);
+    return ()=>{
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisible);
+    };
+  },[currentUser?.agent?.id]); // eslint-disable-line
+
   // Charger le planning depuis Supabase au login
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
@@ -3948,14 +4029,28 @@ export default function App(){
       if(!profile) return;
       setAgentProfiles(prev=>({...prev,[agentId]:{
         ...(prev[agentId]||{}),
-        pinHash: profile.pin_hash,
-        isAdmin: profile.is_admin,
-        roulement: profile.roulement,
-        isReserve: profile.is_reserve,
-        famillesHab: profile.familles_hab,
-        habilitations: profile.habilitations||{},
-        agentColors: profile.agent_colors||{},
+        pinHash:              profile.pin_hash,
+        isAdmin:              profile.is_admin,
+        roulement:            profile.roulement,
+        isReserve:            profile.is_reserve,
+        famillesHab:          profile.familles_hab,
+        habilitations:        profile.habilitations||{},
+        agentColors:          profile.agent_colors||{},
+        pauseFigee:           profile.pause_figee||{},
+        compteurCorrections:  profile.compteur_corrections||{},
+        fetesTracking:        profile.fetes_tracking||{},
+        pauseFigeeFiaMois:    profile.pause_figee_fia_mois||{},
+        pauseFigeeFiaDone:    profile.pause_figee_fia_done||{},
+        demandesConges:       profile.demandes_conges||[],
+        notificationsAcquittees: profile.notifications_acquittees||[],
       }}));
+      // Restaurer les notifications acquittées sur cet appareil
+      if(profile.notifications_acquittees?.length){
+        setNotifications(prev=>prev.map(n=>
+          profile.notifications_acquittees.includes(n.id)
+            ? {...n, acquitte:true} : n
+        ));
+      }
     });
     // Charger le planning
     sbLoadSchedule(agentId).then(entries=>{
@@ -4240,7 +4335,7 @@ export default function App(){
         isAdmin={isAdmin}
         currentUser={currentUser}/>}}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
-      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications}/>}
+      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}
     </div>
 
     {/* MODALS */}
