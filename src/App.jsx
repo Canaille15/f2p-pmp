@@ -5010,6 +5010,7 @@ export default function App(){
   const [weekOffset,setWeekOffset]=useState(0);
   const [profileOpen,setProfileOpen]=useState(false);
   const [profileSearch,setProfileSearch]=useState("");
+  const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
   const [schedule,setSchedule]=usePersist("schedule",{});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
   const [importDPTarget,setImportDPTarget]=useState(null);
