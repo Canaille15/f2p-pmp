@@ -2167,12 +2167,12 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
                   onClick={()=>{setShowFetesMenu(v=>!v); if(isFeteActif) setCodeActif(null);}}
                   style={{
                     display:"inline-flex",alignItems:"center",gap:5,
-                    background: isFeteActif||showFetesMenu ? "#ec4899" : "#fce7f3",
-                    color: isFeteActif||showFetesMenu ? "#fff" : "#9d174d",
-                    border:"2px solid #ec4899",
+                    background: isFeteActif||showFetesMenu ? getColor("F1") : getColor("F1")+"33",
+                    color: isFeteActif||showFetesMenu ? getTc("F1") : getColor("F1"),
+                    border:`2px solid ${getColor("F1")}`,
                     borderRadius:10,padding:"7px 13px",cursor:"pointer",
                     fontSize:12,fontWeight:800,minHeight:38,
-                    boxShadow: isFeteActif?"0 0 0 3px #ec489944":"none",
+                    boxShadow: isFeteActif?`0 0 0 3px ${getColor("F1")}44`:"none",
                     position:"relative",
                   }}>
                   {isFeteActif&&<span style={{
@@ -2197,16 +2197,16 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
                   zIndex:1000,maxHeight:"65vh",overflowY:"auto",
                 }}>
                   {/* Header */}
-                  <div style={{padding:"12px 16px 8px",background:"#fce7f3",
+                  <div style={{padding:"12px 16px 8px",background:getColor("F1")+"22",
                     display:"flex",alignItems:"center",justifyContent:"space-between",
                     borderRadius:"16px 16px 0 0",position:"sticky",top:0}}>
-                    <span style={{fontSize:12,fontWeight:800,color:"#9d174d",letterSpacing:.5}}>
+                    <span style={{fontSize:12,fontWeight:800,color:getColor("F1"),letterSpacing:.5}}>
                       🩷 SÉLECTIONNER UNE FÊTE
                     </span>
                     <button onClick={()=>setShowFetesMenu(false)}
-                      style={{background:"rgba(157,23,77,.15)",border:"none",
+                      style={{background:getColor("F1")+"22",border:"none",
                         borderRadius:8,width:30,height:30,cursor:"pointer",
-                        fontSize:16,color:"#9d174d",display:"flex",
+                        fontSize:16,color:getColor("F1"),display:"flex",
                         alignItems:"center",justifyContent:"center"}}>✕</button>
                   </div>
                   {Object.entries(CODES_FETES).map(([code, label])=>{
@@ -2227,7 +2227,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
                         }}>
                         <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
                           <span style={{
-                            background:"#ec4899",color:"#fff",
+                            background:getColor("F1"),color:getTc("F1"),
                             borderRadius:6,padding:"2px 8px",
                             fontFamily:"monospace",fontSize:11,fontWeight:800,
                             letterSpacing:.5,
@@ -2239,7 +2239,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
                             {new Date(dateFete).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"})}
                           </div>
                         </div>
-                        {isActif&&<span style={{color:"#ec4899",fontWeight:800,fontSize:16}}>✓</span>}
+                        {isActif&&<span style={{color:getColor("F1"),fontWeight:800,fontSize:16}}>✓</span>}
                       </button>
                     );
                   })}
@@ -2314,7 +2314,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {CODES_BARRE.map(({c,l})=>{
             const sel = barreConfig.includes(c);
-            const couleur = c==="FETES"?"#ec4899":getColor(c);
+            const couleur = c==="FETES"?getColor("F1"):getColor(c);
             const tc = c==="FETES"?"#fff":getTc(c);
             return(
               <button key={c}
@@ -2436,8 +2436,22 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const [calView,setCalView]=useState("mois");
   const [monthOff,setMonthOff]=useState(0);
   const [showColorPicker,setShowColorPicker]=useState(false);
-  const [agentColors,setAgentColors]=usePersist(`colors_${agent?.id}`,{});
-  
+  // agentColors : fusion localStorage (réactivité immédiate) + agentProfiles (sync Supabase)
+  const [agentColorsLocal, setAgentColorsLocal] = usePersist(`colors_${agent?.id}`,{});
+  const agentColorsProfile = agentProfiles[agent?.id]?.agentColors||{};
+  // Priorité : local (modif en cours) sur profil (chargé de Supabase)
+  const agentColors = useMemo(()=>({...agentColorsProfile,...agentColorsLocal}),[agentColorsLocal,agentColorsProfile]);
+
+  // Setter unifié : met à jour localStorage ET agentProfiles (→ Supabase via useEffect)
+  const setAgentColors = useCallback((updater)=>{
+    setAgentColorsLocal(prev=>{
+      const next = typeof updater==="function" ? updater(prev) : updater;
+      // Sync vers agentProfiles pour Supabase
+      setAgentProfiles(p=>({...p,[agent.id]:{...(p[agent.id]||{}),agentColors:next}}));
+      return next;
+    });
+  },[agent?.id, setAgentProfiles]);
+
   // Couleur effective pour un code
   const getColor=(code)=>agentColors[code]||DEFAULT_COLORS[code]||EQ[code]?.color||"#f8fafc";
   const getTc=(code)=>getTextColor(getColor(code));
