@@ -2715,9 +2715,10 @@ function BarreSaisieReserviste({habilitations, famillesHab, codeActif, setCodeAc
 
   // Codes non-travail communs (toujours disponibles)
   const CODES_NON_TRAVAIL = [
-    {code:"RP", label:"RP"},{code:"RU", label:"RU"},
-    {code:"CA", label:"Congés"},{code:"MA", label:"Maladie"},
-    {code:"ABS",label:"Absent"},{code:"DISPO",label:"Dispo"},
+    {code:"RP",  label:"RP"},  {code:"RU",  label:"RU"},
+    {code:"CA",  label:"Congés"},{code:"MA", label:"Maladie"},
+    {code:"ABS", label:"Absent"},{code:"FOR",label:"Formation"},
+    {code:"DISPO",label:"Dispo"},
   ];
 
   if(postesHabilites.length===0 && !famillesHab){
@@ -3109,7 +3110,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
               fontSize:11,fontWeight:700,whiteSpace:"nowrap",minWidth:90,textAlign:"center"}}>
             📋 Déroulé</button>
           <button onClick={()=>setShowDemandeConges(true)}
-            style={{background:"rgba(234,88,12,.4)",border:"1px solid rgba(253,186,116,.4)",
+            style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",
               color:"#fff",borderRadius:8,padding:"7px 11px",cursor:"pointer",
               fontSize:11,fontWeight:700,whiteSpace:"nowrap",textAlign:"center"}}>
             📝 Congés</button>
@@ -4697,13 +4698,10 @@ const HAB_PRCI = [
   {code:"PIPA3J", label:"Pauseur PA3", subtitle:"Pauseur PA3 · 08h45–16h30",  type:"J"},
   {code:"PIDPXJ", label:"DPX PRCI",   subtitle:"DPX PRCI · 08h00–16h45",     type:"J"},
   {code:"PIASSJ", label:"Adj DPX",    subtitle:"Adjoint DPX PRCI",            type:"J"},
-  {code:"AFOPRCI",label:"AFO PRCI",   subtitle:"AFO PRCI · 09h00–16h45",     type:"J"},
-  {code:"CAF",    label:"CAF",         subtitle:"Certificat Aptitude Fonction",type:"J"},
-  {code:"PPRCI",  label:"PPRCI",       subtitle:"PPRCI · 09h00–16h45",        type:"J"},
-  {code:"F-PRCI", label:"K-PRCI",      subtitle:"Formation PRCI · 09h00–17h45",type:"J"},
-  {code:"K-PRCI", label:"K-PRCI (bis)",subtitle:"Formation PRCI",              type:"J"},
-  {code:"A-PRCI", label:"A-PRCI",      subtitle:"Assistant PRCI",              type:"J"},
-  {code:"SD%",    label:"SD",           subtitle:"Service Doux · 08h00–16h43", type:"J"},
+  {code:"PPRCI",  label:"PPRCI",        subtitle:"PPRCI · 09h00–16h45",         type:"J"},
+  {code:"AFOPRCI",label:"AFO PRCI",     subtitle:"Accompagnateur Formation · 09h00–16h45", type:"J"},
+  {code:"SD%",    label:"SD",           subtitle:"Service Doux · 08h00–16h43",  type:"J"},
+  // Note : CAF, K-PRCI, A-PRCI = formations → pas des habilitations
 ];
 
 // HAB_PAR : tous les postes PAR 3×8 + journée
@@ -4715,10 +4713,9 @@ const HAB_PAR = [
   // ── Journée ──
   {code:"PAPAUJ", label:"Pauseur PAR",   subtitle:"Pauseur PAR · 09h00–17h45",  type:"J"},
   {code:"PADPXJ", label:"DPX PAR",       subtitle:"DPX PAR · 08h00–16h45",      type:"J"},
-  {code:"PAASMJ", label:"ASMTE PAR",     subtitle:"ASMTE PAR · 08h00–16h45",    type:"J"},
-  {code:"AFO PAR",label:"AFO PAR",        subtitle:"AFO PAR · 09h00–16h45",      type:"J"},
-  {code:"K-PAR",  label:"K-PAR",         subtitle:"Formation PAR · 09h00–17h45",type:"J"},
-  {code:"F-PAR",  label:"F-PAR",         subtitle:"Formateur PAR · 09h00–17h45",type:"J"},
+  {code:"PAASMJ", label:"ASMTE PAR",   subtitle:"ASMTE PAR · 08h00–16h45",          type:"J"},
+  {code:"AFO PAR",label:"AFO PAR",     subtitle:"Accompagnateur Formation PAR · 09h00–16h45", type:"J"},
+  // Note : K-PAR, F-PAR = formations suivies → pas des habilitations
 ];
 
 function HabilitationsModal({agent,habilitations,onSave,onClose,suggestedPostes}){
@@ -4907,7 +4904,11 @@ function HabilitationsRoulementModal({agent, habilitations, onSave, onClose}){
         groupe:"3×8", jsCodeM: p.M, jsCodeAM: p.AM, jsCodeN: p.N,
       })),
       // Journée
-      ...POSTES_JOURNEE.filter(p=>p.famille==="PRCI").map(p=>({
+      ...POSTES_JOURNEE.filter(p=>p.famille==="PRCI"
+        // Exclure formations suivies (pas des habilitations) : K-PRCI, A-PRCI, F-PRCI, CAF
+        // AFO PRCI = habilitation de formateur → gardé
+        && !["F-PRCI","K-PRCI","A-PRCI","CAF"].includes(p.jsCode)
+      ).map(p=>({
         code: p.jsCode, label: p.label,
         subtitle: `Journée · ${p.horaires||"Variable"}${p.subtitle?" · "+p.subtitle:""}`,
         groupe:"Journée",
@@ -4921,7 +4922,11 @@ function HabilitationsRoulementModal({agent, habilitations, onSave, onClose}){
         groupe:"3×8",
       })),
       // Journée
-      ...POSTES_JOURNEE.filter(p=>p.famille==="PAR").map(p=>({
+      ...POSTES_JOURNEE.filter(p=>p.famille==="PAR"
+        // Exclure formations suivies : K-PAR, F-PAR
+        // AFO PAR = habilitation de formateur → gardé
+        && !["K-PAR","F-PAR"].includes(p.jsCode)
+      ).map(p=>({
         code: p.jsCode, label: p.label,
         subtitle: `Journée · ${p.horaires||"Variable"}${p.subtitle?" · "+p.subtitle:""}`,
         groupe:"Journée",
