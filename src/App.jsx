@@ -2183,16 +2183,31 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
                   🩷 {isFeteActif ? codeActif : "Fêtes"} ▾
                 </button>
 
-                {/* Menu déroulant fêtes */}
+                {/* Overlay fermeture */}
+                {showFetesMenu&&<div
+                  onClick={()=>setShowFetesMenu(false)}
+                  style={{position:"fixed",inset:0,zIndex:999,background:"rgba(0,0,0,.3)"}}
+                />}
+                {/* Menu déroulant fêtes — bottom-sheet fixed */}
                 {showFetesMenu&&<div style={{
-                  position:"absolute",top:"calc(100% + 6px)",left:0,
-                  background:"#fff",border:"1.5px solid #fbcfe8",
-                  borderRadius:12,boxShadow:"0 8px 24px rgba(0,0,0,.15)",
-                  zIndex:200,minWidth:220,overflow:"hidden",
+                  position:"fixed",left:0,right:0,bottom:0,
+                  background:"#fff",border:"none",
+                  borderRadius:"16px 16px 0 0",
+                  boxShadow:"0 -4px 24px rgba(0,0,0,.2)",
+                  zIndex:1000,maxHeight:"65vh",overflowY:"auto",
                 }}>
-                  <div style={{padding:"7px 12px",background:"#fce7f3",
-                    fontSize:10,fontWeight:800,color:"#9d174d",letterSpacing:.5}}>
-                    SÉLECTIONNER UNE FÊTE
+                  {/* Header */}
+                  <div style={{padding:"12px 16px 8px",background:"#fce7f3",
+                    display:"flex",alignItems:"center",justifyContent:"space-between",
+                    borderRadius:"16px 16px 0 0",position:"sticky",top:0}}>
+                    <span style={{fontSize:12,fontWeight:800,color:"#9d174d",letterSpacing:.5}}>
+                      🩷 SÉLECTIONNER UNE FÊTE
+                    </span>
+                    <button onClick={()=>setShowFetesMenu(false)}
+                      style={{background:"rgba(157,23,77,.15)",border:"none",
+                        borderRadius:8,width:30,height:30,cursor:"pointer",
+                        fontSize:16,color:"#9d174d",display:"flex",
+                        alignItems:"center",justifyContent:"center"}}>✕</button>
                   </div>
                   {Object.entries(CODES_FETES).map(([code, label])=>{
                     const dateFete = datesFetes[code];
