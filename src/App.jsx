@@ -1577,7 +1577,67 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
   const notifCount   = lignes.filter(l=>l.notifActive).length;
   const nbPrises     = lignes.filter(l=>l.statut==="prise").length;
   const nbPayees     = lignes.filter(l=>l.statut==="payee"||l.statut==="payee_auto").length;
-  const nbTotal      = lignes.filter(l=>l.statut!=="futur").length; // fêtes passées ou en cours
+
+  // Fêtes de N-1 qui débordent sur l'année N (T4 : limite 31 mars N)
+  // Toussaint (F8=1er nov), 11nov (F9), Noël (F0), VN éventuel
+  const yearMoins1 = year - 1;
+  const fetesDataN1 = agentProfiles[agent?.id]?.fetesTracking?.[yearMoins1] || {};
+  const datesFetesN1 = getDatesFetesAnnee(yearMoins1);
+  const limiteT4N1 = `${year}-03-31`; // fin du trimestre suivant T4 de N-1
+  const today2 = new Date().toISOString().slice(0,10);
+
+  const fetesReportN1 = Object.entries(CODES_FETES).map(([code, label])=>{
+    const dateFete = datesFetesN1[code];
+    if(!dateFete) return null;
+    // Seulement les fêtes T4 de N-1 (octobre-décembre) dont la limite déborde sur N
+    const moisFete = parseInt(dateFete.slice(5,7));
+    if(getTrimestre(moisFete) !== 4) return null; // seulement T4
+    // La limite est bien 31 mars N
+    const limiteDate = limiteT4N1;
+    // Si on est après la limite, plus pertinent de l'afficher
+    // (sauf si payée ou prise, on garde pour info)
+
+    const override = fetesDataN1[code] || {};
+
+    // Détection prise dans le planning
+    let priseLe = null;
+    // Chercher dans N-1 ET dans N (car la récup peut être prise en jan-mars N)
+    Object.entries(schedule).forEach(([k,v])=>{
+      if(!k.startsWith(agent.id+"-")) return;
+      const dk = k.slice(agent.id.length+1);
+      // Fenêtre : date fête → 31 mars N
+      if(dk < dateFete || dk > limiteDate) return;
+      if(v?.equipe===code) priseLe = dk;
+    });
+    // RP dans le trimestre suivant (janv-mars N)
+    if(!priseLe){
+      Object.entries(schedule).forEach(([k,v])=>{
+        if(!k.startsWith(agent.id+"-")) return;
+        const dk = k.slice(agent.id.length+1);
+        if(dk < `${year}-01-01` || dk > limiteDate) return;
+        if(v?.equipe==="RP"){ priseLe = dk; }
+      });
+    }
+    if(override.priseLe!==undefined) priseLe = override.priseLe;
+    const estPayee = override.estPayee || (!priseLe && today2 > limiteDate);
+
+    let statut;
+    if(priseLe)      statut = "prise";
+    else if(estPayee) statut = "payee";
+    else if(today2 > limiteDate) statut = "payee_auto";
+    else             statut = "attente";
+
+    return {code, label, dateFete, limiteDate, priseLe, statut};
+  }).filter(Boolean);
+
+  // Grouper par statut pour affichage bandeau
+  const fetesN1Prises   = fetesReportN1.filter(l=>l.statut==="prise");
+  const fetesN1Payees   = fetesReportN1.filter(l=>l.statut==="payee"||l.statut==="payee_auto");
+  const fetesN1Attente  = fetesReportN1.filter(l=>l.statut==="attente");
+  const nbPrisesN1  = fetesN1Prises.length;
+  const nbPayeesN1  = fetesN1Payees.length;
+  const nbAttenteN1 = fetesN1Attente.length;
+
   const [ouvert, setOuvert] = useState(true);
   const [motifOuvert, setMotifOuvert] = useState(null);
 
@@ -1620,20 +1680,48 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
 
         {/* Compteurs inline */}
         <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-          {/* Fêtes prises */}
+
+          {/* Année en cours — prises */}
           {nbPrises>0&&<span style={{
             background:"rgba(22,163,74,.85)",color:"#fff",
             borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
             display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}>
-            ✅ {nbPrises} prise{nbPrises>1?"s":""}
+            ✅ {nbPrises} prise{nbPrises>1?"s":""} {year}
           </span>}
 
-          {/* Fêtes payées */}
+          {/* Année en cours — payées */}
           {nbPayees>0&&<span style={{
             background:"rgba(59,130,246,.85)",color:"#fff",
             borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
             display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}>
-            💶 {nbPayees} payée{nbPayees>1?"s":""}
+            💶 {nbPayees} payée{nbPayees>1?"s":""} {year}
+          </span>}
+
+          {/* Fêtes T4 de N-1 encore en cours — prises */}
+          {nbPrisesN1>0&&<span style={{
+            background:"rgba(22,163,74,.7)",color:"#fff",
+            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}
+            title={fetesN1Prises.map(l=>`${l.code} – ${l.label}`).join(", ")}>
+            ✅ {nbPrisesN1} prise{nbPrisesN1>1?"s":""} ({yearMoins1})
+          </span>}
+
+          {/* Fêtes T4 de N-1 — en attente (délai pas encore dépassé) */}
+          {nbAttenteN1>0&&<span style={{
+            background:"rgba(245,158,11,.8)",color:"#fff",
+            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}
+            title={`À prendre avant le 31 mars ${year} : ${fetesN1Attente.map(l=>l.code).join(", ")}`}>
+            ⏳ {nbAttenteN1} à prendre ({yearMoins1})
+          </span>}
+
+          {/* Fêtes T4 de N-1 — payées */}
+          {nbPayeesN1>0&&<span style={{
+            background:"rgba(59,130,246,.7)",color:"#fff",
+            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}
+            title={fetesN1Payees.map(l=>`${l.code} – ${l.label}`).join(", ")}>
+            💶 {nbPayeesN1} payée{nbPayeesN1>1?"s":""} ({yearMoins1})
           </span>}
 
           {/* Rappels */}
