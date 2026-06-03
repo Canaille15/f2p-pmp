@@ -2452,14 +2452,17 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   ]);
 
   // Setter unifié : met à jour localStorage ET agentProfiles (→ Supabase via useEffect)
+  // Le prev passé à l'updater est l'état FUSIONNÉ (local + profil) pour ne rien perdre
   const setAgentColors = useCallback((updater)=>{
-    setAgentColorsLocal(prev=>{
-      const next = typeof updater==="function" ? updater(prev) : updater;
+    setAgentColorsLocal(prevLocal=>{
+      // Construire le prev fusionné pour que l'updater voie toutes les couleurs
+      const prevFused = {...agentColorsProfile, ...prevLocal};
+      const next = typeof updater==="function" ? updater(prevFused) : updater;
       // Sync vers agentProfiles pour Supabase
       setAgentProfiles(p=>({...p,[agent.id]:{...(p[agent.id]||{}),agentColors:next}}));
       return next;
     });
-  },[agent?.id, setAgentProfiles]);
+  },[agent?.id, agentColorsProfile, setAgentProfiles]);
 
   // Couleur effective pour un code
   const getColor=(code)=>{
