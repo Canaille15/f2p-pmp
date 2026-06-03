@@ -1698,34 +1698,25 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
 
 // ─── SECTION PAUSE FIGÉE ─────────────────────────────────────────────────────
 function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
+  const [ouvert, setOuvert] = useState(true);
   const [showCal, setShowCal] = useState(false);
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
 
-  // Toutes les dates enregistrées (toutes années)
   const allDates = agentProfiles[agent?.id]?.pauseFigee || {};
   const allDatesSorted = Object.keys(allDates).sort();
-  
-  // Dates de l'année calendrier affichée (pour le total affiché)
-  const yearDates = allDatesSorted.filter(d=>d.startsWith(calYear+"-"));
-  
+
   const totalMinutesAll = allDatesSorted.length * 90;
   const totalHAll = Math.floor(totalMinutesAll/60);
   const totalMAll = totalMinutesAll%60;
-  
-  const totalMinutes = yearDates.length * 90;
-  const totalH = Math.floor(totalMinutes/60);
-  const totalM = totalMinutes%60;
 
   const toggleDate = (dk) => {
     const current = agentProfiles[agent?.id]?.pauseFigee || {};
     let updated;
     if(current[dk]){
-      // Supprimer (décocher)
       const {[dk]:_, ...rest} = current;
       updated = rest;
     } else {
-      // Ajouter avec confirmation
       updated = {...current, [dk]: new Date().toISOString()};
     }
     setAgentProfiles(prev=>({
@@ -1734,7 +1725,17 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
     }));
   };
 
-  // Générer les jours du mois calendrier
+  // Regrouper les dates par mois (toutes années)
+  const parMois = useMemo(()=>{
+    const groupes = {};
+    allDatesSorted.forEach(dk=>{
+      const moisKey = dk.slice(0,7); // "2026-01"
+      if(!groupes[moisKey]) groupes[moisKey] = [];
+      groupes[moisKey].push(dk);
+    });
+    return Object.entries(groupes).sort(([a],[b])=>a.localeCompare(b));
+  },[allDatesSorted.join(",")]);
+
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
   const firstDow = new Date(calYear, calMonth, 1).getDay();
   const daysList = Array.from({length:daysInMonth},(_,i)=>{
@@ -1749,87 +1750,132 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
   return(
     <div style={{marginTop:16,background:"#fff",borderRadius:14,border:"1.5px solid #e2e8f0",
       overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-      {/* Header */}
-      <div style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",padding:"12px 16px",
-        display:"flex",alignItems:"center",gap:10}}>
-        <span style={{fontSize:16}}>⏸️</span>
+
+      {/* ── Header cliquable ── */}
+      <div onClick={()=>setOuvert(o=>!o)}
+        style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",padding:"12px 16px",
+          display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none"}}>
+        <span style={{fontSize:15}}>⏸️</span>
         <div style={{flex:1}}>
-          <div style={{color:"#fff",fontSize:13,fontWeight:800}}>Pauses figées {year}</div>
+          <div style={{color:"#fff",fontSize:13,fontWeight:800}}>Pauses figées</div>
           <div style={{color:"rgba(255,255,255,.7)",fontSize:10,marginTop:1}}>
-            Total : {allDatesSorted.length} jour(s) · {totalHAll}h{totalMAll>0?String(totalMAll).padStart(2,'0'):"00"} cumulées
+            {allDatesSorted.length} jour{allDatesSorted.length>1?"s":""} · {totalHAll}h{String(totalMAll).padStart(2,'0')} TC cumulées
           </div>
         </div>
-        <button onClick={()=>setShowCal(v=>!v)}
+        <button onClick={e=>{e.stopPropagation();setShowCal(v=>!v);}}
           style={{background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.3)",
-            color:"#fff",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>
-          {showCal?"✕ Fermer":"📅 Ajouter"}
+            color:"#fff",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:700,
+            flexShrink:0}}>
+          {showCal?"✕":"📅 Ajouter"}
         </button>
+        <span style={{color:"#fff",fontSize:14,fontWeight:700,
+          display:"inline-block",transform:ouvert?"rotate(0deg)":"rotate(-90deg)",
+          transition:"transform .2s",flexShrink:0}}>▼</span>
       </div>
 
-      {/* Calendrier */}
-      {showCal&&<div style={{padding:"12px 14px",borderBottom:"1px solid #f1f5f9"}}>
-        {/* Nav mois */}
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}
-            style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",cursor:"pointer",background:"#f8fafc",fontSize:13}}>‹</button>
-          <div style={{flex:1,textAlign:"center",fontWeight:700,fontSize:13,color:"#1e293b"}}>
-            {MOIS_L[calMonth]} {calYear}
-          </div>
-          <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}}
-            style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",cursor:"pointer",background:"#f8fafc",fontSize:13}}>›</button>
-        </div>
-        {/* Grille */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
-          {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:9,fontWeight:700,color:"#94a3b8"}}>{j}</div>)}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-          {Array.from({length:firstDow}).map((_,i)=><div key={`e${i}`}/>)}
-          {daysList.map(({dk,d,dow})=>{
-            const isWE=dow===0||dow===6;
-            const isSelected=!!allDates[dk];
-            return(
-              <button key={dk} onClick={()=>toggleDate(dk)}
-                style={{borderRadius:7,border:isSelected?"2px solid #0284c7":"1.5px solid #e2e8f0",
-                  background:isSelected?"#0284c7":isWE?"#f8fafc":"#fff",
-                  color:isSelected?"#fff":isWE?"#94a3b8":"#1e293b",
-                  cursor:"pointer",padding:"6px 0",fontSize:11,fontWeight:isSelected?700:400,
-                  textAlign:"center"}}>
-                {d}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{fontSize:10,color:"#94a3b8",marginTop:8,textAlign:"center"}}>
-          Clique sur un jour pour l'ajouter/retirer · 1h30 par jour sélectionné
-        </div>
-      </div>}
-
-      {/* Liste des dates enregistrées */}
-      {allDatesSorted.length>0&&<div style={{padding:"10px 14px"}}>
-        <div style={{fontSize:10,fontWeight:700,color:"#64748b",marginBottom:6}}>Jours enregistrés :</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {allDatesSorted.map(dk=>(
-            <div key={dk} style={{background:"#eff6ff",border:"1px solid #bfdbfe",
-              borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:600,color:"#1e40af",
-              display:"flex",alignItems:"center",gap:6}}>
-              {new Date(dk).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})}
-              <button onClick={()=>toggleDate(dk)}
-                style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",
-                  fontSize:12,padding:0,lineHeight:1}}>×</button>
+      {ouvert&&<>
+        {/* ── Calendrier ajout ── */}
+        {showCal&&<div style={{padding:"12px 14px",borderBottom:"1px solid #e2e8f0",background:"#f8fafc"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}
+              style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 9px",cursor:"pointer",background:"#fff",fontSize:13}}>‹</button>
+            <div style={{flex:1,textAlign:"center",fontWeight:700,fontSize:13,color:"#1e293b"}}>
+              {MOIS_L[calMonth]} {calYear}
             </div>
-          ))}
-        </div>
-        <div style={{marginTop:10,padding:"8px 12px",background:"#f0fdf4",borderRadius:8,
-          border:"1px solid #bbf7d0",fontSize:11,color:"#065f46",fontWeight:600}}>
-          Total TC généré : <strong>{totalHAll}h{totalMAll>0?String(totalMAll).padStart(2,'0'):"00"}</strong>
-          &nbsp;({allDatesSorted.length} × 1h30)
-        </div>
-      </div>}
+            <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}}
+              style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 9px",cursor:"pointer",background:"#fff",fontSize:13}}>›</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
+            {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:9,fontWeight:700,color:"#94a3b8"}}>{j}</div>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+            {Array.from({length:firstDow}).map((_,i)=><div key={`e${i}`}/>)}
+            {daysList.map(({dk,d,dow})=>{
+              const isWE=dow===0||dow===6;
+              const isSel=!!allDates[dk];
+              return(
+                <button key={dk} onClick={()=>toggleDate(dk)}
+                  style={{borderRadius:7,
+                    border:isSel?"2px solid #0284c7":"1.5px solid #e2e8f0",
+                    background:isSel?"#0284c7":isWE?"#f1f5f9":"#fff",
+                    color:isSel?"#fff":isWE?"#94a3b8":"#1e293b",
+                    cursor:"pointer",padding:"6px 0",fontSize:11,
+                    fontWeight:isSel?700:400,textAlign:"center"}}>
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{fontSize:9,color:"#94a3b8",marginTop:7,textAlign:"center"}}>
+            Appuyez sur un jour pour ajouter/retirer · 1h30 TC par jour
+          </div>
+        </div>}
 
-      {allDatesSorted.length===0&&!showCal&&<div style={{padding:"14px",textAlign:"center",
-        fontSize:11,color:"#94a3b8"}}>
-        Aucune pause figée enregistrée
-      </div>}
+        {/* ── Jours enregistrés triés par mois ── */}
+        {parMois.length>0?(
+          <div style={{display:"flex",flexDirection:"column",gap:0}}>
+            {parMois.map(([moisKey, dates])=>{
+              const [annee, mois] = moisKey.split("-").map(Number);
+              const nbMin = dates.length * 90;
+              const h = Math.floor(nbMin/60);
+              const m = nbMin%60;
+              return(
+                <div key={moisKey} style={{borderBottom:"1px solid #f1f5f9"}}>
+                  {/* En-tête mois */}
+                  <div style={{padding:"6px 14px",background:"#f0f9ff",
+                    display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <span style={{fontSize:11,fontWeight:800,color:"#0369a1"}}>
+                      {MOIS_L[mois-1]} {annee}
+                    </span>
+                    <span style={{fontSize:10,color:"#0284c7",fontWeight:600}}>
+                      {dates.length} jour{dates.length>1?"s":""} · {h}h{String(m).padStart(2,'0')}
+                    </span>
+                  </div>
+                  {/* Jours du mois */}
+                  <div style={{padding:"7px 14px",display:"flex",flexWrap:"wrap",gap:5}}>
+                    {dates.map(dk=>{
+                      const dow = new Date(dk).getDay();
+                      const isWE = dow===0||dow===6;
+                      const jourLabel = new Date(dk).toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit"});
+                      return(
+                        <div key={dk} style={{
+                          background:isWE?"#f0f9ff":"#eff6ff",
+                          border:"1px solid #bfdbfe",
+                          borderRadius:8,padding:"4px 9px",
+                          fontSize:10,fontWeight:600,color:"#1e40af",
+                          display:"flex",alignItems:"center",gap:5}}>
+                          <span style={{fontFamily:"monospace"}}>{jourLabel}</span>
+                          <button onClick={()=>toggleDate(dk)}
+                            style={{background:"none",border:"none",color:"#94a3b8",
+                              cursor:"pointer",fontSize:13,padding:0,lineHeight:1,
+                              fontWeight:700}}>×</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            {/* Total général */}
+            <div style={{padding:"9px 14px",background:"#f0fdf4",
+              display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:11,fontWeight:700,color:"#065f46"}}>
+                Total TC généré
+              </span>
+              <span style={{fontSize:12,fontWeight:800,color:"#16a34a"}}>
+                {totalHAll}h{String(totalMAll).padStart(2,'0')}
+                <span style={{fontSize:9,fontWeight:500,color:"#4ade80",marginLeft:5}}>
+                  ({allDatesSorted.length} × 1h30)
+                </span>
+              </span>
+            </div>
+          </div>
+        ):(
+          !showCal&&<div style={{padding:"16px",textAlign:"center",fontSize:11,color:"#94a3b8"}}>
+            Aucune pause figée enregistrée
+          </div>
+        )}
+      </>}
     </div>
   );
 }
