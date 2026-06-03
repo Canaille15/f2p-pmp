@@ -230,8 +230,8 @@ const EQUIPES = [
   { code:"TY",   label:"TY",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
   { code:"RN",   label:"RN",         heures:"",            color:"#4338ca", textColor:"#fff", dot:"#e0e7ff", prive:true,  compteur:"RN",      bg:"#4338ca" },
   { code:"NU",   label:"NU",         heures:"",            color:"#475569", textColor:"#fff", dot:"#cbd5e1", prive:false, compteur:"RU",      bg:"#475569" },
-  { code:"CA",   label:"Congé Ann.", heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
-  { code:"CP",   label:"Congé",      heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
+  { code:"CA",   label:"Congés", heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
+  { code:"CP",   label:"Congés",      heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
   { code:"MA",   label:"Maladie",    heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
   { code:"VT",   label:"VT",         heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3",  prive:true,  compteur:"ABS",     bg:"#eab308" },
   { code:"ABS",  label:"Absent",     heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
@@ -849,7 +849,7 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
   const CODE_LABELS = {
     M:"Matinée", AM:"Soirée", N:"Nuit", J:"Journée", JF:"Jour Fête",
     RP:"RP", RU:"RU", RQ:"RQ", TC:"TC", TY:"TY", RN:"RN",
-    NU:"NU", CA:"Congé Ann.", CP:"Congé", MA:"Maladie",
+    NU:"NU", CA:"Congés", CP:"Congés", MA:"Maladie",
     ABS:"Absent", VT:"VT", VM:"Visite méd.", FOR:"Formation", DISPO:"Dispo",
     FETE:"Fêtes légales",
   };
@@ -883,9 +883,9 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
     },
     {
       id:"conges",
-      label:"🏖️ Congés",
+      label:"🏖️ Congés (CA / CP)",
       codes:["CA","CP"],
-      note:"CA = Congé Annuel · CP = Congé",
+      note:"CA et CP = Congés (même chose)",
     },
     {
       id:"absences",
@@ -1136,7 +1136,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const solde = CONGES_ANNUELS - congesPris;
 
   const CARDS = [
-    {key:"conges",  label:"Congés pris",     color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
+    {key:"conges",  label:"Congés",          color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", icon:"💼", subtitle:`Année ${year}`},
     {key:"RP",      label:"RP",              color:"#16a34a", icon:"🟢", subtitle:"Repos périodiques"},
     {key:"RU",      label:"RU",              color:"#d97706", icon:"🟡", subtitle:"Repos utilisation"},
@@ -2369,7 +2369,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     {c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
     {c:"JF",l:"Jour Fête"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},
     {c:"TC",l:"TC"},{c:"TY",l:"TY"},{c:"RN",l:"RN"},{c:"NU",l:"NU"},
-    {c:"CA",l:"Congé Ann."},{c:"CP",l:"Congé"},{c:"MA",l:"Maladie"},
+    {c:"CA",l:"Congés"},{c:"CP",l:"Congés"},{c:"MA",l:"Maladie"},
     {c:"ABS",l:"Absent"},{c:"VT",l:"VT"},{c:"VM",l:"VM"},
     {c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"},
   ];
@@ -2710,7 +2710,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
                 <option value="">— choisir —</option>
                 {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
                   {c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},{c:"NU",l:"NU"},
-                  {c:"CA",l:"Congé Ann."},{c:"MA",l:"Maladie"},{c:"VT",l:"VT"},
+                  {c:"CA",l:"Congés"},{c:"MA",l:"Maladie"},{c:"VT",l:"VT"},
                   {c:"TY",l:"TY"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}
                 ].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
               </select>
@@ -3737,7 +3737,7 @@ function ImportDeroulement({agent,onClose,onImport}){
     {c:"RU",   l:"RU",         bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
     {c:"RQ",   l:"RQ",         bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
     {c:"NU",   l:"NU",         bg:"#475569",tc:"#fff",dot:"#cbd5e1"},
-    {c:"CA",   l:"Congé Ann.", bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
+    {c:"CA",   l:"Congés", bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
     {c:"MA",   l:"Maladie",    bg:"#dc2626",tc:"#fff",dot:"#fecaca",prive:true},
     {c:"VT",   l:"VT",          bg:"#eab308",tc:"#fff",dot:"#fef9c3",prive:true},
     {c:"ABS",  l:"Absent",     bg:"#dc2626",tc:"#fff",dot:"#fecaca",prive:true},
