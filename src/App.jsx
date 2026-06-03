@@ -962,8 +962,6 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
               padding:"10px 14px",fontSize:13,fontWeight:700,color:"#1e293b",
               background:"#fff",cursor:"pointer",outline:"none",
               WebkitAppearance:"none",appearance:"none",
-              backgroundImage:"url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%2364748b' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E")",
-              backgroundRepeat:"no-repeat",backgroundPosition:"right 14px center",
               paddingRight:36}}>
             {GROUPES.map(g=>(
               <option key={g.id} value={g.id}>{g.label}</option>
