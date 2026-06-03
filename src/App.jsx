@@ -1232,13 +1232,6 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
         💡 Le chiffre central = calculé depuis votre planning. Utilisez +/− pour corriger si votre planning n'est pas à jour. Les corrections sont sauvegardées automatiquement.
       </div>}
 
-      {/* Référence réglementaire congés */}
-      <div style={{marginTop:6,textAlign:"right"}}>
-        <span style={{fontSize:9,color:"#cbd5e1",fontStyle:"italic",userSelect:"text",cursor:"text"}}>
-          Réf. congés : CONGÉS DU PERSONNEL DE LA SNCF — GRH00143
-        </span>
-      </div>
-
       {/* ── FÊTES LÉGALES ─────────────────────────────────────── */}
       {(isOwnProfile||isAdmin)&&<FetesSection
         agent={agent}
@@ -2402,7 +2395,10 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       {/* Ligne 3 : compteurs si profil déverrouillé */}
       {isOwnProfile&&<div style={{borderTop:"1px solid rgba(255,255,255,.12)",padding:"10px 20px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7,flexWrap:"wrap",gap:6}}>
-          <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.5)",letterSpacing:.8}}>📊 COMPTEURS {compteurYear}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:2}}>
+            <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.5)",letterSpacing:.8}}>📊 COMPTEURS {compteurYear}</div>
+            <div style={{fontSize:8,color:"rgba(255,255,255,.3)",fontStyle:"italic"}}>CONGÉS DU PERSONNEL DE LA SNCF — GRH00143</div>
+          </div>
           <div style={{display:"flex",gap:3}}>
             {[currentYear-1,currentYear,currentYear+1].map(y=>(
               <button key={y} onClick={()=>setCompteurYear(y)}
