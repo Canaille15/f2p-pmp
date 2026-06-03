@@ -4426,6 +4426,50 @@ function ImportDeroulement({agent,onClose,onImport}){
     </div>
   );
 }
+// ─── HABILITATIONS ───────────────────────────────────────────────────────────
+const NIV_HAB = [
+  {code:"HC",  label:"HC",   color:"#1e3a5f", textColor:"#fff", dot:"#3b82f6"},
+  {code:"V",   label:"V",    color:"#065f46", textColor:"#fff", dot:"#22c55e"},
+  {code:"EA",  label:"EA",   color:"#713f12", textColor:"#fff", dot:"#f59e0b"},
+];
+
+// Postes PRCI — construits depuis POSTES_PRCI_3x8 et POSTES_JOURNEE
+const HAB_PRCI = [
+  // 3×8 — depuis POSTES_PRCI_3x8
+  {code:"PICCL",  label:"CCL",        subtitle:"CCL",                    type:"3x8"},
+  {code:"PIADJ",  label:"Adj CCL",    subtitle:"Adjoint CCL",            type:"3x8"},
+  {code:"PILNE",  label:"AC LNE",     subtitle:"Agent Circulation LNE",  type:"3x8"},
+  {code:"PILNO",  label:"AC LNO",     subtitle:"Agent Circulation LNO",  type:"3x8"},
+  {code:"PILCL",  label:"AC LC",      subtitle:"Agent Circulation LC",   type:"3x8"},
+  {code:"PIVGD",  label:"AC VGD",     subtitle:"Agent Circulation VGD",  type:"3x8"},
+  // Journée — depuis POSTES_JOURNEE famille PRCI
+  {code:"PIPA1J", label:"Pauseur PA1",subtitle:"Pauseur PA1",            type:"J"},
+  {code:"PIPA2J", label:"Pauseur PA2",subtitle:"Pauseur PA2",            type:"J"},
+  {code:"PIPA3J", label:"Pauseur PA3",subtitle:"Pauseur PA3",            type:"J"},
+  {code:"PIDPXJ", label:"DPX PRCI",   subtitle:"DPX PRCI",               type:"J"},
+  {code:"PIASSJ", label:"Adj DPX",    subtitle:"Adjoint DPX PRCI",       type:"J"},
+  {code:"AFOPRCI",label:"AFO PRCI",   subtitle:"AFO PRCI",               type:"J"},
+  {code:"CAF",    label:"CAF",        subtitle:"Cert. Aptitude Fonction", type:"J"},
+  {code:"PPRCI",  label:"PPRCI",      subtitle:"PPRCI",                   type:"J"},
+  {code:"KPRCI",  label:"K-PRCI",     subtitle:"Formation PRCI",          type:"J"},
+  {code:"APRCI",  label:"A-PRCI",     subtitle:"Assistant PRCI",          type:"J"},
+];
+
+// Postes PAR — depuis POSTES_PAR_3x8 et POSTES_JOURNEE famille PAR
+const HAB_PAR = [
+  // 3×8 — depuis POSTES_PAR_3x8
+  {code:"PAAC1",  label:"AC PAR",         subtitle:"Agent Circulation PAR",    type:"3x8"},
+  {code:"PAAC2",  label:"Aide AC PAR",    subtitle:"Aide Agent Circulation PAR",type:"3x8"},
+  {code:"PAACXX", label:"CT AC Travaux",  subtitle:"Contrôleur AC Travaux",    type:"3x8"},
+  // Journée — depuis POSTES_JOURNEE famille PAR
+  {code:"PAPAUJ", label:"Pauseur PAR",    subtitle:"Pauseur PAR",              type:"J"},
+  {code:"PADPXJ", label:"DPX PAR",        subtitle:"DPX PAR",                  type:"J"},
+  {code:"PAASMJ", label:"ASMTE PAR",      subtitle:"ASMTE PAR",                type:"J"},
+  {code:"AFOPAR", label:"AFO PAR",         subtitle:"AFO PAR",                  type:"J"},
+  {code:"KPAR",   label:"K-PAR",          subtitle:"Formation PAR",             type:"J"},
+  {code:"FPAR",   label:"F-PAR",          subtitle:"Formateur PAR",             type:"J"},
+];
+
 function HabilitationsModal({agent,habilitations,onSave,onClose,suggestedPostes}){
   const [hab,setHab]=useState(()=>JSON.parse(JSON.stringify(habilitations)));
   const toggle=(code,niveau)=>setHab(prev=>{const next={...prev};if(next[code]===niveau)delete next[code];else next[code]=niveau;return next;});
@@ -4444,8 +4488,16 @@ function HabilitationsModal({agent,habilitations,onSave,onClose,suggestedPostes}
           <div style={{fontSize:10,fontWeight:800,color:"#94a3b8",letterSpacing:.6,marginBottom:6}}>{g.titre.toUpperCase()}</div>
           <div style={{display:"flex",flexDirection:"column",gap:4}}>
             {g.items.map(h=>{const current=hab[h.code];const n=NIV_HAB.find(x=>x.code===current);const isSug=suggestedPostes?.includes(h.label);
-              return(<div key={h.code} style={{display:"flex",alignItems:"center",gap:8,background:current?"#f8fafc":isSug?"#fef9c3":"transparent",border:`1px solid ${current?"#e2e8f0":isSug?"#fde68a":"transparent"}`,borderRadius:7,padding:"4px 8px"}}>
-                <div style={{flex:1}}><span style={{fontSize:12,fontWeight:600,color:"#1e293b"}}>{h.label}</span>{isSug&&!current&&<span style={{fontSize:9,color:"#92400e",marginLeft:5,background:"#fef3c7",borderRadius:8,padding:"1px 5px"}}>PDF</span>}{current&&<span style={{fontSize:10,fontWeight:700,marginLeft:6,color:n?.textColor}}>{n?.label}</span>}</div>
+              return(<div key={h.code} style={{display:"flex",alignItems:"center",gap:8,background:current?"#f8fafc":isSug?"#fef9c3":"transparent",border:`1px solid ${current?"#e2e8f0":isSug?"#fde68a":"transparent"}`,borderRadius:7,padding:"6px 8px"}}>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                    <span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,color:"#64748b",background:"#f1f5f9",borderRadius:4,padding:"1px 5px"}}>{h.code}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{h.label}</span>
+                    {h.subtitle&&h.subtitle!==h.label&&<span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>{h.subtitle}</span>}
+                    {isSug&&!current&&<span style={{fontSize:9,color:"#92400e",background:"#fef3c7",borderRadius:8,padding:"1px 5px"}}>PDF</span>}
+                    {current&&<span style={{fontSize:10,fontWeight:700,color:n?.textColor,background:n?.color,borderRadius:6,padding:"1px 6px"}}>{n?.label}</span>}
+                  </div>
+                </div>
                 <div style={{display:"flex",gap:3}}>
                   {NIV_HAB.map(nv=>(<button key={nv.code} onClick={()=>toggle(h.code,nv.code)} style={{border:`1.5px solid ${current===nv.code?nv.dot:"#e2e8f0"}`,background:current===nv.code?nv.color:"#fff",color:current===nv.code?nv.textColor:"#94a3b8",borderRadius:6,padding:"2px 8px",cursor:"pointer",fontSize:10,fontWeight:700}}>{nv.label}</button>))}
                   {current&&<button onClick={()=>toggle(h.code,current)} style={{border:"1px solid #e2e8f0",background:"#fff",color:"#94a3b8",borderRadius:6,padding:"2px 6px",cursor:"pointer",fontSize:10}}>✕</button>}
