@@ -5722,71 +5722,143 @@ export default function App(){
   return(<div style={{minHeight:"100vh",background:"#ffffff",fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
     <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;}button:hover{opacity:.85;}`}</style>
 
-    {/* HEADER */}
-    <div style={{background:"#fff",borderBottom:"1.5px solid #e2e8f0",position:"sticky",top:0,zIndex:50}}>
-      <div style={{maxWidth:1100,margin:"0 auto",display:"flex",alignItems:"center",gap:8,height:52,padding:"0 14px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:7,marginRight:4}}>
-          <div style={{width:30,height:30,background:"linear-gradient(135deg,#0f4c81,#1e3a5f)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:15}}>🚄</span>
+    {/* ── HEADER ── */}
+    <div style={{background:"#fff",borderBottom:"1.5px solid #e2e8f0",
+      position:"sticky",top:0,zIndex:50,
+      boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
+
+      {/* Ligne 1 : Logo + actions */}
+      <div style={{maxWidth:1100,margin:"0 auto",
+        display:"flex",alignItems:"center",gap:8,
+        height:48,padding:"0 12px"}}>
+
+        {/* Logo */}
+        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+          <div style={{width:28,height:28,background:"linear-gradient(135deg,#0f4c81,#1e3a5f)",
+            borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:14}}>🚄</span>
           </div>
-          <div>
-            <div style={{fontSize:13,fontWeight:800,color:"#0f4c81",letterSpacing:-.3}}>F2P.PMP</div>
-            <div style={{fontSize:8,color:"#94a3b8",letterSpacing:.5,fontFamily:"monospace"}}>PRCI · PAR · PMP</div>
+          <div style={{lineHeight:1}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#0f4c81",letterSpacing:-.3}}>F2P.PMP</div>
+            <div style={{fontSize:7,color:"#94a3b8",letterSpacing:.4,fontFamily:"monospace"}}>PRCI · PAR</div>
           </div>
         </div>
-        <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:9,padding:3}}>
-          {VIEWS.map(({k,l})=>(
-            <button key={k} onClick={()=>setView(k)} style={{border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",background:view===k?"#fff":"transparent",color:view===k?"#1e293b":"#94a3b8",fontSize:11,fontWeight:view===k?700:400,boxShadow:view===k?"0 1px 4px rgba(0,0,0,.08)":"none",whiteSpace:"nowrap",position:"relative"}}>
-              {l}{k==="cps"&&activeNotifCount>0&&<span style={{position:"absolute",top:-2,right:-2,width:7,height:7,borderRadius:"50%",background:"#ef4444"}}/>}
-            </button>
-          ))}
-        </div>
-        {isAdmin&&<div style={{display:"flex",alignItems:"center",gap:5}}>
-          <div style={{background:"#fff8e1",border:"1px solid #fde68a",borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:700,color:"#92400e"}}>👑 Admin</div>
-          <button onClick={()=>setShowAuthAdmin(true)} style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:6,padding:"2px 8px",fontSize:9,fontWeight:700,color:"#7c3aed",cursor:"pointer"}}>⚙️ Comptes</button>
-        </div>}
+
         <div style={{flex:1}}/>
-        <button onClick={handleLogout} title="Se déconnecter" style={{border:"1.5px solid #fee2e2",borderRadius:9,padding:"5px 9px",background:"#fff",cursor:"pointer",fontSize:11,color:"#ef4444",fontWeight:600}}>🚪 Déco.</button>
-        <div style={{position:"relative"}}>
-          <button onClick={()=>setProfileOpen(p=>!p)} style={{border:"1.5px solid #e2e8f0",borderRadius:9,padding:"5px 10px",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#1e293b",fontWeight:700}}>
-            {currentAgent&&<Av initials={currentAgent.initials} size={18} famille={currentAgent.famille}/>}
-            <span>{currentAgent?.prenom||"Profil"}</span>
-            {isOwnProfile&&<span style={{fontSize:9,color:"#10b981"}}>🔓</span>}
-            <span style={{fontSize:9,opacity:.4}}>▼</span>
+
+        {/* Admin badges — masqués sur très petit écran */}
+        {isAdmin&&<div style={{display:"flex",alignItems:"center",gap:4}}>
+          <div style={{background:"#fff8e1",border:"1px solid #fde68a",borderRadius:6,
+            padding:"2px 6px",fontSize:9,fontWeight:700,color:"#92400e"}}>👑</div>
+          <button onClick={()=>setShowAuthAdmin(true)}
+            style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:6,
+              padding:"2px 7px",fontSize:9,fontWeight:700,color:"#7c3aed",cursor:"pointer"}}>
+            ⚙️
           </button>
-          {profileOpen&&(<div style={{position:"absolute",top:"calc(100% + 5px)",right:0,width:260,background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:13,boxShadow:"0 8px 30px rgba(0,0,0,.12)",zIndex:100,overflow:"hidden"}}>
-            <div style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9"}}>
-              <input autoFocus placeholder="Rechercher…" value={profileSearch} onChange={e=>setProfileSearch(e.target.value)}
-                style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11,outline:"none"}}/>
+        </div>}
+
+        {/* Déco */}
+        <button onClick={handleLogout}
+          style={{border:"1.5px solid #fee2e2",borderRadius:8,padding:"5px 8px",
+            background:"#fff",cursor:"pointer",fontSize:11,color:"#ef4444",
+            fontWeight:600,flexShrink:0}}>
+          🚪
+        </button>
+
+        {/* Profil selector */}
+        <div style={{position:"relative",flexShrink:0}}>
+          <button onClick={()=>setProfileOpen(p=>!p)}
+            style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"5px 8px",
+              background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",
+              gap:5,fontSize:11,color:"#1e293b",fontWeight:700,maxWidth:130}}>
+            {currentAgent&&<Av initials={currentAgent.initials} size={18} famille={currentAgent.famille}/>}
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+              maxWidth:70}}>{currentAgent?.prenom||"Profil"}</span>
+            {isOwnProfile&&<span style={{fontSize:9,color:"#10b981",flexShrink:0}}>🔓</span>}
+            <span style={{fontSize:9,opacity:.4,flexShrink:0}}>▼</span>
+          </button>
+
+          {profileOpen&&(
+            <div style={{position:"absolute",top:"calc(100% + 5px)",right:0,
+              width:260,background:"#fff",border:"1.5px solid #e2e8f0",
+              borderRadius:13,boxShadow:"0 8px 30px rgba(0,0,0,.14)",
+              zIndex:100,overflow:"hidden"}}>
+              <div style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9"}}>
+                <input autoFocus placeholder="Rechercher…"
+                  value={profileSearch} onChange={e=>setProfileSearch(e.target.value)}
+                  style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:7,
+                    padding:"5px 8px",fontSize:11,outline:"none"}}/>
+              </div>
+              {["PRCI","PAR"].map(fKey=>{
+                const rows=profils.filter(a=>a.famille===fKey);
+                if(!rows.length) return null;
+                const fam=FAMILLES[fKey];
+                return(<div key={fKey}>
+                  <div style={{padding:"4px 11px",fontSize:8,fontWeight:800,
+                    color:"#94a3b8",letterSpacing:.8,
+                    background:fam.color+"11",borderBottom:"1px solid #f1f5f9"}}>
+                    {fam.label.toUpperCase()}
+                  </div>
+                  <div style={{maxHeight:160,overflowY:"auto"}}>
+                    {rows.map(a=>(
+                      <button key={a.id} onClick={()=>{
+                        if(currentUser&&a.id===currentUser.agent?.id){
+                          setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
+                        } else if(isAdmin){
+                          setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
+                        } else {
+                          setLoginTarget(a);setProfileOpen(false);setProfileSearch("");
+                        }
+                      }} style={{width:"100%",border:"none",
+                        background:currentAgent?.id===a.id?"#eff6ff":"transparent",
+                        padding:"6px 11px",cursor:"pointer",
+                        display:"flex",alignItems:"center",gap:7,textAlign:"left"}}>
+                        <Av initials={a.initials} size={22} famille={a.famille}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:600,color:"#1e293b",
+                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {a.prenom} {a.nom}
+                          </div>
+                          <div style={{fontSize:9,color:"#94a3b8"}}>{a.poste}</div>
+                        </div>
+                        {currentAgent?.id===a.id&&<span style={{color:fam.accent,fontSize:11}}>✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>);
+              })}
             </div>
-            {["PRCI","PAR"].map(fKey=>{
-              const rows=profils.filter(a=>a.famille===fKey);if(!rows.length)return null;
-              const fam=FAMILLES[fKey];
-              return(<div key={fKey}>
-                <div style={{padding:"4px 11px",fontSize:8,fontWeight:800,color:"#94a3b8",letterSpacing:.8,background:fam.color+"11",borderBottom:"1px solid #f1f5f9"}}>{fam.label.toUpperCase()}</div>
-                <div style={{maxHeight:150,overflowY:"auto"}}>
-                  {rows.map(a=>(
-                    <button key={a.id} onClick={()=>{
-                      if(currentUser&&a.id===currentUser.agent?.id){
-                        setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
-                      } else if(isAdmin){
-                        setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
-                      } else {
-                        setLoginTarget(a);setProfileOpen(false);setProfileSearch("");
-                      }
-                    }} style={{width:"100%",border:"none",background:currentAgent?.id===a.id?"#eff6ff":"transparent",padding:"6px 11px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,textAlign:"left"}}>
-                      <Av initials={a.initials} size={22} famille={a.famille}/>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:11,fontWeight:600,color:"#1e293b"}}>{a.prenom} {a.nom}</div>
-                        <div style={{fontSize:9,color:"#94a3b8"}}>{a.poste}</div>
-                      </div>
-                      {currentAgent?.id===a.id&&<span style={{color:fam.accent,fontSize:11}}>✓</span>}
-                    </button>
-                  ))}
-                </div>
-              </div>);
-            })}
-          </div>)}
+          )}
+        </div>
+      </div>
+
+      {/* Ligne 2 : Onglets navigation — pleine largeur, scrollable */}
+      <div style={{borderTop:"1px solid #f1f5f9",overflowX:"auto",
+        WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
+        <div style={{display:"flex",minWidth:"max-content",
+          padding:"0 12px",gap:2}}>
+          {VIEWS.map(({k,l})=>{
+            const actif = view===k;
+            return(
+              <button key={k} onClick={()=>setView(k)}
+                style={{
+                  border:"none",background:"transparent",
+                  padding:"9px 14px",cursor:"pointer",
+                  fontSize:12,fontWeight:actif?800:500,
+                  color:actif?"#0f4c81":"#94a3b8",
+                  borderBottom:actif?"2.5px solid #0f4c81":"2.5px solid transparent",
+                  whiteSpace:"nowrap",position:"relative",
+                  letterSpacing:actif?-.1:0,
+                  transition:"color .15s",
+                }}>
+                {l}
+                {k==="cps"&&activeNotifCount>0&&
+                  <span style={{position:"absolute",top:6,right:4,
+                    width:7,height:7,borderRadius:"50%",
+                    background:"#ef4444"}}/>}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
