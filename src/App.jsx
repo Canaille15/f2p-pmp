@@ -3030,170 +3030,222 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
     {/* ── BANDEAU PROFIL ÉTENDU ── */}
-    <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,borderRadius:16,overflow:"hidden",color:"#fff"}}>
+    <div style={{background:`linear-gradient(160deg,${fam?.color||"#0f172a"} 0%,#1e293b 60%,#0f172a 100%)`,
+      borderRadius:20,overflow:"hidden",color:"#fff",
+      boxShadow:"0 4px 24px rgba(0,0,0,.18)"}}>
 
-      {/* Ligne 1 : identité + boutons principaux */}
-      <div style={{padding:"16px 20px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-        <Av initials={agent.initials} size={48} famille={agent.famille}/>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:16,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{agent.prenom} {agent.nom}</div>
-          <div style={{fontSize:10,opacity:.65,marginTop:1}}>
-            {agent.grade} · {agent.poste} · {fam?.label}
-            {/* Roulement + poste principal habilité */}
-            {profile.roulement&&<>
-              <span style={{opacity:.5}}> · </span>
-              <span style={{fontWeight:700,opacity:.9}}>{profile.roulement}</span>
-            </>}
-            {(()=>{
-              // Afficher le poste principal habilité (premier trouvé)
-              const habs = profile.habilitations||{};
-              const allPostes = [...HAB_PRCI,...HAB_PAR];
-              const premier = Object.keys(habs).find(code=>allPostes.find(p=>p.code===code));
-              const posteLabel = premier ? allPostes.find(p=>p.code===premier)?.label : null;
-              const nbTotal = Object.keys(habs).length;
-              if(!posteLabel) return null;
-              return <>
-                <span style={{opacity:.5}}> · </span>
-                <span style={{fontWeight:700,opacity:.9}}>{posteLabel}</span>
-                {nbTotal>1&&<span style={{opacity:.6}}> +{nbTotal-1}</span>}
-              </>;
-            })()}
-          </div>
+      {/* ── BLOC IDENTITÉ ── */}
+      <div style={{padding:"20px 20px 16px",display:"flex",alignItems:"flex-start",gap:16}}>
+        {/* Avatar grand */}
+        <div style={{flexShrink:0}}>
+          <Av initials={agent.initials} size={56} famille={agent.famille}/>
         </div>
-        {/* Actions principales */}
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          <button onClick={()=>onImportDP(agent)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",color:"#fff",borderRadius:9,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:700}}>📋 Déroulé</button>
-          <button onClick={()=>setShowDemandeConges(true)} style={{background:"rgba(234,88,12,.35)",border:"1px solid rgba(253,186,116,.4)",color:"#fff",borderRadius:9,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:700}}>📝 Congés</button>
-          <button onClick={()=>setShowColorPicker(true)} style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",color:"#fff",borderRadius:9,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:700}}>🎨</button>
+
+        {/* Infos identité */}
+        <div style={{flex:1,minWidth:0}}>
+          {/* Nom */}
+          <div style={{fontSize:19,fontWeight:900,letterSpacing:-.3,lineHeight:1.1,
+            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {agent.prenom} {agent.nom}
+          </div>
+
+          {/* Grade + Famille */}
+          <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
+            <span style={{background:"rgba(255,255,255,.15)",borderRadius:6,
+              padding:"2px 8px",fontSize:10,fontWeight:700,letterSpacing:.3}}>
+              {agent.grade}
+            </span>
+            <span style={{background:fam?.color+"44"||"rgba(255,255,255,.1)",
+              border:`1px solid ${fam?.color+"88"||"rgba(255,255,255,.2)"}`,
+              borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700}}>
+              {fam?.label||agent.famille}
+            </span>
+            {/* Poste de base */}
+            <span style={{fontSize:10,opacity:.6,fontWeight:500}}>{agent.poste}</span>
+          </div>
+
+          {/* Roulement + postes habilités */}
+          {(profile.roulement||Object.keys(profile.habilitations||{}).length>0)&&(
+            <div style={{display:"flex",gap:5,marginTop:6,flexWrap:"wrap",alignItems:"center"}}>
+              {profile.roulement&&<span style={{
+                background:"rgba(255,255,255,.18)",
+                border:"1px solid rgba(255,255,255,.3)",
+                borderRadius:8,padding:"3px 9px",
+                fontSize:10,fontWeight:800,
+              }}>🔄 {profile.roulement}</span>}
+              {(()=>{
+                const habs = profile.habilitations||{};
+                const allPostes = [...HAB_PRCI,...HAB_PAR];
+                const postesHab = Object.keys(habs).map(code=>allPostes.find(p=>p.code===code)).filter(Boolean);
+                if(!postesHab.length) return null;
+                return postesHab.slice(0,3).map((p,i)=>(
+                  <span key={p.code} style={{
+                    background:"rgba(255,255,255,.12)",
+                    border:"1px solid rgba(255,255,255,.2)",
+                    borderRadius:8,padding:"3px 9px",
+                    fontSize:10,fontWeight:700,
+                  }}>⚡ {p.label}</span>
+                )).concat(postesHab.length>3?[
+                  <span key="more" style={{fontSize:10,opacity:.5,fontWeight:600}}>
+                    +{postesHab.length-3}
+                  </span>
+                ]:[]);
+              })()}
+              {profile.isReserve&&<span style={{
+                background:"rgba(16,185,129,.25)",
+                border:"1px solid rgba(110,231,183,.4)",
+                borderRadius:8,padding:"3px 9px",
+                fontSize:10,fontWeight:700,
+              }}>🛡️ Réserviste</span>}
+            </div>
+          )}
+        </div>
+
+        {/* Boutons actions */}
+        <div style={{display:"flex",flexDirection:"column",gap:5,flexShrink:0,alignSelf:"flex-start"}}>
+          <button onClick={()=>onImportDP(agent)}
+            style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",
+              color:"#fff",borderRadius:8,padding:"7px 11px",cursor:"pointer",
+              fontSize:11,fontWeight:700,whiteSpace:"nowrap",minWidth:90,textAlign:"center"}}>
+            📋 Déroulé</button>
+          <button onClick={()=>setShowDemandeConges(true)}
+            style={{background:"rgba(234,88,12,.4)",border:"1px solid rgba(253,186,116,.4)",
+              color:"#fff",borderRadius:8,padding:"7px 11px",cursor:"pointer",
+              fontSize:11,fontWeight:700,whiteSpace:"nowrap",textAlign:"center"}}>
+            📝 Congés</button>
+          <button onClick={()=>setShowColorPicker(true)}
+            style={{background:"rgba(255,255,255,.12)",border:"1px solid rgba(255,255,255,.2)",
+              color:"#fff",borderRadius:8,padding:"7px 11px",cursor:"pointer",
+              fontSize:11,fontWeight:700,textAlign:"center"}}>
+            🎨 Couleurs</button>
         </div>
       </div>
 
-      {/* Ligne 2 : Roulement + Réserviste côte à côte dans le bandeau */}
-      <div style={{borderTop:"1px solid rgba(255,255,255,.12)",padding:"12px 20px",
-        display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {/* ── SÉPARATEUR ── */}
+      <div style={{height:1,background:"rgba(255,255,255,.08)",margin:"0 20px"}}/>
 
-        {/* ── Roulement ── */}
+      {/* ── ROULEMENT + RÉSERVISTE ── */}
+      <div style={{padding:"14px 20px",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:14}}>
+
+        {/* Roulement */}
         <div>
-          <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.5)",letterSpacing:.8,marginBottom:7}}>🔄 ROULEMENT</div>
-          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.4)",
+            letterSpacing:1,marginBottom:8,textTransform:"uppercase"}}>🔄 Roulement</div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
             {ROULEMENTS.map(r=>{
-              const sel=profile.roulement===r;
+              const sel = profile.roulement===r;
               return(
                 <button key={r} onClick={()=>setProfile({roulement:sel?null:r})}
-                  style={{display:"flex",alignItems:"center",gap:6,
-                    border:`1.5px solid ${sel?"rgba(255,255,255,.8)":"rgba(255,255,255,.2)"}`,
-                    background:sel?"rgba(255,255,255,.2)":"rgba(255,255,255,.07)",
-                    color:"#fff",borderRadius:8,padding:"5px 10px",
-                    cursor:"pointer",fontSize:11,fontWeight:sel?700:400,textAlign:"left"}}>
-                  <span style={{width:10,height:10,borderRadius:"50%",flexShrink:0,
-                    border:`2px solid ${sel?"#fff":"rgba(255,255,255,.4)"}`,
-                    background:sel?"#fff":"transparent"}}/>
+                  style={{display:"flex",alignItems:"center",gap:8,
+                    border:`1.5px solid ${sel?"rgba(255,255,255,.7)":"rgba(255,255,255,.15)"}`,
+                    background:sel?"rgba(255,255,255,.18)":"rgba(255,255,255,.05)",
+                    color:"#fff",borderRadius:10,padding:"7px 12px",
+                    cursor:"pointer",fontSize:12,fontWeight:sel?800:400,textAlign:"left",
+                    boxShadow:sel?"0 2px 8px rgba(0,0,0,.15)":"none",
+                  }}>
+                  <span style={{width:12,height:12,borderRadius:"50%",flexShrink:0,
+                    border:`2px solid ${sel?"#fff":"rgba(255,255,255,.3)"}`,
+                    background:sel?"#fff":"transparent",
+                    boxShadow:sel?"0 0 0 3px rgba(255,255,255,.2)":"none",
+                  }}/>
                   {r}
+                  {sel&&<span style={{marginLeft:"auto",fontSize:10,opacity:.6}}>✓</span>}
                 </button>
               );
             })}
-            {/* Bouton postes habilités roulement */}
             <button onClick={()=>setShowHabRoul(true)}
-              style={{display:"flex",alignItems:"center",gap:6,
-                border:"1.5px solid rgba(255,255,255,.2)",
-                background:"rgba(255,255,255,.07)",
-                color:"#fff",borderRadius:8,padding:"5px 10px",
-                cursor:"pointer",fontSize:11,fontWeight:400,textAlign:"left",marginTop:2}}>
-              <span style={{fontSize:12}}>⚙️</span>
-              Postes {profile.habilitations&&Object.keys(profile.habilitations).length>0
-                ? `(${Object.keys(profile.habilitations).length})`
-                : ""}
+              style={{display:"flex",alignItems:"center",gap:8,
+                border:"1.5px solid rgba(255,255,255,.15)",
+                background:"rgba(255,255,255,.05)",
+                color:"rgba(255,255,255,.8)",borderRadius:10,padding:"7px 12px",
+                cursor:"pointer",fontSize:11,fontWeight:500,textAlign:"left",marginTop:2}}>
+              ⚙️ Postes habilités
+              {Object.keys(profile.habilitations||{}).length>0&&
+                <span style={{marginLeft:"auto",background:"rgba(255,255,255,.15)",
+                  borderRadius:12,padding:"1px 7px",fontSize:10,fontWeight:700}}>
+                  {Object.keys(profile.habilitations||{}).length}
+                </span>}
             </button>
           </div>
         </div>
 
-        {/* ── Réserviste ── */}
+        {/* Réserviste */}
         <div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7}}>
-            <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.5)",letterSpacing:.8}}>🛡️ RÉSERVISTE</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.4)",
+              letterSpacing:1,textTransform:"uppercase"}}>🛡️ Réserviste</div>
             <Toggle value={profile.isReserve||false} onChange={v=>setProfile({isReserve:v})} color="#10b981"/>
           </div>
           {profile.isReserve?(
-            <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {/* Familles habilitées */}
-              {(()=>{
-                const detected=detectFamillesReserviste(agent.id,schedule);
-                const current=profile.famillesHab||null;
-                const suggestion=detected&&!current?detected:null;
-                const OPTS=[
-                  {k:"PRCI",l:"PRCI",     bg:"rgba(59,130,246,.3)",bd:"rgba(147,197,253,.5)"},
-                  {k:"PAR", l:"PAR",      bg:"rgba(16,185,129,.3)",bd:"rgba(110,231,183,.5)"},
-                  {k:"BOTH",l:"PRCI+PAR", bg:"rgba(139,92,246,.3)",bd:"rgba(196,181,253,.5)"},
-                ];
-                return(
-                  <div>
-                    {suggestion&&<div style={{fontSize:8,color:"#fde68a",marginBottom:4,fontWeight:600}}>
-                      💡 {suggestion==="BOTH"?"PRCI+PAR":suggestion} détecté automatiquement
-                    </div>}
-                    <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                      {OPTS.map(o=>{const sel=current===o.k;const isSug=suggestion===o.k;
-                        return <button key={o.k} onClick={()=>setProfile({famillesHab:sel?null:o.k})}
-                          style={{border:`1.5px solid ${sel?"rgba(255,255,255,.8)":isSug?o.bd:"rgba(255,255,255,.2)"}`,
-                            background:sel?o.bg:"rgba(255,255,255,.07)",
-                            color:"#fff",borderRadius:7,padding:"4px 9px",
-                            cursor:"pointer",fontSize:10,fontWeight:sel?800:400}}>
-                          {sel&&"✓ "}{o.l}
-                        </button>;
-                      })}
-                    </div>
-                    {current&&<div style={{fontSize:8,color:"rgba(255,255,255,.6)",marginTop:4}}>
-                      ✓ {current==="BOTH"?"PRCI et PAR":current==="PRCI"?"PRCI uniquement":"PAR uniquement"}
-                    </div>}
-                  </div>
-                );
-              })()}
-              {/* Habilitations résumé + bouton */}
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                {nbHab>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3}}>
-                  {Object.entries(profile.habilitations||{}).slice(0,3).map(([code,niv])=>{
-                    const n=NIV_HAB.find(x=>x.code===niv);
-                    const h=[...HAB_PRCI,...HAB_PAR].find(x=>x.code===code);
-                    return h?<span key={code} style={{fontSize:8,background:n?.color,color:n?.textColor,borderRadius:6,padding:"1px 5px",fontWeight:700}}>{h.label}</span>:null;
-                  })}
-                  {nbHab>3&&<span style={{fontSize:8,color:"rgba(255,255,255,.5)"}}>+{nbHab-3}</span>}
-                </div>}
-                <button onClick={()=>setShowHab(true)}
-                  style={{background:"rgba(255,255,255,.15)",border:"1px solid rgba(255,255,255,.25)",
-                    color:"#fff",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>
-                  ⚙️ Hab. ({nbHab})
-                </button>
-              </div>
-              <div style={{fontSize:8,color:"rgba(255,255,255,.5)"}}>
-                {nbHab===0?"Aucune habilitation":`${nbValid} validée${nbValid>1?"s":""} · ${nbHab-nbValid} en cours`}
-              </div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {/* Bouton habilitations */}
+              <button onClick={()=>setShowHab(true)}
+                style={{display:"flex",alignItems:"center",gap:8,
+                  border:"1.5px solid rgba(255,255,255,.2)",
+                  background:"rgba(255,255,255,.08)",
+                  color:"#fff",borderRadius:10,padding:"9px 12px",
+                  cursor:"pointer",fontSize:12,fontWeight:600,textAlign:"left",
+                  width:"100%",
+                }}>
+                <span style={{fontSize:14}}>⚙️</span>
+                <span style={{flex:1}}>Mes habilitations</span>
+                {nbHab>0
+                  ? <span style={{background:"rgba(16,185,129,.4)",
+                      border:"1px solid rgba(110,231,183,.5)",
+                      borderRadius:20,padding:"1px 8px",fontSize:10,fontWeight:800}}>
+                      {nbHab} poste{nbHab>1?"s":""}
+                    </span>
+                  : <span style={{fontSize:10,opacity:.4}}>Aucune</span>
+                }
+              </button>
+              {/* Résumé postes habilités */}
+              {nbHab>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                {Object.keys(profile.habilitations||{}).map(code=>{
+                  const h=[...HAB_PRCI,...HAB_PAR].find(x=>x.code===code);
+                  return h?<span key={code} style={{
+                    fontSize:9,fontWeight:700,
+                    background:"rgba(255,255,255,.1)",
+                    color:"rgba(255,255,255,.85)",
+                    borderRadius:6,padding:"2px 7px",
+                    border:"1px solid rgba(255,255,255,.15)",
+                  }}>{h.label}</span>:null;
+                })}
+              </div>}
             </div>
           ):(
-            <div style={{fontSize:10,color:"rgba(255,255,255,.4)",fontStyle:"italic"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,.3)",fontStyle:"italic",marginTop:4}}>
               Activez pour gérer vos habilitations.
             </div>
           )}
         </div>
       </div>
 
-      {/* Ligne 3 : compteurs si profil déverrouillé */}
-      {isOwnProfile&&<div style={{borderTop:"1px solid rgba(255,255,255,.12)",padding:"10px 20px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:7,flexWrap:"wrap",gap:6}}>
-          <div style={{display:"flex",flexDirection:"column",gap:2}}>
-            <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.5)",letterSpacing:.8}}>📊 COMPTEURS {compteurYear}</div>
-            <div style={{fontSize:8,color:"rgba(255,255,255,.3)",fontStyle:"italic"}}>CONGÉS DU PERSONNEL DE LA SNCF — GRH00143</div>
+      {/* ── COMPTEURS ── */}
+      {isOwnProfile&&<>
+        <div style={{height:1,background:"rgba(255,255,255,.08)",margin:"0 20px"}}/>
+        <div style={{padding:"12px 20px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+            marginBottom:8,flexWrap:"wrap",gap:6}}>
+            <div>
+              <div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,.4)",
+                letterSpacing:1,textTransform:"uppercase"}}>📊 Compteurs {compteurYear}</div>
+              <div style={{fontSize:8,color:"rgba(255,255,255,.2)",fontStyle:"italic",marginTop:1}}>
+                CONGÉS DU PERSONNEL DE LA SNCF — GRH00143
+              </div>
+            </div>
+            <div style={{display:"flex",gap:3}}>
+              {[currentYear-1,currentYear,currentYear+1].map(y=>(
+                <button key={y} onClick={()=>setCompteurYear(y)}
+                  style={{border:`1px solid ${compteurYear===y?"rgba(255,255,255,.6)":"rgba(255,255,255,.15)"}`,
+                    background:compteurYear===y?"rgba(255,255,255,.18)":"transparent",
+                    color:"#fff",borderRadius:7,padding:"3px 8px",cursor:"pointer",
+                    fontSize:10,fontWeight:compteurYear===y?800:400}}>{y}</button>
+              ))}
+            </div>
           </div>
-          <div style={{display:"flex",gap:3}}>
-            {[currentYear-1,currentYear,currentYear+1].map(y=>(
-              <button key={y} onClick={()=>setCompteurYear(y)}
-                style={{border:`1px solid ${compteurYear===y?"rgba(255,255,255,.8)":"rgba(255,255,255,.2)"}`,
-                  background:compteurYear===y?"rgba(255,255,255,.2)":"transparent",
-                  color:"#fff",borderRadius:6,padding:"2px 7px",cursor:"pointer",
-                  fontSize:10,fontWeight:compteurYear===y?700:400}}>{y}</button>
-            ))}
-          </div>
+          <CompteursBadges counts={counts} year={compteurYear} onFetePaye={onFetePaye} schedule={schedule} agentId={agent.id}/>
         </div>
-        <CompteursBadges counts={counts} year={compteurYear} onFetePaye={onFetePaye} schedule={schedule} agentId={agent.id}/>
-      </div>}
+      </>}
     </div>
 
     {/* Bandeau congé en cours */}
