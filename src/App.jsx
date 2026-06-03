@@ -870,10 +870,16 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
       note:"RP = Repos Périodique · RU/RQ = Repos Utilisation · TC/TY = Temps Compensé · RN = Repos Nuit",
     },
     {
+      id:"nu",
+      label:"⬜ NU (Non Utilisé)",
+      codes:["NU"],
+      note:"NU = Journée non utilisée",
+    },
+    {
       id:"dispo",
-      label:"⬜ Disponible / NU",
-      codes:["NU","DISPO"],
-      note:"",
+      label:"🟩 DISPO (Disponible)",
+      codes:["DISPO"],
+      note:"DISPO = Agent disponible",
     },
     {
       id:"conges",
