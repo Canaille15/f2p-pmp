@@ -2500,198 +2500,200 @@ function getPlageMinutes(code) {
 }
 
 function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile}){
-  const TOTAL_MINUTES = 24*60;
-  const PX_PER_HOUR   = 50; // pixels par heure
-  const PX_PER_MIN    = PX_PER_HOUR / 60;
-  const GRID_HEIGHT   = TOTAL_MINUTES * PX_PER_MIN; // 1200px
-  const HOURS         = Array.from({length:25},(_,i)=>i); // 0..24
+  // Vue liste verticale scrollable (style Google Agenda mobile)
+  // Un jour par ligne, bloc horaire visuel à droite
 
-  // Colonnes : tous les jours de la période
-  const cols = dates.map(dk=>{
-    const en  = schedule[`${agent.id}-${dk}`];
-    const code= en?.equipe;
-    const eq  = code ? EQ[code] : null;
-    const isPrive = en?.prive||eq?.prive||false;
-    const showData= isOwnProfile||!isPrive;
-    const dow = new Date(dk).getDay();
-    const isWE= dow===0||dow===6;
+  const JOURS_LONG = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+  const BAR_PX_PER_MIN = 0.5; // 1px = 2 minutes → barre de 480px pour 24h
+
+  const lignes = dates.map(dk=>{
+    const en   = schedule[`${agent.id}-${dk}`];
+    const code = en?.equipe;
+    const eq   = code ? EQ[code] : null;
+    const isPrive  = en?.prive||eq?.prive||false;
+    const showData = isOwnProfile||!isPrive;
+    const dow   = new Date(dk).getDay();
+    const isWE  = dow===0||dow===6;
     const isToday = dk===TODAY;
 
-    // Calcul bloc
-    let bloc = null;
+    let plage = null;
+    let label = null;
+    let couleur = "#f1f5f9";
+    let tc = "#94a3b8";
+
     if(code && showData){
-      const plage = getPlageMinutes(code);
-      if(plage){
-        bloc = {
-          top:  plage.debut * PX_PER_MIN,
-          height: (plage.fin - plage.debut) * PX_PER_MIN,
-          code, label: eq?.label||code,
-          heures: eq?.heures||"",
-          color: getColor(code),
-          tc: getTc(code),
-          depasse: plage.fin > TOTAL_MINUTES, // nuit → dépasse minuit
-        };
-      } else {
-        // Pas d'horaire → bloc journée complète
-        bloc = {
-          top: 6*60*PX_PER_MIN, // commence à 6h
-          height: 12*60*PX_PER_MIN, // 12h de bloc
-          code, label: eq?.label||code,
-          heures: "",
-          color: getColor(code),
-          tc: getTc(code),
-          depasse: false,
-          journee: true,
-        };
-      }
+      label   = eq?.label||code;
+      couleur = getColor(code);
+      tc      = getTc(code);
+      plage   = getPlageMinutes(code);
     }
 
-    return {dk, code, bloc, isWE, isToday, dow, en, showData};
+    const d = new Date(dk);
+    return {dk, code, eq, label, plage, couleur, tc, isWE, isToday, dow,
+      jourNom: JOURS_LONG[dow],
+      jourNum: d.getDate(),
+      moisNom: d.toLocaleDateString("fr-FR",{month:"short"}),
+      showData};
   });
 
-  // Scroll auto vers 6h au mount
-  const scrollRef = React.useRef(null);
-  useEffect(()=>{
-    if(scrollRef.current){
-      scrollRef.current.scrollTop = 5 * PX_PER_HOUR; // positionne sur 5h
+  // Grouper par semaine pour afficher un séparateur
+  const lignesAvecSep = [];
+  let dernSemaine = null;
+  lignes.forEach(l=>{
+    const d = new Date(l.dk);
+    // Numéro de semaine ISO
+    const sem = Math.ceil((((d - new Date(d.getFullYear(),0,1))/86400000)+1)/7);
+    if(sem !== dernSemaine){
+      dernSemaine = sem;
     }
-  },[]);
-
-  const dayLabel = (dk) => {
-    const d = new Date(dk);
-    return {
-      jourSemaine: d.toLocaleDateString("fr-FR",{weekday:"short"}),
-      jourNum:     d.getDate(),
-      mois:        d.toLocaleDateString("fr-FR",{month:"short"}),
-    };
-  };
+    lignesAvecSep.push(l);
+  });
 
   return(
     <div style={{border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden",background:"#fff"}}>
+      {/* Légende */}
+      <div style={{padding:"8px 14px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",
+        display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>📋 Vue Planning</span>
+        <span style={{fontSize:9,color:"#94a3b8"}}>— Scroll pour naviguer dans le mois</span>
+      </div>
 
-      {/* En-têtes colonnes jours */}
-      <div style={{
-        display:"grid",
-        gridTemplateColumns:`48px repeat(${cols.length},1fr)`,
-        borderBottom:"2px solid #e2e8f0",
-        position:"sticky",top:0,zIndex:10,background:"#fff",
-      }}>
-        <div/> {/* coin vide */}
-        {cols.map(({dk,isWE,isToday})=>{
-          const {jourSemaine,jourNum,mois} = dayLabel(dk);
+      {/* Liste des jours */}
+      <div style={{overflowY:"auto",maxHeight:"75vh",WebkitOverflowScrolling:"touch"}}>
+        {lignesAvecSep.map((l,i)=>{
+          const isFirstOfMonth = l.jourNum===1;
           return(
-            <div key={dk} style={{
-              textAlign:"center",padding:"8px 2px",
-              background:isToday?"#eef2ff":isWE?"#f8fafc":"#fff",
-              borderLeft:"1px solid #f1f5f9",
-            }}>
-              <div style={{fontSize:9,fontWeight:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#64748b",
-                textTransform:"uppercase"}}>{jourSemaine}</div>
-              <div style={{fontSize:15,fontWeight:isToday?900:700,
-                color:isToday?"#fff":"#1e293b",
-                background:isToday?"#6366f1":"transparent",
-                borderRadius:"50%",width:28,height:28,
-                display:"inline-flex",alignItems:"center",justifyContent:"center",
-                margin:"2px auto 0"}}>
-                {jourNum}
+            <div key={l.dk}>
+              {/* Séparateur semaine si lundi */}
+              {l.dow===1&&i>0&&<div style={{height:1,background:"#e2e8f0",margin:"0 14px"}}/>}
+
+              {/* Ligne jour */}
+              <div style={{
+                display:"flex",alignItems:"stretch",
+                minHeight:52,
+                background:l.isToday?"#eef2ff":l.isWE?"#fafafa":"#fff",
+                borderBottom:"1px solid #f8fafc",
+                borderLeft:l.isToday?"3px solid #6366f1":"3px solid transparent",
+              }}>
+                {/* Colonne date */}
+                <div style={{
+                  width:56,flexShrink:0,
+                  display:"flex",flexDirection:"column",
+                  alignItems:"center",justifyContent:"center",
+                  padding:"6px 4px",
+                  borderRight:"1px solid #f1f5f9",
+                }}>
+                  <div style={{
+                    fontSize:10,fontWeight:700,
+                    color:l.isToday?"#6366f1":l.isWE?"#f97316":"#94a3b8",
+                    textTransform:"uppercase",letterSpacing:.3,
+                  }}>{l.jourNom.slice(0,3)}</div>
+                  <div style={{
+                    fontSize:18,fontWeight:l.isToday?900:600,
+                    color:l.isToday?"#fff":"#1e293b",
+                    background:l.isToday?"#6366f1":"transparent",
+                    borderRadius:"50%",width:32,height:32,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    lineHeight:1,
+                  }}>{l.jourNum}</div>
+                  <div style={{fontSize:8,color:"#94a3b8",marginTop:1}}>{l.moisNom}</div>
+                </div>
+
+                {/* Contenu : bloc équipe */}
+                <div style={{flex:1,padding:"6px 10px",display:"flex",
+                  flexDirection:"column",justifyContent:"center",gap:4}}>
+                  {l.code&&l.showData?(
+                    <div>
+                      {/* Badge code + label */}
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                        <span style={{
+                          background:l.couleur,color:l.tc,
+                          borderRadius:8,padding:"3px 10px",
+                          fontSize:12,fontWeight:800,
+                          boxShadow:"0 1px 3px rgba(0,0,0,.12)",
+                        }}>
+                          {CODES_FETES[l.code]?"🩷":""}{l.label}
+                        </span>
+                        {l.eq?.heures&&<span style={{
+                          fontSize:10,color:"#64748b",fontWeight:600,
+                          fontFamily:"monospace",
+                        }}>{l.eq.heures}</span>}
+                      </div>
+
+                      {/* Barre horaire visuelle */}
+                      {l.plage&&(()=>{
+                        const totalMin = 24*60;
+                        const debutPct = Math.min(l.plage.debut/totalMin*100,100);
+                        const largeurPct = Math.min((l.plage.fin-l.plage.debut)/totalMin*100,100-debutPct);
+                        return(
+                          <div style={{position:"relative",height:8,
+                            background:"#f1f5f9",borderRadius:4,overflow:"visible"}}>
+                            {/* Fond barre */}
+                            <div style={{
+                              position:"absolute",
+                              left:`${debutPct}%`,
+                              width:`${largeurPct}%`,
+                              height:"100%",
+                              background:l.couleur,
+                              borderRadius:4,
+                              minWidth:3,
+                            }}/>
+                            {/* Marqueurs 6h, 12h, 18h */}
+                            {[6,12,18].map(h=>(
+                              <div key={h} style={{
+                                position:"absolute",
+                                left:`${h/24*100}%`,
+                                top:-2,bottom:-2,
+                                width:1,background:"rgba(0,0,0,.08)",
+                              }}/>
+                            ))}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Ligne "maintenant" si aujourd'hui */}
+                      {l.isToday&&(()=>{
+                        const now = new Date();
+                        const minNow = now.getHours()*60+now.getMinutes();
+                        const pct = minNow/1440*100;
+                        return(
+                          <div style={{position:"relative",height:2,marginTop:2}}>
+                            <div style={{
+                              position:"absolute",
+                              left:`${pct}%`,
+                              top:0,
+                              width:3,height:3,
+                              borderRadius:"50%",
+                              background:"#ef4444",
+                              transform:"translateX(-50%)",
+                            }}/>
+                            <div style={{
+                              position:"absolute",
+                              left:`${pct}%`,
+                              right:0,
+                              height:1,
+                              background:"#ef4444",
+                              opacity:.4,
+                            }}/>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ):(
+                    <div style={{fontSize:10,color:"#cbd5e1",fontStyle:"italic"}}>
+                      {l.showData?"—":"·"}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div style={{fontSize:8,color:"#94a3b8"}}>{mois}</div>
             </div>
           );
         })}
       </div>
-
-      {/* Corps scrollable */}
-      <div ref={scrollRef} style={{
-        overflowY:"auto",maxHeight:"70vh",
-        WebkitOverflowScrolling:"touch",
-      }}>
-        <div style={{
-          display:"grid",
-          gridTemplateColumns:`48px repeat(${cols.length},1fr)`,
-          position:"relative",
-          height: GRID_HEIGHT,
-        }}>
-
-          {/* Axe horaire */}
-          <div style={{position:"relative"}}>
-            {HOURS.map(h=>(
-              <div key={h} style={{
-                position:"absolute",
-                top: h*PX_PER_HOUR - 7,
-                right:4,
-                fontSize:9,fontWeight:600,color:"#94a3b8",
-                lineHeight:1,textAlign:"right",
-                width:40,
-              }}>
-                {h<24?`${String(h).padStart(2,"0")}:00`:""}
-              </div>
-            ))}
-          </div>
-
-          {/* Colonnes jours */}
-          {cols.map(({dk,isWE,isToday,bloc,showData})=>(
-            <div key={dk} style={{
-              position:"relative",
-              borderLeft:"1px solid #f1f5f9",
-              background:isWE?"#fafafa":"#fff",
-            }}>
-              {/* Lignes horaires */}
-              {HOURS.map(h=>(
-                <div key={h} style={{
-                  position:"absolute",top:h*PX_PER_HOUR,
-                  left:0,right:0,height:1,
-                  background: h%6===0?"#e2e8f0":"#f8fafc",
-                  zIndex:0,
-                }}/>
-              ))}
-
-              {/* Ligne "maintenant" */}
-              {isToday&&(()=>{
-                const now = new Date();
-                const minuits = now.getHours()*60+now.getMinutes();
-                return <div style={{
-                  position:"absolute",
-                  top: minuits*PX_PER_MIN,
-                  left:0,right:0,height:2,
-                  background:"#ef4444",zIndex:5,
-                }}>
-                  <div style={{position:"absolute",left:-4,top:-4,width:10,height:10,
-                    borderRadius:"50%",background:"#ef4444"}}/>
-                </div>;
-              })()}
-
-              {/* Bloc équipe */}
-              {bloc&&<div style={{
-                position:"absolute",
-                top: Math.min(bloc.top, GRID_HEIGHT-8),
-                height: Math.min(bloc.height, GRID_HEIGHT - Math.min(bloc.top, GRID_HEIGHT-8)),
-                left:2,right:2,
-                background:bloc.color,
-                borderRadius:6,
-                zIndex:2,
-                overflow:"hidden",
-                padding:"3px 5px",
-                boxShadow:"0 1px 3px rgba(0,0,0,.15)",
-                cursor:"default",
-              }}>
-                <div style={{fontSize:9,fontWeight:800,color:bloc.tc,lineHeight:1.3,
-                  overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  {CODES_FETES[bloc.code]?"🩷":""}{bloc.label}
-                </div>
-                {bloc.heures&&bloc.height>25&&<div style={{fontSize:8,color:bloc.tc,opacity:.8,
-                  overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  {bloc.heures}
-                </div>}
-                {bloc.journee&&<div style={{fontSize:7,color:bloc.tc,opacity:.7}}>Journée</div>}
-              </div>}
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
+
 
 // ─── HELPER RC FÊTES AGENDA ──────────────────────────────────────────────────
 // Retourne la liste des codes fêtes dont ce jour est soit :
