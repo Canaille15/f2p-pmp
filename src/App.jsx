@@ -1462,185 +1462,236 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
   };
 
   const notifCount = lignes.filter(l=>l.notifActive).length;
+  const [ouvert, setOuvert] = useState(true);
+  const [motifOuvert, setMotifOuvert] = useState(null); // code dont le motif est déroulé
 
   // Couleurs par statut
   const statutStyle = {
-    futur:          {bg:"#f8fafc", border:"#e2e8f0", badge:"#e2e8f0", badgeTc:"#94a3b8", icon:"🔜"},
-    prise:          {bg:"#f0fdf4", border:"#86efac", badge:"#22c55e", badgeTc:"#fff",     icon:"✅"},
-    attente:        {bg:"#fffbeb", border:"#fde68a", badge:"#f59e0b", badgeTc:"#fff",     icon:"⏳"},
-    payee:          {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶"},
-    payee_auto:     {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶"},
-    perdue:         {bg:"#fef2f2", border:"#fecaca", badge:"#dc2626", badgeTc:"#fff",     icon:"❌"},
-    perdue_probable:{bg:"#fff7ed", border:"#fed7aa", badge:"#ea580c", badgeTc:"#fff",     icon:"⚠️"},
-    indetermine:    {bg:"#faf5ff", border:"#e9d5ff", badge:"#7c3aed", badgeTc:"#fff",     icon:"❓"},
+    futur:          {bg:"#f8fafc", border:"#e2e8f0", badge:"#94a3b8", badgeTc:"#fff",     icon:"🔜", label:"À venir"},
+    prise:          {bg:"#f0fdf4", border:"#86efac", badge:"#16a34a", badgeTc:"#fff",     icon:"✅", label:"Prise"},
+    attente:        {bg:"#fffbeb", border:"#fde68a", badge:"#f59e0b", badgeTc:"#fff",     icon:"⏳", label:"En attente"},
+    payee:          {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée"},
+    payee_auto:     {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée"},
+    perdue:         {bg:"#fef2f2", border:"#fecaca", badge:"#dc2626", badgeTc:"#fff",     icon:"❌", label:"PERDUE"},
+    perdue_probable:{bg:"#fff7ed", border:"#fed7aa", badge:"#ea580c", badgeTc:"#fff",     icon:"⚠️", label:"Prob. perdue"},
+    indetermine:    {bg:"#faf5ff", border:"#e9d5ff", badge:"#7c3aed", badgeTc:"#fff",     icon:"❓", label:"Indéterminé"},
   };
 
   const canEdit = isOwnProfile || isAdmin;
 
+  const labelPriseLe = (l) => {
+    if(!l.priseLe) return null;
+    const d = new Date(l.priseLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"});
+    if(l.priseType==="RP")    return `${d} 🩷RC`;
+    if(l.priseType==="code")  return `${d} 🩷${l.code}`;
+    if(l.priseType==="manuel") return `${d} ✎`;
+    return d;
+  };
+
   return(
     <div style={{marginTop:14,border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden",background:"#fff"}}>
-      {/* Header */}
-      <div style={{background:"linear-gradient(135deg,#9d174d,#be185d)",padding:"11px 16px",display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:16}}>🩷</span>
-        <span style={{fontSize:13,fontWeight:800,color:"#fff",flex:1}}>Suivi des fêtes légales {year}</span>
-        {notifCount>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:700}}>{notifCount} rappel{notifCount>1?"s":""}</span>}
-        <span style={{fontSize:9,color:"rgba(255,255,255,.5)",fontStyle:"italic"}}>Réf. GRH00143</span>
+
+      {/* ── HEADER cliquable ── */}
+      <div onClick={()=>setOuvert(o=>!o)}
+        style={{background:"linear-gradient(135deg,#9d174d,#be185d)",padding:"11px 16px",
+          display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none"}}>
+        <span style={{fontSize:15}}>🩷</span>
+        <span style={{fontSize:13,fontWeight:800,color:"#fff",flex:1}}>
+          Suivi des fêtes légales {year}
+        </span>
+        {notifCount>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,
+          padding:"2px 9px",fontSize:11,fontWeight:700,flexShrink:0}}>
+          {notifCount} rappel{notifCount>1?"s":""}
+        </span>}
+        <span style={{fontSize:9,color:"rgba(255,255,255,.4)",fontStyle:"italic",marginRight:4}}>GRH00143</span>
+        <span style={{color:"#fff",fontSize:14,fontWeight:700,transition:"transform .2s",
+          display:"inline-block",transform:ouvert?"rotate(0deg)":"rotate(-90deg)"}}>
+          ▼
+        </span>
       </div>
 
-      {/* Alertes actives */}
-      {lignes.filter(l=>l.notifActive).map(l=>{
-        const s = statutStyle[l.statut]||statutStyle.attente;
-        return(
-          <div key={"alert-"+l.code} style={{background:"#fff7ed",borderBottom:"1px solid #fed7aa",padding:"10px 14px",display:"flex",alignItems:"flex-start",gap:10}}>
-            <span style={{fontSize:18,flexShrink:0}}>⚠️</span>
-            <div style={{flex:1}}>
-              <div style={{fontSize:12,fontWeight:800,color:"#c2410c"}}>{l.code} — {l.label}</div>
-              <div style={{fontSize:11,color:"#92400e",marginTop:2}}>
-                À prendre avant le <strong>{new Date(l.limiteDate).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined})}</strong>
+      {ouvert&&<>
+        {/* ── Alertes actives ── */}
+        {lignes.filter(l=>l.notifActive).map(l=>(
+          <div key={"alert-"+l.code} style={{background:"#fff7ed",borderBottom:"1px solid #fed7aa",
+            padding:"9px 14px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{fontSize:15,flexShrink:0}}>⚠️</span>
+            <div style={{flex:1,minWidth:160}}>
+              <div style={{fontSize:11,fontWeight:800,color:"#c2410c"}}>
+                🩷 {l.code} — {l.label}
+              </div>
+              <div style={{fontSize:10,color:"#92400e",marginTop:1}}>
+                À prendre avant le <strong>
+                  {new Date(l.limiteDate).toLocaleDateString("fr-FR",{
+                    day:"2-digit",month:"long",
+                    year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined
+                  })}
+                </strong>
               </div>
             </div>
             {canEdit&&<div style={{display:"flex",gap:5,flexShrink:0}}>
-              <button onClick={()=>prendreEnCompte(l.code)}
-                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>✓ Pris en compte</button>
-              <button onClick={()=>snooze10j(l.code)}
-                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",fontSize:10}}>⏰ +10j</button>
+              <button onClick={e=>{e.stopPropagation();prendreEnCompte(l.code);}}
+                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,
+                  padding:"5px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>✓ Pris</button>
+              <button onClick={e=>{e.stopPropagation();snooze10j(l.code);}}
+                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",
+                  borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:10}}>⏰ +10j</button>
             </div>}
           </div>
-        );
-      })}
-
-      {/* Tableau */}
-      <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-          <thead>
-            <tr style={{background:"#f8fafc",borderBottom:"1.5px solid #e2e8f0"}}>
-              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>CODE</th>
-              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10}}>FÊTE</th>
-              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>DATE FÊTE</th>
-              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>DATE LIMITE</th>
-              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10,whiteSpace:"nowrap"}}>PRISE LE</th>
-              <th style={{padding:"7px 10px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:10}}>STATUT</th>
-              {canEdit&&<th style={{padding:"7px 10px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:10}}>✏️</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {lignes.map((l,i)=>{
-              const s = statutStyle[l.statut]||statutStyle.futur;
-              const isEditing = editingCode===l.code;
-              return(
-                <tr key={l.code} style={{background:i%2===0?s.bg:"#fff",borderBottom:"1px solid #f1f5f9"}}>
-                  <td style={{padding:"7px 10px"}}>
-                    <span style={{background:"#fce7f3",color:"#9d174d",borderRadius:6,padding:"2px 7px",fontFamily:"monospace",fontSize:10,fontWeight:800}}>{l.code}</span>
-                  </td>
-                  <td style={{padding:"7px 10px",fontWeight:600,color:"#1e293b",maxWidth:200}}>
-                    <div style={{fontWeight:700}}>{l.label}</div>
-                    {/* Motif réglementaire selon situation */}
-                    {l.motifReglementaire&&<div style={{
-                      fontSize:8,marginTop:3,lineHeight:1.4,
-                      color:l.estPerdue?"#dc2626":l.code==="VN"?"#7c3aed":"#64748b",
-                      fontStyle:"italic",
-                      background:l.estPerdue?"#fef2f2":l.code==="VN"?"#faf5ff":"#f8fafc",
-                      borderRadius:4,padding:"2px 5px",
-                    }}>
-                      {l.estPerdue&&<span style={{fontWeight:800,fontStyle:"normal"}}>❌ PERDUE — </span>}
-                      {l.motifReglementaire}
-                    </div>}
-                  </td>
-                  <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
-                    <div style={{fontFamily:"monospace",fontSize:10,color:"#475569",fontWeight:600}}>
-                      {new Date(l.dateFete).toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit",year:"2-digit"})}
-                    </div>
-                    {l.estDimanche&&<div style={{fontSize:8,fontWeight:700,color:"#dc2626",marginTop:1}}>⚠️ Dimanche</div>}
-                  </td>
-                  <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
-                    <span style={{fontSize:10,fontWeight:700,color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#475569"}}>
-                      {new Date(l.limiteDate).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined})}
-                    </span>
-                  </td>
-                  <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
-                    {isEditing?(
-                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                        <input type="date" defaultValue={l.priseLe||""} autoFocus
-                          onChange={e=>setEditVal(e.target.value)}
-                          style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"2px 6px",fontSize:10,outline:"none",width:110}}/>
-                        <button onClick={()=>setManualDate(l.code,editVal)}
-                          style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:10}}>✓</button>
-                        <button onClick={()=>setEditingCode(null)}
-                          style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:5,padding:"2px 7px",cursor:"pointer",fontSize:10}}>✕</button>
-                      </div>
-                    ):(
-                      l.priseLe
-                        ? <span style={{fontSize:10,fontWeight:700,color:"#16a34a",display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
-                            <span>{new Date(l.priseLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})}</span>
-                            {l.priseType==="RP"&&<span style={{
-                              fontSize:8,fontWeight:800,
-                              background:"#fce7f3",color:"#9d174d",
-                              borderRadius:6,padding:"1px 5px",
-                              border:"1px solid #fbcfe8",
-                            }}>🩷 RC-{l.code}</span>}
-                            {l.priseType==="code"&&<span style={{
-                              fontSize:8,fontWeight:800,
-                              background:"#ec4899",color:"#fff",
-                              borderRadius:6,padding:"1px 5px",
-                            }}>🩷 {l.code}</span>}
-                            {l.priseType==="manuel"&&<span style={{fontSize:8,color:"#6366f1",fontWeight:600}}>(manuel)</span>}
-                          </span>
-                        : (l.statut==="payee"||l.statut==="payee_auto")
-                          ? <span style={{fontSize:10,color:"#3b82f6",fontWeight:600}}>
-                              Payé — fiche {MOIS_NOMS[l.moisPaye-1]} {l.anneePaye!==year?l.anneePaye:""}
-                            </span>
-                          : <span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>—</span>
-                    )}
-                  </td>
-                  <td style={{padding:"7px 10px"}}>
-                    <span style={{background:s.badge,color:s.badgeTc,borderRadius:20,padding:"2px 9px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>
-                      {s.icon} {
-                        l.statut==="futur"           ? "À venir"       :
-                        l.statut==="prise"           ? "Prise"         :
-                        l.statut==="attente"         ? "En attente"    :
-                        l.statut==="perdue"          ? "PERDUE"        :
-                        l.statut==="perdue_probable" ? "Probab. perdue":
-                        l.statut==="indetermine"     ? "Indéterminé"   :
-                        `Payé ${MOIS_NOMS[l.moisPaye-1]}`
-                      }
-                    </span>
-                  </td>
-                  {canEdit&&<td style={{padding:"7px 10px",textAlign:"center"}}>
-                    <div style={{display:"flex",gap:3,justifyContent:"center"}}>
-                      <button onClick={()=>{setEditingCode(l.code);setEditVal(l.priseLe||"");}}
-                        title="Modifier la date de prise"
-                        style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"2px 6px",cursor:"pointer",fontSize:10}}>📅</button>
-                      <button onClick={()=>setManualPayee(l.code,!l.estPayee)}
-                        title={l.estPayee?"Marquer non payé":"Marquer payé"}
-                        style={{background:l.estPayee?"#eff6ff":"#f1f5f9",border:`1px solid ${l.estPayee?"#bfdbfe":"#e2e8f0"}`,borderRadius:5,padding:"2px 6px",cursor:"pointer",fontSize:10}}>💶</button>
-                    </div>
-                  </td>}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Légende */}
-      <div style={{padding:"8px 14px",borderTop:"1px solid #f1f5f9",display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-        {[
-          {bg:"#22c55e",tc:"#fff",l:"Prise"},
-          {bg:"#f59e0b",tc:"#fff",l:"En attente"},
-          {bg:"#3b82f6",tc:"#fff",l:"Payée sur fiche"},
-          {bg:"#dc2626",tc:"#fff",l:"PERDUE"},
-          {bg:"#ea580c",tc:"#fff",l:"Probab. perdue"},
-          {bg:"#7c3aed",tc:"#fff",l:"Indéterminé"},
-          {bg:"#e2e8f0",tc:"#94a3b8",l:"À venir"},
-        ].map(({bg,tc,l})=>(
-          <span key={l} style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:9}}>
-            <span style={{width:8,height:8,borderRadius:"50%",background:bg,flexShrink:0}}/>
-            <span style={{color:"#64748b"}}>{l}</span>
-          </span>
         ))}
-        <span style={{flex:1}}/>
-        <span style={{fontSize:8,color:"#e2e8f0",fontStyle:"italic"}}>Réf. JOURS FÉRIÉS SNCF — GRH00143</span>
-      </div>
+
+        {/* ── Cartes portrait (1 par fête) ── */}
+        <div style={{display:"flex",flexDirection:"column",gap:0}}>
+          {lignes.map((l,i)=>{
+            const s = statutStyle[l.statut]||statutStyle.futur;
+            const isEditing = editingCode===l.code;
+            const motifVisible = motifOuvert===l.code;
+            const priseLe = labelPriseLe(l);
+            return(
+              <div key={l.code} style={{
+                borderBottom:"1px solid #f1f5f9",
+                background:s.bg,
+              }}>
+                {/* Ligne principale */}
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px"}}>
+
+                  {/* Badge code fête */}
+                  <span style={{
+                    background:"#ec4899",color:"#fff",
+                    borderRadius:7,padding:"3px 8px",
+                    fontFamily:"monospace",fontSize:11,fontWeight:800,
+                    flexShrink:0,minWidth:36,textAlign:"center",
+                  }}>🩷{l.code}</span>
+
+                  {/* Nom + date fête */}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#1e293b",
+                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {l.label}
+                      {l.estDimanche&&<span style={{fontSize:9,color:"#dc2626",marginLeft:5,fontWeight:800}}>⚠️Dim.</span>}
+                    </div>
+                    <div style={{fontSize:9,color:"#64748b",marginTop:1,display:"flex",gap:6,flexWrap:"wrap"}}>
+                      <span style={{fontFamily:"monospace"}}>
+                        {new Date(l.dateFete).toLocaleDateString("fr-FR",{
+                          weekday:"short",day:"2-digit",month:"2-digit"
+                        })}
+                      </span>
+                      <span style={{color:"#94a3b8"}}>→</span>
+                      <span style={{
+                        fontWeight:600,
+                        color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#475569"
+                      }}>
+                        {new Date(l.limiteDate).toLocaleDateString("fr-FR",{
+                          day:"2-digit",month:"short",
+                          year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Statut badge */}
+                  <span style={{
+                    background:s.badge,color:s.badgeTc,
+                    borderRadius:20,padding:"3px 9px",
+                    fontSize:9,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
+                  }}>
+                    {s.icon} {s.label}
+                    {(l.statut==="payee"||l.statut==="payee_auto")&&
+                      ` ${MOIS_NOMS[l.moisPaye-1]}`}
+                  </span>
+                </div>
+
+                {/* Ligne prise le + actions */}
+                <div style={{display:"flex",alignItems:"center",gap:6,
+                  padding:"0 12px 8px",flexWrap:"wrap"}}>
+
+                  {/* Prise le */}
+                  {isEditing?(
+                    <div style={{display:"flex",gap:4,alignItems:"center",flex:1}}>
+                      <input type="date" defaultValue={l.priseLe||""} autoFocus
+                        onChange={e=>setEditVal(e.target.value)}
+                        style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 7px",
+                          fontSize:10,outline:"none",flex:1}}/>
+                      <button onClick={()=>setManualDate(l.code,editVal)}
+                        style={{background:"#16a34a",color:"#fff",border:"none",
+                          borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10}}>✓</button>
+                      <button onClick={()=>setEditingCode(null)}
+                        style={{background:"#f1f5f9",color:"#475569",border:"none",
+                          borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10}}>✕</button>
+                    </div>
+                  ):(
+                    <div style={{flex:1,fontSize:10}}>
+                      {priseLe
+                        ? <span style={{color:"#16a34a",fontWeight:700}}>{priseLe}</span>
+                        : (l.statut==="payee"||l.statut==="payee_auto")
+                          ? <span style={{color:"#3b82f6",fontWeight:600}}>
+                              💶 Fiche {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                            </span>
+                          : <span style={{color:"#94a3b8",fontStyle:"italic"}}>Non renseigné</span>
+                      }
+                    </div>
+                  )}
+
+                  {/* Boutons actions */}
+                  {canEdit&&!isEditing&&<div style={{display:"flex",gap:4,flexShrink:0}}>
+                    <button onClick={()=>{setEditingCode(l.code);setEditVal(l.priseLe||"");}}
+                      title="Modifier la date de prise"
+                      style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,
+                        padding:"3px 7px",cursor:"pointer",fontSize:10}}>📅</button>
+                    <button onClick={()=>setManualPayee(l.code,!l.estPayee)}
+                      title={l.estPayee?"Non payé":"Marquer payé"}
+                      style={{background:l.estPayee?"#dbeafe":"#f1f5f9",
+                        border:`1px solid ${l.estPayee?"#bfdbfe":"#e2e8f0"}`,
+                        borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:10}}>💶</button>
+                    {/* Bouton motif réglementaire */}
+                    {l.motifReglementaire&&<button
+                      onClick={()=>setMotifOuvert(motifVisible?null:l.code)}
+                      title="Motif réglementaire"
+                      style={{background:motifVisible?"#fce7f3":"#f1f5f9",
+                        border:`1px solid ${motifVisible?"#fbcfe8":"#e2e8f0"}`,
+                        borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:10,
+                        color:motifVisible?"#9d174d":"#64748b"}}>📋</button>}
+                  </div>}
+                </div>
+
+                {/* Motif réglementaire déroulant */}
+                {motifVisible&&l.motifReglementaire&&<div style={{
+                  margin:"0 12px 10px",
+                  background:l.estPerdue?"#fef2f2":l.code==="VN"?"#faf5ff":"#f8fafc",
+                  borderRadius:8,padding:"8px 10px",
+                  fontSize:9,lineHeight:1.5,
+                  color:l.estPerdue?"#991b1b":l.code==="VN"?"#6b21a8":"#475569",
+                  border:`1px solid ${l.estPerdue?"#fecaca":l.code==="VN"?"#e9d5ff":"#e2e8f0"}`,
+                }}>
+                  {l.estPerdue&&<div style={{fontWeight:800,fontSize:10,marginBottom:3}}>❌ PERDUE</div>}
+                  {l.motifReglementaire}
+                </div>}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Légende compacte ── */}
+        <div style={{padding:"7px 12px",borderTop:"1px solid #f1f5f9",
+          display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",background:"#fafafa"}}>
+          {[
+            {bg:"#16a34a",l:"Prise"},
+            {bg:"#f59e0b",l:"Attente"},
+            {bg:"#3b82f6",l:"Payée"},
+            {bg:"#dc2626",l:"Perdue"},
+            {bg:"#ea580c",l:"Prob."},
+            {bg:"#7c3aed",l:"Indét."},
+            {bg:"#94a3b8",l:"À venir"},
+          ].map(({bg,l})=>(
+            <span key={l} style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:9}}>
+              <span style={{width:7,height:7,borderRadius:"50%",background:bg,flexShrink:0}}/>
+              <span style={{color:"#64748b"}}>{l}</span>
+            </span>
+          ))}
+          <span style={{flex:1}}/>
+          <span style={{fontSize:8,color:"#cbd5e1",fontStyle:"italic"}}>GRH00143</span>
+        </div>
+      </>}
     </div>
   );
 }
