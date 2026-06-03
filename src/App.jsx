@@ -847,7 +847,7 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
 
   // Labels lisibles pour chaque code
   const CODE_LABELS = {
-    M:"Matinée", AM:"Soirée", N:"Nuit", J:"Journée", JF:"Jour Fête",
+    M:"Matinée", AM:"Soirée", N:"Nuit", J:"Journée", JF:"Fête (travaillée)",
     RP:"RP", RU:"RU", RQ:"RQ", TC:"TC", TY:"TY", RN:"RN",
     NU:"NU", CA:"Congés", CP:"Congés", MA:"Maladie",
     ABS:"Absent", VT:"VT", VM:"Visite méd.", FOR:"Formation", DISPO:"Dispo",
@@ -861,7 +861,7 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
       label:"🟥 Travail",
       codes:["M","AM","N","J","JF"],
       syncAll:true, // bouton "même couleur pour tous"
-      note:"M = Matinée · AM = Soirée · N = Nuit · J = Journée · JF = Jour de Fête travaillé",
+      note:"M = Matinée · AM = Soirée · N = Nuit · J = Journée · JF = Fête travaillée",
     },
     {
       id:"repos",
@@ -2500,7 +2500,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   // Tous les codes disponibles pour la barre
   const CODES_BARRE = [
     {c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
-    {c:"JF",l:"Jour Fête"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},
+    {c:"JF",l:"Fête"},{c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},
     {c:"TC",l:"TC"},{c:"TY",l:"TY"},{c:"RN",l:"RN"},{c:"NU",l:"NU"},
     {c:"CA",l:"Congés"},{c:"MA",l:"Maladie"},
     {c:"ABS",l:"Absent"},{c:"VT",l:"VT"},{c:"VM",l:"VM"},
