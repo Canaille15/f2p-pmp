@@ -2457,13 +2457,29 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
           );
         })}
 
-        {/* Bouton annuler si mode actif */}
-        {codeActif&&<button onClick={()=>{setCodeActif(null);setShowFetesMenu(false);}}
-          style={{background:"#fef2f2",color:"#dc2626",border:"2px solid #fecaca",
-            borderRadius:10,padding:"7px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
-            minHeight:38}}>
-          ✕
-        </button>}
+        {/* Bouton EFFACER — toujours visible */}
+        <button
+          onClick={()=>{setCodeActif(codeActif==="EFFACER"?null:"EFFACER"); setShowFetesMenu(false);}}
+          style={{
+            background: codeActif==="EFFACER" ? "#dc2626" : "#fef2f2",
+            color: codeActif==="EFFACER" ? "#fff" : "#dc2626",
+            border:`2px solid ${codeActif==="EFFACER"?"#dc2626":"#fecaca"}`,
+            borderRadius:10,padding:"7px 12px",cursor:"pointer",
+            fontSize:11,fontWeight:800,minHeight:38,
+            boxShadow: codeActif==="EFFACER"?"0 0 0 3px #fca5a5":"none",
+            whiteSpace:"nowrap",
+          }}>
+          🗑 Effacer
+        </button>
+
+        {/* Annuler mode actif */}
+        {codeActif&&codeActif!=="EFFACER"&&
+          <button onClick={()=>{setCodeActif(null);setShowFetesMenu(false);}}
+            style={{background:"#f1f5f9",color:"#64748b",border:"1.5px solid #e2e8f0",
+              borderRadius:10,padding:"7px 10px",cursor:"pointer",fontSize:12,fontWeight:700,
+              minHeight:38}}>
+            ✕
+          </button>}
 
         {/* Bouton config */}
         <button onClick={()=>{setShowConfig(v=>!v);setShowFetesMenu(false);}}
@@ -2478,12 +2494,22 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
       </div>
 
       {/* Info mode actif */}
-      {codeActif&&<div style={{fontSize:10,color:"#6366f1",fontWeight:700,
-        background:"#eef2ff",borderRadius:8,padding:"4px 10px"}}>
-        ✏️ Mode saisie : {CODES_FETES[codeActif]
-          ? `🩷 ${codeActif} — ${CODES_FETES[codeActif]}`
-          : `"${CODES_BARRE.find(x=>x.c===codeActif)?.l||codeActif}"`
-        } — tape sur un jour pour appliquer
+      {codeActif&&<div style={{
+        fontSize:10,fontWeight:700,borderRadius:8,padding:"5px 10px",
+        background: codeActif==="EFFACER" ? "#fef2f2" : "#eef2ff",
+        color: codeActif==="EFFACER" ? "#dc2626" : "#6366f1",
+        display:"flex",alignItems:"center",gap:6,
+      }}>
+        {codeActif==="EFFACER"
+          ? "🗑 Mode effacement — tap sur un jour pour le vider"
+          : `✏️ Saisie : ${CODES_FETES[codeActif]
+              ? `🩷 ${codeActif} — ${CODES_FETES[codeActif]}`
+              : CODES_BARRE.find(x=>x.c===codeActif)?.l||codeActif
+            } — tap sur un jour pour appliquer`
+        }
+        <button onClick={()=>setCodeActif(null)}
+          style={{background:"none",border:"none",cursor:"pointer",
+            fontSize:12,color:"inherit",opacity:.6,padding:0,marginLeft:"auto"}}>✕</button>
       </div>}
 
       {/* Panneau de configuration */}
@@ -2862,6 +2888,279 @@ function BarreSaisieReserviste({habilitations, famillesHab, codeActif, setCodeAc
   );
 }
 
+// ─── BARRE DE SAISIE UNIFIÉE ────────────────────────────────────────────────
+// Adaptée roulement (boutons poste+horaire) et réserviste (postes habilités)
+// Règle vue équipe : M/AM/N/J/JF + FOR + DISPO → prive:false
+//                   RP/RU/CA/MA/ABS/FETE…     → prive:true
+const CODES_PRIVES = new Set(["RP","RU","RQ","RN","TC","TY","CA","CP","MA","ABS","VT","VM","NU",...Object.keys(CODES_FETES),"JF"]);
+
+function BarreSaisie({profile, habilitations, codeActif, setCodeActif, getColor, getTc, setDay, schedule, agentId}){
+  const [showRepos, setShowRepos] = useState(false);
+  const [showFetesMenu, setShowFetesMenu] = useState(false);
+  const anneeCourante = new Date().getFullYear();
+  const datesFetes = getDatesFetesAnnee(anneeCourante);
+  const isFeteActif = codeActif && CODES_FETES[codeActif];
+
+  // ── Construire les boutons de travail selon le profil ──────────────────────
+  const boutonsTravaill = [];
+
+  if(profile.isReserve){
+    // Réserviste : un bouton par poste habilité
+    const allPostes = [...HAB_PRCI,...HAB_PAR];
+    Object.keys(habilitations||{}).forEach(code=>{
+      const p = allPostes.find(x=>x.code===code);
+      if(!p) return;
+      boutonsTravaill.push({
+        id: code,
+        label: p.label,
+        sublabel: p.type==="3x8"?"3×8":"J",
+        equipe: p.type==="3x8"?"M":"J",
+        jsCode: code,
+        prive: false,
+        color: getColor("M"),
+        tc: getTc("M"),
+      });
+    });
+  } else {
+    // Roulement : un bouton par combinaison poste+horaire
+    const allPostes3x8 = [...POSTES_PRCI_3x8,...POSTES_PAR_3x8];
+    const postesHab = allPostes3x8.filter(p=>{
+      // L'agent est habilité sur ce poste si son jsCode M/AM/N est dans habilitations
+      const codeHab = p.M?.replace("-","") || p.code;
+      return habilitations && habilitations[codeHab];
+    });
+    // Si aucun poste habilité → montrer tous les postes de la famille
+    const postesAfficher = postesHab.length>0 ? postesHab : allPostes3x8;
+
+    postesAfficher.forEach(p=>{
+      const horaires = [
+        p.M&&{equipe:"M", jsCode:p.M, label:`${p.label}`, sublabel:"Mat."},
+        p.AM&&{equipe:"AM",jsCode:p.AM,label:`${p.label}`, sublabel:"Soir."},
+        p.N&&{equipe:"N", jsCode:p.N, label:`${p.label}`, sublabel:"Nuit"},
+      ].filter(Boolean);
+      horaires.forEach(h=>{
+        boutonsTravaill.push({
+          id: h.jsCode,
+          label: h.label,
+          sublabel: h.sublabel,
+          equipe: h.equipe,
+          jsCode: h.jsCode,
+          prive: false,
+          color: getColor(h.equipe),
+          tc: getTc(h.equipe),
+        });
+      });
+    });
+
+    // Journée
+    boutonsTravaill.push({
+      id:"J", label:"Journée", sublabel:"J",
+      equipe:"J", jsCode:"J", prive:false,
+      color:getColor("J"), tc:getTc("J"),
+    });
+  }
+
+  // ── Boutons repos / privés ─────────────────────────────────────────────────
+  const REPOS = [
+    {id:"RP",    label:"RP",       equipe:"RP",   prive:true},
+    {id:"RU",    label:"RU",       equipe:"RU",   prive:true},
+    {id:"CA",    label:"Congés",   equipe:"CA",   prive:true},
+    {id:"MA",    label:"Maladie",  equipe:"MA",   prive:true},
+    {id:"ABS",   label:"Absent",   equipe:"ABS",  prive:true},
+    {id:"FOR",   label:"Formation",equipe:"FOR",  prive:false},
+    {id:"DISPO", label:"Dispo",    equipe:"DISPO",prive:false},
+  ];
+
+  const handleBtn = (btn) => {
+    if(codeActif===btn.id){
+      setCodeActif(null);
+    } else {
+      setCodeActif(btn.id);
+      setShowFetesMenu(false);
+      setShowRepos(false);
+    }
+  };
+
+  const btnStyle = (btn) => {
+    const actif = codeActif===btn.id;
+    const col = btn.color||getColor(btn.equipe||"RP");
+    const tc  = btn.tc||getTc(btn.equipe||"RP");
+    return {
+      display:"inline-flex",flexDirection:"column",alignItems:"center",gap:1,
+      background: actif ? col : col+"18",
+      color: actif ? tc : col,
+      border:`1.5px solid ${col}`,
+      borderRadius:9,padding:"5px 9px",cursor:"pointer",
+      minHeight:36,minWidth:44,
+      boxShadow: actif?`0 0 0 2px ${col}44`:"none",
+      transition:"all .12s",position:"relative",
+      flexShrink:0,
+    };
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+
+      {/* ── Ligne 1 : boutons travail + fêtes + effacer + config ── */}
+      <div style={{display:"flex",flexWrap:"wrap",gap:4,alignItems:"center"}}>
+
+        {/* Boutons travail */}
+        {boutonsTravaill.map(btn=>(
+          <button key={btn.id} onClick={()=>handleBtn(btn)} style={btnStyle(btn)}>
+            {codeActif===btn.id&&<span style={{
+              position:"absolute",top:-3,right:-3,
+              width:8,height:8,borderRadius:"50%",
+              background:"#6366f1",border:"1.5px solid #fff"}}/>}
+            <span style={{fontSize:10,fontWeight:800,lineHeight:1}}>{btn.label}</span>
+            <span style={{fontSize:8,opacity:.75,lineHeight:1}}>{btn.sublabel}</span>
+          </button>
+        ))}
+
+        {/* Bouton Fêtes */}
+        <div style={{position:"relative"}}>
+          <button
+            onClick={()=>{setShowFetesMenu(v=>!v);if(isFeteActif)setCodeActif(null);}}
+            style={{
+              display:"inline-flex",flexDirection:"column",alignItems:"center",gap:1,
+              background: isFeteActif||showFetesMenu ? getColor("F1") : getColor("F1")+"18",
+              color: isFeteActif||showFetesMenu ? getTc("F1") : getColor("F1"),
+              border:`1.5px solid ${getColor("F1")}`,
+              borderRadius:9,padding:"5px 9px",cursor:"pointer",
+              minHeight:36,minWidth:44,flexShrink:0,
+              boxShadow:isFeteActif?`0 0 0 2px ${getColor("F1")}44`:"none",
+            }}>
+            <span style={{fontSize:10,fontWeight:800,lineHeight:1}}>🩷</span>
+            <span style={{fontSize:8,opacity:.75,lineHeight:1}}>{isFeteActif?codeActif:"Fête"}</span>
+          </button>
+          {/* Bottom-sheet fêtes */}
+          {showFetesMenu&&<>
+            <div onClick={()=>setShowFetesMenu(false)}
+              style={{position:"fixed",inset:0,zIndex:999,background:"rgba(0,0,0,.3)"}}/>
+            <div style={{position:"fixed",left:0,right:0,bottom:0,
+              background:"#fff",borderRadius:"16px 16px 0 0",
+              boxShadow:"0 -4px 24px rgba(0,0,0,.2)",
+              zIndex:1000,maxHeight:"65vh",overflowY:"auto"}}>
+              <div style={{padding:"10px 16px 6px",background:getColor("F1")+"22",
+                display:"flex",alignItems:"center",justifyContent:"space-between",
+                position:"sticky",top:0,borderRadius:"16px 16px 0 0"}}>
+                <span style={{fontSize:12,fontWeight:800,color:getColor("F1")}}>
+                  🩷 SÉLECTIONNER UNE FÊTE
+                </span>
+                <button onClick={()=>setShowFetesMenu(false)}
+                  style={{background:getColor("F1")+"22",border:"none",
+                    borderRadius:8,width:30,height:30,cursor:"pointer",
+                    fontSize:16,color:getColor("F1")}}>✕</button>
+              </div>
+              {Object.entries(CODES_FETES).map(([code,label])=>{
+                const dateFete = datesFetes[code];
+                if(!dateFete) return null;
+                const isActif = codeActif===code;
+                return(
+                  <button key={code}
+                    onClick={()=>{setCodeActif(isActif?null:code);setShowFetesMenu(false);}}
+                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",
+                      background:isActif?getColor("F1")+"22":"#fff",
+                      border:"none",borderBottom:"1px solid #fdf2f8",
+                      padding:"8px 12px",cursor:"pointer",textAlign:"left"}}>
+                    <span style={{background:getColor("F1"),color:getTc("F1"),
+                      borderRadius:5,padding:"1px 6px",fontFamily:"monospace",
+                      fontSize:11,fontWeight:800}}>{code}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{label}</div>
+                      <div style={{fontSize:9,color:"#94a3b8"}}>
+                        {new Date(dateFete).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"})}
+                      </div>
+                    </div>
+                    {isActif&&<span style={{color:getColor("F1"),fontWeight:800}}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>}
+        </div>
+
+        {/* Bouton Repos (repliable) */}
+        <button onClick={()=>{setShowRepos(v=>!v); setShowFetesMenu(false);}}
+          style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:1,
+            background:showRepos?"#1e293b":"#f1f5f9",
+            color:showRepos?"#fff":"#64748b",
+            border:"1.5px solid #e2e8f0",borderRadius:9,
+            padding:"5px 9px",cursor:"pointer",minHeight:36,minWidth:44,flexShrink:0}}>
+          <span style={{fontSize:10,fontWeight:800,lineHeight:1}}>…</span>
+          <span style={{fontSize:8,opacity:.75,lineHeight:1}}>Repos</span>
+        </button>
+
+        {/* Bouton Effacer */}
+        <button onClick={()=>setCodeActif(codeActif==="EFFACER"?null:"EFFACER")}
+          style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:1,
+            background:codeActif==="EFFACER"?"#dc2626":"#fef2f2",
+            color:codeActif==="EFFACER"?"#fff":"#dc2626",
+            border:`1.5px solid ${codeActif==="EFFACER"?"#dc2626":"#fecaca"}`,
+            borderRadius:9,padding:"5px 9px",cursor:"pointer",
+            minHeight:36,minWidth:44,flexShrink:0,
+            boxShadow:codeActif==="EFFACER"?"0 0 0 2px #fca5a5":"none"}}>
+          <span style={{fontSize:11,lineHeight:1}}>🗑</span>
+          <span style={{fontSize:8,fontWeight:700,lineHeight:1}}>Effacer</span>
+        </button>
+
+        {/* Annuler mode actif */}
+        {codeActif&&codeActif!=="EFFACER"&&
+          <button onClick={()=>{setCodeActif(null);setShowFetesMenu(false);setShowRepos(false);}}
+            style={{background:"#f1f5f9",color:"#64748b",border:"1.5px solid #e2e8f0",
+              borderRadius:9,padding:"5px 8px",cursor:"pointer",
+              fontSize:13,minHeight:36,flexShrink:0}}>✕</button>}
+      </div>
+
+      {/* ── Ligne 2 : repos/absences repliable ── */}
+      {showRepos&&<div style={{display:"flex",flexWrap:"wrap",gap:4,
+        background:"#f8fafc",borderRadius:10,padding:"7px 10px",
+        border:"1px solid #e2e8f0"}}>
+        <span style={{fontSize:9,fontWeight:700,color:"#94a3b8",
+          alignSelf:"center",marginRight:2,letterSpacing:.4}}>
+          PRIVÉ :
+        </span>
+        {REPOS.map(btn=>{
+          const col = getColor(btn.equipe)||"#64748b";
+          const tc  = getTc(btn.equipe)||"#fff";
+          const actif = codeActif===btn.id;
+          return(
+            <button key={btn.id} onClick={()=>handleBtn(btn)}
+              style={{
+                display:"inline-flex",flexDirection:"column",alignItems:"center",gap:1,
+                background: actif ? col : col+"18",
+                color: actif ? tc : col,
+                border:`1.5px solid ${col}`,
+                borderRadius:8,padding:"4px 8px",cursor:"pointer",
+                minHeight:32,flexShrink:0,
+                boxShadow:actif?`0 0 0 2px ${col}44`:"none",
+                opacity: btn.prive ? 1 : 0.7,
+              }}>
+              <span style={{fontSize:9,fontWeight:800,lineHeight:1}}>{btn.label}</span>
+              {!btn.prive&&<span style={{fontSize:7,opacity:.7,lineHeight:1}}>public</span>}
+            </button>
+          );
+        })}
+      </div>}
+
+      {/* ── Bandeau info mode actif ── */}
+      {codeActif&&<div style={{
+        fontSize:10,fontWeight:700,borderRadius:7,padding:"4px 10px",
+        background: codeActif==="EFFACER" ? "#fef2f2" : "#eef2ff",
+        color: codeActif==="EFFACER" ? "#dc2626" : "#6366f1",
+        display:"flex",alignItems:"center",gap:6,
+      }}>
+        <span>{codeActif==="EFFACER"
+          ? "🗑 Tap sur un jour pour effacer"
+          : `✏️ ${boutonsTravaill.find(b=>b.id===codeActif)?.label||REPOS.find(b=>b.id===codeActif)?.label||CODES_FETES[codeActif]||codeActif} — tap sur un jour`
+        }</span>
+        <button onClick={()=>setCodeActif(null)}
+          style={{background:"none",border:"none",cursor:"pointer",
+            fontSize:11,color:"inherit",opacity:.5,padding:0,marginLeft:"auto"}}>✕</button>
+      </div>}
+    </div>
+  );
+}
+
 // ─── HELPER RC FÊTES AGENDA ──────────────────────────────────────────────────
 // Retourne la liste des codes fêtes dont ce jour est soit :
 //   - le jour de la fête elle-même (code Fx saisi directement)
@@ -2999,24 +3298,56 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
         else { if(next[key]){const {equipe2,...rest}=next[key];next[key]=rest;} }
       } else {
         if(code){
-          const eq=EQ[code]||EQ_COLORS[code]||null;
+          const eq = EQ[code]||EQ_COLORS[code]||null;
 
-          // Poste réserviste : code = jsCode du poste habilité
-          // On cherche si c'est un poste HAB (pas un code équipe standard)
-          const posteHab = [...HAB_PRCI,...HAB_PAR].find(p=>p.code===code);
-          if(posteHab){
-            // Poste habilité → equipe=travail selon type, jsCode=code poste, prive=false
-            const equipeBase = posteHab.type==="J" ? "J" : "M"; // 3x8 → M par défaut
+          // Règle vue équipe :
+          // prive:false → visible en vue équipe : M/AM/N/J/JF + FOR + DISPO + postes jsCode
+          // prive:true  → privé : RP/RU/CA/MA/ABS/FETE…
+          const CODES_PUBLICS = new Set(["M","AM","N","J","JF","FOR","DISPO"]);
+          const isPrive = !CODES_PUBLICS.has(code) && !CODES_FETES[code]===false;
+
+          // Déterminer si c'est un jsCode de poste (PICCL-, PICCLO…)
+          const allPostes3x8 = [...POSTES_PRCI_3x8,...POSTES_PAR_3x8];
+          const posteMatch = allPostes3x8.find(p=>
+            p.M===code||p.AM===code||p.N===code
+          );
+          const equipeBase = posteMatch
+            ? (posteMatch.M===code?"M":posteMatch.AM===code?"AM":"N")
+            : (eq?.equipe||code);
+
+          // Poste HAB réserviste (journée)
+          const posteHabJ = HAB_PRCI.concat(HAB_PAR).find(p=>p.code===code&&p.type==="J");
+
+          if(posteMatch){
+            // jsCode 3×8 (PICCL-, PICCLO, PICCLX…) → equipe M/AM/N, prive:false
             next[key]={
               ...(next[key]||{}),
               equipe: equipeBase,
               jsCode: code,
-              horaires: [...POSTES_JOURNEE,...POSTES_PRCI_3x8.map(p=>({jsCode:p.M,horaires:""}))].find(p=>p.jsCode===code)?.horaires||"",
-              prive: false, // travail = visible en vue équipe
+              horaires: EQ[equipeBase]?.heures||"",
+              prive: false,
+            };
+          } else if(posteHabJ){
+            // Poste journée réserviste → equipe J, prive:false
+            const posJ = POSTES_JOURNEE.find(p=>p.jsCode===code);
+            next[key]={
+              ...(next[key]||{}),
+              equipe:"J",
+              jsCode:code,
+              horaires:posJ?.horaires||"",
+              prive:false,
             };
           } else {
+            // Code standard (M,AM,N,J,RP,CA…)
             const eqData = eq||{prive:false,heures:""};
-            next[key]={...(next[key]||{}),equipe:code,jsCode:code,horaires:eqData.heures||"",prive:eqData.prive||false};
+            // Appliquer la règle prive selon le code
+            const priveEffectif = CODES_PUBLICS.has(code) ? false : (eqData.prive||true);
+            next[key]={
+              ...(next[key]||{}),
+              equipe:code,jsCode:code,
+              horaires:eqData.heures||"",
+              prive: priveEffectif,
+            };
           }
         } else { delete next[key]; }
       }
@@ -3340,22 +3671,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     {/* ── VUE SEMAINE ── */}
     {calView==="semaine"&&<>
-      {/* ── BARRE DE SAISIE RAPIDE ── */}
-      {profile.isReserve
-        ? <BarreSaisieReserviste
-            habilitations={profile.habilitations||{}}
-            famillesHab={profile.famillesHab}
-            codeActif={codeActif} setCodeActif={setCodeActif}
-            getColor={getColor} getTc={getTc}
-          />
-        : <BarreSaisieRapide
-            barreConfig={barreConfig} setBarreConfig={setBarreConfig}
-            codeActif={codeActif} setCodeActif={setCodeActif}
-            getColor={getColor} getTc={getTc}
-            showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
-            CODES_BARRE={CODES_BARRE}
-          />
-      }
+      {/* ── BARRE DE SAISIE ── */}
+      <BarreSaisie
+        profile={profile}
+        habilitations={profile.habilitations||{}}
+        codeActif={codeActif} setCodeActif={setCodeActif}
+        getColor={getColor} getTc={getTc}
+        setDay={setDay} schedule={schedule} agentId={agent?.id}
+      />
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
         {weekDates.map((dk,i)=>{
           const en=schedule[`${agent.id}-${dk}`];
@@ -3371,7 +3694,10 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
           const barColor=isFinNuit2?"#1e3a8a":code&&showData?getColor(code):isWE?"#e2e8f0":"#f1f5f9";
 
           return <div key={dk}
-            onClick={()=>{if(codeActif) setDay(dk, code===codeActif?null:codeActif);}}
+            onClick={()=>{
+              if(codeActif==="EFFACER") setDay(dk,null);
+              else if(codeActif) setDay(dk, code===codeActif?null:codeActif);
+            }}
             style={{
             borderRadius:12,
             overflow:"hidden",
@@ -3510,22 +3836,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
     {/* ── VUE MOIS ── */}
     {calView==="mois"&&<>
-      {/* ── BARRE DE SAISIE RAPIDE ── */}
-      {profile.isReserve
-        ? <BarreSaisieReserviste
-            habilitations={profile.habilitations||{}}
-            famillesHab={profile.famillesHab}
-            codeActif={codeActif} setCodeActif={setCodeActif}
-            getColor={getColor} getTc={getTc}
-          />
-        : <BarreSaisieRapide
-            barreConfig={barreConfig} setBarreConfig={setBarreConfig}
-            codeActif={codeActif} setCodeActif={setCodeActif}
-            getColor={getColor} getTc={getTc}
-            showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
-            CODES_BARRE={CODES_BARRE}
-          />
-      }
+      {/* ── BARRE DE SAISIE ── */}
+      <BarreSaisie
+        profile={profile}
+        habilitations={profile.habilitations||{}}
+        codeActif={codeActif} setCodeActif={setCodeActif}
+        getColor={getColor} getTc={getTc}
+        setDay={setDay} schedule={schedule} agentId={agent?.id}
+      />
 
       {/* Grille mensuelle */}
       <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
@@ -3554,7 +3872,10 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
             else if(en&&showData&&code) bg=getColor(code);
             return <div key={dk} style={{background:bg,border:isToday?"2px solid #6366f1":"1px solid #e2e8f0",borderRadius:8,padding:"4px 5px",minHeight:52,cursor:"pointer",position:"relative",boxShadow:isToday?"0 0 0 2px #eef2ff":"none"}}
               onClick={()=>{
-                if(codeActif){
+                if(codeActif==="EFFACER"){
+                  // Mode effacement : vide la journée
+                  setDay(dk, null);
+                } else if(codeActif){
                   // Mode saisie rapide : applique ou efface le code actif
                   setDay(dk, code===codeActif ? null : codeActif);
                 } else {
@@ -3628,14 +3949,14 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       onClose={()=>setShowHabRoul(false)}/>}
     {/* ── VUE PLANNING ── */}
     {calView==="planning"&&<>
-      {/* ── BARRE DE SAISIE RAPIDE ── */}
-      {!profile.isReserve && <BarreSaisieRapide
-        barreConfig={barreConfig} setBarreConfig={setBarreConfig}
+      {/* ── BARRE DE SAISIE ── */}
+      <BarreSaisie
+        profile={profile}
+        habilitations={profile.habilitations||{}}
         codeActif={codeActif} setCodeActif={setCodeActif}
         getColor={getColor} getTc={getTc}
-        showConfig={showBarreConfig} setShowConfig={setShowBarreConfig}
-        CODES_BARRE={CODES_BARRE}
-      />}
+        setDay={setDay} schedule={schedule} agentId={agent?.id}
+      />
       <VuePlanning
         dates={monthDates}
         agent={agent}
