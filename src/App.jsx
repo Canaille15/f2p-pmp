@@ -1,5 +1,6 @@
 import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import api from "./api/client";
 
 
 // ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
@@ -3353,8 +3354,8 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       }
       // Sync Supabase directe
       setTimeout(()=>{
-        if(next[key]) sbSaveEntry(agent.id, dk, next[key]);
-        else sbDeleteEntry(agent.id, dk);
+        if(next[key]) api.planning.saveEntry(agent.id, dk, next[key]);
+        else api.planning.deleteEntry(agent.id, dk);
       }, 0);
       return next;
     });
@@ -5849,7 +5850,7 @@ export default function App(){
         }
       });
       // Recharger planning
-      sbLoadSchedule(agentId).then(entries=>{
+      api.planning.getSchedule(agentId).then(entries=>{
         if(entries&&Object.keys(entries).length>0){
           setSchedule(prev=>({...prev,...entries}));
         }
@@ -5898,7 +5899,7 @@ export default function App(){
       }
     });
     // Charger le planning
-    sbLoadSchedule(agentId).then(entries=>{
+    api.planning.getSchedule(agentId).then(entries=>{
       if(!entries||Object.keys(entries).length===0) return;
       setSchedule(prev=>({...prev,...entries}));
     });
@@ -6064,7 +6065,7 @@ export default function App(){
   if(currentUser?.agent?.id && !loadedRef.current[currentUser.agent.id]){
     loadedRef.current[currentUser.agent.id] = true;
     const agentId = currentUser.agent.id;
-    sbLoadSchedule(agentId).then(entries=>{
+    api.planning.getSchedule(agentId).then(entries=>{
       if(entries && Object.keys(entries).length>0){
         setSchedule(prev=>({...prev,...entries}));
       }
