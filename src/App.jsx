@@ -1168,7 +1168,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
           cursor:"pointer",userSelect:"none",
           background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
           borderBottom:ouvert?"1.5px solid #818cf8":"none",
-          flexWrap:"wrap",gap:8}}>
+          flexWrap:"wrap",gap:8}>
 
         <span style={{fontSize:15}}>📊</span>
         <span style={{fontSize:13,fontWeight:800,color:"#fff",letterSpacing:-.2}}>
