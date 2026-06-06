@@ -3968,7 +3968,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       />
     </>}
 
-    {/* Tableau de bord compteurs */}}
+    {/* Tableau de bord compteurs */}
     {agent&&<DashboardCompteurs agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
   </div>);
 }
