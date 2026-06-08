@@ -5541,25 +5541,24 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     }
   };
 
-  const handleLogin = async () => {
+const handleLogin = async () => {
     setError("");
     setLoading(true);
-    setTimeout(() => {
+    try {
       const mat = CP.trim().toUpperCase();
-      // Vérifier que le CP existe dans la liste
-      const agent = AGENTS_INIT.find(a =>
-        a.immatriculation?.toUpperCase() === mat
-      );
-      if (!agent) {
-        setError("CP non reconnu. Vérifiez votre saisie ou contactez l'administrateur.");
-        return;
-      }
-      const stored = authData[mat];
-      if (!stored || !stored.pinHash) {
-        // Première connexion — vider le pin pour repartir proprement
-setPin(["","","",""]);
+      const { token, agent } = await api.auth.login(mat, pinStr);
+      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
+    } catch(e) {
+      if(e.message?.includes("429") || e.message?.includes("Trop")) {
+        setError("Trop de tentatives. Attendez quelques minutes.");
+      } else if(e.message?.includes("première") || e.message?.includes("PIN")) {
         setStep("first_time");
-        return;
+      } else {
+        setError(e.message || "CP ou PIN incorrect");
+      }
+    }
+    setLoading(false);
+  };
       }
     }, 300);
   };
