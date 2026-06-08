@@ -6,7 +6,7 @@ const pool   = require('../config/db');
 async function login(req, res) {
   const { cp, pin } = req.body;
   if (!cp || !pin) return res.status(400).json({ error: 'CP et PIN requis' });
-  if (!/^\d{5}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (5 chiffres)' });
+  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (5 chiffres)' });
   try {
     const [rows] = await pool.query(
       `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, au.pin_hash, au.is_admin
