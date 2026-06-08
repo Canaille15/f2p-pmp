@@ -5822,7 +5822,7 @@ export default function App(){
   useEffect(()=>{
     const handleFocus = () => {
       if(!currentUser?.agent?.id) return;
-      const agentId = currentUser.agent.id;
+      const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
       // Recharger profil
       sbLoadProfile(agentId).then(profile=>{
         if(!profile) return;
@@ -5870,7 +5870,7 @@ export default function App(){
   // Charger le planning depuis Supabase au login
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
-    const agentId = currentUser.agent.id;
+    const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     // Charger le profil
     sbLoadProfile(agentId).then(profile=>{
       if(!profile) return;
@@ -5910,7 +5910,7 @@ export default function App(){
   // Sauvegarder le profil dans Supabase quand il change
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
-    const agentId = currentUser.agent.id;
+    const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     const profile = agentProfiles[agentId];
     if(profile) sbSaveProfile(agentId, profile);
   },[agentProfiles]);
@@ -5920,7 +5920,7 @@ export default function App(){
   // Identifiée par une clé unique année+type+agent pour éviter les doublons
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
-    const agentId = currentUser.agent.id;
+    const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     const now = new Date();
     const month = now.getMonth()+1;
     const day   = now.getDate();
@@ -5965,7 +5965,7 @@ export default function App(){
   // notif indiquant le nombre de CA restants à prendre avant le 31 décembre.
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
-    const agentId = currentUser.agent.id;
+    const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     const now = new Date();
     const month = now.getMonth()+1;
     const day   = now.getDate();
@@ -6065,7 +6065,7 @@ export default function App(){
   // Charger les données Supabase si pas encore fait (au premier rendu après login)
   if(currentUser?.agent?.id && !loadedRef.current[currentUser.agent.id]){
     loadedRef.current[currentUser.agent.id] = true;
-    const agentId = currentUser.agent.id;
+    const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     api.planning.getSchedule(agentId).then(entries=>{
       if(entries && Object.keys(entries).length>0){
         setSchedule(prev=>({...prev,...entries}));
