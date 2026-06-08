@@ -5552,14 +5552,14 @@ function LoginPage({ onLogin, authData, setAuthData }) {
       );
       if (!agent) {
         setError("CP non reconnu. Vérifiez votre saisie ou contactez l'administrateur.");
-        git add src/App.jsx return;
+        return;
       }
       const stored = authData[mat];
       if (!stored || !stored.pinHash) {
         // Première connexion — vider le pin pour repartir proprement
         setPin(["","","",""]);
         setStep("first_time");
-        git add src/App.jsx return;
+        return;
       }
       // Vérifier PIN
       if (hashPin(mat, pinStr) === stored.pinHash) {
