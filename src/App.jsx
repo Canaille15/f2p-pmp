@@ -5560,7 +5560,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
         setPin(["","","",""]);
         setStep("first_time");
         return;
- };
+}
 
   const handleFirstTime = async () => {
     if (pinStr.length < 4) { setError("4 chiffres requis"); return; }
