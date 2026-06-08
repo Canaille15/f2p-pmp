@@ -4466,7 +4466,7 @@ Règles :
         const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
         setResult(parsed);
       } catch(e) { setResult({error: e.message}); }
-      git add src/App.jsx
+
     };
     reader.readAsDataURL(file);
   };
