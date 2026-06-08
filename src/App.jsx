@@ -5557,26 +5557,23 @@ function LoginPage({ onLogin, authData, setAuthData }) {
       const stored = authData[mat];
       if (!stored || !stored.pinHash) {
         // Première connexion — vider le pin pour repartir proprement
-        setPin(["","","",""]);
+setPin(["","","",""]);
         setStep("first_time");
         return;
-}
+      }
+    }, 300);
+  };
 
   const handleFirstTime = async () => {
     if (pinStr.length < 4) { setError("4 chiffres requis"); return; }
     if (pinStr !== confStr) { setError("Les codes ne correspondent pas"); return; }
     const mat = CP.trim().toUpperCase();
-    const isAdmin = ADMIN_MATRICULES_DEFAULT.includes(mat) ||
-      Object.values(authData).some(d => d.isAdmin && d.grantedAdmin?.includes(mat));
-    const newAuth = {
-      ...authData,
-      [mat]: {
-        pinHash: hashPin(mat, pinStr),
-        isAdmin,
-        createdAt: new Date().toISOString(),
-      }
-    };
-    setAuthData(newAuth);
+    try {
+      const { token, agent } = await api.auth.login(mat, pinStr);
+      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
+    } catch(e) {
+      setError(e.message || "Erreur connexion");
+    }
   };
 
   const PinInput = ({arr, setArr, refs, label}) => (
