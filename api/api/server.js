@@ -5,6 +5,7 @@ const helmet  = require('helmet');
 const { apiLimiter } = require('./src/middleware/rateLimiter');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
