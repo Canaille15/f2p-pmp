@@ -5560,16 +5560,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
         setPin(["","","",""]);
         setStep("first_time");
         return;
-      }
-      };
-      if (hashPin(mat, pinStr) === stored.pinHash) {
-        onLogin({ agent, isAdmin: stored.isAdmin || ADMIN_MATRICULES_DEFAULT.includes(mat) });
-      } else {
-        setError("Code PIN incorrect.");
-      }
-      
-    }, 300);
-  };
+ };
 
   const handleFirstTime = async () => {
     if (pinStr.length < 4) { setError("4 chiffres requis"); return; }
