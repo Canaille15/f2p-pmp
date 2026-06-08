@@ -1,6 +1,7 @@
 import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import api from "./api/client";
+import AdminPanel from "./components/AdminPanel";
 
 
 // ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
@@ -6253,7 +6254,7 @@ export default function App(){
         isAdmin={isAdmin}
         currentUser={currentUser}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
-      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}
+      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
     </div>
 
     {/* MODALS */}

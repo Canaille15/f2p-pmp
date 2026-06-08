@@ -67,11 +67,12 @@ export const auth = {
 // ─── AGENTS ───────────────────────────────────────────────────────────────────
 
 export const agents = {
-  getAll:  ()         => apiFetch('/agents'),
-  getById: (id)       => apiFetch(`/agents/${id}`),
-  create:  (data)     => apiFetch('/agents', { method: 'POST', body: JSON.stringify(data) }),
-  update:  (id, data) => apiFetch(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete:  (id)       => apiFetch(`/agents/${id}`, { method: 'DELETE' }),
+  getAll:   ()         => apiFetch('/agents'),
+  getById:  (id)       => apiFetch(`/agents/${id}`),
+  create:   (data)     => apiFetch('/agents', { method: 'POST', body: JSON.stringify(data) }),
+  update:   (id, data) => apiFetch(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete:   (id)       => apiFetch(`/agents/${id}`, { method: 'DELETE' }),
+  resetPin: (cp, newPin) => apiFetch(`/agents/${cp}/reset-pin`, { method: 'PUT', body: JSON.stringify({ newPin }) }),
 };
 
 // ─── PLANNING ─────────────────────────────────────────────────────────────────
