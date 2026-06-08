@@ -4466,7 +4466,7 @@ Règles :
         const parsed = JSON.parse(raw.replace(/```json|```/g,"").trim());
         setResult(parsed);
       } catch(e) { setResult({error: e.message}); }
-      setLoading(false);
+      git add src/App.jsx
     };
     reader.readAsDataURL(file);
   };
@@ -4655,7 +4655,7 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
       }catch(err){
         alert("Erreur lecture CPS : "+err.message);
       }
-      setLoading(false);setUploading(false);
+      git add src/App.jsxsetUploading(false);
     };
     reader.readAsDataURL(file);
   };
@@ -5541,7 +5541,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     }
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setError("");
     setLoading(true);
     setTimeout(() => {
@@ -5552,14 +5552,14 @@ function LoginPage({ onLogin, authData, setAuthData }) {
       );
       if (!agent) {
         setError("CP non reconnu. Vérifiez votre saisie ou contactez l'administrateur.");
-        setLoading(false); return;
+        git add src/App.jsx return;
       }
       const stored = authData[mat];
       if (!stored || !stored.pinHash) {
         // Première connexion — vider le pin pour repartir proprement
         setPin(["","","",""]);
         setStep("first_time");
-        setLoading(false); return;
+        git add src/App.jsx return;
       }
       // Vérifier PIN
       if (hashPin(mat, pinStr) === stored.pinHash) {
@@ -5567,7 +5567,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
       } else {
         setError("Code PIN incorrect.");
       }
-      setLoading(false);
+      git add src/App.jsx
     }, 300);
   };
 
