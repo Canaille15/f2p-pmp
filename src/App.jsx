@@ -5559,10 +5559,7 @@ const handleLogin = async () => {
     }
     setLoading(false);
   };
-      }
-    }, 300);
-  };
-
+ 
   const handleFirstTime = async () => {
     if (pinStr.length < 4) { setError("4 chiffres requis"); return; }
     if (pinStr !== confStr) { setError("Les codes ne correspondent pas"); return; }
