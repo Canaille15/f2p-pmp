@@ -5561,7 +5561,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
         setStep("first_time");
         return;
       }
-      // Vérifier PIN
+      };
       if (hashPin(mat, pinStr) === stored.pinHash) {
         onLogin({ agent, isAdmin: stored.isAdmin || ADMIN_MATRICULES_DEFAULT.includes(mat) });
       } else {
