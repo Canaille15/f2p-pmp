@@ -4654,8 +4654,8 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
         setResults(updates);
       }catch(err){
         alert("Erreur lecture CPS : "+err.message);
-      }
-      git add src/App.jsxsetUploading(false);
+}
+      setUploading(false);
     };
     reader.readAsDataURL(file);
   };
