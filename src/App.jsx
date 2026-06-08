@@ -5567,7 +5567,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
       } else {
         setError("Code PIN incorrect.");
       }
-      git add src/App.jsx
+      
     }, 300);
   };
 
