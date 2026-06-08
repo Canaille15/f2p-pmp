@@ -6088,7 +6088,7 @@ export default function App(){
     {k:"personal",l:"📊 Mon planning"},
     {k:"global",  l:"🏢 Vue équipe"},
     {k:"echanges",l:"🔄 Échanges"},
-    {k:"cps",     l:"📋 CPS"+(activeNotifCount>0?` (${activeNotifCount})`:"")}
+ {k:"cps",     l:"📋 CPS"+(activeNotifCount>0?` (${activeNotifCount})`:"")} ,
 ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
 
