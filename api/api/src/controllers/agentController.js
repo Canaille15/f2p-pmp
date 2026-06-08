@@ -1,16 +1,28 @@
 const pool = require('../config/db');
 const { encrypt, decrypt } = require('../utils/crypto');
+const bcrypt = require('bcrypt');
 
+// ─── GET ALL ──────────────────────────────────────────────────────────────────
 async function getAll(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, af.famille, af.type_affectation
-       FROM agent a LEFT JOIN agent_famille af ON af.cp_agent = a.cp AND af.date_fin IS NULL
-       ORDER BY a.nom, a.prenom`);
+      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales,
+              pa.familles_hab AS famille,
+              au.is_admin,
+              au.pin_hash IS NOT NULL AS has_pin
+       FROM agent a
+       LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp
+       LEFT JOIN auth au ON au.cp_agent = a.cp
+       ORDER BY a.nom, a.prenom`
+    );
     res.json(rows);
-  } catch (e) { res.status(500).json({ error: 'Erreur serveur' }); }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
 }
 
+// ─── GET ONE ──────────────────────────────────────────────────────────────────
 async function getOne(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
@@ -22,24 +34,133 @@ async function getOne(req, res) {
     if (a.email)     a.email     = decrypt(a.email);
     if (a.telephone) a.telephone = decrypt(a.telephone);
     res.json(a);
-  } catch (e) { res.status(500).json({ error: 'Erreur serveur' }); }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
 }
 
+// ─── UPDATE ───────────────────────────────────────────────────────────────────
 async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, grade } = req.body;
+  const { email, telephone, grade, nom, prenom, poste } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
-  if (grade !== undefined && req.agent.is_admin) { fields.push('grade = ?'); values.push(grade); }
+  if (req.agent.is_admin) {
+    if (grade  !== undefined) { fields.push('grade = ?');  values.push(grade); }
+    if (nom    !== undefined) { fields.push('nom = ?');    values.push(nom); }
+    if (prenom !== undefined) { fields.push('prenom = ?'); values.push(prenom); }
+    if (poste  !== undefined) { fields.push('poste = ?');  values.push(poste); }
+  }
   if (!fields.length) return res.status(400).json({ error: 'Rien à modifier' });
   values.push(cp);
   try {
     await pool.query(`UPDATE agent SET ${fields.join(', ')} WHERE cp = ?`, values);
-    res.json({ message: 'Profil mis à jour' });
-  } catch (e) { res.status(500).json({ error: 'Erreur serveur' }); }
+    res.json({ message: 'Agent mis à jour' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
 }
 
-module.exports = { getAll, getOne, update };
+// ─── CREATE (admin) ───────────────────────────────────────────────────────────
+async function create(req, res) {
+  const { cp, nom, prenom, grade, poste, famille } = req.body;
+  if (!cp || !nom || !prenom)
+    return res.status(400).json({ error: 'CP, nom et prénom sont obligatoires' });
+
+  // Initiales automatiques
+  const initiales = (prenom[0] + (nom.replace(/[\s-]/g, '')[0] || '')).toUpperCase();
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Créer l'agent
+    await conn.query(
+      `INSERT INTO agent (cp, nom, prenom, grade, initiales) VALUES (?, ?, ?, ?, ?)`,
+      [cp.toUpperCase(), nom.toUpperCase(), prenom, grade || null, initiales]
+    );
+
+    // Créer le profil
+    await conn.query(
+      `INSERT INTO profil_agent (cp_agent, is_reserve, familles_hab) VALUES (?, 0, ?)`,
+      [cp.toUpperCase(), famille || 'PRCI']
+    );
+
+    // Créer l'entrée auth (sans PIN — l'agent le créera à la première connexion)
+    await conn.query(
+      `INSERT INTO auth (cp_agent, pin_hash, is_admin) VALUES (?, NULL, 0)`,
+      [cp.toUpperCase()]
+    );
+
+    await conn.commit();
+    res.status(201).json({ message: 'Agent créé', cp: cp.toUpperCase() });
+  } catch (e) {
+    await conn.rollback();
+    console.error(e);
+    if (e.code === 'ER_DUP_ENTRY')
+      return res.status(409).json({ error: 'Ce CP existe déjà' });
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    conn.release();
+  }
+}
+
+// ─── DELETE (admin) ───────────────────────────────────────────────────────────
+async function remove(req, res) {
+  const { cp } = req.params;
+
+  // Sécurité — impossible de supprimer son propre compte
+  if (req.agent.cp === cp)
+    return res.status(400).json({ error: 'Impossible de supprimer votre propre compte' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Supprimer dans l'ordre (clés étrangères)
+    await conn.query('DELETE FROM planning_periode WHERE planning_jour_id IN (SELECT id FROM planning_jour WHERE cp_agent = ?)', [cp]);
+    await conn.query('DELETE FROM planning_jour WHERE cp_agent = ?', [cp]);
+    await conn.query('DELETE FROM profil_agent WHERE cp_agent = ?', [cp]);
+    await conn.query('DELETE FROM auth WHERE cp_agent = ?', [cp]);
+    await conn.query('DELETE FROM agent WHERE cp = ?', [cp]);
+
+    await conn.commit();
+    res.json({ message: 'Agent supprimé' });
+  } catch (e) {
+    await conn.rollback();
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    conn.release();
+  }
+}
+
+// ─── RESET PIN (admin) ────────────────────────────────────────────────────────
+async function resetPin(req, res) {
+  const { cp } = req.params;
+  const { newPin } = req.body;
+
+  if (!newPin || newPin.length !== 4 || !/^\d{4}$/.test(newPin))
+    return res.status(400).json({ error: 'Le PIN doit être 4 chiffres' });
+
+  try {
+    const hash = await bcrypt.hash(newPin, 10);
+    const [result] = await pool.query(
+      'UPDATE auth SET pin_hash = ? WHERE cp_agent = ?',
+      [hash, cp]
+    );
+    if (result.affectedRows === 0)
+      return res.status(404).json({ error: 'Agent introuvable' });
+    res.json({ message: 'PIN réinitialisé' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+module.exports = { getAll, getOne, update, create, remove, resetPin };
