@@ -5571,7 +5571,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     }, 300);
   };
 
-  const handleFirstTime = () => {
+  const handleFirstTime = async () => {
     if (pinStr.length < 4) { setError("4 chiffres requis"); return; }
     if (pinStr !== confStr) { setError("Les codes ne correspondent pas"); return; }
     const mat = CP.trim().toUpperCase();
@@ -5587,7 +5587,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     };
     setAuthData(newAuth);
     const agent = AGENTS_INIT.find(a => a.immatriculation?.toUpperCase() === mat);
-    onLogin({ agent, isAdmin });
+    const mat = CP.trim().toUpperCase();
   };
 
   const PinInput = ({arr, setArr, refs, label}) => (
