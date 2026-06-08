@@ -5577,8 +5577,6 @@ function LoginPage({ onLogin, authData, setAuthData }) {
       }
     };
     setAuthData(newAuth);
-
-    const mat = CP.trim().toUpperCase();
   };
 
   const PinInput = ({arr, setArr, refs, label}) => (
