@@ -1,5 +1,11 @@
 // ─── F2P.PMP — API REST Client ────────────────────────────────────────────────
+// Remplace tous les appels Supabase (sbFetch) par des appels à l'API Node.js/Express
 // Fichier : src/api/client.js
+//
+// Usage :
+//   import api from './api/client';
+//   const { token, agent } = await api.auth.login('6810186B', '17444');
+//   const agents = await api.agents.getAll();
 // ─────────────────────────────────────────────────────────────────────────────
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -9,9 +15,15 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const TOKEN_KEY = 'f2ppmp_jwt';
 
 export const tokenStore = {
-  get:   () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
-  set:   (t) => { try { localStorage.setItem(TOKEN_KEY, t); } catch {} },
-  clear: () => { try { localStorage.removeItem(TOKEN_KEY); } catch {} },
+  get: () => {
+    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+  },
+  set: (token) => {
+    try { localStorage.setItem(TOKEN_KEY, token); } catch {}
+  },
+  clear: () => {
+    try { localStorage.removeItem(TOKEN_KEY); } catch {}
+  },
 };
 
 // ─── FETCH DE BASE ────────────────────────────────────────────────────────────
@@ -24,13 +36,15 @@ async function apiFetch(path, opts = {}) {
     ...(opts.headers || {}),
   };
 
-  const res = await fetch(`${API_BASE}/api${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...opts,
     headers,
   });
 
+  // 401 → token expiré → on nettoie
   if (res.status === 401) {
     tokenStore.clear();
+    // Déclencher un event custom pour que l'app redirige vers login
     window.dispatchEvent(new CustomEvent('f2ppmp:unauthorized'));
     throw new Error('Session expirée — reconnectez-vous');
   }
@@ -40,13 +54,21 @@ async function apiFetch(path, opts = {}) {
     throw new Error(body.message || body.error || `Erreur ${res.status}`);
   }
 
+  // 204 No Content
   if (res.status === 204) return null;
+
   return res.json();
 }
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
+// ─── MODULE AUTH ──────────────────────────────────────────────────────────────
 
 export const auth = {
+  /**
+   * Connexion agent
+   * @param {string} cp  — Code Personnel (ex: "6810186B")
+   * @param {string} pin — PIN 4 chiffres
+   * @returns {{ token: string, agent: object }}
+   */
   async login(cp, pin) {
     const data = await apiFetch('/auth/login', {
       method: 'POST',
@@ -55,112 +77,177 @@ export const auth = {
     if (data.token) tokenStore.set(data.token);
     return data;
   },
-  logout()    { tokenStore.clear(); },
-  isLoggedIn(){ return !!tokenStore.get(); },
+
+  /**
+   * Déconnexion — vide le token local
+   */
+  logout() {
+    tokenStore.clear();
+  },
+
+  /**
+   * Vérifie si un token est présent (ne valide pas côté serveur)
+   */
+  isLoggedIn() {
+    return !!tokenStore.get();
+  },
+
+  /**
+   * Récupère le profil de l'agent connecté depuis le token
+   * (décode le JWT sans vérification de signature — pour affichage uniquement)
+   */
   getCurrentAgentFromToken() {
     const token = tokenStore.get();
     if (!token) return null;
-    try { return JSON.parse(atob(token.split('.')[1])); } catch { return null; }
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload;
+    } catch {
+      return null;
+    }
   },
 };
 
-// ─── AGENTS ───────────────────────────────────────────────────────────────────
+// ─── MODULE AGENTS ────────────────────────────────────────────────────────────
 
 export const agents = {
-  getAll:   ()         => apiFetch('/agents'),
-  getById:  (id)       => apiFetch(`/agents/${id}`),
-  create:   (data)     => apiFetch('/agents', { method: 'POST', body: JSON.stringify(data) }),
-  update:   (id, data) => apiFetch(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  delete:   (id)       => apiFetch(`/agents/${id}`, { method: 'DELETE' }),
-  resetPin: (cp, newPin) => apiFetch(`/agents/${cp}/reset-pin`, { method: 'PUT', body: JSON.stringify({ newPin }) }),
+  /** Tous les agents */
+  getAll: () => apiFetch('/agents'),
+
+  /** Un agent par ID */
+  getById: (id) => apiFetch(`/agents/${id}`),
+
+  /**
+   * Créer un agent (admin)
+   * @param {{ prenom, nom, grade, poste, famille, cp }} data
+   */
+  create: (data) =>
+    apiFetch('/agents', { method: 'POST', body: JSON.stringify(data) }),
+
+  /**
+   * Mettre à jour un agent (admin)
+   */
+  update: (id, data) =>
+    apiFetch(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  /**
+   * Supprimer un agent (admin)
+   */
+  delete: (id) =>
+    apiFetch(`/agents/${id}`, { method: 'DELETE' }),
 };
 
-// ─── PLANNING ─────────────────────────────────────────────────────────────────
+// ─── MODULE PLANNING ─────────────────────────────────────────────────────────
 
 export const planning = {
+  /**
+   * Charger tout le planning d'un agent
+   * Retourne un objet { "AGENTID-YYYY-MM-DD": { equipe, jsCode, horaires, prive, ... } }
+   * Compatible avec la structure schedule existante dans App.jsx
+   * @param {string} agentId
+   */
   async getSchedule(agentId) {
     const rows = await apiFetch(`/planning/${agentId}`);
     if (!rows) return {};
     const result = {};
     rows.forEach((row) => {
-      result[`${row.agent_id}-${row.date}`] = {
-        equipe:       row.equipe        || null,
-        equipe2:      row.equipe2       || null,
-        jsCode:       row.js_code       || null,
-        horaires:     row.horaires      || null,
-        prive:        row.prive         || false,
-        finNuit:      row.fin_nuit      || false,
+      const date = row.date_jour ? row.date_jour.split('T')[0] : row.date;
+        equipe:       row.equipe       || null,
+        equipe2:      row.equipe2      || null,
+        jsCode:       row.js_code      || null,
+        horaires:     row.horaires     || null,
+        prive:        row.prive        || false,
+        finNuit:      row.fin_nuit     || false,
         impressionAt: row.impression_at || null,
       };
     });
     return result;
   },
 
+  /**
+   * Charger le planning de TOUS les agents (vue globale admin)
+   * Retourne le même format { "AGENTID-DATE": {...} }
+   */
   async getAllSchedules() {
     const rows = await apiFetch('/planning');
     if (!rows) return {};
     const result = {};
     rows.forEach((row) => {
-      result[`${row.agent_id}-${row.date}`] = {
-        equipe:       row.equipe        || null,
-        equipe2:      row.equipe2       || null,
-        jsCode:       row.js_code       || null,
-        horaires:     row.horaires      || null,
-        prive:        row.prive         || false,
-        finNuit:      row.fin_nuit      || false,
+      const date = row.date_jour ? row.date_jour.split('T')[0] : row.date;
+        equipe:       row.equipe       || null,
+        equipe2:      row.equipe2      || null,
+        jsCode:       row.js_code      || null,
+        horaires:     row.horaires     || null,
+        prive:        row.prive        || false,
+        finNuit:      row.fin_nuit     || false,
         impressionAt: row.impression_at || null,
       };
     });
     return result;
   },
 
- saveEntry: (agentId, date, entry) =>
+  /**
+   * Sauvegarder / mettre à jour une entrée de planning
+   * @param {string} agentId
+   * @param {string} date     — "YYYY-MM-DD"
+   * @param {object} entry    — { equipe, equipe2, jsCode, horaires, prive, finNuit, impressionAt }
+   */
+  saveEntry: (agentId, date, entry) =>
     apiFetch(`/planning/${agentId}/${date}`, {
       method: 'PUT',
       body: JSON.stringify({
-        periodes: [{
-          ordre: 1,
-          code_equipe: entry.equipe || null,
-          code_poste:  null,
-          heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
-heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
-          prive:       entry.prive || false,
-          note:        entry.finNuit ? 'fin_nuit' : null,
-        }],
-        source: 'manuel',
+        equipe:        entry.equipe       || null,
+        equipe2:       entry.equipe2      || null,
+        js_code:       entry.jsCode       || null,
+        horaires:      entry.horaires     || null,
+        prive:         entry.prive        || false,
+        fin_nuit:      entry.finNuit      || false,
+        impression_at: entry.impressionAt || null,
       }),
     }),
-  
 
+  /**
+   * Supprimer une entrée de planning
+   */
   deleteEntry: (agentId, date) =>
     apiFetch(`/planning/${agentId}/${date}`, { method: 'DELETE' }),
 };
 
-// ─── PROFIL ───────────────────────────────────────────────────────────────────
+// ─── MODULE PROFIL ────────────────────────────────────────────────────────────
 
 export const profil = {
+  /**
+   * Charger le profil d'un agent (habilitations, roulement, couleurs, etc.)
+   * @param {string} agentId
+   */
   async get(agentId) {
     const row = await apiFetch(`/profil/${agentId}`);
     if (!row) return null;
+    // Mapper snake_case → camelCase (structure attendue par App.jsx)
     return {
-      pinHash:                 row.pin_hash                || null,
-      isAdmin:                 row.is_admin                || false,
-      roulement:               row.roulement               || null,
-      isReserve:               row.is_reserve              || false,
-      famillesHab:             row.familles_hab            || null,
-      habilitations:           row.habilitations           || {},
-      agentColors:             row.agent_colors            || {},
-      pauseFigee:              row.pause_figee             || {},
-      compteurCorrections:     row.compteur_corrections    || {},
-      departDate:              row.depart_date             || null,
-      fetesTracking:           row.fetes_tracking          || {},
-      pauseFigeeFiaMois:       row.pause_figee_fia_mois    || {},
-      pauseFigeeFiaDone:       row.pause_figee_fia_done    || {},
-      demandesConges:          row.demandes_conges         || [],
-      notificationsAcquittees: row.notifications_acquittees|| [],
+      pinHash:                  row.pin_hash               || null,
+      isAdmin:                  row.is_admin               || false,
+      roulement:                row.roulement              || null,
+      isReserve:                row.is_reserve             || false,
+      famillesHab:              row.familles_hab           || null,
+      habilitations:            row.habilitations          || {},
+      agentColors:              row.agent_colors           || {},
+      pauseFigee:               row.pause_figee            || {},
+      compteurCorrections:      row.compteur_corrections   || {},
+      departDate:               row.depart_date            || null,
+      fetesTracking:            row.fetes_tracking         || {},
+      pauseFigeeFiaMois:        row.pause_figee_fia_mois   || {},
+      pauseFigeeFiaDone:        row.pause_figee_fia_done   || {},
+      demandesConges:           row.demandes_conges        || [],
+      notificationsAcquittees:  row.notifications_acquittees || [],
     };
   },
 
+  /**
+   * Sauvegarder le profil d'un agent
+   * @param {string} agentId
+   * @param {object} data — structure camelCase (comme ci-dessus)
+   */
   save: (agentId, data) =>
     apiFetch(`/profil/${agentId}`, {
       method: 'PUT',
@@ -183,6 +270,11 @@ export const profil = {
       }),
     }),
 
+  /**
+   * Changer le PIN d'un agent
+   * @param {string} agentId
+   * @param {string} newPin — PIN en clair (hashé côté serveur)
+   */
   changePin: (agentId, newPin) =>
     apiFetch(`/profil/${agentId}/pin`, {
       method: 'PUT',
@@ -190,48 +282,174 @@ export const profil = {
     }),
 };
 
-// ─── CONGÉS ───────────────────────────────────────────────────────────────────
+// ─── MODULE CONGÉS ────────────────────────────────────────────────────────────
 
 export const conges = {
-  getAll:       (agentId)              => apiFetch(`/conges/${agentId}`),
-  create:       (agentId, data)        => apiFetch(`/conges/${agentId}`, { method: 'POST', body: JSON.stringify(data) }),
-  updateStatus: (congeId, statut, dec) => apiFetch(`/conges/${congeId}/statut`, { method: 'PUT', body: JSON.stringify({ statut, decompte: dec }) }),
-  delete:       (congeId)              => apiFetch(`/conges/${congeId}`, { method: 'DELETE' }),
+  /** Toutes les demandes de congés d'un agent */
+  getAll: (agentId) => apiFetch(`/conges/${agentId}`),
+
+  /** Créer une demande */
+  create: (agentId, data) =>
+    apiFetch(`/conges/${agentId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /** Mettre à jour le statut (admin) */
+  updateStatus: (congeId, statut, decompte) =>
+    apiFetch(`/conges/${congeId}/statut`, {
+      method: 'PUT',
+      body: JSON.stringify({ statut, decompte }),
+    }),
+
+  /** Supprimer une demande */
+  delete: (congeId) =>
+    apiFetch(`/conges/${congeId}`, { method: 'DELETE' }),
 };
 
-// ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
+// ─── MODULE NOTIFICATIONS ─────────────────────────────────────────────────────
 
 export const notifications = {
-  getAll:    (agentId)       => apiFetch(`/notifications/${agentId}`),
-  acquitter: (id)            => apiFetch(`/notifications/${id}/acquitter`, { method: 'PUT' }),
-  create:    (agentId, data) => apiFetch(`/notifications/${agentId}`, { method: 'POST', body: JSON.stringify(data) }),
+  /** Toutes les notifications d'un agent */
+  getAll: (agentId) => apiFetch(`/notifications/${agentId}`),
+
+  /** Acquitter une notification */
+  acquitter: (notifId) =>
+    apiFetch(`/notifications/${notifId}/acquitter`, { method: 'PUT' }),
+
+  /** Créer une notification (admin / CPS) */
+  create: (agentId, data) =>
+    apiFetch(`/notifications/${agentId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 
-// ─── ÉCHANGES ─────────────────────────────────────────────────────────────────
+// ─── MODULE ÉCHANGES ─────────────────────────────────────────────────────────
 
 export const echanges = {
-  getAll:   (agentId)             => apiFetch(`/echanges?agentId=${agentId}`),
-  create:   (data)                => apiFetch('/echanges', { method: 'POST', body: JSON.stringify(data) }),
-  repondre: (echangeId, agId, st) => apiFetch(`/echanges/${echangeId}/reponse`, { method: 'PUT', body: JSON.stringify({ agentId: agId, statut: st }) }),
+  /** Toutes les demandes d'échange visibles pour un agent */
+  getAll: (agentId) => apiFetch(`/echanges?agentId=${agentId}`),
+
+  /** Créer une demande d'échange */
+  create: (data) =>
+    apiFetch('/echanges', { method: 'POST', body: JSON.stringify(data) }),
+
+  /** Répondre à une demande */
+  repondre: (echangeId, agentId, statut) =>
+    apiFetch(`/echanges/${echangeId}/reponse`, {
+      method: 'PUT',
+      body: JSON.stringify({ agentId, statut }),
+    }),
 };
 
-// ─── PAUSES ───────────────────────────────────────────────────────────────────
+// ─── MODULE PAUSES ────────────────────────────────────────────────────────────
 
 export const pauses = {
-  getAll:    (agentId)           => apiFetch(`/pauses/${agentId}`),
-  add:       (agentId, date)     => apiFetch(`/pauses/${agentId}`, { method: 'POST', body: JSON.stringify({ date }) }),
-  delete:    (agentId, date)     => apiFetch(`/pauses/${agentId}/${date}`, { method: 'DELETE' }),
-  setFiaMois:(agentId, date, m)  => apiFetch(`/pauses/${agentId}/${date}/fia`, { method: 'PUT', body: JSON.stringify({ mois_fia: m }) }),
+  /** Pauses figées d'un agent */
+  getAll: (agentId) => apiFetch(`/pauses/${agentId}`),
+
+  /** Ajouter une pause figée */
+  add: (agentId, date) =>
+    apiFetch(`/pauses/${agentId}`, {
+      method: 'POST',
+      body: JSON.stringify({ date }),
+    }),
+
+  /** Supprimer une pause figée */
+  delete: (agentId, date) =>
+    apiFetch(`/pauses/${agentId}/${date}`, { method: 'DELETE' }),
+
+  /** Mettre à jour le mois FIA d'une pause */
+  setFiaMois: (agentId, date, moisKey) =>
+    apiFetch(`/pauses/${agentId}/${date}/fia`, {
+      method: 'PUT',
+      body: JSON.stringify({ mois_fia: moisKey }),
+    }),
 };
 
-// ─── FÊTES ────────────────────────────────────────────────────────────────────
+// ─── MODULE FÊTES ─────────────────────────────────────────────────────────────
 
 export const fetes = {
-  get:    (agentId, year)             => apiFetch(`/fetes/${agentId}/${year}`),
-  update: (agentId, year, code, data) => apiFetch(`/fetes/${agentId}/${year}/${code}`, { method: 'PUT', body: JSON.stringify(data) }),
+  /** Suivi des fêtes d'un agent pour une année */
+  get: (agentId, year) => apiFetch(`/fetes/${agentId}/${year}`),
+
+  /** Mettre à jour le tracking d'une fête */
+  update: (agentId, year, code, data) =>
+    apiFetch(`/fetes/${agentId}/${year}/${code}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 
-// ─── EXPORT ───────────────────────────────────────────────────────────────────
+// ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────
 
-const api = { auth, agents, planning, profil, conges, notifications, echanges, pauses, fetes };
+const api = {
+  auth,
+  agents,
+  planning,
+  profil,
+  conges,
+  notifications,
+  echanges,
+  pauses,
+  fetes,
+};
+
 export default api;
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GUIDE D'INTÉGRATION DANS App.jsx
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 1. REMPLACER sbSaveEntry / sbDeleteEntry :
+//
+//    AVANT  : sbSaveEntry(agent.id, dk, entry)
+//    APRÈS  : api.planning.saveEntry(agent.id, dk, entry)
+//
+//    AVANT  : sbDeleteEntry(agent.id, dk)
+//    APRÈS  : api.planning.deleteEntry(agent.id, dk)
+//
+// 2. REMPLACER sbLoadProfile / sbSaveProfile :
+//
+//    AVANT  : sbLoadProfile(agentId)
+//    APRÈS  : api.profil.get(agentId)
+//
+//    AVANT  : sbSaveProfile(agentId, data)
+//    APRÈS  : api.profil.save(agentId, data)
+//
+// 3. REMPLACER sbLoadSchedule :
+//
+//    AVANT  : sbLoadSchedule(agentId)
+//    APRÈS  : api.planning.getSchedule(agentId)
+//
+// 4. AJOUTER le login dans App (composant racine) :
+//
+//    const handleLogin = async (cp, pin) => {
+//      const { token, agent } = await api.auth.login(cp, pin);
+//      setCurrentUser({ agent, token });
+//    };
+//
+// 5. CHARGER les agents depuis l'API au démarrage :
+//
+//    useEffect(() => {
+//      api.agents.getAll().then(setAgents).catch(console.error);
+//    }, []);
+//
+// 6. GÉRER la déconnexion automatique (token expiré) :
+//
+//    useEffect(() => {
+//      const handler = () => { setCurrentUser(null); };
+//      window.addEventListener('f2ppmp:unauthorized', handler);
+//      return () => window.removeEventListener('f2ppmp:unauthorized', handler);
+//    }, []);
+//
+// 7. FICHIER .env.local (racine du projet) :
+//
+//    VITE_API_URL=http://localhost:3001
+//
+//    FICHIER .env.production (Vercel) :
+//    VITE_API_URL=https://votre-api.railway.app
+//
+// ─────────────────────────────────────────────────────────────────────────────
