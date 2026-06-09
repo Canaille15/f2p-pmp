@@ -5807,7 +5807,7 @@ export default function App(){
       if(!currentUser?.agent?.id) return;
       const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
       // Recharger profil
-      sbLoadProfile(agentId).then(profile=>{
+      api.profil.get(agentId).then(profile=>{
         if(!profile) return;
         setAgentProfiles(prev=>({...prev,[agentId]:{
           ...(prev[agentId]||{}),
@@ -5855,7 +5855,7 @@ export default function App(){
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     // Charger le profil
-    sbLoadProfile(agentId).then(profile=>{
+    api.profil.get(agentId).then(profile=>{
       if(!profile) return;
       setAgentProfiles(prev=>({...prev,[agentId]:{
         ...(prev[agentId]||{}),
@@ -5895,7 +5895,7 @@ export default function App(){
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     const profile = agentProfiles[agentId];
-    if(profile) sbSaveProfile(agentId, profile);
+    if(profile) api.profil.save(agentId, profile);
   },[agentProfiles]);
 
   // ── RAPPEL CONGÉS PROTOCOLAIRES ─────────────────────────────────────────────
