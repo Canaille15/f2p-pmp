@@ -130,8 +130,7 @@ export const planning = {
         source: 'manuel',
       }),
     }),
-      }),
-    }),
+  
 
   deleteEntry: (agentId, date) =>
     apiFetch(`/planning/${agentId}/${date}`, { method: 'DELETE' }),
