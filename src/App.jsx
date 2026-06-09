@@ -3355,7 +3355,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       }
       // Sync Supabase directe
       setTimeout(()=>{
-        if(next[key]) api.planning.saveEntry(agent.id, dk, next[key]);
+        const agCp = agent.immatriculation || agent.cp || agent.id;
         else api.planning.deleteEntry(agent.id, dk);
       }, 0);
       return next;
