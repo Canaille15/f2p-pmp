@@ -114,17 +114,22 @@ export const planning = {
     return result;
   },
 
-  saveEntry: (agentId, date, entry) =>
+ saveEntry: (agentId, date, entry) =>
     apiFetch(`/planning/${agentId}/${date}`, {
       method: 'PUT',
       body: JSON.stringify({
-        equipe:        entry.equipe       || null,
-        equipe2:       entry.equipe2      || null,
-        js_code:       entry.jsCode       || null,
-        horaires:      entry.horaires     || null,
-        prive:         entry.prive        || false,
-        fin_nuit:      entry.finNuit      || false,
-        impression_at: entry.impressionAt || null,
+        periodes: [{
+          ordre: 1,
+          code_equipe: entry.equipe || null,
+          code_poste:  entry.jsCode || null,
+          heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim() : null,
+          heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim() : null,
+          prive:       entry.prive || false,
+          note:        entry.finNuit ? 'fin_nuit' : null,
+        }],
+        source: 'manuel',
+      }),
+    }),
       }),
     }),
 
