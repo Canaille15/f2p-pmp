@@ -175,6 +175,7 @@ export const planning = {
     const result = {};
     rows.forEach((row) => {
       const date = row.date_jour ? row.date_jour.split('T')[0] : row.date;
+result[`${row.agent_id || agentId}-${date}`] = {
         equipe:       row.equipe       || null,
         equipe2:      row.equipe2      || null,
         jsCode:       row.js_code      || null,
