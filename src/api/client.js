@@ -121,7 +121,7 @@ export const planning = {
         periodes: [{
           ordre: 1,
           code_equipe: entry.equipe || null,
-          code_poste:  entry.jsCode || null,
+          code_poste:  null,
           heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
 heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
           prive:       entry.prive || false,
