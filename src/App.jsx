@@ -5785,10 +5785,16 @@ export default function App(){
   const [loginTarget,setLoginTarget]=useState(null);
   const isAdmin=currentUser?.isAdmin||false;
 
+
   const handleLogin=(user)=>{
     setCurrentUser(user);
     setCurrentAgent(user.agent);
-    setView("personal");
+    setView("personal");const agentId = user.agent.immatriculation || user.agent.cp || user.agent.id;
+    api.planning.getSchedule(agentId).then(entries=>{
+      if(entries&&Object.keys(entries).length>0){
+        setSchedule(prev=>({...prev,...entries}));
+      }
+    }).catch(()=>{});
   };
   const handleLogout=()=>{
     setCurrentUser(null);
