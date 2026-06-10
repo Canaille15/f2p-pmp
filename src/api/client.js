@@ -199,9 +199,8 @@ result[`${row.agent_id || agentId}-${date}`] = {
       method: 'PUT',
       body: JSON.stringify({
 periodes: [{ordre:1,code_equipe:entry.equipe||null,code_poste:null,prive:entry.prive||false}],source:'manuel',
-
+      }),
     }),
-
   /**
    * Supprimer une entrée de planning
    */
