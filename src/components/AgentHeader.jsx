@@ -116,31 +116,7 @@ export default function AgentHeader({
         )}
       </div>
 
-      {/* ── COMPTEURS RAPIDES ── */}
-      <div style={{ padding: "8px 16px 12px", borderTop: "1px solid #f1f5f9" }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          {/* Sélecteur année */}
-          <div style={{ display: "flex", gap: 3, marginRight: 4 }}>
-            {[currentYear - 1, currentYear, currentYear + 1].map(y => (
-              <button key={y} onClick={() => setCompteurYear?.(y)} style={{
-                border: `1px solid ${compteurYear === y ? fam.accent : "#e2e8f0"}`,
-                background: compteurYear === y ? fam.accent : "#fff",
-                color: compteurYear === y ? "#fff" : "#94a3b8",
-                borderRadius: 6, padding: "2px 7px", cursor: "pointer",
-                fontSize: 10, fontWeight: 700,
-              }}>{y}</button>
-            ))}
-          </div>
 
-          {counts?.RP > 0 && <Badge label={`${counts.RP} RP`} bg="#d1fae5" color="#065f46" />}
-          {(counts?.RU > 0 || counts?.RQ > 0) && <Badge label={`${(counts?.RU || 0) + (counts?.RQ || 0)} RU/RQ`} bg="#fef9c3" color="#713f12" />}
-          {counts?.FETE > 0 && <Badge label={`${counts.FETE} fêtes`} bg="#fce7f3" color="#9d174d" />}
-          {(counts?.CA > 0 || counts?.CP > 0) && <Badge label={`${(counts?.CA || 0) + (counts?.CP || 0)} congés`} bg="#dbeafe" color="#1e40af" />}
-          {counts?.travail > 0 && <Badge label={`${counts.travail} trav.`} bg="#fee2e2" color="#991b1b" />}
-          {counts?.RN > 0 && <Badge label={`${counts.RN} RN`} bg="#ede9fe" color="#5b21b6" />}
-          {counts?.TC > 0 && <Badge label={`${counts.TC} TC`} bg="#e0f2fe" color="#0369a1" />}
-        </div>
-      </div>
 
       {/* ── ACCORDÉON PROFIL COMPLET ── */}
       {ouvert && isOwnProfile && (
