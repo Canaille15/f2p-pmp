@@ -153,7 +153,7 @@ export const planning = {
     rows.forEach((row) => {
       const date = row.date_jour ? row.date_jour.split('T')[0] : row.date;
       result[`${agentId}-${date}`] = { 
-       equipe:       row.equipe       || null,
+       equipe:       row.code_equipe  || row.equipe  || null,
         equipe2:      row.equipe2      || null,
         jsCode:       row.js_code      || null,
         horaires:     row.horaires     || null,
@@ -176,7 +176,7 @@ export const planning = {
     rows.forEach((row) => {
       const date = row.date_jour ? row.date_jour.split('T')[0] : row.date;
 result[`${row.agent_id || agentId}-${date}`] = {
-        equipe:       row.equipe       || null,
+        equipe:       row.code_equipe  || row.equipe  || null,
         equipe2:      row.equipe2      || null,
         jsCode:       row.js_code      || null,
         horaires:     row.horaires     || null,
