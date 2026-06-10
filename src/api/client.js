@@ -36,7 +36,7 @@ async function apiFetch(path, opts = {}) {
     ...(opts.headers || {}),
   };
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${API_BASE}/api${path}`, {
     ...opts,
     headers,
   });
