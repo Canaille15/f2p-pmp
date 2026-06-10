@@ -99,9 +99,6 @@ export default function AgentHeader({
         {isOwnProfile && (
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             
-              <button onClick={() => onImportDP(agent)} style={btnStyle("#f8fafc", "#475569")} title="Déroulé">
-                📋
-              </button>
             )}
             {onDemandeConges && (
               <button onClick={onDemandeConges} style={btnStyle("#f8fafc", "#475569")} title="Congés">
