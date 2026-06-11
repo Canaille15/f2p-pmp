@@ -272,7 +272,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
           <div style={{ display:"flex", borderBottom:"1px solid #e2e8f0", background:"#f8fafc" }}>
             {[
               { id:"p1", label:"Période 1" },
-              ...(hasPeriode1 && ["M","AM","N","J"].includes(periode1.type) ? [{ id:"p2", label:"+ Nuit" }] : []),
+              { id:"p2", label:"+ Nuit" },
               { id:"fetes", label:"🩷 Fêtes" },
             ].map(o => (
               <button key={o.id} onClick={() => setOnglet(o.id)} style={{
