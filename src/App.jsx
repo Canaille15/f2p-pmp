@@ -3726,7 +3726,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
       agent={agent}
       habilitations={profile.habilitations||{}}
       suggestedPostes={postesDetectes}
-      onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);}}
+      onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);const agCp=agent.immatriculation||agent.cp||agent.id;const habs
       onClose={()=>setShowHab(false)}/>}
 
     {showHabRoul&&<HabilitationsRoulementModal
