@@ -352,11 +352,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {/* Horaires */}
-                {hasPeriode1 && periode1.horaires !== undefined && (
+ {/* Poste */}!== undefined && (
                   <div>
                     <div style={{ fontSize:11, color:"#64748b", fontWeight:700, marginBottom:6, textTransform:"uppercase" }}>
                       Horaires
