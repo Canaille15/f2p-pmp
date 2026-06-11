@@ -198,7 +198,15 @@ result[`${row.agent_id || agentId}-${date}`] = {
     apiFetch(`/planning/${agentId}/${date}`, {
       method: 'PUT',
       body: JSON.stringify({
-periodes: [{ordre:1,code_equipe:entry.equipe||null,code_poste:null,prive:entry.prive||false}],source:'manuel',
+periodes: [{
+          ordre: 1,
+          code_equipe: entry.equipe||null,
+          code_poste:  entry.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(entry.jsCode) ? entry.jsCode : null,
+          heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
+          heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
+          prive:       entry.prive||false,
+          note:        entry.finNuit ? 'fin_nuit' : null,
+        }],source:'manuel',
       }),
     }),
   /**
