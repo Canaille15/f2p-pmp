@@ -270,7 +270,11 @@ export const profil = {
    * @param {string} agentId
    * @param {string} newPin — PIN en clair (hashé côté serveur)
    */
-  changePin: (agentId, newPin) =>
+  setHabilitations: (agentId, habs) =>
+    apiFetch(`/profil/${agentId}/habilitations`, {
+      method: 'PUT',
+      body: JSON.stringify({ habilitations: habs }),
+    }),  changePin: (agentId, newPin) =>
     apiFetch(`/profil/${agentId}/pin`, {
       method: 'PUT',
       body: JSON.stringify({ pin: newPin }),
@@ -278,181 +282,6 @@ export const profil = {
 };
 
 // ─── MODULE CONGÉS ────────────────────────────────────────────────────────────
-
-  setHabilitations: (agentId, habs) =>
-    apiFetch("/profil/" + ' = {
-  /** Toutes les demandes de congés d'un agent */
-  getAll: (agentId) => apiFetch(`/conges/${agentId}`),
-
-  /** Créer une demande */
-  create: (agentId, data) =>
-    apiFetch(`/conges/${agentId}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  /** Mettre à jour le statut (admin) */
-  updateStatus: (congeId, statut, decompte) =>
-    apiFetch(`/conges/${congeId}/statut`, {
-      method: 'PUT',
-      body: JSON.stringify({ statut, decompte }),
-    }),
-
-  /** Supprimer une demande */
-  delete: (congeId) =>
-    apiFetch(`/conges/${congeId}`, { method: 'DELETE' }),
-};
-
-// ─── MODULE NOTIFICATIONS ─────────────────────────────────────────────────────
-
-export const notifications = {
-  /** Toutes les notifications d'un agent */
-  getAll: (agentId) => apiFetch(`/notifications/${agentId}`),
-
-  /** Acquitter une notification */
-  acquitter: (notifId) =>
-    apiFetch(`/notifications/${notifId}/acquitter`, { method: 'PUT' }),
-
-  /** Créer une notification (admin / CPS) */
-  create: (agentId, data) =>
-    apiFetch(`/notifications/${agentId}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-};
-
-// ─── MODULE ÉCHANGES ─────────────────────────────────────────────────────────
-
-export const echanges = {
-  /** Toutes les demandes d'échange visibles pour un agent */
-  getAll: (agentId) => apiFetch(`/echanges?agentId=${agentId}`),
-
-  /** Créer une demande d'échange */
-  create: (data) =>
-    apiFetch('/echanges', { method: 'POST', body: JSON.stringify(data) }),
-
-  /** Répondre à une demande */
-  repondre: (echangeId, agentId, statut) =>
-    apiFetch(`/echanges/${echangeId}/reponse`, {
-      method: 'PUT',
-      body: JSON.stringify({ agentId, statut }),
-    }),
-};
-
-// ─── MODULE PAUSES ────────────────────────────────────────────────────────────
-
-export const pauses = {
-  /** Pauses figées d'un agent */
-  getAll: (agentId) => apiFetch(`/pauses/${agentId}`),
-
-  /** Ajouter une pause figée */
-  add: (agentId, date) =>
-    apiFetch(`/pauses/${agentId}`, {
-      method: 'POST',
-      body: JSON.stringify({ date }),
-    }),
-
-  /** Supprimer une pause figée */
-  delete: (agentId, date) =>
-    apiFetch(`/pauses/${agentId}/${date}`, { method: 'DELETE' }),
-
-  /** Mettre à jour le mois FIA d'une pause */
-  setFiaMois: (agentId, date, moisKey) =>
-    apiFetch(`/pauses/${agentId}/${date}/fia`, {
-      method: 'PUT',
-      body: JSON.stringify({ mois_fia: moisKey }),
-    }),
-};
-
-// ─── MODULE FÊTES ─────────────────────────────────────────────────────────────
-
-export const fetes = {
-  /** Suivi des fêtes d'un agent pour une année */
-  get: (agentId, year) => apiFetch(`/fetes/${agentId}/${year}`),
-
-  /** Mettre à jour le tracking d'une fête */
-  update: (agentId, year, code, data) =>
-    apiFetch(`/fetes/${agentId}/${year}/${code}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-};
-
-// ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────
-
-const api = {
-  auth,
-  agents,
-  planning,
-  profil,
-  conges,
-  notifications,
-  echanges,
-  pauses,
-  fetes,
-};
-
-export default api;
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GUIDE D'INTÉGRATION DANS App.jsx
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// 1. REMPLACER sbSaveEntry / sbDeleteEntry :
-//
-//    AVANT  : sbSaveEntry(agent.id, dk, entry)
-//    APRÈS  : api.planning.saveEntry(agent.id, dk, entry)
-//
-//    AVANT  : sbDeleteEntry(agent.id, dk)
-//    APRÈS  : api.planning.deleteEntry(agent.id, dk)
-//
-// 2. REMPLACER sbLoadProfile / sbSaveProfile :
-//
-//    AVANT  : sbLoadProfile(agentId)
-//    APRÈS  : api.profil.get(agentId)
-//
-//    AVANT  : sbSaveProfile(agentId, data)
-//    APRÈS  : api.profil.save(agentId, data)
-//
-// 3. REMPLACER sbLoadSchedule :
-//
-//    AVANT  : sbLoadSchedule(agentId)
-//    APRÈS  : api.planning.getSchedule(agentId)
-//
-// 4. AJOUTER le login dans App (composant racine) :
-//
-//    const handleLogin = async (cp, pin) => {
-//      const { token, agent } = await api.auth.login(cp, pin);
-//      setCurrentUser({ agent, token });
-//    };
-//
-// 5. CHARGER les agents depuis l'API au démarrage :
-//
-//    useEffect(() => {
-//      api.agents.getAll().then(setAgents).catch(console.error);
-//    }, []);
-//
-// 6. GÉRER la déconnexion automatique (token expiré) :
-//
-//    useEffect(() => {
-//      const handler = () => { setCurrentUser(null); };
-//      window.addEventListener('f2ppmp:unauthorized', handler);
-//      return () => window.removeEventListener('f2ppmp:unauthorized', handler);
-//    }, []);
-//
-// 7. FICHIER .env.local (racine du projet) :
-//
-//    VITE_API_URL=http://localhost:3001
-//
-//    FICHIER .env.production (Vercel) :
-//    VITE_API_URL=https://votre-api.railway.app
-//
-// ─────────────────────────────────────────────────────────────────────────────
- + "{agentId}/habilitations", {
-      method: 'PUT',
-      body: JSON.stringify({ habilitations: habs }),
-    }),
 
 export const conges = {
   /** Toutes les demandes de congés d'un agent */
@@ -623,4 +452,3 @@ export default api;
 //    VITE_API_URL=https://votre-api.railway.app
 //
 // ─────────────────────────────────────────────────────────────────────────────
-
