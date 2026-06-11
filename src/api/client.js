@@ -155,8 +155,8 @@ export const planning = {
       result[`${agentId}-${date}`] = { 
        equipe:       row.code_equipe  || row.equipe  || null,
         equipe2:      row.equipe2      || null,
-        jsCode:       row.js_code      || null,
-        horaires:     row.horaires     || null,
+        jsCode:       row.code_poste   || row.js_code || null,
+        horaires:     row.heure_debut  ? (row.heure_debut.slice(0,5).replace(':','h')+'–'+(row.heure_fin||'').slice(0,5).replace(':','h')) : (row.horaires||null),
         prive:        row.prive        || false,
         finNuit:      row.fin_nuit     || false,
         impressionAt: row.impression_at || null,
@@ -178,8 +178,8 @@ export const planning = {
 result[`${row.agent_id || agentId}-${date}`] = {
         equipe:       row.code_equipe  || row.equipe  || null,
         equipe2:      row.equipe2      || null,
-        jsCode:       row.js_code      || null,
-        horaires:     row.horaires     || null,
+        jsCode:       row.code_poste   || row.js_code || null,
+        horaires:     row.heure_debut  ? (row.heure_debut.slice(0,5).replace(':','h')+'–'+(row.heure_fin||'').slice(0,5).replace(':','h')) : (row.horaires||null),
         prive:        row.prive        || false,
         finNuit:      row.fin_nuit     || false,
         impressionAt: row.impression_at || null,
