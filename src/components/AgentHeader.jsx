@@ -122,31 +122,7 @@ export default function AgentHeader({
       {ouvert && isOwnProfile && (
         <div style={{ borderTop: "1px solid #f1f5f9", padding: "14px 16px", background: "#f8fafc", display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Roulement */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>
-              🔄 Roulement
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {ROULEMENTS.map(r => {
-                const sel = profile?.roulement === r;
-                return (
-                  <button key={r} onClick={() => onRoulementChange?.(sel ? null : r)} style={{
-                    padding: "6px 12px", borderRadius: 8, cursor: "pointer",
-                    border: `1.5px solid ${sel ? fam.accent : "#e2e8f0"}`,
-                    background: sel ? fam.color : "#fff",
-                    color: sel ? "#fff" : "#475569",
-                    fontSize: 12, fontWeight: sel ? 700 : 400,
-                    display: "flex", alignItems: "center", gap: 6,
-                  }}>
-                    <span style={{ width: 10, height: 10, borderRadius: "50%", border: `2px solid ${sel ? "#fff" : "#cbd5e1"}`, background: sel ? "#fff" : "transparent", display: "inline-block" }} />
-                    {r}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
+ 
           {/* Habilitations */}
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>
@@ -173,33 +149,7 @@ export default function AgentHeader({
             </div>
           </div>
 
-          {/* Réserviste */}
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            background: "#fff", borderRadius: 10, padding: "10px 14px",
-            border: "1px solid #e2e8f0",
-          }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>🛡️ Réserviste</div>
-              <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Activez pour gérer vos habilitations</div>
-            </div>
-            <div
-              onClick={() => onReservisteChange?.(!profile?.isReserve)}
-              style={{
-                width: 44, height: 24, borderRadius: 12, cursor: "pointer",
-                background: profile?.isReserve ? "#10b981" : "#e2e8f0",
-                position: "relative", transition: "background .2s",
-              }}>
-              <div style={{
-                position: "absolute", top: 2,
-                left: profile?.isReserve ? 22 : 2,
-                width: 20, height: 20, borderRadius: "50%",
-                background: "#fff", transition: "left .2s",
-                boxShadow: "0 1px 3px rgba(0,0,0,.2)",
-              }} />
-            </div>
-          </div>
-
+          
         </div>
       )}
     </div>
