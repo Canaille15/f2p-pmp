@@ -3276,7 +3276,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const getColor=(code)=>{
     // Lire directement agentProfiles pour la réactivité maximale
     const colors = agentProfiles[agent?.id]?.agentColors || {};
-onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);const agCp=agent.immatriculation||agent.cp||agent.id;api.profil.setHabilitations(agCp,Object.entries(hab).filter(([,v])=>v==="HC").map(([c])=>({code_poste:c,date_debut:new Date().toISOString().slice(0,10)}))).then(()=>api.profil.get(agCp).then(p=>{if(p)setProfile({habilitations:p.habilitations||{}});})).catch(()=>{});}}
+
     if(colors[code]) return colors[code];
     // Fêtes légales F1..VN → couleur perso de F1 ou défaut rose
     if(CODES_FETES[code]) return colors["F1"] || "#ec4899";
@@ -3726,7 +3726,7 @@ onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);const agCp=agent
       agent={agent}
       habilitations={profile.habilitations||{}}
       suggestedPostes={postesDetectes}
-  onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);api.profil.setHabilitations(agent.immatriculation||agent.cp||agent.id,Object.entries(hab).filter(([,v])=>v==="HC").map(([c])=>({code_poste:c,date_debut:new Date().toISOString().slice(0,10)}))).catch(()=>{});}}
+  onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);const agCp2=agent.immatriculation||agent.cp||agent.id;api.profil.setHabilitations(agCp2,Object.entries(hab).filter(([,v])=>v==="HC").map(([c])=>({code_poste:c,date_debut:new Date().toISOString().slice(0,10)}))).then(()=>api.profil.get(agCp2).then(p=>{if(p&&p.habilitations)setProfile({habilitations:p.habilitations});})).catch(()=>{});}}
       onClose={()=>setShowHab(false)}/>}
 
     {showHabRoul&&<HabilitationsRoulementModal
