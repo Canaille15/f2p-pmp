@@ -3461,14 +3461,6 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
     {/* ── VUE SEMAINE ── */}
     {calView==="semaine"&&<>
-      {/* ── BARRE DE SAISIE ── */}
-      <BarreSaisie
-        profile={profile}
-        habilitations={profile.habilitations||{}}
-        codeActif={codeActif} setCodeActif={setCodeActif}
-        getColor={getColor} getTc={getTc}
-        setDay={setDay} schedule={schedule} agentId={agent?.id}
-      />
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
         {weekDates.map((dk,i)=>{
           const en=schedule[`${agent.id}-${dk}`];
@@ -3626,14 +3618,6 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
     {/* ── VUE MOIS ── */}
     {calView==="mois"&&<>
-      {/* ── BARRE DE SAISIE ── */}
-      <BarreSaisie
-        profile={profile}
-        habilitations={profile.habilitations||{}}
-        codeActif={codeActif} setCodeActif={setCodeActif}
-        getColor={getColor} getTc={getTc}
-        setDay={setDay} schedule={schedule} agentId={agent?.id}
-      />
 
       {/* Grille mensuelle */}
       <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
@@ -3676,11 +3660,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
             const posteLabel = getPosteLabel(en?.jsCode);
 
             return <div key={dk}
-              onClick={()=>{
-                if(codeActif==="EFFACER"){ setDay(dk,null); return; }
-                if(codeActif){ setDay(dk,code===codeActif?null:codeActif); return; }
-                setDayPopup({dk, entry:en||null});
-              }}
+              onClick={()=>{ setDayPopup({dk, entry:en||null}); }}
               style={{
                 background:"#fff",
                 border:isToday?"2px solid #6366f1":"1px solid #e8edf2",
@@ -3808,14 +3788,6 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
       onClose={()=>setShowHabRoul(false)}/>}
     {/* ── VUE PLANNING ── */}
     {calView==="planning"&&<>
-      {/* ── BARRE DE SAISIE ── */}
-      <BarreSaisie
-        profile={profile}
-        habilitations={profile.habilitations||{}}
-        codeActif={codeActif} setCodeActif={setCodeActif}
-        getColor={getColor} getTc={getTc}
-        setDay={setDay} schedule={schedule} agentId={agent?.id}
-      />
       <VuePlanning
         dates={monthDates}
         agent={agent}
