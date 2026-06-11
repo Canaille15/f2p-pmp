@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import api from "./api/client";
 import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
+import DayEditPopup from "./components/DayEditPopup";
 
 
 // ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
