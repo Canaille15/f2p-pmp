@@ -5580,6 +5580,7 @@ export default function App(){
         setSchedule(prev=>({...prev,...entries}));
       }
     }).catch(()=>{});
+    api.profil.get(agentId).then(p=>{if(p&&p.habilitations)setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations}}));}).catch(()=>{});
   };
   const handleLogout=()=>{
     setCurrentUser(null);
