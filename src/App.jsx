@@ -3754,10 +3754,11 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
       onSave={(newEntry)=>{
         const agCp=agent.immatriculation||agent.cp||agent.id;
         const dk=dayPopup.dk;
+        const prevEntry = schedule[agCp+'-'+dk] || {};
         const fullEntry={
-          equipe:   newEntry.equipe||null,
+          equipe:   newEntry.equipe !== undefined ? (newEntry.equipe||null) : (prevEntry.equipe||null),
           equipe2:  newEntry.equipe2||null,
-          jsCode:   newEntry.jsCode||newEntry.equipe||null,
+          jsCode:   newEntry.jsCode||null,
           jsCode2:  newEntry.jsCodeNuit||null,
           horaires: newEntry.horaires||null,
           prive:    newEntry.prive||false,
