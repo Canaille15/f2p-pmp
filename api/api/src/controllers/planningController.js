@@ -44,7 +44,7 @@ async function setJour(req, res) {
       await conn.query(
         `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note)
          VALUES (?,?,?,?,?,?,?,?)`,
-        [jour.id, p.ordre||1, p.code_equipe, p.code_poste||null,
+        [jour.id, p.ordre||1, p.code_equipe||(p.note==='fin_nuit'?'N':null), p.code_poste||null,
          p.heure_debut||null, p.heure_fin||null, prive, p.note||null]);
     }
     await conn.commit();
