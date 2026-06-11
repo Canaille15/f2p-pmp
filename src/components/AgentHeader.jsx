@@ -11,17 +11,27 @@ const FAMILLES = {
 };
 
 const HAB_PRCI = [
-  { code:"CCL",  label:"CCL"        },
-  { code:"ADJ",  label:"Adj CCL"    },
-  { code:"LNE",  label:"AC LNE"     },
-  { code:"LNO",  label:"AC LNO"     },
-  { code:"VGD",  label:"AC VGD"     },
-  { code:"LC",   label:"AC LC"      },
+  { code:"PICCL",   label:"CCL"         },
+  { code:"PIADJ",   label:"Adj CCL"     },
+  { code:"PILNE",   label:"AC LNE"      },
+  { code:"PILNO",   label:"AC LNO"      },
+  { code:"PIVGD",   label:"AC VGD"      },
+  { code:"PILCL",   label:"AC LC"       },
+  { code:"PIPA1J",  label:"Pauseur PA1" },
+  { code:"PIPA2J",  label:"Pauseur PA2" },
+  { code:"PIPA3J",  label:"Pauseur PA3" },
+  { code:"PIDPXJ",  label:"DPX PRCI"   },
+  { code:"PIASSJ",  label:"Adj DPX"    },
+  { code:"PPRCI",   label:"PPRCI"      },
+  { code:"AFOPRCI", label:"AFO PRCI"   },
 ];
 const HAB_PAR = [
-  { code:"AC1",  label:"AC PAR"        },
-  { code:"AC2",  label:"Aide AC PAR"   },
-  { code:"ACXX", label:"CT AC Travaux" },
+  { code:"PAAC1-", label:"AC PAR"        },
+  { code:"PAAC2-", label:"Aide AC PAR"   },
+  { code:"PAACXX", label:"CT AC Travaux" },
+  { code:"PAPAUJ", label:"Pauseur PAR"   },
+  { code:"PADPXJ", label:"DPX PAR"      },
+  { code:"PAASMJ", label:"ASMTE PAR"    },
 ];
 
 export default function AgentHeader({
