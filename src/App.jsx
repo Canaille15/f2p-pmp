@@ -3703,7 +3703,9 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", alignItems:"center", gap:3,
               }}>
-                <span>{(EQ_COLORS["N"]?.label||"Nuit").slice(0,4)}</span><span>↓</span>
+                <span>{(EQ_COLORS["N"]?.label||"Nuit").slice(0,4)}</span>
+                {en?.jsCode2&&<span style={{fontSize:8,opacity:.85}}>{en.jsCode2}</span>}
+                <span>↓</span>
               </div>}
               {(()=>{
                 const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));
@@ -3756,6 +3758,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
           equipe:   newEntry.equipe||null,
           equipe2:  newEntry.equipe2||null,
           jsCode:   newEntry.jsCode||newEntry.equipe||null,
+          jsCode2:  newEntry.jsCodeNuit||null,
           horaires: newEntry.horaires||null,
           prive:    newEntry.prive||false,
           finNuit:  newEntry.finNuit||false,
