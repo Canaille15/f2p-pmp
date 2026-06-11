@@ -5608,7 +5608,7 @@ export default function App(){
           roulement:           profile.roulement,
           isReserve:           profile.is_reserve,
           famillesHab:         profile.familles_hab,
-          habilitations:       profile.habilitations||{},
+          habilitations:       Array.isArray(profile.habilitations) ? Object.fromEntries((profile.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (profile.habilitations||{}),
           agentColors:         profile.agent_colors||{},
           pauseFigee:          profile.pause_figee||{},
           compteurCorrections: profile.compteur_corrections||{},
