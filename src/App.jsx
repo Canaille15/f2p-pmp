@@ -3658,32 +3658,83 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
             let bg=isWE?"#f8fafc":"#f8fafc";
             if(en?.finNuit&&!en?.equipe) bg="#eff6ff";
             else if(en&&showData&&code) bg=getColor(code);
-            return <div key={dk} style={{background:bg,border:isToday?"2px solid #6366f1":"1px solid #e2e8f0",borderRadius:8,padding:"4px 5px",minHeight:52,cursor:"pointer",position:"relative",boxShadow:isToday?"0 0 0 2px #eef2ff":"none"}}
+            // Cases bicolores/tricolores
+            const hasFinNuit = !!(en?.finNuit && showData);
+            const hasDebutNuit = !!(en?.equipe2 && showData);
+            const isSandwich = hasFinNuit && hasDebutNuit;
+            const couleurNuit = getColor("N");
+            const tcNuit = getTc("N");
+            const posteLabel=(()=>{
+              if(!en?.jsCode||en.jsCode===code) return null;
+              const pm=[...POSTES_PRCI_3x8,...POSTES_PAR_3x8].find(p=>p.M===en.jsCode||p.AM===en.jsCode||p.N===en.jsCode);
+              if(pm) return pm.label;
+              const pj=POSTES_JOURNEE.find(p=>p.jsCode===en.jsCode);
+              if(pj) return pj.label.slice(0,8);
+              return en.jsCode.slice(0,6);
+            })();
+            return <div key={dk} style={{
+                border:isToday?"2px solid #6366f1":"1px solid #e2e8f0",
+                borderRadius:8, minHeight:52, cursor:"pointer",
+                position:"relative", overflow:"hidden",
+                display:"flex", flexDirection:"column",
+                boxShadow:isToday?"0 0 0 2px #eef2ff":"none",
+              }}
               onClick={()=>{
-                if(codeActif==="EFFACER"){
-                  // Mode effacement : vide la journée
-                  setDay(dk, null);
-                } else if(codeActif){
-                  // Mode saisie rapide : applique ou efface le code actif
-                  setDay(dk, code===codeActif ? null : codeActif);
+                if(codeActif==="EFFACER"){ setDay(dk,null);
+                } else if(codeActif){ setDay(dk,code===codeActif?null:codeActif);
                 } else {
-                  // Mode cycle classique
                   const codes=["","M","AM","N","J","RP","RU","NU","CA","MA","VT","FOR","DISPO"];
                   const cur=codes.indexOf(code||"");
                   const next=codes[(cur+1)%codes.length];
                   setDay(dk,next||null);
                 }
               }}>
-              <div style={{fontSize:10,fontWeight:isToday?800:600,color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",marginBottom:2}}>{dayNum}</div>
-              {en?.finNuit&&showData&&<div style={{fontSize:7,fontWeight:700,color:"#1e3a8a",background:"#dbeafe",borderRadius:3,padding:"1px 3px",textAlign:"center",lineHeight:1.4}}>🌙 fin nuit<br/><span style={{fontWeight:400,fontSize:6}}>libre</span></div>}
-              {code&&<div style={{fontSize:8,fontWeight:700,
-                color:getTc(code),
-                background:getColor(code),
-                borderRadius:4,padding:"1px 4px",display:"inline-block"}}>
-                {CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)?.slice(0,4)}
-              </div>}
-              {en?.equipe2&&(()=>{const eq2=EQ[en.equipe2]||EQ_COLORS[en.equipe2];return <div style={{fontSize:7,fontWeight:700,color:eq2?.textColor||eq2?.tc,background:eq2?.color||eq2?.bg,borderRadius:4,padding:"1px 3px",display:"inline-block",marginTop:1}}>🌙N</div>;})()} 
-              {en?.jsCode&&en.jsCode!==code&&<div style={{fontSize:7,color:"#94a3b8",fontFamily:"monospace",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{en.jsCode}</div>}
+              <div style={{position:"absolute",top:3,left:5,fontSize:10,fontWeight:isToday?800:600,
+                color:isToday?"#6366f1":isWE?"#94a3b8":"#1e293b",zIndex:3,lineHeight:1.4}}>{dayNum}</div>
+              {isSandwich&&<>
+                <div style={{flex:1,background:couleurNuit,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:7,fontWeight:700,color:tcNuit}}>fin N</span>
+                </div>
+                <div style={{flex:1,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:6,color:"#cbd5e1"}}>libre</span>
+                </div>
+                <div style={{flex:1,background:couleurNuit,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:7,fontWeight:700,color:tcNuit}}>deb N</span>
+                </div>
+              </>}
+              {hasFinNuit&&!isSandwich&&!code&&<>
+                <div style={{flex:1,background:couleurNuit,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:7,fontWeight:700,color:tcNuit}}>fin N</span>
+                </div>
+                <div style={{flex:2,background:"#fff"}}/>
+              </>}
+              {hasDebutNuit&&!isSandwich&&<>
+                <div style={{flex:2,background:code&&showData?getColor(code):"#f8fafc",
+                  display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",paddingTop:14,paddingBottom:2}}>
+                  {code&&showData&&<>
+                    <span style={{fontSize:8,fontWeight:800,color:getTc(code)}}>
+                      {CODES_FETES[code]?("F "+code):(EQ_COLORS[code]?.label||code)?.slice(0,4)}
+                    </span>
+                    {posteLabel&&<span style={{fontSize:6,color:getTc(code),opacity:.8,marginTop:1}}>{posteLabel}</span>}
+                  </>}
+                </div>
+                <div style={{flex:1,background:couleurNuit,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:7,fontWeight:700,color:tcNuit}}>deb N</span>
+                </div>
+              </>}
+              {!isSandwich&&!hasDebutNuit&&!(hasFinNuit&&!code)&&<>
+                <div style={{flex:1,background:code&&showData?getColor(code):"transparent",
+                  display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",
+                  padding:"4px 3px",marginTop:14}}>
+                  {code&&showData&&<>
+                    <div style={{fontSize:8,fontWeight:800,color:getTc(code),textAlign:"center",lineHeight:1.3}}>
+                      {CODES_FETES[code]?("F "+code):(EQ_COLORS[code]?.label||code)?.slice(0,4)}
+                    </div>
+                    {posteLabel&&<div style={{fontSize:6,color:getTc(code),opacity:.8,marginTop:1,textAlign:"center",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%"}}>{posteLabel}</div>}
+                  </>}
+                  {hasFinNuit&&showData&&<div style={{fontSize:6,fontWeight:700,color:tcNuit,background:couleurNuit,borderRadius:3,padding:"1px 3px",marginTop:2}}>fin N</div>}
+                </div>
+              </>}
               {(()=>{
                 const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));
                 if(!rcFetes.length) return null;
