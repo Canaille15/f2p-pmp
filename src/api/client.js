@@ -225,7 +225,7 @@ export const profil = {
       roulement:                row.roulement              || null,
       isReserve:                row.is_reserve             || false,
       famillesHab:              row.familles_hab           || null,
-      habilitations:            row.habilitations          || {},
+      habilitations:            Array.isArray(row.habilitations) ? Object.fromEntries((row.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (row.habilitations||{}),
       agentColors:              row.agent_colors           || {},
       pauseFigee:               row.pause_figee            || {},
       compteurCorrections:      row.compteur_corrections   || {},
