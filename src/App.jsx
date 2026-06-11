@@ -3767,13 +3767,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
           const tomorrow=new Date(dk);
           tomorrow.setDate(tomorrow.getDate()+1);
           const tomorrowStr=tomorrow.toISOString().slice(0,10);
-          const nuitEntry = {
-            ...(prev_s[agCp+'-'+tomorrowStr]||{}),
-            finNuit: true,
-            equipe: 'N',
-            jsCode: newEntry.jsCodeNuit || null,
-          };
-          setSchedule(prev_s=>({...prev_s,[agCp+'-'+tomorrowStr]:nuitEntry}));
+          setSchedule(prev=>({...prev,[agCp+'-'+tomorrowStr]:{...(prev[agCp+'-'+tomorrowStr]||{}),finNuit:true,equipe:'N',jsCode:newEntry.jsCodeNuit||null}}));
           api.planning.saveEntry(agCp, tomorrowStr, {equipe:'N', jsCode:newEntry.jsCodeNuit||null, horaires:'22h15–06h17', finNuit:true, prive:false}).catch(()=>{});
         }
         setDayPopup(null);
