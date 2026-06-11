@@ -29,7 +29,7 @@ async function updateProfil(req, res) {
          familles_hab = COALESCE(VALUES(familles_hab),  familles_hab),
          couleurs     = COALESCE(VALUES(couleurs),      couleurs)`,
       [cp,
-       is_reserve  !== undefined ? (is_reserve?1:0) : null,
+       is_reserve  !== undefined ? (is_reserve?1:0) : 0,
        familles_hab|| null,
        couleurs    ? JSON.stringify(couleurs) : null]
     );
