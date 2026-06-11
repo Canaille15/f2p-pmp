@@ -3704,6 +3704,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 display:"flex", alignItems:"center", gap:3,
               }}>
                 <span>{(EQ_COLORS["N"]?.label||"Nuit").slice(0,4)}</span>
+                {en?.jsCode2&&<span style={{fontSize:8,opacity:.85,marginLeft:2}}>{en.jsCode2}</span>}
                 {en?.jsCode2&&<span style={{fontSize:8,opacity:.85}}>{en.jsCode2}</span>}
                 <span>↓</span>
               </div>}
