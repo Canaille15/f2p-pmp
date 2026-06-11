@@ -201,7 +201,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
 periodes: [{
           ordre: 1,
           code_equipe: entry.equipe||null,
-          code_poste:  entry.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(entry.jsCode) ? entry.jsCode : null,
+          code_poste:  (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|DISPO|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !/^(PI|PA)/.test(entry.jsCode)) ? entry.jsCode : null,
           heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
           heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
           prive:       entry.prive||false,
