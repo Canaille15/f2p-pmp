@@ -3276,7 +3276,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const getColor=(code)=>{
     // Lire directement agentProfiles pour la réactivité maximale
     const colors = agentProfiles[agent?.id]?.agentColors || {};
-    // Couleur perso agent en priorité
+onSave={hab=>{setProfile({habilitations:hab});setShowHab(false);const agCp=agent.immatriculation||agent.cp||agent.id;api.profil.setHabilitations(agCp,Object.entries(hab).filter(([,v])=>v==="HC").map(([c])=>({code_poste:c,date_debut:new Date().toISOString().slice(0,10)}))).then(()=>api.profil.get(agCp).then(p=>{if(p)setProfile({habilitations:p.habilitations||{}});})).catch(()=>{});}}
     if(colors[code]) return colors[code];
     // Fêtes légales F1..VN → couleur perso de F1 ou défaut rose
     if(CODES_FETES[code]) return colors["F1"] || "#ec4899";
