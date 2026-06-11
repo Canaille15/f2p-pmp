@@ -3402,8 +3402,9 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   </div>);
 
   const fam=FAMILLES[agent.famille];
-  const profile=agentProfiles[agent.id]||{};
-  const setProfile=u=>setAgentProfiles(p=>({...p,[agent.id]:{...profile,...u}}));
+ const agKey=agent.immatriculation||agent.cp||agent.id;
+const profile=agentProfiles[agKey]||{};
+const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
   const hasPin=!!profile.pinHash;
   const ROULEMENTS=["Roulement 3×8","Journée"];
   const counts=useMemo(()=>computeCompteurs(schedule,agent.id,compteurYear,agentProfiles),[schedule,agent.id,compteurYear,agentProfiles]);
