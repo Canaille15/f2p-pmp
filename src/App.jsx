@@ -3675,14 +3675,15 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 color:isToday?"#6366f1":isWE?"#94a3b8":"#374151",
                 lineHeight:1.3, marginBottom:1}}>{dayNum}</div>
 
-              {/* Fin de nuit (haut de case) */}
+              {/* Fin de nuit (haut de case) - meme style que nuit */}
               {hasFinNuit&&<div style={{
                 background:couleurNuit, color:tcNuit,
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
-                display:"flex", alignItems:"center", gap:3,
+                display:"flex", flexDirection:"column",
               }}>
-                <span>↓</span><span>{(EQ_COLORS["N"]?.label||"Nuit").slice(0,4)}</span>
+                <span>{(EQ_COLORS["N"]?.label||"Nuit").slice(0,4)}</span>
+                {en?.jsCode&&en.jsCode!==code&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{en.jsCode}</span>}
               </div>}
 
               {/* Période principale */}
@@ -3696,17 +3697,15 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
               </div>}
 
-              {/* Début de nuit (bas de case) */}
+              {/* Début de nuit (bas de case) - meme style que nuit */}
               {hasDebutNuit&&<div style={{
                 background:couleurNuit, color:tcNuit,
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
-                display:"flex", alignItems:"center", gap:3,
+                display:"flex", flexDirection:"column",
               }}>
                 <span>{(EQ_COLORS["N"]?.label||"Nuit").slice(0,4)}</span>
-                {en?.jsCode2&&<span style={{fontSize:8,opacity:.85,marginLeft:2}}>{en.jsCode2}</span>}
-                {en?.jsCode2&&<span style={{fontSize:8,opacity:.85}}>{en.jsCode2}</span>}
-                <span>↓</span>
+                {en?.jsCode2&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{en.jsCode2}</span>}
               </div>}
               {(()=>{
                 const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));

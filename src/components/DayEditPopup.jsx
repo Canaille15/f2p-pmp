@@ -100,6 +100,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
   const [poste1, setPoste1]     = useState(entry?.jsCode && !["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(entry?.jsCode) ? entry.jsCode : "");
   const [horaires1, setHoraires1] = useState(entry?.horaires || "");
   const [finNuit, setFinNuit]   = useState(!!entry?.finNuit);
+  const isFinNuitOnly = !!entry?.finNuit && !entry?.equipe; // case fin de nuit sans periode journee
   const [debutNuit, setDebutNuit] = useState(!!entry?.equipe2);
   const [posteNuit, setPosteNuit] = useState("");
   const [showFetes, setShowFetes] = useState(false);
