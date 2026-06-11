@@ -3766,13 +3766,16 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
           impressionAt: null,
         };
         setSchedule(prev=>({...prev,[agCp+'-'+dk]:fullEntry}));
-        api.planning.saveEntry(agCp, dk, fullEntry).catch(()=>{});
-        if(newEntry.equipe2) {
-          const tomorrow=new Date(dk);
-          tomorrow.setDate(tomorrow.getDate()+1);
-          const tomorrowStr=tomorrow.toISOString().slice(0,10);
-          setSchedule(prev=>({...prev,[agCp+'-'+tomorrowStr]:{...(prev[agCp+'-'+tomorrowStr]||{}),finNuit:true,equipe:'N',jsCode:newEntry.jsCodeNuit||null}}));
-          api.planning.saveEntry(agCp, tomorrowStr, {equipe:'N', jsCode:newEntry.jsCodeNuit||null, horaires:'22h15–06h17', finNuit:true, prive:false}).catch(()=>{});
+        api.planning.saveEntry(agCp, dk, fullEntry).then(()=>{
+          if(newEntry.equipe2) {
+            const tomorrow=new Date(dk);
+            tomorrow.setDate(tomorrow.getDate()+1);
+            const tomorrowStr=tomorrow.toISOString().slice(0,10);
+            setSchedule(prev=>({...prev,[agCp+'-'+tomorrowStr]:{...(prev[agCp+'-'+tomorrowStr]||{}),finNuit:true,equipe:'N',jsCode:newEntry.jsCodeNuit||null}}));
+            setTimeout(()=>api.planning.saveEntry(agCp, tomorrowStr, {equipe:'N', jsCode:newEntry.jsCodeNuit||null, horaires:'22h15–06h17', finNuit:true, prive:false}).catch(()=>{}), 300);
+          }
+        }).catch(()=>{});
+        if(newEntry.equipe2_placeholder) {
         }
         setDayPopup(null);
       }}
