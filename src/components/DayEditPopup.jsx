@@ -141,7 +141,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
   const isNuitPrincipale = type1 === "N";
   const postesJ = isTravailJ ? getPostes(type1) : [];
   const postesN = getPostes("N");
-  const canSave = !!(type1 || typeN || entry?.finNuit);
+  const canSave = true; // Toujours actif — si tout décoché = effacer la case
 
   // Couleur du type
   const getColor = (code) => {
