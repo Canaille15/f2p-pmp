@@ -105,6 +105,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
     isNuitSeule ? (entry?.jsCode || "") : (entry?.jsCode2 || "")
   );
   const [showFetes, setShowFetes] = useState(false);
+  const [finNuit, setFinNuit] = useState(!!entry?.finNuit);
 
   // Date lisible
   const dateObj = new Date(date + "T12:00:00");
@@ -169,7 +170,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
       equipe2:   typeN || null,
       jsCodeNuit: typeN ? (posteN || null) : null,
       prive:     !["M","AM","N","J","JF","FOR","DISPO",...FETES.map(f=>f.code)].includes(type1),
-      finNuit:   entry?.finNuit || false,
+      finNuit:   finNuit,
     };
     onSave(newEntry);
   };
@@ -220,6 +221,19 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
 
         {/* CONTENU */}
         <div style={{overflowY:"auto", flex:1, padding:"14px 16px", display:"flex", flexDirection:"column", gap:14}}>
+
+          {/* Descente de nuit */}
+          <button onClick={() => setFinNuit(v => !v)} style={{
+            width:"100%", padding:"10px 14px",
+            background: finNuit ? "#0f172a" : "#f8fafc",
+            border: finNuit ? "none" : "1.5px dashed #cbd5e1",
+            borderRadius:10, cursor:"pointer",
+            fontSize:12, fontWeight:700,
+            color: finNuit ? "#94a3b8" : "#64748b",
+            display:"flex", alignItems:"center", gap:8,
+          }}>
+            🌙 {finNuit ? "Descente de nuit ✓ (cliquer pour retirer)" : "Descente de nuit"}
+          </button>
 
           {/* Repos / Absences */}
           <div>
