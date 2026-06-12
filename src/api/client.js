@@ -201,15 +201,44 @@ result[`${row.agent_id || agentId}-${date}`] = {
    * @param {object} entry    — { equipe, equipe2, jsCode, horaires, prive, finNuit, impressionAt }
    */
   saveEntry: (agentId, date, entry) => {
-    const periodes = [{
-      ordre: 1,
-      code_equipe: entry.equipe || null,
-      code_poste: (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|DISPO|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !/^(PI|PA)/.test(entry.jsCode)) ? entry.jsCode : null,
-      heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
-      heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
-      prive: entry.prive || false,
-      note: entry.finNuit ? 'fin_nuit' : null,
-    }];
+    const periodes = [];
+    // Periode 1 : journee (si equipe non null)
+    if (entry.equipe) {
+      periodes.push({
+        ordre: 1,
+        code_equipe: entry.equipe,
+        code_poste: (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|DISPO|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !/^(PI|PA)/.test(entry.jsCode)) ? entry.jsCode : null,
+        heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
+        heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
+        prive: entry.prive || false,
+        note: entry.finNuit ? 'fin_nuit' : null,
+      });
+    }
+    // Periode nuit ce soir (si equipe2=N)
+    if (entry.equipe2 === 'N') {
+      periodes.push({
+        ordre: periodes.length + 1,
+        code_equipe: 'N',
+        code_poste: (entry.jsCode2 && !/^(PI|PA)/.test(entry.jsCode2)) ? entry.jsCode2 : null,
+        heure_debut: '22:15',
+        heure_fin: '06:17',
+        prive: false,
+        note: 'debut_nuit',
+      });
+    }
+    // Si rien du tout mais finNuit : juste noter la fin de nuit
+    if (periodes.length === 0 && entry.finNuit) {
+      periodes.push({
+        ordre: 1,
+        code_equipe: 'N',
+        code_poste: entry.jsCode || null,
+        heure_debut: null,
+        heure_fin: null,
+        prive: false,
+        note: 'fin_nuit',
+      });
+    }
+    if (periodes.length === 0) periodes.push({ordre:1, code_equipe:'N', code_poste:null, heure_debut:null, heure_fin:null, prive:false, note:null});
     // Ajouter periode de nuit si debut de nuit ce soir
     if (entry.equipe2 === 'N') {
       periodes.push({
