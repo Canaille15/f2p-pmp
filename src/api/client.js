@@ -194,24 +194,33 @@ result[`${row.agent_id || agentId}-${date}`] = {
    * @param {string} date     — "YYYY-MM-DD"
    * @param {object} entry    — { equipe, equipe2, jsCode, horaires, prive, finNuit, impressionAt }
    */
-  saveEntry: (agentId, date, entry) =>
-    apiFetch(`/planning/${agentId}/${date}`, {
+  saveEntry: (agentId, date, entry) => {
+    const periodes = [{
+      ordre: 1,
+      code_equipe: entry.equipe || null,
+      code_poste: (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|DISPO|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !/^(PI|PA)/.test(entry.jsCode)) ? entry.jsCode : null,
+      heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
+      heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
+      prive: entry.prive || false,
+      note: entry.finNuit ? 'fin_nuit' : null,
+    }];
+    // Ajouter periode de nuit si debut de nuit ce soir
+    if (entry.equipe2 === 'N') {
+      periodes.push({
+        ordre: 2,
+        code_equipe: 'N',
+        code_poste: (entry.jsCode2 && !/^(PI|PA)/.test(entry.jsCode2)) ? entry.jsCode2 : null,
+        heure_debut: '22:15',
+        heure_fin: '06:17',
+        prive: false,
+        note: 'debut_nuit',
+      });
+    }
+    return apiFetch(`/planning/${agentId}/${date}`, {
       method: 'PUT',
-      body: JSON.stringify({
-periodes: [{
-          ordre: 1,
-          code_equipe: entry.equipe||null,
-          code_poste:  (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|DISPO|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !/^(PI|PA)/.test(entry.jsCode)) ? entry.jsCode : null,
-          heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
-          heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
-          prive:       entry.prive||false,
-          note:        entry.finNuit ? 'fin_nuit' : null,
-        }],source:'manuel',
-      }),
-    }),
-  /**
-   * Supprimer une entrée de planning
-   */
+      body: JSON.stringify({ periodes, source: 'manuel' }),
+    });
+  },
   deleteEntry: (agentId, date) =>
     apiFetch(`/planning/${agentId}/${date}`, { method: 'DELETE' }),
 };
