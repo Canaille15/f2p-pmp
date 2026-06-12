@@ -108,13 +108,18 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
 
   // Toggle type journée
   const toggleType1 = (code) => {
+    // N spécial : toggle la nuit du soir (bas de case)
+    if (code === "N") {
+      toggleNuit();
+      return;
+    }
     if (type1 === code) {
       setType1(null);
       setPoste1("");
       setHoraires1("");
     } else {
       setType1(code);
-      if (["M","AM","N","J"].includes(code)) {
+      if (["M","AM","J"].includes(code)) {
         setHoraires1(HORAIRES_DEFAUT[code] || "");
         setPoste1("");
       } else {
@@ -123,8 +128,6 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
       }
       setShowFetes(false);
     }
-    // Si on sélectionne N comme type journée, pas de nuit séparée
-    if (code === "N") setTypeN(null);
   };
 
   // Toggle nuit ce soir
@@ -138,7 +141,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
   };
 
   const isTravailJ = type1 && ["M","AM","J"].includes(type1);
-  const isNuitPrincipale = type1 === "N";
+  const isNuitPrincipale = false; // N est maintenant toujours nuit du soir
   const postesJ = isTravailJ ? getPostes(type1) : [];
   const postesN = getPostes("N");
   const canSave = true; // Toujours actif — si tout décoché = effacer la case
@@ -159,8 +162,8 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
       equipe:    type1 || null,
       jsCode:    (isTravailJ || isNuitPrincipale) ? (poste1 || null) : null,
       horaires:  horaires1 || null,
-      equipe2:   effectiveTypeN || null,
-      jsCodeNuit: effectiveTypeN ? (posteN || null) : null,
+      equipe2:   typeN || null,
+      jsCodeNuit: typeN ? (posteN || null) : null,
       prive:     !["M","AM","N","J","JF","FOR","DISPO",...FETES.map(f=>f.code)].includes(type1),
       finNuit:   entry?.finNuit || false,
     };
@@ -331,42 +334,22 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
             </div>
           )}
 
-          {/* Nuit ce soir (bas de case) — seulement si pas déjà une nuit principale */}
-          {!isNuitPrincipale && (
+          {/* Nuit ce soir - affichée quand N sélectionné comme nuit soir */}
+          {typeN && postesN.length > 0 && (
             <div>
-              <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:7,textTransform:"uppercase",letterSpacing:.5}}>
-                Nuit ce soir
+              <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>
+                Poste de nuit
               </div>
-              <button onClick={toggleNuit} style={{
-                width:"100%", padding:"10px",
-                background: typeN ? "#1e293b" : "#f8fafc",
-                border: typeN ? "none" : "1.5px dashed #cbd5e1",
-                borderRadius:10, cursor:"pointer",
-                fontSize:12, fontWeight:700,
-                color: typeN ? "#fff" : "#64748b",
-                display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-              }}>
-                🌙 {typeN ? "Nuit ce soir ajoutée ✓ (cliquer pour retirer)" : "+ Début de nuit ce soir"}
-              </button>
-
-              {/* Poste nuit ce soir */}
-              {typeN && postesN.length > 0 && (
-                <div style={{marginTop:8}}>
-                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>
-                    Poste de nuit
-                  </div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                    {postesN.map(p => (
-                      <button key={p.code} onClick={() => setPosteN(posteN===p.code?"":p.code)} style={{
-                        padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
-                        fontSize:12, fontWeight:700,
-                        background: posteN === p.code ? "#1e293b" : "#f1f5f9",
-                        color: posteN === p.code ? "#fff" : "#475569",
-                      }}>{p.label}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                {postesN.map(p => (
+                  <button key={p.code} onClick={() => setPosteN(posteN===p.code?"":p.code)} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: posteN === p.code ? "#1e293b" : "#f1f5f9",
+                    color: posteN === p.code ? "#fff" : "#475569",
+                  }}>{p.label}</button>
+                ))}
+              </div>
             </div>
           )}
 
