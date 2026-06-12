@@ -92,14 +92,18 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
   // ── États ──────────────────────────────────────────────────────────────────
   // type1 = code journée (RP, RU, M, AM, J, F1...) — null si vide
   // typeN = "N" si nuit ce soir, null sinon
-  const [type1,  setType1]  = useState(
-    (entry?.equipe && entry.equipe !== "N") ? entry.equipe :
-    (entry?.finNuit && !entry?.equipe) ? null : (entry?.equipe || null)
+  // Si equipe="N" = nuit seule (bas de case), sinon c'est la periode journee
+  const isNuitSeule = entry?.equipe === "N" && !entry?.equipe2;
+  const [type1,  setType1]  = useState(isNuitSeule ? null : (entry?.equipe || null));
+  const [poste1, setPoste1] = useState(isNuitSeule ? "" : (entry?.jsCode || ""));
+  const [horaires1, setHoraires1] = useState(isNuitSeule ? "" : (entry?.horaires || ""));
+  const [typeN,  setTypeN]  = useState(
+    entry?.equipe2 === "N" ? "N" :
+    isNuitSeule ? "N" : null
   );
-  const [poste1, setPoste1] = useState(entry?.jsCode || "");
-  const [horaires1, setHoraires1] = useState(entry?.horaires || "");
-  const [typeN,  setTypeN]  = useState(entry?.equipe2 === "N" ? "N" : null);
-  const [posteN, setPosteN] = useState(entry?.jsCode2 || "");
+  const [posteN, setPosteN] = useState(
+    isNuitSeule ? (entry?.jsCode || "") : (entry?.jsCode2 || "")
+  );
   const [showFetes, setShowFetes] = useState(false);
 
   // Date lisible
