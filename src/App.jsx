@@ -3644,20 +3644,18 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
             let bg=isWE?"#f8fafc":"#f8fafc";
             if(en?.finNuit&&!en?.equipe) bg="#eff6ff";
             else if(en&&showData&&code) bg=getColor(code);
-            // Cases style Google Agenda
-            const hasFinNuit = !!(en?.finNuit && showData);
-            const hasDebutNuit = !!(en?.equipe2 && showData);
+            // ── Cases logique nuit simplifiée ──
+            // Règles:
+            // - Case avec nuit soir : badge journée haut + badge Nuit+poste bas
+            // - Case nuit suivante (finNuit+equipe2) : haut blanc + badge Nuit+poste bas
+            // - Case après dernière nuit (finNuit seul) : entièrement blanche
+            const hasDebutNuit = !!(en?.equipe2 === "N" && showData);
+            const isNuitSuivante = !!(en?.finNuit && en?.equipe2 === "N" && showData);
+            const isDescente = !!(en?.finNuit && !en?.equipe2 && showData);
             const couleurNuit = getColor("N");
             const tcNuit = getTc("N");
-            const getPosteLabel = (jsCode) => {
-              if(!jsCode||jsCode===code) return null;
-              const pm=[...POSTES_PRCI_3x8,...POSTES_PAR_3x8].find(p=>p.M===jsCode||p.AM===jsCode||p.N===jsCode);
-              if(pm) return pm.label;
-              const pj=POSTES_JOURNEE.find(p=>p.jsCode===jsCode);
-              if(pj) return pj.label.slice(0,8);
-              return jsCode.slice(0,6);
-            };
-            const posteLabel = getPosteLabel(en?.jsCode);
+            const posteNuitLabel = en?.jsCode2 || null;
+            const posteLabel = en?.jsCode && !["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode) ? en.jsCode : null;
 
             return <div key={dk}
               onClick={()=>{ setDayPopup({dk, entry:en||null}); }}
@@ -3675,19 +3673,22 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 color:isToday?"#6366f1":isWE?"#94a3b8":"#374151",
                 lineHeight:1.3, marginBottom:1}}>{dayNum}</div>
 
-              {/* Fin de nuit (haut de case) - meme style que nuit */}
-              {hasFinNuit&&<div style={{
+              {/* Case entièrement blanche = descente de nuit (rien à afficher) */}
+              {isDescente&&null}
+
+              {/* Case nuit suivante : haut blanc + nuit bas */}
+              {isNuitSuivante&&<div style={{
                 background:couleurNuit, color:tcNuit,
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", flexDirection:"column",
               }}>
-                <span>{(EQ_COLORS["N"]?.label||"Nuit").slice(0,4)}</span>
-                {en?.jsCode&&en.jsCode!==code&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{en.jsCode}</span>}
+                <span>Nuit</span>
+                {posteNuitLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteNuitLabel}</span>}
               </div>}
 
-              {/* Période principale - ne pas afficher si c'est juste une fin de nuit */}
-              {code&&showData&&!(hasFinNuit&&code==="N"&&!en?.equipe2)&&<div style={{
+              {/* Période principale journée (si pas nuit suivante) */}
+              {!isNuitSuivante&&!isDescente&&code&&showData&&<div style={{
                 background:getColor(code), color:getTc(code),
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
@@ -3697,15 +3698,15 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
               </div>}
 
-              {/* Début de nuit (bas de case) - meme style que nuit */}
-              {hasDebutNuit&&<div style={{
+              {/* Début de nuit ce soir (bas de case) */}
+              {hasDebutNuit&&!isNuitSuivante&&<div style={{
                 background:couleurNuit, color:tcNuit,
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", flexDirection:"column",
               }}>
-                <span>{(EQ_COLORS["N"]?.label||"Nuit").slice(0,4)}</span>
-                {en?.jsCode2&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{en.jsCode2}</span>}
+                <span>Nuit</span>
+                {posteNuitLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteNuitLabel}</span>}
               </div>}
               {(()=>{
                 const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));
@@ -3783,6 +3784,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               finNuit: true,
               equipe: prevTomorrow.equipe || null,
               jsCode: prevTomorrow.jsCode || null,
+              jsCode2: prevTomorrow.jsCode2 || null,
             };
             setSchedule(prev=>({...prev,[agCp+'-'+tomorrowStr]:tomorrowEntry}));
             await api.planning.saveEntry(agCp, tomorrowStr, {
@@ -3795,34 +3797,51 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
           }
         } catch(e) { console.error('Erreur save:', e); }
       }}
-      onDelete={async ()=>{
+      onDelete={async (type)=>{
         const agCp=agent.immatriculation||agent.cp||agent.id;
         const dk=dayPopup.dk;
         const entry = schedule[agCp+'-'+dk] || {};
-        const hadNuit = !!entry.equipe2;
-        // Supprimer localement
-        setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
         setDayPopup(null);
-        // Supprimer en base
-        try {
-          await api.planning.deleteEntry(agCp, dk);
-          // Si avait une nuit : retirer finNuit du lendemain
-          if(hadNuit) {
-            const tomorrow=new Date(dk+'T12:00:00');
-            tomorrow.setDate(tomorrow.getDate()+1);
-            const tomorrowStr=tomorrow.toISOString().slice(0,10);
-            const prevTomorrow = schedule[agCp+'-'+tomorrowStr] || {};
-            if(prevTomorrow.finNuit) {
-              const newTomorrow = {...prevTomorrow, finNuit:false};
-              // Si la case lendemain n'a plus rien d'autre, la supprimer
-              if(!newTomorrow.equipe) {
-                setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+tomorrowStr];return n;});
-                await api.planning.deleteEntry(agCp, tomorrowStr);
-              } else {
-                setSchedule(prev=>({...prev,[agCp+'-'+tomorrowStr]:newTomorrow}));
-                await api.planning.saveEntry(agCp, tomorrowStr, newTomorrow);
-              }
+
+        const cleanTomorrow = async () => {
+          const tomorrow=new Date(dk+'T12:00:00');
+          tomorrow.setDate(tomorrow.getDate()+1);
+          const tomorrowStr=tomorrow.toISOString().slice(0,10);
+          const prevTomorrow = schedule[agCp+'-'+tomorrowStr] || {};
+          if(prevTomorrow.finNuit) {
+            const newTomorrow = {...prevTomorrow, finNuit:false, equipe2:null};
+            if(!newTomorrow.equipe && !newTomorrow.equipe2) {
+              setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+tomorrowStr];return n;});
+              await api.planning.deleteEntry(agCp, tomorrowStr);
+            } else {
+              setSchedule(prev=>({...prev,[agCp+'-'+tomorrowStr]:newTomorrow}));
+              await api.planning.saveEntry(agCp, tomorrowStr, newTomorrow);
             }
+          }
+        };
+
+        try {
+          if(type==='journee') {
+            // Garder la nuit, effacer juste la journée
+            const newEntry = {...entry, equipe:null, jsCode:null, horaires:null};
+            setSchedule(prev=>({...prev,[agCp+'-'+dk]:newEntry}));
+            await api.planning.saveEntry(agCp, dk, newEntry);
+          } else if(type==='nuit') {
+            // Effacer la nuit + nettoyer le lendemain
+            const newEntry = {...entry, equipe2:null, jsCode2:null};
+            if(!newEntry.equipe && !newEntry.finNuit) {
+              setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
+              await api.planning.deleteEntry(agCp, dk);
+            } else {
+              setSchedule(prev=>({...prev,[agCp+'-'+dk]:newEntry}));
+              await api.planning.saveEntry(agCp, dk, newEntry);
+            }
+            await cleanTomorrow();
+          } else {
+            // Effacer tout
+            setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
+            await api.planning.deleteEntry(agCp, dk);
+            if(entry.equipe2) await cleanTomorrow();
           }
         } catch(e) { console.error('Erreur delete:', e); }
       }}

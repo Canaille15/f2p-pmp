@@ -413,15 +413,30 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
         </div>
 
         {/* ACTIONS */}
+        {/* Boutons suppression séparés si case a plusieurs éléments */}
+        {(entry?.equipe || entry?.equipe2 || entry?.finNuit) && (
+          <div style={{ padding:"8px 20px 0", display:"flex", gap:6, flexShrink:0 }}>
+            {entry?.equipe && <button onClick={()=>onDelete('journee')} style={{
+              flex:1, padding:"7px 8px", background:"#fef2f2", color:"#dc2626",
+              border:"1px solid #fecaca", borderRadius:8, cursor:"pointer",
+              fontSize:11, fontWeight:700,
+            }}>🗑 Journée</button>}
+            {entry?.equipe2 && <button onClick={()=>onDelete('nuit')} style={{
+              flex:1, padding:"7px 8px", background:"#1e293b", color:"#fff",
+              border:"none", borderRadius:8, cursor:"pointer",
+              fontSize:11, fontWeight:700,
+            }}>🌙 Nuit</button>}
+            {(entry?.equipe && entry?.equipe2) && <button onClick={()=>onDelete('tout')} style={{
+              flex:1, padding:"7px 8px", background:"#fef2f2", color:"#dc2626",
+              border:"1px solid #fecaca", borderRadius:8, cursor:"pointer",
+              fontSize:11, fontWeight:700,
+            }}>🗑 Tout</button>}
+          </div>
+        )}
         <div style={{
           padding:"14px 20px", borderTop:"1px solid #e2e8f0",
           display:"flex", gap:8, flexShrink:0, background:"#fff",
         }}>
-          <button onClick={onDelete} style={{
-            padding:"10px 14px", background:"#fef2f2", color:"#dc2626",
-            border:"none", borderRadius:10, cursor:"pointer",
-            fontSize:12, fontWeight:700,
-          }}>🗑 Effacer</button>
           <button onClick={onClose} style={{
             flex:1, padding:"10px", background:"#f1f5f9", color:"#64748b",
             border:"none", borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:600,
