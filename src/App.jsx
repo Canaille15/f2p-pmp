@@ -3687,25 +3687,20 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 {posteNuitLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteNuitLabel}</span>}
               </div>}
 
-              {/* Nuit seule = equipe=N sans equipe2 → toujours en bas */}
-              {(() => {
-                const isNuitSeule = code === "N" && !en?.equipe2 && !en?.finNuit;
-                if (isNuitSeule) {
-                  return <>
-                    <div style={{flex:1}}/>
-                    <div style={{
-                      background:couleurNuit, color:tcNuit,
-                      borderRadius:5, padding:"2px 5px",
-                      fontSize:9, fontWeight:700, lineHeight:1.4,
-                      display:"flex", flexDirection:"column",
-                    }}>
-                      <span>Nuit</span>
-                      {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
-                    </div>
-                  </>;
-                }
-                return null;
-              })()}
+              {/* Nuit seule = equipe=N sans equipe2 → espace vide haut + nuit bas */}
+              {code === "N" && !en?.equipe2 && !en?.finNuit && showData && <>
+                <div style={{flex:1,minHeight:20}}/>
+                <div style={{
+                  background:couleurNuit, color:tcNuit,
+                  borderRadius:5, padding:"2px 5px",
+                  fontSize:9, fontWeight:700, lineHeight:1.4,
+                  display:"flex", flexDirection:"column",
+                  marginTop:"auto",
+                }}>
+                  <span>Nuit</span>
+                  {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
+                </div>
+              </>}
 
               {/* Période principale journée (si pas nuit seule, pas nuit suivante) */}
               {!isNuitSuivante&&!isDescente&&code&&showData&&code!=="N"&&<div style={{
