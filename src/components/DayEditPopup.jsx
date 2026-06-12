@@ -120,10 +120,13 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
 
   // Quand on choisit un code simple
   const choisirSimple = (code) => {
-    setType1(code);
+    if (type1 === code) {
+      setType1("");
+    } else {
+      setType1(code);
+    }
     setHoraires1("");
     setPoste1("");
-    setDebutNuit(false);
     setShowFetes(false);
   };
 
