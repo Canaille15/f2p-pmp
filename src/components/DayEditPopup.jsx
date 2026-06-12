@@ -1,28 +1,28 @@
 // ─── DayEditPopup.jsx ─────────────────────────────────────────────────────────
-// Popup de saisie journée — F2P.PMP
-// Logique : clic case → voir/modifier période 1 + bouton "+ Ajouter nuit"
+// Popup de saisie ultra-simple — F2P.PMP
+// Logique : boutons toggle + poste si travail + N en bas de case automatique
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useMemo } from "react";
 
 // ─── DONNÉES ──────────────────────────────────────────────────────────────────
 
-const CODES_SIMPLES = [
-  { code:"RP",  label:"RP",       color:"#16a34a" },
-  { code:"RU",  label:"RU",       color:"#ca8a04" },
-  { code:"RQ",  label:"RQ",       color:"#ca8a04" },
-  { code:"TC",  label:"TC",       color:"#0284c7" },
-  { code:"TY",  label:"TY",       color:"#0284c7" },
-  { code:"RN",  label:"RN",       color:"#4338ca" },
-  { code:"NU",  label:"NU",       color:"#475569" },
-  { code:"CA",  label:"Congés",   color:"#eab308" },
-  { code:"MA",  label:"Maladie",  color:"#dc2626" },
-  { code:"VT",  label:"VT",       color:"#eab308" },
-  { code:"ABS", label:"Absent",   color:"#dc2626" },
-  { code:"FOR", label:"Formation",color:"#b45309" },
+const CODES_REPOS = [
+  { code:"RP",  label:"RP",        color:"#16a34a" },
+  { code:"RU",  label:"RU",        color:"#ca8a04" },
+  { code:"RQ",  label:"RQ",        color:"#ca8a04" },
+  { code:"TC",  label:"TC",        color:"#0284c7" },
+  { code:"TY",  label:"TY",        color:"#0284c7" },
+  { code:"RN",  label:"RN",        color:"#4338ca" },
+  { code:"NU",  label:"NU",        color:"#475569" },
+  { code:"CA",  label:"Congés",    color:"#eab308" },
+  { code:"MA",  label:"Maladie",   color:"#dc2626" },
+  { code:"VT",  label:"VT",        color:"#eab308" },
+  { code:"ABS", label:"Absent",    color:"#dc2626" },
+  { code:"FOR", label:"Formation", color:"#b45309" },
 ];
 
-const TRAVAIL = [
+const CODES_TRAVAIL = [
   { code:"M",  label:"Matin",   heures:"06h10–14h17", color:"#8B0000" },
   { code:"AM", label:"Soir",    heures:"14h05–22h17", color:"#8B0000" },
   { code:"N",  label:"Nuit",    heures:"22h15–06h17", color:"#1e293b" },
@@ -30,46 +30,41 @@ const TRAVAIL = [
 ];
 
 const FETES = [
-  {code:"F1",label:"1er Janvier"},{code:"F2",label:"Lundi de Pâques"},
+  {code:"F1",label:"1er Jan."},{code:"F2",label:"Lundi Pâques"},
   {code:"F3",label:"1er Mai"},{code:"F4",label:"Ascension"},
-  {code:"FV",label:"8 Mai"},{code:"F5",label:"Lundi de Pentecôte"},
-  {code:"F6",label:"14 Juillet"},{code:"F7",label:"15 Août"},
-  {code:"F8",label:"1er Novembre"},{code:"F9",label:"11 Novembre"},
+  {code:"FV",label:"8 Mai"},{code:"F5",label:"Pentecôte"},
+  {code:"F6",label:"14 Juil."},{code:"F7",label:"15 Août"},
+  {code:"F8",label:"1er Nov."},{code:"F9",label:"11 Nov."},
   {code:"F0",label:"Noël"},{code:"VN",label:"Veille Noël"},
   {code:"JF",label:"Fête SNCF"},
 ];
 
 const POSTES_PRCI = [
-  {code:"CCL",   label:"CCL",          famille:"PRCI", types:["M","AM","N"]},
-  {code:"ADJ",   label:"Adj CCL",      famille:"PRCI", types:["M","AM","N"]},
-  {code:"LNE",   label:"AC LNE",       famille:"PRCI", types:["M","AM","N"]},
-  {code:"LNO",   label:"AC LNO",       famille:"PRCI", types:["M","AM","N"]},
-  {code:"VGD",   label:"AC VGD",       famille:"PRCI", types:["M","AM"]},
-  {code:"LC",    label:"AC LC",        famille:"PRCI", types:["M","AM","N"]},
-  {code:"PA1J",  label:"Pauseur PA1",  famille:"PRCI", types:["J"]},
-  {code:"PA2J",  label:"Pauseur PA2",  famille:"PRCI", types:["J"]},
-  {code:"PA3J",  label:"Pauseur PA3",  famille:"PRCI", types:["J"]},
-  {code:"DPXJ",  label:"DPX PRCI",     famille:"PRCI", types:["J"]},
-  {code:"ASSJ",  label:"Adj DPX",      famille:"PRCI", types:["J"]},
-  {code:"PPRCI", label:"PPRCI",        famille:"PRCI", types:["J"]},
-  {code:"AFOPR", label:"AFO PRCI",     famille:"PRCI", types:["J"]},
+  {code:"CCL",  label:"CCL",         types:["M","AM","N"]},
+  {code:"ADJ",  label:"Adj CCL",     types:["M","AM","N"]},
+  {code:"LNE",  label:"AC LNE",      types:["M","AM","N"]},
+  {code:"LNO",  label:"AC LNO",      types:["M","AM","N"]},
+  {code:"VGD",  label:"AC VGD",      types:["M","AM"]},
+  {code:"LC",   label:"AC LC",       types:["M","AM","N"]},
+  {code:"PA1J", label:"Pauseur PA1", types:["J"]},
+  {code:"PA2J", label:"Pauseur PA2", types:["J"]},
+  {code:"PA3J", label:"Pauseur PA3", types:["J"]},
+  {code:"DPXJ", label:"DPX PRCI",    types:["J"]},
+  {code:"ASSJ", label:"Adj DPX",     types:["J"]},
+  {code:"PPRCI",label:"PPRCI",       types:["J","M","AM"]},
+  {code:"AFOPR",label:"AFO PRCI",    types:["J"]},
 ];
 
 const POSTES_PAR = [
-  {code:"AC1",   label:"AC PAR",       famille:"PAR",  types:["M","AM","N"]},
-  {code:"AC2",   label:"Aide AC PAR",  famille:"PAR",  types:["M","AM","N"]},
-  {code:"ACXX",  label:"CT Travaux",   famille:"PAR",  types:["N"]},
-  {code:"PARJ",  label:"Pauseur PAR",  famille:"PAR",  types:["J"]},
-  {code:"DPXP",  label:"DPX PAR",      famille:"PAR",  types:["J"]},
-  {code:"ASMP",  label:"ASMTE PAR",    famille:"PAR",  types:["J"]},
+  {code:"AC1",  label:"AC PAR",      types:["M","AM","N"]},
+  {code:"AC2",  label:"Aide AC PAR", types:["M","AM","N"]},
+  {code:"ACXX", label:"CT Travaux",  types:["N"]},
+  {code:"PARJ", label:"Pauseur PAR", types:["J"]},
+  {code:"DPXP", label:"DPX PAR",     types:["J"]},
+  {code:"ASMP", label:"ASMTE PAR",   types:["J"]},
 ];
 
-const HORAIRES_DEFAUT = {
-  M:  "06h10–14h17",
-  AM: "14h05–22h17",
-  N:  "22h15–06h17",
-  J:  "08h00–17h45",
-};
+const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
 
 // ─── COMPOSANT ────────────────────────────────────────────────────────────────
 
@@ -80,89 +75,97 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
   const famille = agent?.famille || "PRCI";
   const tous_postes = famille === "PAR" ? [...POSTES_PAR, ...POSTES_PRCI] : [...POSTES_PRCI, ...POSTES_PAR];
 
-  // Habilitations validées
+  // Habilitations
   const habCodes = useMemo(() => {
     const habs = profile.habilitations || {};
     if (Array.isArray(habs)) return habs.map(h => h.code_poste);
     return Object.entries(habs).filter(([,v]) => v === "HC").map(([k]) => k);
   }, [profile.habilitations]);
 
-  // Postes habilités filtrés par type
   const getPostes = (type) => {
-    if (!type || !["M","AM","N","J"].includes(type)) return [];
+    if (!["M","AM","N","J"].includes(type)) return [];
     const postes = tous_postes.filter(p => p.types.includes(type));
-    if (habCodes.length === 0) return postes; // si pas d'hab, tout afficher
+    if (habCodes.length === 0) return postes;
     return postes.filter(p => habCodes.some(h => h.includes(p.code) || p.code.includes(h.slice(0,4))));
   };
 
-  // États
-  const [type1, setType1]       = useState(entry?.equipe || "");
-  const [poste1, setPoste1]     = useState(entry?.jsCode && !["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(entry?.jsCode) ? entry.jsCode : "");
+  // ── États ──────────────────────────────────────────────────────────────────
+  // type1 = code journée (RP, RU, M, AM, J, F1...) — null si vide
+  // typeN = "N" si nuit ce soir, null sinon
+  const [type1,  setType1]  = useState(
+    (entry?.equipe && entry.equipe !== "N") ? entry.equipe :
+    (entry?.finNuit && !entry?.equipe) ? null : (entry?.equipe || null)
+  );
+  const [poste1, setPoste1] = useState(entry?.jsCode || "");
   const [horaires1, setHoraires1] = useState(entry?.horaires || "");
-  const [finNuit, setFinNuit]   = useState(!!entry?.finNuit);
-  const isFinNuitOnly = !!entry?.finNuit && !entry?.equipe; // case fin de nuit sans periode journee
-  const [debutNuit, setDebutNuit] = useState(!!entry?.equipe2);
-  const [posteNuit, setPosteNuit] = useState(entry?.jsCode2 || "");
+  const [typeN,  setTypeN]  = useState(entry?.equipe2 === "N" ? "N" : null);
+  const [posteN, setPosteN] = useState(entry?.jsCode2 || "");
   const [showFetes, setShowFetes] = useState(false);
-  const [confirmNuit, setConfirmNuit] = useState(false);
 
   // Date lisible
   const dateObj = new Date(date + "T12:00:00");
   const dateLabel = dateObj.toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" });
 
-  // Quand on choisit un type de travail
-  const choisirType = (code) => {
-    setType1(code);
-    setHoraires1(HORAIRES_DEFAUT[code] || "");
-    setPoste1("");
-    setShowFetes(false);
-  };
-
-  // Quand on choisit un code simple
-  const choisirSimple = (code) => {
+  // Toggle type journée
+  const toggleType1 = (code) => {
     if (type1 === code) {
-      setType1("");
+      setType1(null);
+      setPoste1("");
+      setHoraires1("");
     } else {
       setType1(code);
+      if (["M","AM","N","J"].includes(code)) {
+        setHoraires1(HORAIRES_DEFAUT[code] || "");
+        setPoste1("");
+      } else {
+        setHoraires1("");
+        setPoste1("");
+      }
+      setShowFetes(false);
     }
-    setHoraires1("");
-    setPoste1("");
-    setShowFetes(false);
+    // Si on sélectionne N comme type journée, pas de nuit séparée
+    if (code === "N") setTypeN(null);
   };
 
-  // Quand on choisit un poste
-  const choisirPoste = (code) => {
-    setPoste1(code);
+  // Toggle nuit ce soir
+  const toggleNuit = () => {
+    if (typeN) {
+      setTypeN(null);
+      setPosteN("");
+    } else {
+      setTypeN("N");
+    }
   };
+
+  const isTravailJ = type1 && ["M","AM","J"].includes(type1);
+  const isNuitPrincipale = type1 === "N";
+  const postesJ = isTravailJ ? getPostes(type1) : [];
+  const postesN = getPostes("N");
+  const canSave = !!(type1 || typeN || entry?.finNuit);
 
   // Couleur du type
   const getColor = (code) => {
-    const t = TRAVAIL.find(t => t.code === code);
+    const t = CODES_TRAVAIL.find(t => t.code === code);
     if (t) return t.color;
-    const s = CODES_SIMPLES.find(s => s.code === code);
-    if (s) return s.color;
-    const f = FETES.find(f => f.code === code);
-    if (f) return "#ec4899";
+    const r = CODES_REPOS.find(r => r.code === code);
+    if (r) return r.color;
+    if (FETES.find(f => f.code === code)) return "#ec4899";
     return "#64748b";
   };
 
-  const isTravail = ["M","AM","N","J"].includes(type1);
-
-  // Sauvegarder
   const sauvegarder = () => {
+    const effectiveTypeN = isNuitPrincipale ? null : typeN;
     const newEntry = {
       equipe:    type1 || null,
-      jsCode:    poste1 || null,
+      jsCode:    (isTravailJ || isNuitPrincipale) ? (poste1 || null) : null,
       horaires:  horaires1 || null,
-      equipe2:   debutNuit ? "N" : (entry?.equipe2||null),
-      jsCodeNuit: debutNuit ? (posteNuit || entry?.jsCode2 || null) : null,
+      equipe2:   effectiveTypeN || null,
+      jsCodeNuit: effectiveTypeN ? (posteN || null) : null,
       prive:     !["M","AM","N","J","JF","FOR","DISPO",...FETES.map(f=>f.code)].includes(type1),
-      finNuit:   finNuit,
+      finNuit:   entry?.finNuit || false,
     };
     onSave(newEntry);
   };
-
-  const canSave = !!type1 || finNuit;
 
   return (
     <div style={{
@@ -184,85 +187,65 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
         {/* HEADER */}
         <div style={{
           background:"linear-gradient(135deg,#1e293b,#334155)",
-          padding:"16px 20px",
+          padding:"14px 18px",
           display:"flex", justifyContent:"space-between", alignItems:"center",
           flexShrink:0,
         }}>
           <div>
             <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>
-              Modifier la journée
-            </div>
-            <div style={{color:"#fff",fontSize:15,fontWeight:700,marginTop:2,textTransform:"capitalize"}}>
               {dateLabel}
+            </div>
+            {/* Aperçu */}
+            <div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}}>
+              {entry?.finNuit&&<span style={{background:"#1e293b",border:"1px solid #475569",color:"#94a3b8",fontSize:10,padding:"2px 7px",borderRadius:5}}>↓ fin nuit</span>}
+              {type1&&<span style={{background:getColor(type1),color:"#fff",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:5}}>{type1}{poste1?" · "+poste1:""}</span>}
+              {typeN&&<span style={{background:"#1e293b",color:"#fff",fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:5}}>Nuit{posteN?" · "+posteN:""} ↓</span>}
+              {!type1&&!typeN&&!entry?.finNuit&&<span style={{color:"#475569",fontSize:10}}>case vide</span>}
             </div>
           </div>
           <button onClick={onClose} style={{
             background:"rgba(255,255,255,.1)", border:"none",
             color:"#fff", cursor:"pointer", borderRadius:8,
-            width:32, height:32, fontSize:16,
+            width:32, height:32, fontSize:16, flexShrink:0,
             display:"flex", alignItems:"center", justifyContent:"center",
           }}>✕</button>
         </div>
 
         {/* CONTENU */}
-        <div style={{overflowY:"auto", flex:1, padding:"16px 20px", display:"flex", flexDirection:"column", gap:16}}>
-
-          {/* Fin de nuit (si applicable) */}
-          <div style={{
-            display:"flex", alignItems:"center", justifyContent:"space-between",
-            background: finNuit ? "#f0f9ff" : "#f8fafc",
-            border:`1.5px solid ${finNuit ? "#0284c7" : "#e2e8f0"}`,
-            borderRadius:10, padding:"10px 14px", cursor:"pointer",
-          }} onClick={() => setFinNuit(v => !v)}>
-            <div>
-              <div style={{fontSize:12,fontWeight:700,color:finNuit?"#0284c7":"#475569"}}>
-                🌙 Descente de nuit (fin de nuit le matin)
-              </div>
-              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>
-                Indique que cette journée commence par la fin d'une nuit
-              </div>
-            </div>
-            <div style={{
-              width:20,height:20,borderRadius:10,
-              background:finNuit?"#0284c7":"#e2e8f0",
-              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
-            }}>
-              {finNuit && <span style={{color:"#fff",fontSize:12}}>✓</span>}
-            </div>
-          </div>
+        <div style={{overflowY:"auto", flex:1, padding:"14px 16px", display:"flex", flexDirection:"column", gap:14}}>
 
           {/* Repos / Absences */}
           <div>
-            <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>
+            <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:7,textTransform:"uppercase",letterSpacing:.5}}>
               Repos / Absences
             </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {CODES_SIMPLES.map(c => (
-                <button key={c.code} onClick={() => choisirSimple(c.code)} style={{
-                  padding:"6px 12px", borderRadius:8, border:"none", cursor:"pointer",
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {CODES_REPOS.map(r => (
+                <button key={r.code} onClick={() => toggleType1(r.code)} style={{
+                  padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                   fontSize:12, fontWeight:700,
-                  background: type1 === c.code ? c.color : "#f1f5f9",
-                  color: type1 === c.code ? "#fff" : "#475569",
-                }}>{c.label}</button>
+                  background: type1 === r.code ? r.color : "#f1f5f9",
+                  color: type1 === r.code ? "#fff" : "#475569",
+                  transition:"all .1s",
+                }}>{r.label}</button>
               ))}
               <button onClick={() => setShowFetes(v=>!v)} style={{
-                padding:"6px 12px", borderRadius:8, border:"none", cursor:"pointer",
+                padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                 fontSize:12, fontWeight:700,
                 background: showFetes || FETES.find(f=>f.code===type1) ? "#ec4899" : "#fdf2f8",
                 color: showFetes || FETES.find(f=>f.code===type1) ? "#fff" : "#9d174d",
               }}>🩷 Fêtes</button>
             </div>
             {showFetes && (
-              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+              <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
                 {FETES.map(f => (
-                  <button key={f.code} onClick={() => { setType1(f.code); setHoraires1(""); setPoste1(""); setShowFetes(false); }} style={{
-                    padding:"5px 10px", borderRadius:8, border:"none", cursor:"pointer",
+                  <button key={f.code} onClick={() => { toggleType1(f.code); setShowFetes(false); }} style={{
+                    padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer",
                     fontSize:11, fontWeight:700,
                     background: type1 === f.code ? "#ec4899" : "#fdf2f8",
                     color: type1 === f.code ? "#fff" : "#9d174d",
                   }}>
-                    <div>{f.code}</div>
-                    <div style={{fontSize:9,opacity:.8}}>{f.label}</div>
+                    <span>{f.code}</span><span style={{fontSize:9,opacity:.8,marginLeft:3}}>{f.label}</span>
                   </button>
                 ))}
               </div>
@@ -271,61 +254,68 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
 
           {/* Travail */}
           <div>
-            <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>
+            <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:7,textTransform:"uppercase",letterSpacing:.5}}>
               Travail
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
-              {TRAVAIL.map(t => (
-                <button key={t.code} onClick={() => choisirType(t.code)} style={{
-                  padding:"10px 6px", borderRadius:10, border:"none", cursor:"pointer",
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7}}>
+              {CODES_TRAVAIL.map(t => (
+                <button key={t.code} onClick={() => toggleType1(t.code)} style={{
+                  padding:"9px 5px", borderRadius:10, border:"none", cursor:"pointer",
                   fontSize:12, fontWeight:800,
                   background: type1 === t.code ? t.color : "#f1f5f9",
                   color: type1 === t.code ? "#fff" : "#475569",
-                  display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                  display:"flex", flexDirection:"column", alignItems:"center", gap:2,
+                  transition:"all .1s",
                 }}>
                   <span>{t.label}</span>
-                  <span style={{fontSize:9,opacity:.7}}>{t.heures.split("–")[0]}</span>
+                  <span style={{fontSize:8,opacity:.7}}>{t.heures.split("–")[0]}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Poste (si travail) */}
-          {isTravail && (
+          {/* Poste journée (si M, AM, J) */}
+          {isTravailJ && postesJ.length > 0 && (
             <div>
-              <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:.5}}>
+              <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:7,textTransform:"uppercase",letterSpacing:.5}}>
                 Poste
               </div>
-              {getPostes(type1).length > 0 ? (
-                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                  {getPostes(type1).map(p => (
-                    <button key={p.code} onClick={() => choisirPoste(p.code)} style={{
-                      padding:"6px 12px", borderRadius:8, border:"none", cursor:"pointer",
-                      fontSize:12, fontWeight:700,
-                      background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
-                      color: poste1 === p.code ? "#fff" : "#475569",
-                    }}>{p.label}</button>
-                  ))}
-                </div>
-              ) : (
-                <input
-                  value={poste1}
-                  onChange={e => setPoste1(e.target.value)}
-                  placeholder="ex: CCL, LNE, LC..."
-                  style={{
-                    width:"100%", padding:"8px 12px",
-                    border:"1.5px solid #e2e8f0", borderRadius:8,
-                    fontSize:13, outline:"none", boxSizing:"border-box",
-                  }}
-                />
-              )}
+              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                {postesJ.map(p => (
+                  <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
+                    color: poste1 === p.code ? "#fff" : "#475569",
+                  }}>{p.label}</button>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Horaires */}
-          {isTravail && (
+          {/* Poste nuit principale (si N sélectionné comme type1) */}
+          {isNuitPrincipale && postesN.length > 0 && (
             <div>
-              <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>
+              <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:7,textTransform:"uppercase",letterSpacing:.5}}>
+                Poste de nuit
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                {postesN.map(p => (
+                  <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
+                    color: poste1 === p.code ? "#fff" : "#475569",
+                  }}>{p.label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Horaires (si travail) */}
+          {(isTravailJ || isNuitPrincipale) && (
+            <div>
+              <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>
                 Horaires
               </div>
               <input
@@ -341,103 +331,50 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
             </div>
           )}
 
-          {/* Ajouter une nuit */}
-          {!debutNuit && type1 && (
-            <button onClick={() => setConfirmNuit(true)} style={{
-              padding:"12px", background:"#f8fafc",
-              border:"1.5px dashed #cbd5e1", borderRadius:10,
-              cursor:"pointer", fontSize:13, fontWeight:600, color:"#475569",
-              display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-            }}>
-              🌙 + Ajouter un début de nuit ce soir
-            </button>
-          )}
+          {/* Nuit ce soir (bas de case) — seulement si pas déjà une nuit principale */}
+          {!isNuitPrincipale && (
+            <div>
+              <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:7,textTransform:"uppercase",letterSpacing:.5}}>
+                Nuit ce soir
+              </div>
+              <button onClick={toggleNuit} style={{
+                width:"100%", padding:"10px",
+                background: typeN ? "#1e293b" : "#f8fafc",
+                border: typeN ? "none" : "1.5px dashed #cbd5e1",
+                borderRadius:10, cursor:"pointer",
+                fontSize:12, fontWeight:700,
+                color: typeN ? "#fff" : "#64748b",
+                display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+              }}>
+                🌙 {typeN ? "Nuit ce soir ajoutée ✓ (cliquer pour retirer)" : "+ Début de nuit ce soir"}
+              </button>
 
-          {/* Confirmation nuit */}
-          {confirmNuit && !debutNuit && (
-            <div style={{background:"#1e293b",borderRadius:12,padding:"14px 16px",color:"#fff"}}>
-              <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>
-                🌙 Ajouter une nuit ce soir ?
-              </div>
-              <div style={{fontSize:11,color:"#94a3b8",marginBottom:12}}>
-                La nuit débutera à 22h15 et se terminera le lendemain matin. Elle sera comptée comme 1 seul jour de travail.
-              </div>
-              {/* Poste nuit */}
-              {getPostes("N").length > 0 && (
-                <div style={{marginBottom:10}}>
-                  <div style={{fontSize:10,color:"#64748b",fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Poste de nuit</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                    {getPostes("N").map(p => (
-                      <button key={p.code} onClick={() => setPosteNuit(p.code)} style={{
-                        padding:"5px 10px", borderRadius:7, border:"none", cursor:"pointer",
-                        fontSize:11, fontWeight:700,
-                        background: posteNuit === p.code ? "#fff" : "rgba(255,255,255,.1)",
-                        color: posteNuit === p.code ? "#1e293b" : "#fff",
+              {/* Poste nuit ce soir */}
+              {typeN && postesN.length > 0 && (
+                <div style={{marginTop:8}}>
+                  <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>
+                    Poste de nuit
+                  </div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                    {postesN.map(p => (
+                      <button key={p.code} onClick={() => setPosteN(posteN===p.code?"":p.code)} style={{
+                        padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                        fontSize:12, fontWeight:700,
+                        background: posteN === p.code ? "#1e293b" : "#f1f5f9",
+                        color: posteN === p.code ? "#fff" : "#475569",
                       }}>{p.label}</button>
                     ))}
                   </div>
                 </div>
               )}
-              <div style={{display:"flex",gap:8}}>
-                <button onClick={() => setConfirmNuit(false)} style={{
-                  flex:1, padding:"8px", background:"rgba(255,255,255,.1)",
-                  border:"none", borderRadius:8, color:"#fff", cursor:"pointer", fontSize:12,
-                }}>Annuler</button>
-                <button onClick={() => { setDebutNuit(true); setConfirmNuit(false); }} style={{
-                  flex:2, padding:"8px", background:"#3b82f6",
-                  border:"none", borderRadius:8, color:"#fff", cursor:"pointer",
-                  fontSize:12, fontWeight:700,
-                }}>✓ Confirmer la nuit</button>
-              </div>
-            </div>
-          )}
-
-          {/* Nuit ajoutée */}
-          {debutNuit && (
-            <div style={{
-              background:"#1e293b", color:"#fff",
-              borderRadius:10, padding:"10px 14px",
-              display:"flex", justifyContent:"space-between", alignItems:"center",
-            }}>
-              <div>
-                <div style={{fontSize:12,fontWeight:700}}>🌙 Nuit ajoutée — 22h15–06h17</div>
-                <div style={{fontSize:11,opacity:.7,marginTop:2}}>
-                  Bas de cette case + haut de demain automatique
-                </div>
-              </div>
-              <button onClick={() => { setDebutNuit(false); setPosteNuit(""); }} style={{
-                background:"rgba(255,255,255,.15)", border:"none",
-                color:"#fff", cursor:"pointer", borderRadius:6,
-                padding:"4px 8px", fontSize:11,
-              }}>Retirer</button>
             </div>
           )}
 
         </div>
 
         {/* ACTIONS */}
-        {/* Boutons suppression séparés si case a plusieurs éléments */}
-        {(entry?.equipe || entry?.equipe2 || entry?.finNuit) && (
-          <div style={{ padding:"8px 20px 0", display:"flex", gap:6, flexShrink:0 }}>
-            {entry?.equipe && <button onClick={()=>onDelete('journee')} style={{
-              flex:1, padding:"7px 8px", background:"#fef2f2", color:"#dc2626",
-              border:"1px solid #fecaca", borderRadius:8, cursor:"pointer",
-              fontSize:11, fontWeight:700,
-            }}>🗑 Journée</button>}
-            {entry?.equipe2 && <button onClick={()=>onDelete('nuit')} style={{
-              flex:1, padding:"7px 8px", background:"#1e293b", color:"#fff",
-              border:"none", borderRadius:8, cursor:"pointer",
-              fontSize:11, fontWeight:700,
-            }}>🌙 Nuit</button>}
-            {(entry?.equipe && entry?.equipe2) && <button onClick={()=>onDelete('tout')} style={{
-              flex:1, padding:"7px 8px", background:"#fef2f2", color:"#dc2626",
-              border:"1px solid #fecaca", borderRadius:8, cursor:"pointer",
-              fontSize:11, fontWeight:700,
-            }}>🗑 Tout</button>}
-          </div>
-        )}
         <div style={{
-          padding:"14px 20px", borderTop:"1px solid #e2e8f0",
+          padding:"12px 16px", borderTop:"1px solid #e2e8f0",
           display:"flex", gap:8, flexShrink:0, background:"#fff",
         }}>
           <button onClick={onClose} style={{
