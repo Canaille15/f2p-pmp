@@ -261,19 +261,21 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
               Travail
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7}}>
-              {CODES_TRAVAIL.map(t => (
-                <button key={t.code} onClick={() => toggleType1(t.code)} style={{
+              {CODES_TRAVAIL.map(t => {
+                const isActive = t.code === "N" ? !!typeN : type1 === t.code;
+                return <button key={t.code} onClick={() => toggleType1(t.code)} style={{
                   padding:"9px 5px", borderRadius:10, border:"none", cursor:"pointer",
                   fontSize:12, fontWeight:800,
-                  background: type1 === t.code ? t.color : "#f1f5f9",
-                  color: type1 === t.code ? "#fff" : "#475569",
+                  background: isActive ? t.color : "#f1f5f9",
+                  color: isActive ? "#fff" : "#475569",
                   display:"flex", flexDirection:"column", alignItems:"center", gap:2,
                   transition:"all .1s",
+                  outline: t.code === "N" && typeN ? "2px solid #3b82f6" : "none",
                 }}>
                   <span>{t.label}</span>
                   <span style={{fontSize:8,opacity:.7}}>{t.heures.split("–")[0]}</span>
-                </button>
-              ))}
+                </button>;
+              })}
             </div>
           </div>
 
