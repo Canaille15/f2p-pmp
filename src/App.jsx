@@ -3769,8 +3769,14 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
           impressionAt: null,
         };
         // Sauvegarder localement
-        setSchedule(prev=>({...prev,[agCp+'-'+dk]:fullEntry}));
         setDayPopup(null);
+        // Si tout vide : supprimer la case
+        if(!fullEntry.equipe && !fullEntry.equipe2 && !fullEntry.finNuit) {
+          setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
+          try { await api.planning.deleteEntry(agCp, dk); } catch(e){}
+          return;
+        }
+        setSchedule(prev=>({...prev,[agCp+'-'+dk]:fullEntry}));
         // Sauvegarder en base (sequentiel pour eviter deadlock)
         try {
           await api.planning.saveEntry(agCp, dk, fullEntry);
