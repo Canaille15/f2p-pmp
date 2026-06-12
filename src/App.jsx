@@ -3657,6 +3657,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
             const posteNuitLabel = en?.jsCode2 || null;
             const posteLabel = en?.jsCode && !["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode) ? en.jsCode : null;
 
+            const isNuitSeuleCell = code === "N" && !en?.equipe2 && !en?.finNuit;
             return <div key={dk}
               onClick={()=>{ setDayPopup({dk, entry:en||null}); }}
               style={{
@@ -3667,6 +3668,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.04)",
                 padding:"4px 5px 5px",
                 display:"flex", flexDirection:"column", gap:2,
+                justifyContent: isNuitSeuleCell ? "flex-end" : "flex-start",
               }}>
               {/* Numéro du jour */}
               <div style={{fontSize:11,fontWeight:isToday?800:500,
