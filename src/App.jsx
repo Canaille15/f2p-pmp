@@ -3675,8 +3675,16 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 color:isToday?"#6366f1":isWE?"#94a3b8":"#374151",
                 lineHeight:1.3, marginBottom:1}}>{dayNum}</div>
 
-              {/* Case entièrement blanche = descente de nuit (rien à afficher) */}
-              {isDescente&&null}
+              {/* Descente de nuit = badge 🌙 centré */}
+              {isDescente&&<div style={{
+                background:"#f0f9ff", color:"#0369a1",
+                borderRadius:5, padding:"2px 6px",
+                fontSize:11, fontWeight:700,
+                display:"flex", alignItems:"center", gap:4,
+                marginTop:"auto",
+              }}>
+                🌙
+              </div>}
 
               {/* Case nuit suivante : haut blanc + nuit bas */}
               {isNuitSuivante&&<div style={{
