@@ -3686,8 +3686,8 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 {en?.jsCode&&en.jsCode!==code&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{en.jsCode}</span>}
               </div>}
 
-              {/* Période principale */}
-              {code&&showData&&<div style={{
+              {/* Période principale - ne pas afficher si c'est juste une fin de nuit */}
+              {code&&showData&&!(hasFinNuit&&code==="N"&&!en?.equipe2)&&<div style={{
                 background:getColor(code), color:getTc(code),
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
