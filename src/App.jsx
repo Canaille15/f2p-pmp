@@ -3786,8 +3786,9 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
         };
         // Sauvegarder localement
         setDayPopup(null);
-        // Si tout vide : supprimer la case
-        if(!fullEntry.equipe && !fullEntry.equipe2 && !fullEntry.finNuit) {
+        // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit) : supprimer la case
+        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit);
+        if(!hasContent) {
           setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
           try { await api.planning.deleteEntry(agCp, dk); } catch(e){}
           return;
