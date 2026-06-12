@@ -3689,7 +3689,6 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
               {/* Nuit seule = equipe=N sans equipe2 → espace vide haut + nuit bas */}
               {code === "N" && !en?.equipe2 && !en?.finNuit && showData && <>
-                <div style={{flex:1,minHeight:20}}/>
                 <div style={{
                   background:couleurNuit, color:tcNuit,
                   borderRadius:5, padding:"2px 5px",
