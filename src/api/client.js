@@ -161,14 +161,16 @@ export const planning = {
       const p1 = periodes.find(p => p.note !== 'debut_nuit') || periodes[0];
       const p2 = periodes.find(p => p.note === 'debut_nuit');
       const horaires = p1.heure_debut ? (p1.heure_debut.slice(0,5).replace(':','h')+'–'+(p1.heure_fin||'').slice(0,5).replace(':','h')) : null;
+      const isFinNuit = p1.note === 'fin_nuit';
       result[`${agentId}-${date}`] = {
-        equipe:   p1.code_equipe || null,
+        // Si fin_nuit seule : equipe=null, finNuit=true
+        equipe:   isFinNuit && !p2 ? null : (p1.code_equipe || null),
         equipe2:  p2 ? 'N' : null,
-        jsCode:   p1.code_poste  || null,
+        jsCode:   isFinNuit && !p2 ? null : (p1.code_poste || null),
         jsCode2:  p2 ? (p2.code_poste || null) : null,
-        horaires: horaires,
+        horaires: isFinNuit ? null : horaires,
         prive:    !!p1.prive,
-        finNuit:  p1.note === 'fin_nuit',
+        finNuit:  isFinNuit,
         impressionAt: null,
       };
     });
