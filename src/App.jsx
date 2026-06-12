@@ -3759,10 +3759,11 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
         // Garder finNuit existant si pas modifie
         const fullEntry={
           equipe:   newEntry.equipe !== undefined ? (newEntry.equipe||null) : (prevEntry.equipe||null),
-          equipe2:  newEntry.equipe2||null,
-          jsCode:   newEntry.jsCode||null,
-          jsCode2:  newEntry.jsCodeNuit||null,
-          horaires: newEntry.horaires||null,
+          // Preserver la nuit existante si le popup ne la modifie pas
+          equipe2:  newEntry.equipe2 !== undefined ? (newEntry.equipe2||null) : (prevEntry.equipe2||null),
+          jsCode:   newEntry.jsCode !== undefined ? (newEntry.jsCode||null) : (prevEntry.jsCode||null),
+          jsCode2:  newEntry.jsCodeNuit !== undefined ? (newEntry.jsCodeNuit||null) : (prevEntry.jsCode2||null),
+          horaires: newEntry.horaires !== undefined ? (newEntry.horaires||null) : (prevEntry.horaires||null),
           prive:    newEntry.prive||false,
           finNuit:  newEntry.finNuit !== undefined ? newEntry.finNuit : (prevEntry.finNuit||false),
           impressionAt: null,

@@ -102,7 +102,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
   const [finNuit, setFinNuit]   = useState(!!entry?.finNuit);
   const isFinNuitOnly = !!entry?.finNuit && !entry?.equipe; // case fin de nuit sans periode journee
   const [debutNuit, setDebutNuit] = useState(!!entry?.equipe2);
-  const [posteNuit, setPosteNuit] = useState("");
+  const [posteNuit, setPosteNuit] = useState(entry?.jsCode2 || "");
   const [showFetes, setShowFetes] = useState(false);
   const [confirmNuit, setConfirmNuit] = useState(false);
 
@@ -151,8 +151,8 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
       equipe:    type1 || null,
       jsCode:    poste1 || null,
       horaires:  horaires1 || null,
-      equipe2:   debutNuit ? "N" : null,
-      jsCodeNuit: posteNuit || null,
+      equipe2:   debutNuit ? "N" : (entry?.equipe2||null),
+      jsCodeNuit: debutNuit ? (posteNuit || entry?.jsCode2 || null) : null,
       prive:     !["M","AM","N","J","JF","FOR","DISPO",...FETES.map(f=>f.code)].includes(type1),
       finNuit:   finNuit,
     };
