@@ -149,27 +149,33 @@ export const planning = {
   async getSchedule(agentId) {
     const rows = await apiFetch(`/planning/${agentId}`);
     if (!rows) return {};
-    const result = {};
+    // Grouper par date (plusieurs periodes par jour)
+    const byDate = {};
     rows.forEach((row) => {
       const date = row.date_jour ? row.date_jour.split('T')[0] : row.date;
-      result[`${agentId}-${date}`] = { 
-       equipe:       row.code_equipe  || row.equipe  || null,
-        equipe2:      row.equipe2      || null,
-        jsCode:       row.code_poste   || row.js_code || null,
-        horaires:     row.heure_debut  ? (row.heure_debut.slice(0,5).replace(':','h')+'–'+(row.heure_fin||'').slice(0,5).replace(':','h')) : (row.horaires||null),
-        prive:        row.prive        || false,
-        finNuit:      row.fin_nuit     || false,
-        impressionAt: row.impression_at || null,
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push(row);
+    });
+    const result = {};
+    Object.entries(byDate).forEach(([date, periodes]) => {
+      const p1 = periodes.find(p => p.note !== 'debut_nuit') || periodes[0];
+      const p2 = periodes.find(p => p.note === 'debut_nuit');
+      const horaires = p1.heure_debut ? (p1.heure_debut.slice(0,5).replace(':','h')+'–'+(p1.heure_fin||'').slice(0,5).replace(':','h')) : null;
+      result[`${agentId}-${date}`] = {
+        equipe:   p1.code_equipe || null,
+        equipe2:  p2 ? 'N' : null,
+        jsCode:   p1.code_poste  || null,
+        jsCode2:  p2 ? (p2.code_poste || null) : null,
+        horaires: horaires,
+        prive:    !!p1.prive,
+        finNuit:  p1.note === 'fin_nuit',
+        impressionAt: null,
       };
     });
     return result;
   },
 
-  /**
-   * Charger le planning de TOUS les agents (vue globale admin)
-   * Retourne le même format { "AGENTID-DATE": {...} }
-   */
-  async getAllSchedules() {
+    async getAllSchedules() {
     const rows = await apiFetch('/planning');
     if (!rows) return {};
     const result = {};
