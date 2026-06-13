@@ -3814,22 +3814,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
         const entry = schedule[agCp+'-'+dk] || {};
         setDayPopup(null);
 
-        const cleanTomorrow = async () => {
-          const tomorrow=new Date(dk+'T12:00:00');
-          tomorrow.setDate(tomorrow.getDate()+1);
-          const tomorrowStr=tomorrow.toISOString().slice(0,10);
-          const prevTomorrow = schedule[agCp+'-'+tomorrowStr] || {};
-          if(prevTomorrow.finNuit) {
-            const newTomorrow = {...prevTomorrow, finNuit:false, equipe2:null};
-            if(!newTomorrow.equipe && !newTomorrow.equipe2) {
-              setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+tomorrowStr];return n;});
-              await api.planning.deleteEntry(agCp, tomorrowStr);
-            } else {
-              setSchedule(prev=>({...prev,[agCp+'-'+tomorrowStr]:newTomorrow}));
-              await api.planning.saveEntry(agCp, tomorrowStr, newTomorrow);
-            }
-          }
-        };
+
 
         try {
           if(type==='journee') {
@@ -3847,12 +3832,12 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               setSchedule(prev=>({...prev,[agCp+'-'+dk]:newEntry}));
               await api.planning.saveEntry(agCp, dk, newEntry);
             }
-            await cleanTomorrow();
+
           } else {
             // Effacer tout
             setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
             await api.planning.deleteEntry(agCp, dk);
-            if(entry.equipe2) await cleanTomorrow();
+
           }
         } catch(e) { console.error('Erreur delete:', e); }
       }}
