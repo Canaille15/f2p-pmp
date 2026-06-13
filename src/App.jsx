@@ -3732,22 +3732,9 @@ justifyContent: "flex-start",
                 🌙 fin nuit
               </div>}
 
-     
 
-              
 
-              {/* Période principale journée (si pas nuit seule, pas nuit suivante) */}
-             {code&&showData&&code!=="N"&&
-                background:getColor(code), color:getTc(code),
-                borderRadius:5, padding:"2px 5px",
-                fontSize:9, fontWeight:700, lineHeight:1.4,
-                display:"flex", flexDirection:"column",
-              }}>
-                <span>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
-                {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
-              </div>}
 
-              {/* Début de nuit ce soir (bas de case) */}
               
               })()}
             </div>;
