@@ -3732,33 +3732,12 @@ justifyContent: "flex-start",
                 🌙 fin nuit
               </div>}
 
-              {/* Case nuit suivante : haut blanc + nuit bas */}
-              {isNuitSuivante&&<div style={{
-                background:couleurNuit, color:tcNuit,
-                borderRadius:5, padding:"2px 5px",
-                fontSize:9, fontWeight:700, lineHeight:1.4,
-                display:"flex", flexDirection:"column",
-              }}>
-                <span>Nuit</span>
-                {posteNuitLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteNuitLabel}</span>}
-              </div>}
+     
 
-              {/* Nuit seule = equipe=N sans equipe2 → espace vide haut + nuit bas */}
-              {code === "N" && !en?.equipe2 && !en?.finNuit && showData && <>
-                <div style={{
-                  background:couleurNuit, color:tcNuit,
-                  borderRadius:5, padding:"2px 5px",
-                  fontSize:9, fontWeight:700, lineHeight:1.4,
-                  display:"flex", flexDirection:"column",
-                  marginTop:"auto",
-                }}>
-                  <span>Nuit</span>
-                  {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
-                </div>
-              </>}
+              
 
               {/* Période principale journée (si pas nuit seule, pas nuit suivante) */}
-              {!isNuitSuivante&&!isDescente&&code&&showData&&code!=="N"&&<div style={{
+             {code&&showData&&code!=="N"&&
                 background:getColor(code), color:getTc(code),
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
@@ -3769,33 +3748,7 @@ justifyContent: "flex-start",
               </div>}
 
               {/* Début de nuit ce soir (bas de case) */}
-              {hasDebutNuit&&!isNuitSuivante&&<div style={{
-                background:couleurNuit, color:tcNuit,
-                borderRadius:5, padding:"2px 5px",
-                fontSize:9, fontWeight:700, lineHeight:1.4,
-                display:"flex", flexDirection:"column",
-              }}>
-                <span>Nuit</span>
-                {posteNuitLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteNuitLabel}</span>}
-              </div>}
-              {(()=>{
-                const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));
-                if(!rcFetes.length) return null;
-                return <div style={{display:"flex",flexWrap:"wrap",gap:1,marginTop:1}}>
-                  {rcFetes.map(f=>(
-                    <span key={f.code}
-                      title={`${f.type==="fete"?"Fête prise":f.type==="RC_manuel"?"RC manuel":"RC"} : ${f.label}`}
-                      style={{
-                        fontSize:7,fontWeight:800,
-                        background:"#ec4899",color:"#fff",
-                        borderRadius:4,padding:"0px 3px",
-                        border:"1px solid #db2777",
-                        whiteSpace:"nowrap",
-                      }}>
-                      {f.type!=="fete"?"RC-":""}{f.code}{f.type==="RC_manuel"?" ✎":""}
-                    </span>
-                  ))}
-                </div>;
+              
               })()}
             </div>;
           })}
