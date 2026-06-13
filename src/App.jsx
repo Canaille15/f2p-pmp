@@ -3686,7 +3686,7 @@ justifyContent: "flex-start",
                 🌙
               </div>}
 
-              {/* ZONE 2 — Utilisation journée (milieu) */}
+             {/* ZONE 2 — Utilisation journée (milieu) */}
               {code&&showData&&code!=="N"&&<div style={{
                 background:getColor(code), color:getTc(code),
                 borderRadius:5, padding:"2px 5px",
@@ -3694,6 +3694,17 @@ justifyContent: "flex-start",
                 display:"flex", flexDirection:"column",
               }}>
                 <span>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
+                {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
+              </div>}
+
+              {/* ZONE 2b — Nuit seule comme utilisation journée (si equipe=N sans equipe2) */}
+              {code==="N"&&!en?.equipe2&&showData&&<div style={{
+                background:getColor("N"), color:getTc("N"),
+                borderRadius:5, padding:"2px 5px",
+                fontSize:9, fontWeight:700, lineHeight:1.4,
+                display:"flex", flexDirection:"column",
+              }}>
+                <span>Nuit</span>
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
               </div>}
 
