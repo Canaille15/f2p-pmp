@@ -3199,42 +3199,7 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
     }
   });
 
-  // 3. RP automatique détecté dans le trimestre suivant pour une fête
-  Object.entries(datesFetes).forEach(([code, dateFete])=>{
-    if(!dateFete) return;
-    if(dejaPush.has(code)) return; // déjà traité ci-dessus
-    if(dk === dateFete) return;
-
-    const {limiteDate} = getFeteRegles(dateFete);
-    const moisFete = parseInt(dateFete.slice(5,7));
-    const t = getTrimestre(moisFete);
-    let tSuiv = t+1; let aSuiv = year;
-    if(tSuiv>4){tSuiv=1;aSuiv=year+1;}
-    const debutT={1:`${aSuiv}-01-01`,2:`${aSuiv}-04-01`,3:`${aSuiv}-07-01`,4:`${aSuiv}-10-01`};
-    const debutTrimSuiv = debutT[tSuiv];
-
-    if(dk >= debutTrimSuiv && dk <= limiteDate){
-      const e = schedule[`${agentId}-${dk}`];
-      if(e?.equipe === "RP"){
-        // Pas de date manuelle déjà enregistrée pour cette fête
-        const tracking = trackingAnnee[code];
-        if(tracking?.priseLe && tracking.priseLe !== dk) return; // une autre date manuelle existe
-
-        // Premier RP dans la fenêtre pour cette fête ?
-        let premierRP = true;
-        Object.entries(schedule).forEach(([k,v])=>{
-          if(!k.startsWith(agentId+"-")) return;
-          const d2 = k.slice(agentId.length+1);
-          if(d2 >= debutTrimSuiv && d2 < dk && v?.equipe === "RP") premierRP = false;
-        });
-        if(premierRP){
-          result.push({code, label: CODES_FETES[code], type:"RC"});
-          dejaPush.add(code);
-        }
-      }
-    }
-  });
-
+ 
   return result;
 }
 
@@ -5666,6 +5631,15 @@ export default function App(){
     setCurrentAgent(user.agent);
     setView("personal");const agentId = user.agent.immatriculation || user.agent.cp || user.agent.id;
     api.planning.getSchedule(agentId).then(entries=>{
+      if(entries&&Object.keys(entries).length>0){
+        setSchedule(prev=>{
+          // Railway gagne toujours sur le localStorage
+          const next={...prev};
+          Object.entries(entries).forEach(([k,v])=>{ next[k]=v; });
+          return next;
+        });
+      }
+    }).catch(()=>{});
       if(entries&&Object.keys(entries).length>0){
         setSchedule(prev=>({...prev,...entries}));
       }
