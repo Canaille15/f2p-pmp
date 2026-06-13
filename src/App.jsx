@@ -3668,20 +3668,67 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.04)",
                 padding:"4px 5px 5px",
                 display:"flex", flexDirection:"column", gap:2,
-                justifyContent: isNuitSeuleCell ? "flex-end" : "flex-start",
+justifyContent: "flex-start",
               }}>
-              {/* Numéro du jour */}
+       {/* Numéro du jour */}
               <div style={{fontSize:11,fontWeight:isToday?800:500,
                 color:isToday?"#6366f1":isWE?"#94a3b8":"#374151",
                 lineHeight:1.3, marginBottom:1}}>{dayNum}</div>
 
-              {/* Descente de nuit = badge 🌙 en haut de case */}
-              {isDescente&&<div style={{
+              {/* ZONE 1 — 🌙 descente de nuit (toujours en haut) */}
+              {en?.finNuit&&<div style={{
                 background:"#f0f9ff", color:"#0369a1",
                 borderRadius:5, padding:"2px 6px",
                 fontSize:10, fontWeight:700,
                 display:"inline-flex", alignItems:"center", gap:4,
                 alignSelf:"flex-start",
+              }}>
+                🌙
+              </div>}
+
+              {/* ZONE 2 — Utilisation journée (milieu) */}
+              {code&&showData&&code!=="N"&&<div style={{
+                background:getColor(code), color:getTc(code),
+                borderRadius:5, padding:"2px 5px",
+                fontSize:9, fontWeight:700, lineHeight:1.4,
+                display:"flex", flexDirection:"column",
+              }}>
+                <span>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
+                {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
+              </div>}
+
+              {/* ZONE 3 — Nuit (toujours en bas) */}
+              {(code==="N"||en?.equipe2==="N")&&showData&&<div style={{
+                background:couleurNuit, color:tcNuit,
+                borderRadius:5, padding:"2px 5px",
+                fontSize:9, fontWeight:700, lineHeight:1.4,
+                display:"flex", flexDirection:"column",
+                marginTop:"auto",
+              }}>
+                <span>Nuit</span>
+                {(code==="N"?posteLabel:posteNuitLabel)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
+              </div>}
+
+              {/* Pastilles RC fêtes */}
+              {(()=>{
+                const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));
+                if(!rcFetes.length) return null;
+                return <div style={{display:"flex",flexWrap:"wrap",gap:1,marginTop:1}}>
+                  {rcFetes.map(f=>(
+                    <span key={f.code}
+                      title={`${f.type==="fete"?"Fête prise":f.type==="RC_manuel"?"RC manuel":"RC"} : ${f.label}`}
+                      style={{
+                        fontSize:7,fontWeight:800,
+                        background:"#ec4899",color:"#fff",
+                        borderRadius:4,padding:"0px 3px",
+                        border:"1px solid #db2777",
+                        whiteSpace:"nowrap",
+                      }}>
+                      {f.type!=="fete"?"RC-":""}{f.code}{f.type==="RC_manuel"?" ✎":""}
+                    </span>
+                  ))}
+                </div>;
+              })()}
               }}>
                 🌙 fin nuit
               </div>}
