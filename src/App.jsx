@@ -3805,28 +3805,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
         // Sauvegarder en base (sequentiel pour eviter deadlock)
         try {
           await api.planning.saveEntry(agCp, dk, fullEntry);
-          // Si debut de nuit : propager fin nuit sur J+1
-          if(newEntry.equipe2) {
-            const tomorrow=new Date(dk+'T12:00:00');
-            tomorrow.setDate(tomorrow.getDate()+1);
-            const tomorrowStr=tomorrow.toISOString().slice(0,10);
-            const prevTomorrow = schedule[agCp+'-'+tomorrowStr] || {};
-            const tomorrowEntry = {
-              ...prevTomorrow,
-              finNuit: true,
-              equipe: prevTomorrow.equipe || null,
-              jsCode: prevTomorrow.jsCode || null,
-              jsCode2: prevTomorrow.jsCode2 || null,
-            };
-            setSchedule(prev=>({...prev,[agCp+'-'+tomorrowStr]:tomorrowEntry}));
-            await api.planning.saveEntry(agCp, tomorrowStr, {
-              equipe: tomorrowEntry.equipe || null,
-              jsCode: tomorrowEntry.jsCode || null,
-              horaires: tomorrowEntry.horaires || null,
-              finNuit: true,
-              prive: tomorrowEntry.prive || false,
-            });
-          }
+       
         } catch(e) { console.error('Erreur save:', e); }
       }}
       onDelete={async (type)=>{
