@@ -3686,7 +3686,7 @@ justifyContent: "flex-start",
                 🌙
               </div>}
 
-             {/* ZONE 2 — Utilisation journée (milieu) */}
+       {/* ZONE 2 — Utilisation journée (milieu) */}
               {code&&showData&&code!=="N"&&<div style={{
                 background:getColor(code), color:getTc(code),
                 borderRadius:5, padding:"2px 5px",
@@ -3697,26 +3697,15 @@ justifyContent: "flex-start",
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
               </div>}
 
-              {/* ZONE 2b — Nuit seule comme utilisation journée (si equipe=N sans equipe2) */}
-              {code==="N"&&!en?.equipe2&&showData&&<div style={{
+              {/* ZONE 3 — Nuit (toujours en bas) */}
+              {(code==="N"||en?.equipe2==="N")&&showData&&<div style={{
                 background:getColor("N"), color:getTc("N"),
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", flexDirection:"column",
               }}>
                 <span>Nuit</span>
-                {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
-              </div>}
-
-             {/* ZONE 3 — Nuit du soir (bas de case, uniquement si equipe2=N) */}
-              {en?.equipe2==="N"&&showData&&<div style={{
-                background:getColor("N"), color:getTc("N"),
-                borderRadius:5, padding:"2px 5px",
-                fontSize:9, fontWeight:700, lineHeight:1.4,
-                display:"flex", flexDirection:"column",
-              }}>
-                <span>Nuit</span>
-                {posteNuitLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteNuitLabel}</span>}
+                {(code==="N"?posteLabel:posteNuitLabel)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
               </div>}
 
               {/* Pastilles RC fêtes */}
