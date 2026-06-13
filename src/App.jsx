@@ -3666,7 +3666,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 borderRadius:10, cursor:"pointer",
                 position:"relative",
                 boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.04)",
-                padding:"4px 5px 5px",
+ padding:"4px 5px 5px", minHeight:48,
                 display:"flex", flexDirection:"column", gap:3,
 justifyContent: "flex-start",
               }}>
