@@ -3708,16 +3708,15 @@ justifyContent: "flex-start",
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
               </div>}
 
-              {/* ZONE 3 — Nuit (toujours en bas) */}
-              {(code==="N"||en?.equipe2==="N")&&showData&&<div style={{
-                background:couleurNuit, color:tcNuit,
+             {/* ZONE 3 — Nuit du soir (bas de case, uniquement si equipe2=N) */}
+              {en?.equipe2==="N"&&showData&&<div style={{
+                background:getColor("N"), color:getTc("N"),
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", flexDirection:"column",
-                marginTop:"auto",
               }}>
                 <span>Nuit</span>
-                {(code==="N"?posteLabel:posteNuitLabel)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
+                {posteNuitLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteNuitLabel}</span>}
               </div>}
 
               {/* Pastilles RC fêtes */}
