@@ -3663,7 +3663,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               style={{
                 background:"#fff",
                 border:isToday?"2px solid #6366f1":"1px solid #e8edf2",
-                borderRadius:10, minHeight:54, cursor:"pointer",
+                borderRadius:10, cursor:"pointer",
                 position:"relative",
                 boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.04)",
                 padding:"4px 5px 5px",
@@ -3728,15 +3728,7 @@ justifyContent: "flex-start",
                   ))}
                 </div>;
               })()}
-              }}>
-                🌙 fin nuit
-              </div>}
 
-
-
-
-              
-              })()}
             </div>;
           })}
         </div>
