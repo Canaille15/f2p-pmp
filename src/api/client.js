@@ -270,8 +270,10 @@ export const profil = {
    * @param {string} agentId
    */
   async get(agentId) {
-    const row = await apiFetch(`/profil/${agentId}`);
-    if (!row) return null;
+    const raw = await apiFetch(`/profil/${agentId}`);
+    if (!raw) return null;
+    const row = raw.profil || raw;
+    const hab = raw.habilitations || [];
     // Mapper snake_case → camelCase (structure attendue par App.jsx)
     return {
       pinHash:                  row.pin_hash               || null,
@@ -279,7 +281,7 @@ export const profil = {
       roulement:                row.roulement              || null,
       isReserve:                row.is_reserve             || false,
       famillesHab:              row.familles_hab           || null,
-      habilitations:            Array.isArray(row.habilitations) ? Object.fromEntries((row.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (row.habilitations||{}),
+      habilitations:            Array.isArray(hab) ? Object.fromEntries((hab||[]).map(h=>[h.code_poste,'HC'])) : (row.habilitations||{}),
       agentColors:              row.couleurs               || {},
       pauseFigee:               row.pause_figee            || {},
       compteurCorrections:      row.compteur_corrections   || {},
