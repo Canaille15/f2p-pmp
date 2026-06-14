@@ -333,6 +333,30 @@ export const profil = {
       method: 'PUT',
       body: JSON.stringify({ pin: newPin }),
     }),
+
+  /**
+   * Sauvegarder le profil d'un agent (couleurs, habilitations, etc.)
+   */
+  async save(agentId, data) {
+    return apiFetch(`/profil/${agentId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        roulement:                data.roulement              || null,
+        is_reserve:               data.isReserve              || false,
+        familles_hab:             data.famillesHab            || null,
+        habilitations:            data.habilitations          || {},
+        agent_colors:             data.agentColors            || {},
+        pause_figee:              data.pauseFigee             || {},
+        compteur_corrections:     data.compteurCorrections    || {},
+        fetes_tracking:           data.fetesTracking          || {},
+        pause_figee_fia_mois:     data.pauseFigeeFiaMois      || {},
+        pause_figee_fia_done:     data.pauseFigeeFiaDone      || {},
+        demandes_conges:          data.demandesConges         || [],
+        notifications_acquittees: data.notificationsAcquittees|| [],
+      }),
+    });
+  },
 };
 
 // ─── MODULE CONGÉS ────────────────────────────────────────────────────────────
