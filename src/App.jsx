@@ -5640,10 +5640,7 @@ export default function App(){
         });
       }
     }).catch(()=>{});
-      if(entries&&Object.keys(entries).length>0){
-        setSchedule(prev=>({...prev,...entries}));
-      }
-    }).catch(()=>{});
+
     api.profil.get(agentId).then(p=>{if(p&&p.habilitations)setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations}}));}).catch(()=>{});
   };
   const handleLogout=()=>{
