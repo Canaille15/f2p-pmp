@@ -3175,11 +3175,10 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   const result = []; // [{code, label, type: "fete"|"RC"|"RC_manuel"}]
   const dejaPush = new Set(); // éviter doublons
 
-  // 1. Code fête saisi directement dans le planning ce jour
+  // 1. Code fête saisi directement — pas affiché en pastille (déjà visible via badge journée)
   const entry = schedule[`${agentId}-${dk}`];
   if(entry?.equipe && CODES_FETES[entry.equipe]){
-    result.push({code: entry.equipe, label: CODES_FETES[entry.equipe], type:"fete"});
-    dejaPush.add(entry.equipe);
+    dejaPush.add(entry.equipe); // marquer comme déjà traité sans ajouter la pastille
   }
 
   const datesFetes = getDatesFetesAnnee(year);
