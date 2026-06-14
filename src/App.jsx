@@ -3235,7 +3235,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const [showColorPicker,setShowColorPicker]=useState(false);
   // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate
   // Source unique de vérité : agentProfiles[agent.id].agentColors
-  const agentColors = agentProfiles[agent?.id]?.agentColors || {};
+  const agKeyColors=agent?.immatriculation||agent?.cp||agent?.id;const agentColors = agentProfiles[agKeyColors]?.agentColors || {};
 
   // Setter : met à jour agentProfiles directement (→ Supabase via useEffect save)
   const setAgentColors = useCallback((updater)=>{
