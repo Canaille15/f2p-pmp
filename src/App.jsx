@@ -3503,8 +3503,10 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 background:getColor("N"),color:getTc("N"),
                 borderRadius:8,padding:"4px 8px",
                 fontSize:10,fontWeight:700,textAlign:"center",
+                display:"flex",flexDirection:"column",gap:2,
               }}>
-                Nuit
+                <span>Nuit</span>
+                {(code==="N"?en?.jsCode:en?.jsCode2)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{code==="N"?en?.jsCode:en?.jsCode2}</span>}
               </div>}
 
 
