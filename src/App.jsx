@@ -3681,7 +3681,7 @@ justifyContent: "flex-start",
     {showColorPicker&&<ColorCustomizer
       agentColors={agentProfiles[agent?.id]?.agentColors||{}}
       setAgentColors={setAgentColors}
-      onClose={()=>{setShowColorPicker(false);const agKeyS=agent?.immatriculation||agent?.cp||agent?.id;const prof=agentProfiles[agKeyS];if(prof&&Object.keys(prof.agentColors||{}).length>0)api.profil.save(agKeyS,prof);}}/>}
+      onClose={()=>setShowColorPicker(false)}/>}
 
     {dayPopup&&<DayEditPopup
       date={dayPopup.dk}
@@ -5688,7 +5688,7 @@ export default function App(){
         isReserve:            profile.is_reserve,
         famillesHab:          profile.familles_hab,
         habilitations:        profile.habilitations||{},
-        agentColors:          Object.keys(profile.agent_colors||{}).length > 0 ? profile.agent_colors : (prev[agentId]?.agentColors||{}),
+        agentColors:          profile.agent_colors||{},
         pauseFigee:           profile.pause_figee||{},
         compteurCorrections:  profile.compteur_corrections||{},
         fetesTracking:        profile.fetes_tracking||{},
@@ -5717,7 +5717,8 @@ export default function App(){
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
-    // sauvegarde manuelle uniquement
+    const profile = agentProfiles[agentId];
+    if(profile && Object.keys(profile.agentColors||{}).length > 0) api.profil.save(agentId, profile);
   },[agentProfiles]);
 
   // ── RAPPEL CONGÉS PROTOCOLAIRES ─────────────────────────────────────────────
