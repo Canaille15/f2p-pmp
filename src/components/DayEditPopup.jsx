@@ -97,7 +97,8 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
   // N avec equipe2="N" = journée + nuit → type1=entry.equipe (M/AM/J), typeN="N"
   // Sinon : type1=entry.equipe, typeN=null
 
-  const isNuitSeule = entry?.equipe === "N" && !entry?.equipe2;
+  // Nuit seule = equipe="N" sans journée (equipe2=null OU equipe2="N" avec equipe="N")
+  const isNuitSeule = entry?.equipe === "N" && (entry?.equipe2 === "N" || !entry?.equipe2);
 
   const initType1 = isNuitSeule ? null : (entry?.equipe || null);
   const initTypeN = (entry?.equipe2 === "N" || isNuitSeule) ? "N" : null;
