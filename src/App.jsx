@@ -2703,7 +2703,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                       </div>
 
                       {/* Badge nuit du soir */}
-                      {schedule[`${agent.id}-${l.dk}`]?.equipe2==="N"&&l.showData&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+                      {schedule[`${agent.id}-${l.dk}`]?.equipe2==="N"&&l.code!=="N"&&l.showData&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
                         <span style={{background:getColor("N"),color:getTc("N"),borderRadius:8,padding:"3px 10px",fontSize:12,fontWeight:800}}>Nuit</span>
                         {schedule[`${agent.id}-${l.dk}`]?.jsCode2&&<span style={{fontSize:10,color:"#64748b",fontWeight:600,fontFamily:"monospace"}}>{schedule[`${agent.id}-${l.dk}`]?.jsCode2}</span>}
                       </div>}
