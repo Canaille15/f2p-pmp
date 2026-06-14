@@ -3442,8 +3442,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
           return <div key={dk}
             onClick={()=>{
-              if(codeActif==="EFFACER") setDay(dk,null);
-              else if(codeActif) setDay(dk, code===codeActif?null:codeActif);
+              setDayPopup({dk, entry:en||null});
             }}
             style={{
             borderRadius:12,
@@ -3455,7 +3454,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
             display:"flex",
             flexDirection:"column",
             minHeight:110,
-            cursor:codeActif?"pointer":"default",
+            cursor:"pointer",
           }}>
             {/* Barre colorée en haut */}
             <div style={{
@@ -3507,18 +3506,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               }}>
                 Nuit
               </div>}
-              {/* Badge prise de nuit */}
-              {hasNuit2&&showData&&<div style={{
-                background:"#1e3a8a",
-                color:"#fff",
-                borderRadius:8,
-                padding:"3px 8px",
-                fontSize:9,
-                fontWeight:700,
-                textAlign:"center",
-              }}>
-                🌙 Nuit
-              </div>}
+
 
               {/* Pastilles RC fêtes */}
               {(()=>{
@@ -3548,37 +3536,9 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               }}>—</div>}
             </div>
 
-            {/* Sélecteur équipe */}
-            <div style={{padding:"4px 6px",borderTop:"1px solid #f1f5f9",background:"#fafafa"}}>
-              <select value={code||""} onChange={e=>{
-                  if(codeActif) setCodeActif(null); // désactive la saisie rapide si on utilise le select
-                  setDay(dk,e.target.value||null);
-                }}
-                style={{width:"100%",fontSize:9,border:"1px solid #e2e8f0",borderRadius:6,
-                  padding:"3px 4px",background:"#fff",color:"#475569",cursor:"pointer",outline:"none"}}>
-                <option value="">— choisir —</option>
-                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
-                  {c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},{c:"NU",l:"NU"},
-                  {c:"CA",l:"Congés"},{c:"MA",l:"Maladie"},{c:"VT",l:"VT"},
-                  {c:"TY",l:"TY"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}
-                ].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
-              </select>
-            </div>
+            
 
-            {/* Bouton prise de nuit */}
-            {code&&<div style={{
-              padding:"3px 6px",
-              background:hasNuit2?"#1e3a8a":"#f8fafc",
-              borderTop:"1px solid #f1f5f9",
-            }}>
-              <select value={en?.equipe2||""} onChange={e=>setDay(dk,e.target.value||null,true)}
-                style={{width:"100%",fontSize:9,border:"none",background:"transparent",
-                  color:hasNuit2?"#bfdbfe":"#94a3b8",cursor:"pointer",outline:"none",
-                  fontWeight:hasNuit2?700:400}}>
-                <option value="">🌙 + prise de nuit</option>
-                <option value="N">🌙 Nuit ce soir ✓</option>
-              </select>
-            </div>}
+            
           </div>;
         })}
       </div>
