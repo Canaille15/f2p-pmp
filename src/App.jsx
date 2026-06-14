@@ -5611,7 +5611,7 @@ export default function App(){
       }
     }).catch(()=>{});
 
-    api.profil.get(agentId).then(p=>{if(p&&p.habilitations)setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations,agentColors:{...(p.agentColors||{}), ...(prev[agentId]?.agentColors||{})}}}));}).catch(()=>{});
+    api.profil.get(agentId).then(p=>{if(p&&p.habilitations)setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations,agentColors:p.agentColors||{}}}));}).catch(()=>{});
   };
   const handleLogout=()=>{
     setCurrentUser(null);
@@ -5640,7 +5640,7 @@ export default function App(){
           isReserve:           profile.is_reserve,
           famillesHab:         profile.familles_hab,
           habilitations:       Array.isArray(profile.habilitations) ? Object.fromEntries((profile.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (profile.habilitations||{}),
-          agentColors:         {...(profile.agent_colors||{}), ...(prev[agentId]?.agentColors||{})},
+          agentColors:         profile.agent_colors||{},
           pauseFigee:          profile.pause_figee||{},
           compteurCorrections: profile.compteur_corrections||{},
           fetesTracking:       profile.fetes_tracking||{},
@@ -5688,7 +5688,7 @@ export default function App(){
         isReserve:            profile.is_reserve,
         famillesHab:          profile.familles_hab,
         habilitations:        profile.habilitations||{},
-        agentColors:          {...(profile.agent_colors||{}), ...(prev[agentId]?.agentColors||{})},
+        agentColors:          profile.agent_colors||{},
         pauseFigee:           profile.pause_figee||{},
         compteurCorrections:  profile.compteur_corrections||{},
         fetesTracking:        profile.fetes_tracking||{},
