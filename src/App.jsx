@@ -3249,7 +3249,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   // Couleur effective pour un code
   const getColor=(code)=>{
     // Lire directement agentProfiles pour la réactivité maximale
-    const colors = agentProfiles[agent?.id]?.agentColors || {};
+    const agKeyGC=agent?.immatriculation||agent?.cp||agent?.id;const colors = agentProfiles[agKeyGC]?.agentColors || {};
 
     if(colors[code]) return colors[code];
     // Fêtes légales F1..VN → couleur perso de F1 ou défaut rose
