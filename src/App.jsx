@@ -5688,7 +5688,7 @@ export default function App(){
         isReserve:            profile.is_reserve,
         famillesHab:          profile.familles_hab,
         habilitations:        profile.habilitations||{},
-        agentColors:          profile.agent_colors||{},
+        agentColors:          {...(profile.agent_colors||{}), ...(prev[agentId]?.agentColors||{})},
         pauseFigee:           profile.pause_figee||{},
         compteurCorrections:  profile.compteur_corrections||{},
         fetesTracking:        profile.fetes_tracking||{},
