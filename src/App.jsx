@@ -2591,6 +2591,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
     const eq   = code ? EQ[code] : null;
     const isPrive  = en?.prive||eq?.prive||false;
     const showData = isOwnProfile||!isPrive;
+    const jsCode = en?.jsCode||null;
     const dow   = new Date(dk).getDay();
     const isWE  = dow===0||dow===6;
     const isToday = dk===TODAY;
@@ -2608,7 +2609,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
     }
 
     const d = new Date(dk);
-    return {dk, code, eq, label, plage, couleur, tc, isWE, isToday, dow,
+    return {dk, code, eq, label, plage, couleur, tc, isWE, isToday, dow, jsCode,
       jourNom: JOURS_LONG[dow],
       jourNum: d.getDate(),
       moisNom: d.toLocaleDateString("fr-FR",{month:"short"}),
@@ -2682,7 +2683,8 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                 {/* Contenu : bloc équipe */}
                 <div style={{flex:1,padding:"6px 10px",display:"flex",
                   flexDirection:"column",justifyContent:"center",gap:4}}>
-                  {l.code&&l.showData?(
+                  {en?.finNuit&&<div style={{fontSize:11,color:"#0369a1",background:"#f0f9ff",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>🌙 Descente de nuit</div>}
+                    {l.code&&l.showData?(
                     <div>
                       {/* Badge code + label */}
                       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
@@ -2693,7 +2695,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                           boxShadow:"0 1px 3px rgba(0,0,0,.12)",
                         }}>
                           {CODES_FETES[l.code]?"🩷":""}{l.label}
-                        </span>
+                        {l.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(l.jsCode)?<span style={{fontSize:10,opacity:.8,marginLeft:4}}>/ {l.jsCode}</span>:null}</span>
                         {l.eq?.heures&&<span style={{
                           fontSize:10,color:"#64748b",fontWeight:600,
                           fontFamily:"monospace",
