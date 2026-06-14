@@ -2578,7 +2578,7 @@ function getPlageMinutes(code) {
   return {debut, fin};
 }
 
-function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile}){
+function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onDayClick}){
   // Vue liste verticale scrollable (style Google Agenda mobile)
   // Un jour par ligne, bloc horaire visuel à droite
 
@@ -2647,12 +2647,13 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile}){
               {l.dow===1&&i>0&&<div style={{height:1,background:"#e2e8f0",margin:"0 14px"}}/>}
 
               {/* Ligne jour */}
-              <div style={{
+              <div onClick={()=>onDayClick&&onDayClick(l.dk, schedule[`${agent.id}-${l.dk}`]||null)} style={{
                 display:"flex",alignItems:"stretch",
                 minHeight:52,
                 background:l.isToday?"#eef2ff":l.isWE?"#fafafa":"#fff",
                 borderBottom:"1px solid #f8fafc",
                 borderLeft:l.isToday?"3px solid #6366f1":"3px solid transparent",
+                cursor:"pointer",
               }}>
                 {/* Colonne date */}
                 <div style={{
@@ -3768,6 +3769,7 @@ justifyContent: "flex-start",
         getColor={getColor}
         getTc={getTc}
         isOwnProfile={isOwnProfile}
+        onDayClick={(dk,en)=>setDayPopup({dk,entry:en||null})}
       />
     </>}
 
