@@ -3481,29 +3481,32 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
             {/* Contenu */}
             <div style={{padding:"6px 7px",flex:1,display:"flex",flexDirection:"column",gap:4}}>
-              {/* Fin de nuit J+1 */}
-              {isFinNuit2&&<div style={{
-                background:"#eff6ff",borderRadius:6,padding:"3px 6px",
-                fontSize:9,fontWeight:700,color:"#1e3a8a",lineHeight:1.3,
-                border:"1px solid #bfdbfe",
+           {/* ZONE 1 — 🌙 descente de nuit (haut) */}
+              {en?.finNuit&&showData&&<div style={{
+                background:"#f0f9ff",color:"#0369a1",
+                borderRadius:5,padding:"2px 6px",
+                fontSize:10,fontWeight:700,
+                display:"inline-flex",alignItems:"center",gap:4,
+                alignSelf:"flex-start",
+              }}>🌙</div>}
+
+              {/* ZONE 2 — Utilisation journée (milieu) */}
+              {code&&showData&&code!=="N"&&<div style={{
+                background:getColor(code),color:getTc(code),
+                borderRadius:8,padding:"4px 8px",
+                fontSize:10,fontWeight:700,textAlign:"center",
               }}>
-                🌙 Nuit → matin<br/>
-                <span style={{fontWeight:400,color:"#3b82f6",fontSize:8}}>Libre ensuite</span>
+                {CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)}
               </div>}
 
-              {/* Badge équipe principale */}
-              {code&&showData&&<div style={{
-                background: getColor(code),
-                color: getTc(code),
-                borderRadius:8,
-                padding:"4px 8px",
-                fontSize:10,
-                fontWeight:700,
-                textAlign:"center",
+              {/* ZONE 3 — Nuit (bas) */}
+              {(code==="N"||en?.equipe2==="N")&&showData&&<div style={{
+                background:getColor("N"),color:getTc("N"),
+                borderRadius:8,padding:"4px 8px",
+                fontSize:10,fontWeight:700,textAlign:"center",
               }}>
-                {CODES_FETES[code] ? `🩷 ${code}` : (eq?.label||code)}
+                Nuit
               </div>}
-
               {/* Badge prise de nuit */}
               {hasNuit2&&showData&&<div style={{
                 background:"#1e3a8a",
