@@ -280,7 +280,7 @@ export const profil = {
       isReserve:                row.is_reserve             || false,
       famillesHab:              row.familles_hab           || null,
       habilitations:            Array.isArray(row.habilitations) ? Object.fromEntries((row.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (row.habilitations||{}),
-      agentColors:              row.agent_colors           || {},
+      agentColors:              row.couleurs               || {},
       pauseFigee:               row.pause_figee            || {},
       compteurCorrections:      row.compteur_corrections   || {},
       departDate:               row.depart_date            || null,
