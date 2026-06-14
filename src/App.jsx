@@ -3681,7 +3681,7 @@ justifyContent: "flex-start",
     {showColorPicker&&<ColorCustomizer
       agentColors={agentProfiles[agent?.id]?.agentColors||{}}
       setAgentColors={setAgentColors}
-      onClose={()=>setShowColorPicker(false)}/>}
+      onClose={()=>{setShowColorPicker(false);const agKeyS=agent?.immatriculation||agent?.cp||agent?.id;const prof=agentProfiles[agKeyS];if(prof&&Object.keys(prof.agentColors||{}).length>0)api.profil.save(agKeyS,prof);}}/>}
 
     {dayPopup&&<DayEditPopup
       date={dayPopup.dk}
@@ -5717,8 +5717,7 @@ export default function App(){
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
-    const profile = agentProfiles[agentId];
-    if(profile && Object.keys(profile.agentColors||{}).length > 0) api.profil.save(agentId, profile);
+    // sauvegarde manuelle uniquement
   },[agentProfiles]);
 
   // ── RAPPEL CONGÉS PROTOCOLAIRES ─────────────────────────────────────────────
