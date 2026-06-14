@@ -5611,7 +5611,7 @@ export default function App(){
       }
     }).catch(()=>{});
 
-    api.profil.get(agentId).then(p=>{if(p&&p.habilitations)setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations}}));}).catch(()=>{});
+    api.profil.get(agentId).then(p=>{if(p&&p.habilitations)setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations,agentColors:{...(p.agentColors||{}), ...(prev[agentId]?.agentColors||{})}}}));}).catch(()=>{});
   };
   const handleLogout=()=>{
     setCurrentUser(null);
