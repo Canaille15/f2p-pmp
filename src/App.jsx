@@ -3666,7 +3666,7 @@ justifyContent: "flex-start",
 
       {/* Info tap */}
       <div style={{fontSize:10,color:codeActif?"#6366f1":"#94a3b8",textAlign:"center",fontWeight:codeActif?700:400}}>
-        codeActif ? `✏️ Mode saisie : tap sur un jour pour appliquer "${codeActif}" — tap à nouveau pour effacer` : ""
+        {codeActif ? `✏️ Mode saisie : tap sur un jour pour appliquer "${codeActif}" — tap à nouveau pour effacer` : ""}
       </div>
 
 
