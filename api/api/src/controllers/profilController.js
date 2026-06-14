@@ -15,7 +15,7 @@ async function getProfil(req, res) {
 }
 
 // PUT /api/profil/:cp — mettre à jour profil (couleurs, réserviste, familles_hab)
-async async function updateProfil(req, res) {
+async function updateProfil(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
