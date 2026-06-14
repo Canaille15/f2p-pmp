@@ -2683,7 +2683,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                 {/* Contenu : bloc équipe */}
                 <div style={{flex:1,padding:"6px 10px",display:"flex",
                   flexDirection:"column",justifyContent:"center",gap:4}}>
-                  {en?.finNuit&&<div style={{fontSize:11,color:"#0369a1",background:"#f0f9ff",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>🌙 Descente de nuit</div>}
+                  {schedule[`${agent.id}-${l.dk}`]?.finNuit&&<div style={{fontSize:11,color:"#0369a1",background:"#f0f9ff",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>🌙 Descente de nuit</div>}
                     {l.code&&l.showData?(
                     <div>
                       {/* Badge code + label */}
