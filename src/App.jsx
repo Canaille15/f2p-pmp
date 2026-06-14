@@ -1202,7 +1202,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
         <div onClick={e=>e.stopPropagation()}
           style={{display:"flex",gap:2,background:"rgba(255,255,255,.15)",borderRadius:8,padding:2}}>
           {availableYears.map(y=>(
-            <button key={y} onClick={()=>{setSelectedYear(y);setEditMode(false);}};}}
+            <button key={y} onClick={()=>{setSelectedYear(y);setEditMode(false);}}
               style={{border:"none",borderRadius:6,padding:"3px 9px",cursor:"pointer",
                 fontSize:11,fontWeight:700,
                 background:y===selectedYear?"rgba(255,255,255,.9)":"transparent",
