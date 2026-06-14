@@ -3240,9 +3240,9 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   // Setter : met à jour agentProfiles directement (→ Supabase via useEffect save)
   const setAgentColors = useCallback((updater)=>{
     setAgentProfiles(p=>{
-      const prev = p[agent.id]?.agentColors || {};
+      const agKeyLocal=agent.immatriculation||agent.cp||agent.id;const prev = p[agKeyLocal]?.agentColors || {};
       const next = typeof updater==="function" ? updater(prev) : updater;
-      return {...p, [agent.id]:{...(p[agent.id]||{}), agentColors:next}};
+      return {...p, [agKeyLocal]:{...(p[agKeyLocal]||{}), agentColors:next}};
     });
   },[agent?.id, setAgentProfiles]);
 
