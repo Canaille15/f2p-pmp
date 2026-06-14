@@ -1202,7 +1202,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
         <div onClick={e=>e.stopPropagation()}
           style={{display:"flex",gap:2,background:"rgba(255,255,255,.15)",borderRadius:8,padding:2}}>
           {availableYears.map(y=>(
-            <button key={y} onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setSelectedYear(y);setEditMode(false);}}
+            <button key={y} onClick={()=>{setSelectedYear(y);setEditMode(false);}}
               style={{border:"none",borderRadius:6,padding:"3px 9px",cursor:"pointer",
                 fontSize:11,fontWeight:700,
                 background:y===selectedYear?"rgba(255,255,255,.9)":"transparent",
@@ -1269,14 +1269,14 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
               {editMode&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
-                <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}
+                <button onClick={()=>{
                   const k=card.key==="conges"?"CA":card.key;
                   saveCorrections({...corrections,[k]:(corrections[k]||0)-1});
                 }}
                   style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
                     background:"#fee2e2",color:"#dc2626",cursor:"pointer",fontSize:16,fontWeight:800,
                     display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}
+                <button onClick={()=>{
                   const k=card.key==="conges"?"CA":card.key;
                   saveCorrections({...corrections,[k]:(corrections[k]||0)+1});
                 }}
@@ -1926,7 +1926,7 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
 
                   {/* Boutons actions */}
                   {canEdit&&!isEditing&&<div style={{display:"flex",gap:4,flexShrink:0}}>
-                    <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setEditingCode(l.code);setEditVal(l.priseLe||"");}}
+                    <button onClick={()=>{setEditingCode(l.code);setEditVal(l.priseLe||"");}}
                       title="Modifier la date de prise"
                       style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,
                         padding:"3px 7px",cursor:"pointer",fontSize:10}}>📅</button>
@@ -2137,12 +2137,12 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
         {/* ── Calendrier ajout ── */}
         {showCal&&<div style={{padding:"12px 14px",borderBottom:"1px solid #e2e8f0",background:"#f0f9ff"}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-            <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}
+            <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}
               style={{border:"1px solid #bbf7d0",borderRadius:6,padding:"3px 9px",cursor:"pointer",background:"#fff",fontSize:13}}>‹</button>
             <div style={{flex:1,textAlign:"center",fontWeight:700,fontSize:13,color:"#0369a1"}}>
               {MOIS_L[calMonth]} {calYear}
             </div>
-            <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}}
+            <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}}
               style={{border:"1px solid #bbf7d0",borderRadius:6,padding:"3px 9px",cursor:"pointer",background:"#fff",fontSize:13}}>›</button>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
@@ -2349,7 +2349,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
             return(
               <div key="FETES" style={{position:"relative"}}>
                 <button
-                  onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setShowFetesMenu(v=>!v); if(isFeteActif) setCodeActif(null);}}
+                  onClick={()=>{setShowFetesMenu(v=>!v); if(isFeteActif) setCodeActif(null);}}
                   style={{
                     display:"inline-flex",alignItems:"center",gap:5,
                     background: isFeteActif||showFetesMenu ? getColor("F1") : getColor("F1")+"33",
@@ -2400,7 +2400,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
                     if(!dateFete) return null; // VN conditionnel
                     return(
                       <button key={code}
-                        onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}
+                        onClick={()=>{
                           setCodeActif(isActif?null:code);
                           setShowFetesMenu(false);
                         }}
@@ -2440,7 +2440,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
           const label = CODES_BARRE.find(x=>x.c===c)?.l||c;
           return(
             <button key={c}
-              onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setCodeActif(isActif?null:c); setShowFetesMenu(false);}}
+              onClick={()=>{setCodeActif(isActif?null:c); setShowFetesMenu(false);}}
               style={{
                 display:"inline-flex",alignItems:"center",gap:5,
                 background: isActif ? couleur : couleur+"22",
@@ -2463,7 +2463,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
 
         {/* Bouton EFFACER — toujours visible */}
         <button
-          onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setCodeActif(codeActif==="EFFACER"?null:"EFFACER"); setShowFetesMenu(false);}}
+          onClick={()=>{setCodeActif(codeActif==="EFFACER"?null:"EFFACER"); setShowFetesMenu(false);}}
           style={{
             background: codeActif==="EFFACER" ? "#dc2626" : "#fef2f2",
             color: codeActif==="EFFACER" ? "#fff" : "#dc2626",
@@ -2478,7 +2478,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
 
         {/* Annuler mode actif */}
         {codeActif&&codeActif!=="EFFACER"&&
-          <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setCodeActif(null);setShowFetesMenu(false);}}
+          <button onClick={()=>{setCodeActif(null);setShowFetesMenu(false);}}
             style={{background:"#f1f5f9",color:"#64748b",border:"1.5px solid #e2e8f0",
               borderRadius:10,padding:"7px 10px",cursor:"pointer",fontSize:12,fontWeight:700,
               minHeight:38}}>
@@ -2486,7 +2486,7 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
           </button>}
 
         {/* Bouton config */}
-        <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setShowConfig(v=>!v);setShowFetesMenu(false);}}
+        <button onClick={()=>{setShowConfig(v=>!v);setShowFetesMenu(false);}}
           title="Configurer la barre"
           style={{background:showConfig?"#1e293b":"#f1f5f9",
             color:showConfig?"#fff":"#64748b",
@@ -3023,7 +3023,7 @@ function BarreSaisie({profile, habilitations, codeActif, setCodeActif, getColor,
         {/* Bouton Fêtes */}
         <div style={{position:"relative"}}>
           <button
-            onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setShowFetesMenu(v=>!v);if(isFeteActif)setCodeActif(null);}}
+            onClick={()=>{setShowFetesMenu(v=>!v);if(isFeteActif)setCodeActif(null);}}
             style={{
               display:"inline-flex",flexDirection:"column",alignItems:"center",gap:1,
               background: isFeteActif||showFetesMenu ? getColor("F1") : getColor("F1")+"18",
@@ -3061,7 +3061,7 @@ function BarreSaisie({profile, habilitations, codeActif, setCodeActif, getColor,
                 const isActif = codeActif===code;
                 return(
                   <button key={code}
-                    onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setCodeActif(isActif?null:code);setShowFetesMenu(false);}}
+                    onClick={()=>{setCodeActif(isActif?null:code);setShowFetesMenu(false);}}
                     style={{display:"flex",alignItems:"center",gap:8,width:"100%",
                       background:isActif?getColor("F1")+"22":"#fff",
                       border:"none",borderBottom:"1px solid #fdf2f8",
@@ -3084,7 +3084,7 @@ function BarreSaisie({profile, habilitations, codeActif, setCodeActif, getColor,
         </div>
 
         {/* Bouton Repos (repliable) */}
-        <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setShowRepos(v=>!v); setShowFetesMenu(false);}}
+        <button onClick={()=>{setShowRepos(v=>!v); setShowFetesMenu(false);}}
           style={{display:"inline-flex",flexDirection:"column",alignItems:"center",gap:1,
             background:showRepos?"#1e293b":"#f1f5f9",
             color:showRepos?"#fff":"#64748b",
@@ -3109,7 +3109,7 @@ function BarreSaisie({profile, habilitations, codeActif, setCodeActif, getColor,
 
         {/* Annuler mode actif */}
         {codeActif&&codeActif!=="EFFACER"&&
-          <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setCodeActif(null);setShowFetesMenu(false);setShowRepos(false);}}
+          <button onClick={()=>{setCodeActif(null);setShowFetesMenu(false);setShowRepos(false);}}
             style={{background:"#f1f5f9",color:"#64748b",border:"1.5px solid #e2e8f0",
               borderRadius:9,padding:"5px 8px",cursor:"pointer",
               fontSize:13,minHeight:36,flexShrink:0}}>✕</button>}
@@ -3441,7 +3441,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
           const barColor=isFinNuit2?"#1e3a8a":code&&showData?getColor(code):isWE?"#e2e8f0":"#f1f5f9";
 
           return <div key={dk}
-            onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}
+            onClick={()=>{
               if(codeActif==="EFFACER") setDay(dk,null);
               else if(codeActif) setDay(dk, code===codeActif?null:codeActif);
             }}
@@ -3548,8 +3548,37 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               }}>—</div>}
             </div>
 
-            
-           
+            {/* Sélecteur équipe */}
+            <div style={{padding:"4px 6px",borderTop:"1px solid #f1f5f9",background:"#fafafa"}}>
+              <select value={code||""} onChange={e=>{
+                  if(codeActif) setCodeActif(null); // désactive la saisie rapide si on utilise le select
+                  setDay(dk,e.target.value||null);
+                }}
+                style={{width:"100%",fontSize:9,border:"1px solid #e2e8f0",borderRadius:6,
+                  padding:"3px 4px",background:"#fff",color:"#475569",cursor:"pointer",outline:"none"}}>
+                <option value="">— choisir —</option>
+                {[{c:"M",l:"Matinée"},{c:"AM",l:"Soirée"},{c:"N",l:"Nuit"},{c:"J",l:"Journée"},
+                  {c:"RP",l:"RP"},{c:"RU",l:"RU"},{c:"RQ",l:"RQ"},{c:"NU",l:"NU"},
+                  {c:"CA",l:"Congés"},{c:"MA",l:"Maladie"},{c:"VT",l:"VT"},
+                  {c:"TY",l:"TY"},{c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"}
+                ].map(o=><option key={o.c} value={o.c}>{o.l}</option>)}
+              </select>
+            </div>
+
+            {/* Bouton prise de nuit */}
+            {code&&<div style={{
+              padding:"3px 6px",
+              background:hasNuit2?"#1e3a8a":"#f8fafc",
+              borderTop:"1px solid #f1f5f9",
+            }}>
+              <select value={en?.equipe2||""} onChange={e=>setDay(dk,e.target.value||null,true)}
+                style={{width:"100%",fontSize:9,border:"none",background:"transparent",
+                  color:hasNuit2?"#bfdbfe":"#94a3b8",cursor:"pointer",outline:"none",
+                  fontWeight:hasNuit2?700:400}}>
+                <option value="">🌙 + prise de nuit</option>
+                <option value="N">🌙 Nuit ce soir ✓</option>
+              </select>
+            </div>}
           </div>;
         })}
       </div>
@@ -3598,7 +3627,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
             const isNuitSeuleCell = code === "N" && !en?.equipe2 && !en?.finNuit;
             return <div key={dk}
-              onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}
+              onClick={()=>{ setDayPopup({dk, entry:en||null}); }}
               style={{
                 background:"#fff",
                 border:isToday?"2px solid #6366f1":"1px solid #e8edf2",
@@ -4359,13 +4388,13 @@ Règles :
               {/* Actions */}
               <div style={{display:"flex",gap:8,flexDirection:"column"}}>
                 <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}onAccord({...result,decompte,periodeOK});onClose();}}
+                  <button onClick={()=>{onAccord({...result,decompte,periodeOK});onClose();}}
                     style={{flex:1,background:result.accorde?"#16a34a":"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"11px 0",cursor:"pointer",fontSize:13,fontWeight:700}}>
                     {result.accorde?"✓ Mettre à jour l'agenda":"✓ Marquer comme refusé"}
                   </button>
                   <button onClick={()=>setResult(null)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"11px 12px",cursor:"pointer",fontSize:12}}>↺</button>
                 </div>
-                {result.accorde&&<button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}
+                {result.accorde&&<button onClick={()=>{
                   const html=generateNotificationAccord(demande,agent,result);
                   const w=window.open("","_blank","width=800,height=600");
                   w.document.write(html);w.document.close();
@@ -4769,12 +4798,12 @@ function ImportDeroulement({agent,onClose,onImport}){
         {/* Sélecteur mois */}
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 16px",
           borderBottom:"1px solid #f1f5f9",flexShrink:0,background:"#f8fafc"}}>
-          <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}if(month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1);}}
+          <button onClick={()=>{if(month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1);}}
             style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>‹</button>
           <div style={{flex:1,textAlign:"center",fontWeight:800,fontSize:14,color:"#1e293b"}}>
             {MOIS_L[month]} {year}
           </div>
-          <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}if(month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1);}}
+          <button onClick={()=>{if(month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1);}}
             style={{border:"1px solid #e2e8f0",borderRadius:7,padding:"4px 10px",cursor:"pointer",background:"#fff",fontSize:14}}>›</button>
         </div>
 
@@ -5292,7 +5321,7 @@ function AddAgentModal({onClose,onAdd}){
           <div><div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:3}}>FAMILLE</div><select value={form.famille} onChange={e=>setForm(p=>({...p,famille:e.target.value}))} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}><option value="PRCI">PRCI</option><option value="PAR">PAR</option></select></div>
           <div><div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:3}}>POSTE</div><select value={form.poste} onChange={e=>setForm(p=>({...p,poste:e.target.value}))} style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}>{[...POSTES_PRCI_3x8,...POSTES_PAR_3x8].map(p=>(<option key={p.code} value={p.label}>{p.label}</option>))}</select></div>
         </div>
-        <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}if(!form.prenom||!form.nom)return;const id=`N${Date.now()}`;onAdd({...form,id,initials:form.prenom[0]+(form.nom.replace(/[\s-]/g,"")[0]||"")});onClose();}} disabled={!form.prenom||!form.nom} style={{background:form.prenom&&form.nom?"#1e293b":"#e2e8f0",color:form.prenom&&form.nom?"#fff":"#94a3b8",border:"none",borderRadius:9,padding:"11px 0",cursor:form.prenom&&form.nom?"pointer":"not-allowed",fontSize:13,fontWeight:700}}>✓ Ajouter</button>
+        <button onClick={()=>{if(!form.prenom||!form.nom)return;const id=`N${Date.now()}`;onAdd({...form,id,initials:form.prenom[0]+(form.nom.replace(/[\s-]/g,"")[0]||"")});onClose();}} disabled={!form.prenom||!form.nom} style={{background:form.prenom&&form.nom?"#1e293b":"#e2e8f0",color:form.prenom&&form.nom?"#fff":"#94a3b8",border:"none",borderRadius:9,padding:"11px 0",cursor:form.prenom&&form.nom?"pointer":"not-allowed",fontSize:13,fontWeight:700}}>✓ Ajouter</button>
       </div>
     </div>
   </div>);
@@ -5476,7 +5505,7 @@ const handleLogin = async () => {
               ✓ Créer mon compte
             </button>
 
-            <button onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}setStep("login");setPin(["","","","",""]);setPinConfirm(["","","","",""]);setError("");}}
+            <button onClick={()=>{setStep("login");setPin(["","","","",""]);setPinConfirm(["","","","",""]);setError("");}}
               style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,textAlign:"center"}}>
               ← Retour
             </button>
@@ -5984,7 +6013,7 @@ export default function App(){
                   </div>
                   <div style={{maxHeight:160,overflowY:"auto"}}>
                     {rows.map(a=>(
-                      <button key={a.id} onClick={()=>{ setDayPopup({dk, entry:en||null}); }} setDayPopup({dk, entry:en||null}); }}
+                      <button key={a.id} onClick={()=>{
                         if(currentUser&&a.id===currentUser.agent?.id){
                           setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
                         } else if(isAdmin){
