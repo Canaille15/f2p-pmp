@@ -2609,7 +2609,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
     }
 
     const d = new Date(dk);
-    return {dk, code, eq, label, plage, couleur, tc, isWE, isToday, dow, jsCode,
+    return {dk, code, eq, label, plage, couleur, tc, isWE, isToday, dow, jsCode, showData,
       jourNom: JOURS_LONG[dow],
       jourNum: d.getDate(),
       moisNom: d.toLocaleDateString("fr-FR",{month:"short"}),
