@@ -2650,7 +2650,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
               {/* Ligne jour */}
               <div onClick={()=>onDayClick&&onDayClick(l.dk, schedule[`${agent.id}-${l.dk}`]||null)} style={{
                 display:"flex",alignItems:"stretch",
-                minHeight:52,
+                minHeight:48,
                 background:l.isToday?"#eef2ff":l.isWE?"#fafafa":"#fff",
                 borderBottom:"1px solid #f8fafc",
                 borderLeft:l.isToday?"3px solid #6366f1":"3px solid transparent",
@@ -2702,6 +2702,11 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                         }}>{l.eq.heures}</span>}
                       </div>
 
+                      {/* Badge nuit du soir */}
+                      {schedule[`${agent.id}-${l.dk}`]?.equipe2==="N"&&l.showData&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+                        <span style={{background:getColor("N"),color:getTc("N"),borderRadius:8,padding:"3px 10px",fontSize:12,fontWeight:800}}>Nuit</span>
+                        {schedule[`${agent.id}-${l.dk}`]?.jsCode2&&<span style={{fontSize:10,color:"#64748b",fontWeight:600,fontFamily:"monospace"}}>{schedule[`${agent.id}-${l.dk}`]?.jsCode2}</span>}
+                      </div>}
                       {/* Barre horaire visuelle */}
                       {l.plage&&(()=>{
                         const totalMin = 24*60;
