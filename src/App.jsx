@@ -5711,6 +5711,7 @@ export default function App(){
         demandesConges:       profile.demandes_conges||[],
         notificationsAcquittees: profile.notifications_acquittees||[],
       }}));
+    if(profile.agentColors&&Object.keys(profile.agentColors).length>0) setAgentCouleurs(profile.agentColors);
       // Restaurer les notifications acquittées sur cet appareil
       if(profile.notifications_acquittees?.length){
         setNotifications(prev=>prev.map(n=>
