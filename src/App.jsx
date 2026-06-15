@@ -3240,10 +3240,10 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   // Setter : met à jour agentProfiles directement (→ Supabase via useEffect save)
   const setAgentColors = useCallback((updater)=>{
     setAgentCouleurs(prev => {
-      const next = typeof updater==="function" ? updater(prev) : updater;
-      return next;
+      const next = typeof updater==="function" ? updater(prev||{}) : updater;
+      return next||{};
     });
-  },[]);
+  },[setAgentCouleurs]);
 
   // Couleur effective pour un code
   const getColor=(code)=>{
@@ -3682,7 +3682,7 @@ justifyContent: "flex-start",
       onClose={()=>{
           setShowColorPicker(false);
           const agKeyS=agent?.immatriculation||agent?.cp||agent?.id;
-          if(Object.keys(agentCouleurs).length>0) api.profil.save(agKeyS, {agentColors: agentCouleurs});
+          if(agentCouleurs&&Object.keys(agentCouleurs).length>0) api.profil.save(agKeyS, {agentColors: agentCouleurs});
         }}/>}
 
     {dayPopup&&<DayEditPopup
