@@ -3242,6 +3242,10 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     const current = agentCouleurs || {};
     const next = typeof updater==="function" ? updater(current) : updater;
     setAgentCouleurs(next||{});
+    setAgentProfiles(p=>{
+      const key=agent?.immatriculation||agent?.cp||agent?.id;
+      return {...p,[key]:{...(p[key]||{}),agentColors:next||{}}};
+    });
   };
 
   // v2 - Couleur effective pour un code
