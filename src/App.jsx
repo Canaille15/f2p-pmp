@@ -3712,9 +3712,9 @@ justifyContent: "flex-start",
         const fullEntry={
           equipe:   newEntry.equipe !== undefined ? (newEntry.equipe||null) : (prevEntry.equipe||null),
           // Preserver la nuit existante si le popup ne la modifie pas
-          equipe2:  (newEntry.equipe2===null&&prevEntry.equipe2==="N"&&newEntry.equipe!==null) ? "N" : (newEntry.equipe2 !== undefined ? (newEntry.equipe2||null) : (prevEntry.equipe2||null)),
+          equipe2:  (newEntry.equipe2===null&&prevEntry.equipe2==="N") ? "N" : (newEntry.equipe2 !== undefined ? (newEntry.equipe2||null) : (prevEntry.equipe2||null)),
           jsCode:   newEntry.jsCode !== undefined ? (newEntry.jsCode||null) : (prevEntry.jsCode||null),
-          jsCode2:  (newEntry.equipe2===null&&prevEntry.equipe2==="N"&&newEntry.equipe!==null) ? (prevEntry.jsCode2||null) : (newEntry.jsCodeNuit !== undefined ? (newEntry.jsCodeNuit||null) : (prevEntry.jsCode2||null)),
+          jsCode2:  (newEntry.equipe2===null&&prevEntry.equipe2==="N") ? (prevEntry.jsCode2||null) : (newEntry.jsCodeNuit !== undefined ? (newEntry.jsCodeNuit||null) : (prevEntry.jsCode2||null)),
           horaires: newEntry.horaires !== undefined ? (newEntry.horaires||null) : (prevEntry.horaires||null),
           prive:    newEntry.prive||false,
           finNuit:  newEntry.finNuit !== undefined ? newEntry.finNuit : (prevEntry.finNuit||false),
