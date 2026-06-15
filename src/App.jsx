@@ -3239,6 +3239,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
   // Setter : met à jour agentProfiles directement (→ Supabase via useEffect save)
   const setAgentColors = (updater) => {
+    if(typeof setAgentCouleurs !== "function") { console.error("setAgentCouleurs is not a function!"); return; }
     const current = agentCouleurs || {};
     const next = typeof updater==="function" ? updater(current) : updater;
     setAgentCouleurs(next||{});
