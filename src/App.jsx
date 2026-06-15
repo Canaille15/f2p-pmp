@@ -3678,7 +3678,7 @@ justifyContent: "flex-start",
     </>}
     {showColorPicker&&<ColorCustomizer
       agentColors={agentCouleurs||{}}
-      setAgentColors={setAgentCouleurs}
+      setAgentColors={setAgentColors}
       onClose={()=>{
           setShowColorPicker(false);
           const agKeyS=agent?.immatriculation||agent?.cp||agent?.id;
