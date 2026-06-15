@@ -922,8 +922,8 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
 
   // Lire/écrire une couleur (FETE = clé spéciale pour toutes les fêtes)
   const getColor = (code) => {
-    if(code==="FETE") return agentColors["F1"]||"#ec4899";
-    return agentColors[code]||DEFAULT_COLORS[code]||"#f8fafc";
+    if(code==="FETE") return (agentColors||{})["F1"]||"#ec4899";
+    return (agentColors||{})[code]||DEFAULT_COLORS[code]||"#f8fafc";
   };
   const setColor = (code, color) => {
     if(code==="FETE"){
