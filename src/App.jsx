@@ -547,13 +547,24 @@ function PinModal({agent,onSuccess,onClose,mode="verify",currentPin}){
 
       <div style={{padding:"24px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:18}}>
         <div style={{fontSize:13,color:"#64748b",textAlign:"center"}}>{subtitles[step]}</div>
-        <div style={{display:"flex",gap:12}}>
-          {[0,1,2,3].map(i=>(<input key={i} ref={refs[i]} type="password" inputMode="numeric" maxLength={1}
-            value={active[i]} onChange={e=>handleDigit(i,e.target.value,active,setActive)}
-            onKeyDown={e=>{if(e.key==="Enter"&&active.every(d=>d))submit();if(e.key==="Backspace"&&!active[i]&&i>0)refs[i-1].current?.focus();}}
-            style={{width:54,height:62,textAlign:"center",fontSize:28,fontWeight:800,border:`2px solid ${error?"#ef4444":"#e2e8f0"}`,borderRadius:12,outline:"none",transition:"border-color .15s"}}/>))}
-        </div>
-        {error&&<div style={{fontSize:12,color:"#ef4444",fontWeight:600,background:"#fee2e2",borderRadius:8,padding:"6px 14px"}}>{error}</div>}
+        <div style={{display:"flex",gap:12,position:"relative"}} onClick={()=>p0.current?.focus()}>
+          <input ref={p0} type="tel" inputMode="numeric" maxLength={4}
+            value={active.join("")}
+            onChange={e=>{
+              const val=e.target.value.replace(/\D/g,"").slice(0,4);
+              const next=["","","",""];
+              val.split("").forEach((d,i)=>{next[i]=d;});
+              setActive(next);
+              if(val.length===4) setTimeout(()=>submit(),100);
+            }}
+            onKeyDown={e=>{if(e.key==="Enter"&&active.every(d=>d))submit();}}
+            style={{position:"absolute",opacity:0,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16}}
+            autoComplete="off"
+          />
+          {[0,1,2,3].map(i=>(<div key={i} style={{width:54,height:62,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:800,border:`2px solid ${error?"#ef4444":active[i]?"#3b82f6":"#e2e8f0"}`,borderRadius:12,background:active[i]?"#f0f9ff":"#fff",transition:"all .15s",cursor:"pointer"}}>
+            {active[i]?"●":""}
+          </div>))}
+        </div>}
         <button onClick={submit} disabled={active.some(d=>!d)} style={{width:"100%",background:active.every(d=>d)?fam?.color||"#1e293b":"#e2e8f0",color:active.every(d=>d)?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"13px 0",cursor:active.every(d=>d)?"pointer":"not-allowed",fontSize:14,fontWeight:700,transition:"all .15s"}}>
           {btnLabels[step]||"Confirmer"}
         </button>
