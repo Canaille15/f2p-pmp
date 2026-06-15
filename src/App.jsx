@@ -2659,7 +2659,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
               {l.dow===1&&i>0&&<div style={{height:1,background:"#e2e8f0",margin:"0 14px"}}/>}
 
               {/* Ligne jour */}
-              <div onClick={()=>onDayClick&&onDayClick(l.dk, schedule[`${agent.id}-${l.dk}`]||null)} style={{
+              <div onClick={()=>onDayClick&&onDayClick(l.dk, schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]||null)} style={{
                 display:"flex",alignItems:"stretch",
                 minHeight:48,
                 background:l.isToday?"#eef2ff":l.isWE?"#fafafa":"#fff",
@@ -2694,7 +2694,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                 {/* Contenu : bloc équipe */}
                 <div style={{flex:1,padding:"6px 10px",display:"flex",
                   flexDirection:"column",justifyContent:"center",gap:4}}>
-                  {schedule[`${agent.id}-${l.dk}`]?.finNuit&&<div style={{fontSize:11,color:"#0369a1",background:"#f0f9ff",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>🌙 Descente de nuit</div>}
+                  {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.finNuit&&<div style={{fontSize:11,color:"#0369a1",background:"#f0f9ff",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>🌙 Descente de nuit</div>}
                     {l.code&&l.showData?(
                     <div>
                       {/* Badge code + label */}
@@ -2714,8 +2714,8 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                       </div>
 
                       {/* Badge nuit du soir */}
-                      {schedule[`${agent.id}-${l.dk}`]?.equipe2==="N"&&l.code!=="N"&&l.showData&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-                        <span style={{background:getColor("N"),color:getTc("N"),borderRadius:8,padding:"3px 10px",fontSize:12,fontWeight:800,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><span>Nuit</span>{schedule[`${agent.id}-${l.dk}`]?.jsCode2&&<span style={{fontSize:10,opacity:.85,fontWeight:500}}>{schedule[`${agent.id}-${l.dk}`]?.jsCode2}</span>}</span>
+                      {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.equipe2==="N"&&l.code!=="N"&&l.showData&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+                        <span style={{background:getColor("N"),color:getTc("N"),borderRadius:8,padding:"3px 10px",fontSize:12,fontWeight:800,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><span>Nuit</span>{schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.jsCode2&&<span style={{fontSize:10,opacity:.85,fontWeight:500}}>{schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.jsCode2}</span>}</span>
                       </div>}
                       {/* Barre horaire visuelle */}
                       {l.plage&&(()=>{
