@@ -3245,7 +3245,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     });
   },[setAgentCouleurs]);
 
-  // Couleur effective pour un code
+  // v2 - Couleur effective pour un code
   const getColor=(code)=>{
     const colors = agentCouleurs || {};
 
