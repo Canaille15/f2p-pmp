@@ -3226,7 +3226,7 @@ function detectFamillesReserviste(agentId, schedule){
   return null;
 }
 
-function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser}){
+function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,agentCouleurs,setAgentCouleurs}){
   const [showHab,setShowHab]=useState(false);
   const [showHabRoul,setShowHabRoul]=useState(false);
   const [calView,setCalView]=useState("mois");
@@ -3783,7 +3783,8 @@ justifyContent: "flex-start",
     </>}
 
     {/* Tableau de bord compteurs */}
-    {agent&&<DashboardCompteurs agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
+    {agent&&<DashboardCompteurs agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
+        agentCouleurs={agentCouleurs} setAgentCouleurs={setAgentCouleurs} isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
   </div>);
 }
 
