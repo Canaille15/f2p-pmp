@@ -5425,7 +5425,7 @@ const handleLogin = async () => {
               else setStep("confirm");
             }
           }}
-          style={{position:"absolute",opacity:0,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16}}
+          style={{position:"absolute",opacity:0.01,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16,color:"transparent",background:"transparent",border:"none",caretColor:"transparent"}}
           autoComplete="off"
         />
         {[0,1,2,3].map(i=>(<div key={i} style={{width:48,height:56,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,border:`2px solid ${error?"#ef4444":arr[i]?"#0891b2":"#e2e8f0"}`,borderRadius:10,background:arr[i]?"#f0fdff":"#fff",transition:"all .15s",cursor:"pointer"}}>
