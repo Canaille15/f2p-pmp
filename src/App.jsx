@@ -2706,7 +2706,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                           boxShadow:"0 1px 3px rgba(0,0,0,.12)",
                         }}>
                           {CODES_FETES[l.code]?"🩷":""}{l.label}
-                        {l.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(l.jsCode)?<span style={{fontSize:10,opacity:.8,marginLeft:4}}>/ {l.jsCode}</span>:null}</span>
+                        {l.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(l.jsCode)?<span style={{fontSize:10,opacity:.8}}> / {l.jsCode}</span>:null}</span>
                         {l.eq?.heures&&<span style={{
                           fontSize:10,color:"#64748b",fontWeight:600,
                           fontFamily:"monospace",
