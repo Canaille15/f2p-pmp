@@ -3239,17 +3239,15 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
 
   // Setter : met à jour agentProfiles directement (→ Supabase via useEffect save)
   const setAgentColors = useCallback((updater)=>{
-    setAgentProfiles(p=>{
-      const agKeyLocal=agent.immatriculation||agent.cp||agent.id;const prev = p[agKeyLocal]?.agentColors || {};
+    setAgentCouleurs(prev => {
       const next = typeof updater==="function" ? updater(prev) : updater;
-      return {...p, [agKeyLocal]:{...(p[agKeyLocal]||{}), agentColors:next}};
+      return next;
     });
-  },[agent?.id, setAgentProfiles]);
+  },[]);
 
   // Couleur effective pour un code
   const getColor=(code)=>{
-    // Lire directement agentProfiles pour la réactivité maximale
-    const agKeyGC=agent?.immatriculation||agent?.cp||agent?.id;const colors = agentProfiles[agKeyGC]?.agentColors || {};
+    const colors = agentCouleurs || {};
 
     if(colors[code]) return colors[code];
     // Fêtes légales F1..VN → couleur perso de F1 ou défaut rose
@@ -3679,9 +3677,13 @@ justifyContent: "flex-start",
 
     </>}
     {showColorPicker&&<ColorCustomizer
-      agentColors={agentProfiles[agent?.id]?.agentColors||{}}
+      agentColors={agentCouleurs}
       setAgentColors={setAgentColors}
-      onClose={()=>setShowColorPicker(false)}/>}
+      onClose={()=>{
+          setShowColorPicker(false);
+          const agKeyS=agent?.immatriculation||agent?.cp||agent?.id;
+          if(Object.keys(agentCouleurs).length>0) api.profil.save(agKeyS, {agentColors: agentCouleurs});
+        }}/>}
 
     {dayPopup&&<DayEditPopup
       date={dayPopup.dk}
@@ -5583,6 +5585,7 @@ export default function App(){
   const [profileSearch,setProfileSearch]=useState("");
   const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
   const [schedule,setSchedule]=usePersist("schedule",{});
+  const [agentCouleurs, setAgentCouleurs] = React.useState({});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
   const [importDPTarget,setImportDPTarget]=useState(null);
   const [addAgentOpen,setAddAgentOpen]=useState(false);
@@ -5611,7 +5614,12 @@ export default function App(){
       }
     }).catch(()=>{});
 
-    api.profil.get(agentId).then(p=>{if(p&&p.habilitations)setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations,agentColors:p.agentColors||{}}}));}).catch(()=>{});
+    api.profil.get(agentId).then(p=>{
+    if(p){
+      if(p.habilitations) setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations}}));
+      if(p.agentColors && Object.keys(p.agentColors).length>0) setAgentCouleurs(p.agentColors);
+    }
+  }).catch(()=>{});
   };
   const handleLogout=()=>{
     setCurrentUser(null);
@@ -5649,6 +5657,7 @@ export default function App(){
           demandesConges:      profile.demandes_conges||[],
           notificationsAcquittees: profile.notifications_acquittees||[],
         }}));
+        if(profile.agent_colors&&Object.keys(profile.agent_colors).length>0) setAgentCouleurs(profile.agent_colors);
         // Restaurer acquittements
         if(profile.notifications_acquittees?.length){
           setNotifications(prev=>prev.map(n=>
