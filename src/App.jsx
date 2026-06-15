@@ -5362,6 +5362,9 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     // Prendre seulement le dernier chiffre saisi (cas collage)
     const digit = v.replace(/\D/g, '').slice(-1);
     const next = [...arr]; next[i] = digit; setArr(next);
+    if (digit && i < 3) {
+      setTimeout(() => refs[i+1].current?.focus(), 10);
+    }
     if (!digit && i > 0) {
       setTimeout(() => refs[i-1].current?.focus(), 10);
     }
