@@ -5662,7 +5662,7 @@ export default function App(){
           demandesConges:      profile.demandes_conges||[],
           notificationsAcquittees: profile.notifications_acquittees||[],
         }}));
-        if(profile.agent_colors&&Object.keys(profile.agent_colors).length>0) setAgentCouleurs(profile.agent_colors);
+        if(profile.agentColors&&Object.keys(profile.agentColors).length>0) setAgentCouleurs(profile.agentColors);
         // Restaurer acquittements
         if(profile.notifications_acquittees?.length){
           setNotifications(prev=>prev.map(n=>
