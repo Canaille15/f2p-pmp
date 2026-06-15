@@ -5404,34 +5404,39 @@ const handleLogin = async () => {
   const PinInput = ({arr, setArr, refs, label}) => (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
       <div style={{fontSize:11,color:"#64748b",fontWeight:600}}>{label}</div>
-      <div style={{display:"flex",gap:10,position:"relative"}} onClick={()=>refs[0].current?.focus()}>
-        <input ref={refs[0]} type="tel" inputMode="numeric" maxLength={4}
-          value={arr.join("")}
-          onChange={e=>{
-            const val=e.target.value.replace(/\D/g,"").slice(0,4);
-            const next=["","","",""];
-            val.split("").forEach((d,i)=>{next[i]=d;});
-            setArr(next);
-            if(val.length===4){
-              if(step==="login") setTimeout(()=>handleLogin(),100);
-              else if(step==="first_time"&&confStr.length===4) setTimeout(()=>handleFirstTime(),100);
-              else setTimeout(()=>setStep("confirm"),100);
-            }
-          }}
-          onKeyDown={e=>{
-            if(e.key==="Enter"&&arr.every(d=>d)){
-              if(step==="login") handleLogin();
-              else if(step==="first_time"&&confStr.length===4) handleFirstTime();
-              else setStep("confirm");
-            }
-          }}
-          style={{position:"absolute",opacity:0.01,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16,color:"transparent",background:"transparent",border:"none",caretColor:"transparent"}}
-          autoComplete="off"
-        />
-        {[0,1,2,3].map(i=>(<div key={i} style={{width:48,height:56,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,border:`2px solid ${error?"#ef4444":arr[i]?"#0891b2":"#e2e8f0"}`,borderRadius:10,background:arr[i]?"#f0fdff":"#fff",transition:"all .15s",cursor:"pointer"}}>
+      <div style={{display:"flex",gap:10}}>
+        {[0,1,2,3].map(i=>(<div key={i} style={{width:48,height:56,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,border:`2px solid ${error?"#ef4444":arr[i]?"#0891b2":"#e2e8f0"}`,borderRadius:10,background:arr[i]?"#f0fdff":"#fff"}}>
           {arr[i]?"●":""}
         </div>))}
       </div>
+      {/* Clavier numérique personnalisé */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,width:"100%",maxWidth:240}}>
+        {[1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,idx)=>(
+          <button key={idx} onClick={()=>{
+            if(k==="⌫"){
+              const last=arr.map((d,i)=>d).filter(d=>d).length-1;
+              if(last>=0){const next=[...arr];next[last]="";setArr(next);}
+            } else if(k!==""){
+              const first=arr.findIndex(d=>!d);
+              if(first!==-1){const next=[...arr];next[first]=String(k);setArr(next);
+                if(first===3){
+                  const full=[...arr];full[first]=String(k);
+                  const pin=full.join("");
+                  if(pin.length===4){
+                    if(step==="login") setTimeout(()=>handleLogin(),50);
+                    else if(step==="first_time"&&confStr.length===4) setTimeout(()=>handleFirstTime(),50);
+                    else setTimeout(()=>setStep("confirm"),50);
+                  }
+                }
+              }
+            }
+          }}
+          style={{padding:"14px 0",fontSize:k==="⌫"?18:20,fontWeight:700,background:k===""?"transparent":"#f8fafc",border:k===""?"none":"1.5px solid #e2e8f0",borderRadius:10,cursor:k===""?"default":"pointer",color:"#1e293b"}}>
+            {k}
+          </button>
+        ))}
+      </div>
+    </div>
     </div>
   );
 
