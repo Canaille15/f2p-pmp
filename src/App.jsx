@@ -3238,12 +3238,11 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const agKeyColors=agent?.immatriculation||agent?.cp||agent?.id;const agentColors = agentProfiles[agKeyColors]?.agentColors || {};
 
   // Setter : met à jour agentProfiles directement (→ Supabase via useEffect save)
-  const setAgentColors = useCallback((updater)=>{
-    setAgentCouleurs(prev => {
-      const next = typeof updater==="function" ? updater(prev||{}) : updater;
-      return next||{};
-    });
-  },[setAgentCouleurs]);
+  const setAgentColors = (updater) => {
+    const current = agentCouleurs || {};
+    const next = typeof updater==="function" ? updater(current) : updater;
+    setAgentCouleurs(next||{});
+  };
 
   // v2 - Couleur effective pour un code
   const getColor=(code)=>{
