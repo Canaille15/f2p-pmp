@@ -3677,7 +3677,7 @@ justifyContent: "flex-start",
 
     </>}
     {showColorPicker&&<ColorCustomizer
-      agentColors={agentCouleurs}
+      agentColors={agentCouleurs||{}}
       setAgentColors={setAgentColors}
       onClose={()=>{
           setShowColorPicker(false);
