@@ -160,7 +160,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
       horaires:   horaires1 || null,
       equipe2:    typeN || null,
       jsCodeNuit: typeN ? (posteN || null) : null,
-      prive:      !["M","AM","N","J","JF","FOR","DISPO",
+      prive:      (type1===null&&typeN==="N") ? false : !["M","AM","N","J","JF","FOR","DISPO",
                     ...FETES.map(f=>f.code)].includes(type1),
       finNuit:    finNuit,   // indépendant, sauvegardé tel quel
     };
