@@ -737,8 +737,9 @@ function GlobalView({agents,schedule,weekOffset,setWeekOffset,onImport,currentAg
             {d}<br/><span style={{opacity:.7,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
           </button>);})}
       </div>
+      <button onClick={()=>setWeekOffset(0)} style={{border:"1.5px solid #6366f1",background:"#eef2ff",color:"#4f46e5",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,opacity:weekOffset===0?0.4:1}}>Auj.</button>
       <button onClick={()=>setWeekOffset(w=>w+1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:14}}>›</button>
-      {weekOffset!==0&&<button onClick={()=>setWeekOffset(0)} style={{border:"1.5px solid #6366f1",background:"#eef2ff",color:"#4f46e5",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>Auj.</button>}
+      <button onClick={()=>setWeekOffset(0)} style={{border:"1.5px solid #6366f1",background:"#eef2ff",color:"#4f46e5",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:700,opacity:weekOffset===0?0.4:1}}>Auj.</button>
     </div>
 
     {/* Sections */}
