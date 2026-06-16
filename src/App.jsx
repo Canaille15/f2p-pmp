@@ -691,7 +691,9 @@ function GlobalView({agents,schedule,weekOffset,setWeekOffset,onImport,currentAg
             {type:"text",text:'Extrais les affectations. JSON uniquement: {"date":"YYYY-MM-DD","affectations":[{"nom":"NOM","prenom":"PRENOM","jsCode":"CODE","equipe":"M|AM|N|J|CA|RP|RU","horaires":"HH-HH"}]}'}
           ]}]})});
         const data=await res.json();
+        if(!res.ok||data.error) throw new Error(data.error?.message||data.error||"Erreur API");
         const raw=data.content?.map(x=>x.text||"").join("")||"";
+        if(!raw) throw new Error("Réponse vide de l IA");
         const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
         let nb=0,ec=0;
         (parsed.affectations||[]).forEach(aff=>{
