@@ -3,11 +3,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
-  "functions": {
-    "claude.js": {
-      "runtime": "@vercel/node"
-    }
-  },
   "routes": [
     {
       "src": "/api/claude",
