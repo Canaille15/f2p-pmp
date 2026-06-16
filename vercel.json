@@ -3,11 +3,13 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/claude",
-      "dest": "/claude.js"
-    },
+      "source": "/api/claude",
+      "destination": "/functions/claude"
+    }
+  ],
+  "routes": [
     {
       "src": "/assets/(.*)",
       "dest": "/assets/$1"
