@@ -2597,7 +2597,8 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
   const BAR_PX_PER_MIN = 0.5; // 1px = 2 minutes → barre de 480px pour 24h
 
   const lignes = dates.map(dk=>{
-    const en   = schedule[`${agent.id}-${dk}`];
+    const agKeyL=agent?.immatriculation||agent?.cp||agent?.id;
+    const en   = schedule[`${agKeyL}-${dk}`];
     const code = en?.equipe;
     const eq   = code ? EQ[code] : null;
     const isPrive  = en?.prive||eq?.prive||false;
@@ -3723,7 +3724,7 @@ justifyContent: "flex-start",
         // Sauvegarder localement
         setDayPopup(null);
         // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit) : supprimer la case
-        console.log("KEY:",agCp+"-"+dk,"FULLENTRY:",JSON.stringify(fullEntry));const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit);
+        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit);
         if(!hasContent) {
           setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
           try { await api.planning.deleteEntry(agCp, dk); } catch(e){}
