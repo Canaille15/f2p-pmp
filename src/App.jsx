@@ -475,7 +475,7 @@ function PinModal({agent,onSuccess,onClose,mode="verify",currentPin}){
   const handleDigit=(i,v,arr,setArr)=>{
     const digit=v.replace(/\D/g,'').slice(-1);
     const next=[...arr];next[i]=digit;setArr(next);
-    
+    if(digit&&i<3) setTimeout(()=>refs[i+1].current?.focus(),10);
     if(!digit&&i>0) setTimeout(()=>refs[i-1].current?.focus(),10);
   };
   const pinStr=digits.join("");const confStr=confirm.join("");
@@ -5364,7 +5364,9 @@ function LoginPage({ onLogin, authData, setAuthData }) {
     // Prendre seulement le dernier chiffre saisi (cas collage)
     const digit = v.replace(/\D/g, '').slice(-1);
     const next = [...arr]; next[i] = digit; setArr(next);
-    // pas de changement de focus automatique
+    if (digit && i < 3) {
+      setTimeout(() => refs[i+1].current?.focus(), 10);
+    }
     if (!digit && i > 0) {
       setTimeout(() => refs[i-1].current?.focus(), 10);
     }
