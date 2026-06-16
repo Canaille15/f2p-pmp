@@ -1901,7 +1901,7 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                   {/* Prise le */}
                   {isEditing?(
                     <div style={{display:"flex",gap:4,alignItems:"center",flex:1}}>
-                      <input type="date" defaultValue={l.priseLe||""} autoFocus
+                      <input type="date" defaultValue={l.priseLe||""} 
                         onChange={e=>setEditVal(e.target.value)}
                         style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 7px",
                           fontSize:10,outline:"none",flex:1}}/>
@@ -5991,7 +5991,7 @@ export default function App(){
               borderRadius:13,boxShadow:"0 8px 30px rgba(0,0,0,.14)",
               zIndex:100,overflow:"hidden"}}>
               <div style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9"}}>
-                <input autoFocus placeholder="Rechercher…"
+                <input  placeholder="Rechercher…"
                   value={profileSearch} onChange={e=>setProfileSearch(e.target.value)}
                   style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:7,
                     padding:"5px 8px",fontSize:11,outline:"none"}}/>
