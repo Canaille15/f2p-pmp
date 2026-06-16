@@ -16,7 +16,7 @@ async function login(req, res) {
     const valid = await bcrypt.compare(pin, agent.pin_hash);
     if (!valid) return res.status(401).json({ error: 'Identifiants incorrects' });
     const payload = { cp: agent.cp, is_admin: !!agent.is_admin };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN||'8h' });
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN||'30d' });
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const device = req.headers['x-device-type'] || 'desktop';
     const expiresAt = new Date(Date.now() + 8*60*60*1000);
