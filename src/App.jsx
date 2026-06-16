@@ -3731,6 +3731,8 @@ justifyContent: "flex-start",
           return;
         }
         setSchedule(prev=>({...prev,[agCp+'-'+dk]:fullEntry}));
+        // Recharger depuis Railway pour synchroniser
+        setTimeout(()=>api.planning.getSchedule(agCp).then(entries=>{if(entries)setSchedule(prev=>({...prev,...entries}));}),500);
         // Sauvegarder en base (sequentiel pour eviter deadlock)
         try {
           await api.planning.saveEntry(agCp, dk, fullEntry);
