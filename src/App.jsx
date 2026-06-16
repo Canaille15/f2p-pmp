@@ -3723,7 +3723,7 @@ justifyContent: "flex-start",
         // Sauvegarder localement
         setDayPopup(null);
         // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit) : supprimer la case
-        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit);
+        console.log("PRIVE:",fullEntry.prive,"EQ2:",fullEntry.equipe2);const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit);
         if(!hasContent) {
           setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
           try { await api.planning.deleteEntry(agCp, dk); } catch(e){}
