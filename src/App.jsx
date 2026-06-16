@@ -3491,7 +3491,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
             }}>
               <div style={{fontSize:11,fontWeight:isToday?800:600,
                 color:isToday?"#6366f1":isWE?"#94a3b8":"#475569"}}>
-                {DAYS_L[i].slice(0,3)}
+                {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"][i]}
               </div>
               <div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>
                 {dk?.slice(8)}/{dk?.slice(5,7)}
