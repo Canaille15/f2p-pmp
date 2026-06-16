@@ -671,14 +671,55 @@ function GlobalView({agents,schedule,weekOffset,setWeekOffset,onImport,currentAg
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
   const [filterF,setFilterF]=useState("ALL");
   const [search,setSearch]=useState("");
+  const [uploading,setUploading]=useState(false);
+  const [cpsResult,setCpsResult]=useState(null);
   const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset]);
   const dateKey=weekDates[dayIdx];
   const sections=useMemo(()=>buildSections(schedule,dateKey,filterF,agents),[schedule,dateKey,filterF,agents]);
 
+    const handleCpsImport=async(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    setUploading(true);
+    const reader=new FileReader();
+    reader.onload=async()=>{
+      const b64=reader.result.split(",")[1];
+      const mt=file.type==="application/pdf"?"application/pdf":file.type;
+      try{
+        const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[
+            {type:"document",source:{type:"base64",media_type:mt,data:b64}},
+            {type:"text",text:'Extrais les affectations. JSON uniquement: {"date":"YYYY-MM-DD","affectations":[{"nom":"NOM","prenom":"PRENOM","jsCode":"CODE","equipe":"M|AM|N|J|CA|RP|RU","horaires":"HH-HH"}]}'}
+          ]}]})});
+        const data=await res.json();
+        const raw=data.content?.map(x=>x.text||"").join("")||"";
+        const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
+        let nb=0,ec=0;
+        (parsed.affectations||[]).forEach(aff=>{
+          const ag=agents.find(a=>a.nom.toUpperCase()===aff.nom.toUpperCase());
+          if(!ag)return;
+          const key=ag.id+"-"+parsed.date;
+          const existing=schedule[key];
+          if(existing&&(existing.equipe!==aff.equipe||existing.jsCode!==aff.jsCode))ec++;
+          setSchedule(prev=>({...prev,[key]:{equipe:aff.equipe,jsCode:aff.jsCode,horaires:aff.horaires,prive:false,impressionAt:new Date().toISOString()}}));
+          nb++;
+        });
+        setCpsResult({date:parsed.date,nb,ecarts:ec});
+      }catch(err){alert("Erreur: "+err.message);}
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
       <input placeholder="🔍 Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}
         style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:13,flex:1,minWidth:140,outline:"none"}}/>
+      <label style={{cursor:"pointer",flexShrink:0}}>
+        <div style={{background:uploading?"#94a3b8":"#0f4c81",color:"#fff",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+          {uploading?"⏳...":"📥 Importer CPS"}
+        </div>
+        <input type="file" accept=".pdf,image/*" onChange={handleCpsImport} style={{display:"none"}} disabled={uploading}/>
+      </label>
+      {cpsResult&&<span style={{fontSize:10,background:"#f0fdf4",color:"#16a34a",borderRadius:8,padding:"4px 10px",fontWeight:700}}>✅ {cpsResult.nb} agents · {cpsResult.date}</span>}
       <div style={{display:"flex",gap:3,background:"#f1f5f9",borderRadius:10,padding:3}}>
         {[["ALL","Tous"],["PRCI","PRCI"],["PAR","PAR"]].map(([k,l])=>(
           <button key={k} onClick={()=>setFilterF(k)} style={{border:"none",borderRadius:8,padding:"6px 13px",cursor:"pointer",background:filterF===k?"#fff":"transparent",color:filterF===k?"#1e293b":"#94a3b8",fontSize:12,fontWeight:filterF===k?700:400}}>{l}</button>
@@ -5920,7 +5961,7 @@ export default function App(){
 
   const VIEWS=[
     {k:"personal",l:"📊 Mon planning"},
-    {k:"global",  l:"🏢 Vue équipe"},
+    {k:"global",  l:"📋 CPS Officiel"},
     {k:"echanges",l:"🔄 Échanges"},
 {k:"cps",     l:"📋 CPS"+(activeNotifCount>0?` (${activeNotifCount})`:"")} ,
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
@@ -6076,7 +6117,9 @@ export default function App(){
         onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
         onAddAgent={()=>setAddAgentOpen(true)}
         onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
-        isAdmin={isAdmin}/>}
+        isAdmin={isAdmin}
+        notifications={notifications} setNotifications={setNotifications}
+        currentAgentId={currentAgent?.immatriculation||currentAgent?.cp||currentAgent?.id}/>}
       {view==="personal"&&<PersonalView
         agent={currentAgent||currentUser?.agent}
         schedule={schedule} setSchedule={setSchedule}
