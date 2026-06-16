@@ -684,6 +684,7 @@ function GlobalView({agents,schedule,weekOffset,setWeekOffset,onImport,currentAg
     reader.onload=async()=>{
       const b64=reader.result.split(",")[1];
       const mt=file.type==="application/pdf"?"application/pdf":file.type;
+      console.log("Taille fichier:",file.size,"bytes, base64:",b64.length);
       try{
         const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
           body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[
