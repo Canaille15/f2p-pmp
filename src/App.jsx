@@ -1702,7 +1702,7 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
   const nbPayeesN1  = fetesN1Payees.length;
   const nbAttenteN1 = fetesN1Attente.length;
 
-  const [ouvert, setOuvert] = useState(true);
+  const [ouvert, setOuvert] = useState(false);
   const [motifOuvert, setMotifOuvert] = useState(null);
 
   // Couleurs par statut
