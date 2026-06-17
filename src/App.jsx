@@ -5696,6 +5696,22 @@ export default function App(){
   // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
   const [view,setView]=useState("personal");
   const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
+  // Charger les agents depuis l'API (source de verite = Railway)
+  useEffect(()=>{
+    api.agents.getAll().then(rows=>{
+      if(!rows||rows.length===0) return;
+      const mapped=rows.map(r=>({
+        id: r.cp,
+        immatriculation: r.cp,
+        nom: r.nom,
+        prenom: r.prenom,
+        grade: r.grade,
+        poste: r.poste||"",
+        fam: r.famille||"PRCI",
+      }));
+      setAgents(mapped);
+    }).catch(e=>console.error("Erreur chargement agents:",e));
+  },[]);
   const [currentAgent,setCurrentAgent]=useState(null);
   const [weekOffset,setWeekOffset]=useState(0);
   const [profileOpen,setProfileOpen]=useState(false);
