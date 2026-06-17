@@ -705,37 +705,36 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
         let nb=0,ec=0;
         const updates=[];
 
-        lines.forEach((line,i)=>{
-          const nomMatch=line.match(/\b([A-ZÀ-Ü][A-ZÀ-Ü\-' ]{2,})\s+([A-Z][a-zà-ü]+)\b/);
-          if(!nomMatch) return;
-          const nom=nomMatch[1].trim();
-          const ag=agents.find(a=>a.nom.toUpperCase()===nom.toUpperCase());
+        lines.forEach((line)=>{
+          const horaireMatch=line.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/);
+          if(!horaireMatch) return;
+
+          const jsCodeMatch=line.match(/\b(PA[A-Z0-9]{2,6}[-OX]?|PI[A-Z0-9]{2,6}[-OX]?)\b/);
+          const jsCode=jsCodeMatch?jsCodeMatch[1]:null;
+
+          const ag=agents.find(a=>{
+            const nomUp=a.nom.toUpperCase();
+            return line.toUpperCase().includes(nomUp);
+          });
           if(!ag) return;
 
-          const contextLines=lines.slice(Math.max(0,i-6),i+1).join(" ");
-          const horaireMatch=contextLines.match(/(\d{2}):(\d{2})\s*-\s*\n?\s*(\d{2}):(\d{2})/);
-          const jsCodeMatch=contextLines.match(/\b(PA[A-Z0-9]{2,6}[-OX]?|PI[A-Z0-9]{2,6}[-OX]?)\b/);
-
-          let equipe=null;
-          if(horaireMatch){
-            const hDebut=parseInt(horaireMatch[1]);
-            if(hDebut>=4&&hDebut<11) equipe="M";
-            else if(hDebut>=11&&hDebut<20) equipe="AM";
-            else equipe="N";
-          }
-          if(!equipe) return;
+          const hDebut=parseInt(horaireMatch[1]);
+          let equipe="J";
+          if(hDebut>=4&&hDebut<11) equipe="M";
+          else if(hDebut>=11&&hDebut<20) equipe="AM";
+          else equipe="N";
+          if(jsCode&&/J$/.test(jsCode)) equipe="J";
 
           const key=`${ag.id}-${dateStr}`;
           const existing=schedule[key];
-          const horaires=horaireMatch?`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`:null;
-          const jsCode=jsCodeMatch?jsCodeMatch[1]:null;
+          const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
 
           if(existing&&(existing.equipe!==equipe||existing.jsCode!==jsCode)) ec++;
           updates.push({key,equipe,jsCode,horaires});
           nb++;
         });
 
-        if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Vérifiez le format.");
+        if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
 
         setSchedule(prev=>{
           const next={...prev};
