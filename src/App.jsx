@@ -731,11 +731,25 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
 
           if(existing&&(existing.equipe!==equipe||existing.jsCode!==jsCode)) ec++;
-          updates.push({key,equipe,jsCode,horaires});
+          updates.push({key,equipe,jsCode,horaires,cp_agent:ag.id,date_jour:dateStr,famille:ag.fam||"PAR"});
           nb++;
         });
 
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
+
+        // Sauvegarder en base via API (persistance Railway)
+        try{
+          await api.cps.import(updates.map(u=>({
+            cp_agent: u.cp_agent,
+            date_jour: u.date_jour,
+            equipe: u.equipe,
+            js_code: u.jsCode,
+            horaires: u.horaires,
+            famille: u.famille,
+          })));
+        }catch(apiErr){
+          console.error("Erreur sauvegarde CPS:", apiErr);
+        }
 
         setSchedule(prev=>{
           const next={...prev};
