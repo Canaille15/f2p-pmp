@@ -758,10 +758,10 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           else if(hDebut>=11&&hDebut<20) equipe="AM";
           else equipe="N";
           if(jsCode&&/J$/.test(jsCode)) equipe="J";
-          // Detection statuts speciaux (Formation, VM) - cherche dans la ligne fusionnee et la suivante
-          const ligneEtSuivante=(lines[lines.indexOf(line)+1]||"")+" "+line;
-          if(/formation/i.test(ligneEtSuivante)) equipe="FOR";
-          else if(/\bVM\b/.test(ligneEtSuivante)) equipe="VM";
+          // Detection statuts speciaux (Formation, VM) - les lignes sont deja fusionnees,
+          // on ne regarde que la ligne courante pour eviter de capturer le mot-cle d'un autre agent
+          if(/formation/i.test(line)) equipe="FOR";
+          else if(/\bVM\b/.test(line)) equipe="VM";
           const key=`${ag.id}-${dateStr}`;
           const existing=schedule[key];
           const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
