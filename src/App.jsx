@@ -725,6 +725,10 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           else if(hDebut>=11&&hDebut<20) equipe="AM";
           else equipe="N";
           if(jsCode&&/J$/.test(jsCode)) equipe="J";
+          // Detection statuts speciaux (Formation, VM) - cherche dans la ligne et la ligne suivante (description du poste)
+          const ligneEtSuivante=(lines[lines.indexOf(line)+1]||"")+" "+line;
+          if(/formation/i.test(ligneEtSuivante)) equipe="FOR";
+          else if(/\bVM\b/.test(ligneEtSuivante)) equipe="VM";
 
           const key=`${ag.id}-${dateStr}`;
           const existing=schedule[key];
