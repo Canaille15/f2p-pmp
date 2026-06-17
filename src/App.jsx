@@ -695,6 +695,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
         const ocrData=await ocrRes.json();
         if(ocrData.IsErroredOnProcessing) throw new Error(ocrData.ErrorMessage?.[0]||"Erreur OCR");
         const text=ocrData.ParsedResults?.map(r=>r.ParsedText).join("\n")||"";
+        console.log("TEXTE OCR:",text);
         if(!text) throw new Error("Aucun texte extrait du document");
 
         const dateMatch=text.match(/DU\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/);
