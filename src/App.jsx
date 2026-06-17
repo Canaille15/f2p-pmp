@@ -735,7 +735,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
         });
 
         console.log("UPDATES:",updates.length,JSON.stringify(updates));
-        if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");t";
+        if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
 import api from "./api/client";
 import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
