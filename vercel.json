@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/claude",
-      "destination": "/functions/claude"
+      "destination": "/claude"
     },
     {
       "source": "/(.*)",
