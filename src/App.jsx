@@ -659,13 +659,20 @@ function buildSections(schedule, dateKey, filterF, agents){
   if(dispos.length>0){
     diversRows.push({poste:{jsCode:"DISPO",label:"Disponibles",subtitle:""},jsCode:"DISPO",agents:dispos,famille:null,isDispo:true,maxSlots:99});
   }
-  // Formation
-  const enFormation=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.equipe==="FOR";});
+  // Formation (exclut les agents dont le jsCode est deja affiche dans une autre ligne Divers, ex: K-PAR, AFO PAR)
+  const jsCodesDejaAffiches=new Set(diversRows.map(r=>r.jsCode));
+  const enFormation=agents.filter(a=>{
+    const en=schedule[`${a.id}-${dateKey}`];
+    return en&&en.equipe==="FOR"&&!jsCodesDejaAffiches.has(en.jsCode);
+  });
   if(enFormation.length>0){
     diversRows.push({poste:{jsCode:"FOR",label:"Formation",subtitle:""},jsCode:"FOR",agents:enFormation,famille:null,isFormation:true,maxSlots:99});
   }
-  // VM (visite medicale)
-  const enVM=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.equipe==="VM";});
+  // VM (visite medicale) - meme logique anti-doublon
+  const enVM=agents.filter(a=>{
+    const en=schedule[`${a.id}-${dateKey}`];
+    return en&&en.equipe==="VM"&&!jsCodesDejaAffiches.has(en.jsCode);
+  });
   if(enVM.length>0){
     diversRows.push({poste:{jsCode:"VM",label:"VM",subtitle:""},jsCode:"VM",agents:enVM,famille:null,isVM:true,maxSlots:99});
   }
