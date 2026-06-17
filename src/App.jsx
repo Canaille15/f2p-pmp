@@ -667,7 +667,7 @@ function buildSections(schedule, dateKey, filterF, agents){
   return sections;
 }
 
-function GlobalView({agents,schedule,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin}){
+function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin,notifications,setNotifications,currentAgentId}){
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
   const [filterF,setFilterF]=useState("ALL");
   const [search,setSearch]=useState("");
