@@ -677,7 +677,7 @@ function GlobalView({agents,schedule,weekOffset,setWeekOffset,onImport,currentAg
   const dateKey=weekDates[dayIdx];
   const sections=useMemo(()=>buildSections(schedule,dateKey,filterF,agents),[schedule,dateKey,filterF,agents]);
 
-    handleCpsImport=async(e)=>{
+  const handleCpsImport=async(e)=>{
     const file=e.target.files[0];if(!file)return;
     setUploading(true);
     setCpsResult(null);
