@@ -724,6 +724,9 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           if(jsCode&&/PA[A-Z]+1[0]$/.test(jsCode)) jsCode=jsCode.slice(0,-1)+"O";
           if(jsCode&&/OR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres O
           if(jsCode&&/PIADIX$/.test(jsCode)) jsCode="PIADJX"; // fix OCR : I lu au lieu de J
+          if(jsCode&&/^PAACIX$/.test(jsCode)) jsCode="PAAC1X"; // fix OCR : I lu au lieu de 1
+          if(jsCode&&/^PAACIO$/.test(jsCode)) jsCode="PAAC1O"; // fix OCR : I lu au lieu de 1
+          if(jsCode&&/^PAACI-$/.test(jsCode)) jsCode="PAAC1-"; // fix OCR : I lu au lieu de 1
 
           const candidats=agents.filter(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
           const ag=candidats.length<=1?candidats[0]:candidats.find(a=>a.prenom&&line.toUpperCase().includes(a.prenom.toUpperCase()))||candidats[0];
