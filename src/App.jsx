@@ -712,8 +712,11 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?)/);
           let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
           if(jsCode&&/PA[A-Z]+1[0]$/.test(jsCode)) jsCode=jsCode.slice(0,-1)+"O";
+          if(jsCode&&/OR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres O
+          if(jsCode&&/PIADIX$/.test(jsCode)) jsCode="PIADJX"; // fix OCR : I lu au lieu de J
 
-          const ag=agents.find(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
+          const candidats=agents.filter(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
+          const ag=candidats.length<=1?candidats[0]:candidats.find(a=>a.prenom&&line.toUpperCase().includes(a.prenom.toUpperCase()))||candidats[0];
           if(!ag) return;
 
           const hDebut=parseInt(horaireMatch[1]);
