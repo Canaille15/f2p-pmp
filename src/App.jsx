@@ -758,7 +758,10 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           if(existing&&(existing.equipe!==equipe||existing.jsCode!==jsCode)) ec++;
           updates.push({key,equipe,jsCode,horaires,cp_agent:ag.id,date_jour:dateStr,famille:ag.fam||"PAR"});
           nb++;
-        });if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
+        });
+        console.log("UPDATES GENERES:", JSON.stringify(updates, null, 2));
+        console.log("LIGNES FUSIONNEES:", JSON.stringify(lines, null, 2));
+        if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
 
         // Sauvegarder en base via API (persistance Railway)
         try{
