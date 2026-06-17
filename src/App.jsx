@@ -706,6 +706,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
         const updates=[];
 
         lines.forEach((line)=>{
+          if(line.includes("HUMEZ")||line.includes("USSON")||line.includes("RACAMIER")) console.log("LIGNE SUSPECTE:",JSON.stringify(line));
           const horaireMatch=line.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/);
           if(!horaireMatch) return;
 
