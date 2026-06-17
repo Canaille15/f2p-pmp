@@ -13,7 +13,8 @@ app.use('/api', apiLimiter);
 
 app.use('/api/auth',          require('./src/routes/auth'));
 app.use('/api/agents',        require('./src/routes/agents'));
-app.use('/api/planning',      require('./src/routes/planning'));
+app.use('/api/planning',      require('./src/routes/planning'));\napp.use('/api/cps',            require('./src/routes/cps'));
+app.use('/api/claude', require('./src/routes/claude'));
 app.use('/api/profil',        require('./src/routes/profil'));
 app.use('/api/conges',        require('./src/routes/conges'));
 app.use('/api/fetes',         require('./src/routes/fetes'));

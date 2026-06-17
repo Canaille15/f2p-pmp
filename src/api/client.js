@@ -361,6 +361,44 @@ export const profil = {
   },
 };
 
+// ─── MODULE CPS (planning officiel SNCF importé) ──────────────────────────────
+
+export const cps = {
+  /**
+   * Charger tout le planning CPS sur une période
+   * Retourne un objet { "AGENTID-YYYY-MM-DD": { equipe, jsCode, horaires, famille } }
+   */
+  async getSchedule(from, to) {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const rows = await apiFetch(`/cps?${params.toString()}`);
+    if (!rows) return {};
+    const result = {};
+    rows.forEach((row) => {
+      const date = row.date_jour ? row.date_jour.split('T')[0] : row.date;
+      result[`${row.cp_agent}-${date}`] = {
+        equipe: row.equipe || null,
+        jsCode: row.js_code || null,
+        horaires: row.horaires || null,
+        famille: row.famille || null,
+        prive: false,
+      };
+    });
+    return result;
+  },
+
+  /**
+   * Importer en masse des entrées CPS (admin uniquement)
+   * @param {Array<{cp_agent, date_jour, equipe, js_code, horaires, famille}>} entries
+   */
+  import: (entries) =>
+    apiFetch('/cps/import', {
+      method: 'POST',
+      body: JSON.stringify({ entries }),
+    }),
+};
+
 // ─── MODULE CONGÉS ────────────────────────────────────────────────────────────
 
 export const conges = {
@@ -473,6 +511,7 @@ const api = {
   echanges,
   pauses,
   fetes,
+  cps,
 };
 
 export default api;
