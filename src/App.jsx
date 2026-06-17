@@ -736,10 +736,20 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
 
         console.log("UPDATES:",updates.length,JSON.stringify(updates));
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
-import api from "./api/client";
-import AdminPanel from "./components/AdminPanel";
-import AgentHeader from "./components/AgentHeader";
-import DayEditPopup from "./components/DayEditPopup";
+
+        setSchedule(prev=>{
+          const next={...prev};
+          updates.forEach(u=>{next[u.key]={equipe:u.equipe,jsCode:u.jsCode,horaires:u.horaires,prive:false,impressionAt:new Date().toISOString()};});
+          return next;
+        });
+        setCpsResult({date:dateStr,nb,ecarts:ec});
+      }catch(err){
+        alert("Erreur import CPS : "+err.message);
+      }
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
 
 
 // ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
