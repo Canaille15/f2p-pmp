@@ -1,2 +1,14 @@
 .vercel
 .env*
+node_modules/
+api/node_modules/
+fix_*.js
+fix_*.ps1
+fix_*.py
+backup_*.jsx
+create_*.js
+debug_*.js
+add_*.js
+cleanup_*.js
+*.zip
+api/dir
