@@ -719,7 +719,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           const horaireMatch=line.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/);
           if(!horaireMatch) return;
 
-          const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?)/);
+          const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI)\b/);
           let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
           if(jsCode&&/PA[A-Z]+1[0]$/.test(jsCode)) jsCode=jsCode.slice(0,-1)+"O";
           if(jsCode&&/OR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres O
