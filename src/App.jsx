@@ -5838,6 +5838,14 @@ export default function App(){
       setSchedule(prev=>({...prev,...entries}));
     });
   },[currentUser?.agent?.id]); // eslint-disable-line
+  // Charger le planning CPS officiel (partage entre tous les agents)
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    api.cps.getSchedule().then(entries=>{
+      if(!entries||Object.keys(entries).length===0) return;
+      setSchedule(prev=>({...prev,...entries}));
+    }).catch(e=>console.error("Erreur chargement CPS:",e));
+  },[currentUser?.agent?.id]); // eslint-disable-line
 
 
   // Sauvegarder le profil dans Supabase quand il change
