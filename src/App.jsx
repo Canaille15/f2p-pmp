@@ -659,6 +659,16 @@ function buildSections(schedule, dateKey, filterF, agents){
   if(dispos.length>0){
     diversRows.push({poste:{jsCode:"DISPO",label:"Disponibles",subtitle:""},jsCode:"DISPO",agents:dispos,famille:null,isDispo:true,maxSlots:99});
   }
+  // Formation
+  const enFormation=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.equipe==="FOR";});
+  if(enFormation.length>0){
+    diversRows.push({poste:{jsCode:"FOR",label:"Formation",subtitle:""},jsCode:"FOR",agents:enFormation,famille:null,isFormation:true,maxSlots:99});
+  }
+  // VM (visite medicale)
+  const enVM=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.equipe==="VM";});
+  if(enVM.length>0){
+    diversRows.push({poste:{jsCode:"VM",label:"VM",subtitle:""},jsCode:"VM",agents:enVM,famille:null,isVM:true,maxSlots:99});
+  }
 
   if(diversRows.length>0){
     sections.push({id:"DIVERS",label:"🗂 Divers",equipe:"J",pc:pcD,rows:diversRows});
