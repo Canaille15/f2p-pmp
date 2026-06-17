@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify(req.body),
     });
-    const data = await response.json();
+    console.log("Status:",response.status);const text=await response.text();console.log("Response:",text.slice(0,200));const data=JSON.parse(text);
     return res.status(response.status).json(data);
   } catch (err) {
     return res.status(500).json({ error: err.message });
