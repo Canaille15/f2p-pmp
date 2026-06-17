@@ -734,6 +734,741 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           nb++;
         });
 
+        if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");t";
+import api from "./api/client";
+import AdminPanel from "./components/AdminPanel";
+import AgentHeader from "./components/AgentHeader";
+import DayEditPopup from "./components/DayEditPopup";
+
+
+// ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
+
+// Sauvegarder le profil agent dans Supabase
+async function sbSaveProfile(agentId, data) {
+  return sbFetch(`agent_profiles?on_conflict=agent_id`, {
+    method: 'POST',
+    body: JSON.stringify({
+      agent_id: agentId,
+      pin_hash: data.pinHash||null,
+      is_admin: data.isAdmin||false,
+      roulement: data.roulement||null,
+      is_reserve: data.isReserve||false,
+      familles_hab: data.famillesHab||null,
+      habilitations: data.habilitations||{},
+      agent_colors: data.agentColors||{},
+      pause_figee: data.pauseFigee||{},
+      compteur_corrections: data.compteurCorrections||{},
+      depart_date: data.departDate||null,
+      // Nouveaux champs synchronisés multi-appareils
+      fetes_tracking: data.fetesTracking||{},
+      pause_figee_fia_mois: data.pauseFigeeFiaMois||{},
+      pause_figee_fia_done: data.pauseFigeeFiaDone||{},
+      demandes_conges: data.demandesConges||[],
+      notifications_acquittees: data.notificationsAcquittees||[],
+      updated_at: new Date().toISOString(),
+    }),
+  });
+}
+
+// Charger le profil agent depuis Supabase
+async function sbLoadProfile(agentId) {
+  const data = await sbFetch(`agent_profiles?agent_id=eq.${agentId}&select=*`);
+  return data?.[0] || null;
+}
+
+// Sauvegarder une entrée de planning
+async function sbSaveEntry(agentId, dk, entry) {
+  return sbFetch(`schedule_entries?on_conflict=agent_id,date`, {
+    method: 'POST',
+    body: JSON.stringify({
+      agent_id: agentId,
+      date: dk,
+      equipe: entry.equipe||null,
+      equipe2: entry.equipe2||null,
+      js_code: entry.jsCode||null,
+      horaires: entry.horaires||null,
+      prive: entry.prive||false,
+      fin_nuit: entry.finNuit||false,
+      impression_at: entry.impressionAt||null,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+}
+
+// Charger tout le planning d'un agent
+async function sbLoadSchedule(agentId) {
+  const data = await sbFetch(`schedule_entries?agent_id=eq.${agentId}&select=*`);
+  if (!data) return {};
+  const result = {};
+  data.forEach(row => {
+    result[`${row.agent_id}-${row.date}`] = {
+      equipe: row.equipe,
+      equipe2: row.equipe2,
+      jsCode: row.js_code,
+      horaires: row.horaires,
+      prive: row.prive,
+      finNuit: row.fin_nuit,
+      impressionAt: row.impression_at,
+    };
+  });
+  return result;
+}
+
+// Supprimer une entrée de planning
+async function sbDeleteEntry(agentId, dk) {
+  return sbFetch(`schedule_entries?agent_id=eq.${agentId}&date=eq.${dk}`, {
+    method: 'DELETE'
+  });
+}
+
+// ─── PERSISTANCE LOCALE (localStorage) ───────────────────────────────────────
+function usePersist(key, defaultValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem("f2ppmp_" + key);
+      return stored ? JSON.parse(stored) : defaultValue;
+    } catch { return defaultValue; }
+  });
+  const setPersist = useCallback((next) => {
+    setValue(prev => {
+      const val = typeof next === "function" ? next(prev) : next;
+      try { localStorage.setItem("f2ppmp_" + key, JSON.stringify(val)); } catch {}
+      return val;
+    });
+  }, [key]);
+  return [value, setPersist];
+}
+
+// ─── MIGRATION DONNÉES ────────────────────────────────────────────────────────
+const DATA_VERSION = "1.0";
+try {
+  if (localStorage.getItem("f2ppmp_version") !== DATA_VERSION) {
+    localStorage.setItem("f2ppmp_version", DATA_VERSION);
+  }
+} catch {}
+
+// ─── SUPABASE ────────────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://vrhykmrbdakjycfqbzpt.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHlrbXJiZGFranljZnFienB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTM0MTAsImV4cCI6MjA5NTgyOTQxMH0.LMAwtDR3hSliWV89KO9cRIaC3Wy2QGDh5r8Hl_G_4pY";
+async function sbFetch(path, opts={}) {
+  if (!SUPABASE_URL || SUPABASE_URL==="VOTRE_URL_SUPABASE") return null;
+  const {headers:extraHeaders, ...restOpts} = opts;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...restOpts,
+    headers:{
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": restOpts.method==="POST"?"resolution=merge-duplicates":"",
+      ...(extraHeaders||{}),
+    },
+  });
+  if (!res.ok) {
+    console.error("Supabase error:", res.status, path);
+    return null;
+  }
+  return res.json().catch(()=>null);
+}
+const sb = {
+  select:(t,q="")=>sbFetch(`${t}?${q}`),
+  insert:(t,b)=>sbFetch(t,{method:"POST",body:JSON.stringify(b)}),
+  update:(t,m,b)=>sbFetch(`${t}?${m}`,{method:"PATCH",body:JSON.stringify(b),headers:{"Prefer":"return=representation"}}),
+  delete:(t,m)=>sbFetch(`${t}?${m}`,{method:"DELETE"}),
+  upsert:(t,b)=>sbFetch(t,{method:"POST",body:JSON.stringify(b),headers:{"Prefer":"resolution=merge-duplicates,return=representation"}}),
+};
+
+// ─── DONNÉES MÉTIER ───────────────────────────────────────────────────────────
+const FAMILLES = {
+  PRCI:{ label:"PRCI PMP",        color:"#0f4c81", accent:"#3b82f6", light:"#eff6ff" },
+  PAR: { label:"PAR LGV Réserve", color:"#064e3b", accent:"#10b981", light:"#ecfdf5" },
+};
+
+// Postes 3x8 ordonnés
+const POSTES_PRCI_3x8 = [
+  { code:"CCL", label:"CCL",     M:"PICCL-", AM:"PICCLO", N:"PICCLX" },
+  { code:"ADJ", label:"Adj CCL", M:"PIADJ-", AM:"PIADJO", N:"PIADJX" },
+  { code:"LNE", label:"AC LNE",  M:"PILNE-", AM:"PILNEO", N:"PILNEX" },
+  { code:"LNO", label:"AC LNO",  M:"PILNO-", AM:"PILNOO", N:"PILNOX" },
+  { code:"VGD", label:"AC VGD",  M:"PIVGD-", AM:"PIVGDO", N:null     },
+  { code:"LC",  label:"AC LC",   M:"PILCL-", AM:"PILCLO", N:"PILCLX" },
+];
+const POSTES_PAR_3x8 = [
+  { code:"AC1",  label:"AC PAR",        M:"PAAC1-", AM:"PAAC1O", N:"PAAC1X" },
+  { code:"AC2",  label:"Aide AC PAR",   M:"PAAC2-", AM:"PAAC2O", N:"PAAC2X" },
+  { code:"ACXX", label:"CT AC Travaux", M:null,      AM:null,     N:"PAACXX" },
+];
+
+// Postes journée PRINCIPAUX (affichés dans section Journée)
+const POSTES_JOURNEE_PRCI_PRINCIPAUX = ["PIPA1J","PIPA2J","PIPA3J"];
+const POSTES_JOURNEE_PAR_PRINCIPAUX  = ["PAPAUJ","PAASMJ"];
+
+// TOUS les postes journée avec métadonnées
+const POSTES_JOURNEE = [
+  { jsCode:"PIPA1J",  label:"Pauseur PA1",     horaires:"08h45–18h15", famille:"PRCI", maxSlots:1, allowFormation:true,  pause:"13h15–15h00", principal:true  },
+  { jsCode:"PIPA2J",  label:"Pauseur PA2",     horaires:"10h15–19h45", famille:"PRCI", maxSlots:1, allowFormation:true,  pause:"13h15–15h00", principal:true  },
+  { jsCode:"PIPA3J",  label:"Pauseur PA3",     horaires:"08h45–16h30", famille:"PRCI", maxSlots:1, allowFormation:false, pause:null,           principal:true  },
+  { jsCode:"PIDPXJ",  label:"DPX PRCI",        horaires:"08h00–16h45", famille:"PRCI", maxSlots:1, allowFormation:false, pause:"12h00–13h00",  principal:false },
+  { jsCode:"PIASSJ",  label:"Adj DPX PRCI",    horaires:"08h00–16h45", famille:"PRCI", maxSlots:1, allowFormation:false, pause:"12h00–13h00",  principal:false },
+  { jsCode:"SD%",     label:"SD",              subtitle:"Service doux", horaires:"08h00–16h43", famille:"PRCI", maxSlots:1, allowFormation:false, pause:"12h00–13h00", principal:false },
+  { jsCode:"F-PRCI",  label:"K-PRCI",          subtitle:"Formation PRCI", horaires:"09h00–17h45", famille:"PRCI", maxSlots:6, allowFormation:false, pause:"12h00–13h00", principal:false },
+  { jsCode:"AFOPRCI", label:"AFO PRCI",         horaires:"09h00–16h45", famille:"PRCI", maxSlots:2, allowFormation:false, pause:"12h00–13h00",  principal:false },
+  { jsCode:"CAF",     label:"CAF",              subtitle:"Certificat d'Aptitude à la Fonction", horaires:"09h00–14h30", famille:"PRCI", maxSlots:1, allowFormation:false, pause:null, principal:false },
+  { jsCode:"PPRCI",   label:"PPRCI",            horaires:"09h00–16h45", famille:"PRCI", maxSlots:1, allowFormation:false, pause:null,           principal:false },
+  { jsCode:"VM",      label:"VM",               subtitle:"Visite médicale", horaires:"Variable", famille:"PRCI", maxSlots:99, allowFormation:false, pause:null, principal:false },
+  { jsCode:"PAPAUJ",  label:"Pauseur PAR",      horaires:"09h00–17h45", famille:"PAR",  maxSlots:1, allowFormation:false, pause:"12h45–13h45",  principal:true  },
+  { jsCode:"PADPXJ",  label:"DPX PAR",          horaires:"08h00–16h45", famille:"PAR",  maxSlots:1, allowFormation:false, pause:"12h00–13h00",  principal:false },
+  { jsCode:"PAASMJ",  label:"ASMTE PAR",        horaires:"08h00–16h45", famille:"PAR",  maxSlots:1, allowFormation:true,  pause:"12h00–13h00",  principal:true  },
+  { jsCode:"AFO PAR", label:"AFO PAR",           horaires:"09h00–16h45", famille:"PAR",  maxSlots:2, allowFormation:false, pause:null,           principal:false },
+  { jsCode:"K-PAR",   label:"K-PAR",             subtitle:"Formation PAR",   horaires:"09h00–17h45", famille:"PAR",  maxSlots:2,  allowFormation:false, pause:"12h00–13h00", principal:false },
+  { jsCode:"F-PAR",   label:"F-PAR",             subtitle:"Formateur PAR",   horaires:"09h00–17h45", famille:"PAR",  maxSlots:4,  allowFormation:false, pause:"12h00–13h00", principal:false },
+  // PRCI supplémentaires
+  { jsCode:"K-PRCI",  label:"K-PRCI",            subtitle:"Formation PRCI",  horaires:"09h00–17h45", famille:"PRCI", maxSlots:4,  allowFormation:false, pause:"12h00–13h00", principal:false },
+  { jsCode:"A-PRCI",  label:"A-PRCI",            subtitle:"Assistant PRCI",  horaires:"09h00–17h45", famille:"PRCI", maxSlots:4,  allowFormation:false, pause:"12h00–13h00", principal:false },
+  { jsCode:"DISPO",   label:"DISPO",             subtitle:"Disponible",      horaires:"Variable",     famille:"PRCI", maxSlots:99, allowFormation:false, pause:null,          principal:false },
+];
+
+// Codes fêtes légales SNCF
+const CODES_FETES = {
+  "F1":"1er Janvier",
+  "F2":"Lundi de Pâques",
+  "F3":"1er Mai",
+  "F4":"Ascension",
+  "FV":"8 Mai",
+  "F5":"Lundi de Pentecôte",
+  "F6":"14 Juillet",
+  "F7":"15 Août",
+  "F8":"1er Novembre",
+  "F9":"11 Novembre",
+  "F0":"Noël",
+  "VN":"Samedi veille de Noël (si Noël = dimanche)",
+};
+
+// Couleurs compteurs agenda perso
+const COMPTEUR_COLORS = {
+  TRAVAIL:{ bg:"#fee2e2", text:"#991b1b",  label:"Jours travaillés" },
+  RP:     { bg:"#d1fae5", text:"#065f46",  label:"Repos (RP)"       },
+  FETE:   { bg:"#fce7f3", text:"#9d174d",  label:"Fêtes"            },
+  RU:     { bg:"#fef9c3", text:"#713f12",  label:"Repos RU/RQ"      },
+  TC:     { bg:"#dbeafe", text:"#1e40af",  label:"TC"               },
+  RN:     { bg:"#ede9fe", text:"#5b21b6",  label:"RN"               },
+};
+
+// Équipes avec flag prive et couleur agenda perso
+const EQUIPES = [
+  // ── TRAVAIL — fond intense, texte blanc ──────────────────────────────────
+  { code:"M",    label:"Matinée",    heures:"06h10–14h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"AM",   label:"Soirée",     heures:"14h05–22h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"N",    label:"Nuit",       heures:"22h15–06h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"J",    label:"Journée",    heures:"08h00–17h45", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
+  { code:"JF",   label:"Fête",  heures:"",            color:"#ec4899", textColor:"#fff", dot:"#fce7f3", prive:false, compteur:"FETE",    bg:"#ec4899" },
+  // ── REPOS / RÉSERVISTE — fond coloré, texte blanc ────────────────────────
+  { code:"RP",   label:"RP",         heures:"",            color:"#16a34a", textColor:"#fff", dot:"#bbf7d0", prive:true,  compteur:"RP",      bg:"#16a34a" },
+  { code:"RU",   label:"RU",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
+  { code:"RQ",   label:"RQ",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
+  { code:"TC",   label:"TC",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
+  { code:"TY",   label:"TY",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
+  { code:"RN",   label:"RN",         heures:"",            color:"#4338ca", textColor:"#fff", dot:"#e0e7ff", prive:true,  compteur:"RN",      bg:"#4338ca" },
+  { code:"NU",   label:"NU",         heures:"",            color:"#475569", textColor:"#fff", dot:"#cbd5e1", prive:false, compteur:"RU",      bg:"#475569" },
+  { code:"CA",   label:"Congés", heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
+  { code:"CP",   label:"Congés",      heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
+  { code:"MA",   label:"Maladie",    heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
+  { code:"VT",   label:"VT",         heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3",  prive:true,  compteur:"ABS",     bg:"#eab308" },
+  { code:"ABS",  label:"Absent",     heures:"",            color:"#dc2626", textColor:"#fff", dot:"#fecaca", prive:true,  compteur:"ABS",     bg:"#dc2626" },
+  { code:"FOR",  label:"Formation",  heures:"",            color:"#b45309", textColor:"#fff", dot:"#fef9c3", prive:false, compteur:"FOR",     bg:"#b45309" },
+  { code:"DISPO",label:"Dispo",      heures:"",            color:"#059669", textColor:"#fff", dot:"#d1fae5", prive:false, compteur:"DISPO",   bg:"#059669" },
+  { code:"VM",   label:"VM",         heures:"",            color:"#6b7280", textColor:"#fff", dot:"#f3f4f6", prive:true,  compteur:"ABS",     bg:"#6b7280" },
+  ...Object.keys(CODES_FETES).map(k=>({ code:k, label:k, heures:"", color:"#ec4899", textColor:"#fff", dot:"#fce7f3", prive:true, compteur:"FETE", bg:"#ec4899" })),
+];
+const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
+
+// EQ_COLORS — alias de EQ avec mapping bg/tc/dot pour compatibilité
+const EQ_COLORS = Object.fromEntries(
+  Object.entries(EQ).map(([k,v])=>[k,{
+    ...v,
+    bg: v.bg||v.color,
+    tc: v.textColor||v.tc,
+    dot: v.dot,
+    label: v.label,
+    prive: v.prive||false,
+  }])
+);
+const TODAY=new Date().toISOString().slice(0,10);
+
+const DAYS_L=["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+const DAYS_S=["Di","Lu","Ma","Me","Je","Ve","Sa"];
+const MOIS_L=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+function getWeekDates(offset=0){
+  const d=new Date();
+  d.setDate(d.getDate()-d.getDay()+1+(offset*7)); // lundi
+  return Array.from({length:7},(_,i)=>{
+    const day=new Date(d);
+    day.setDate(d.getDate()+i);
+    return day.toISOString().slice(0,10);
+  });
+}
+
+
+function dKey(y,m,d){return`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;}
+
+// Archive cleanup : supprimer entrées > 3 ans
+function cleanOldEntries(schedule){
+  const cutoff=new Date();cutoff.setFullYear(cutoff.getFullYear()-3);
+  const cutStr=cutoff.toISOString().slice(0,10);
+  return Object.fromEntries(Object.entries(schedule).filter(([k])=>{
+    const date=k.split("-").slice(1).join("-");
+    return date>=cutStr;
+  }));
+}
+
+// Calcul fêtes récupérées
+function computeFetes(schedule, agentId, year) {
+  const fetes = [];
+  Object.entries(schedule).forEach(([k,v])=>{
+    if (!k.startsWith(agentId+"-")) return;
+    const date = k.slice(agentId.length+1);
+    if (!date.startsWith(year)) return;
+    const code = v?.equipe||v?.jsCode;
+    if (CODES_FETES[code]) {
+      fetes.push({ date, code, label:CODES_FETES[code], paye:v?.fetePaye||false });
+    }
+    // Aussi : si agent travaille ou RP ce jour = potentiellement récup fête
+    // Logique simplifiée : on liste jours fête détectés
+  });
+  return fetes;
+}
+
+// Compteurs planning perso par année civile
+// agentProfiles optionnel : si fourni, enrichit les fêtes avec fetesTracking
+function computeCompteurs(schedule, agentId, year, agentProfiles) {
+  const counts = { TRAVAIL:0, RP:0, RU:0, TC:0, RN:0, FETE:[] };
+  const fetesDejaVues = new Set(); // éviter doublons fête
+
+  Object.entries(schedule).forEach(([k,v])=>{
+    if (!k.startsWith(agentId+"-")) return;
+    const date=k.slice(agentId.length+1);
+    if (!date.startsWith(String(year))) return;
+    const code=v?.equipe||v?.jsCode||"";
+    const eq=EQ[code];
+    if (!eq) return;
+    if (eq.compteur==="TRAVAIL" && code!=="NU" && !CODES_FETES[code]) counts.TRAVAIL++;
+    else if (eq.compteur==="RP") counts.RP++;
+    else if (eq.compteur==="RU") counts.RU++;
+    else if (eq.compteur==="TC") counts.TC++;
+    else if (eq.compteur==="RN") counts.RN++;
+    else if (eq.compteur==="FETE") {
+      counts.FETE.push({date,code,label:CODES_FETES[code]||code,paye:v?.fetePaye||false,source:"planning"});
+      fetesDejaVues.add(code);
+    }
+  });
+
+  // Ajouter les fêtes prises/RC enregistrés dans fetesTracking (manuel ou RC)
+  // Ces fêtes n'ont pas forcément de code F1/F2 saisi dans le planning
+  if(agentProfiles){
+    const tracking = agentProfiles[agentId]?.fetesTracking?.[year] || {};
+    Object.entries(tracking).forEach(([code, data])=>{
+      if(!CODES_FETES[code]) return;
+      if(fetesDejaVues.has(code)) return; // déjà dans le planning
+      if(data?.priseLe) {
+        // La date de prise est-elle dans l'année ?
+        const anneeTracking = parseInt((data.priseLe||"").slice(0,4));
+        counts.FETE.push({
+          date: data.priseLe,
+          code,
+          label: CODES_FETES[code],
+          paye: data.estPayee||false,
+          source: data.priseType==="manuel"?"manuel":"RC",
+        });
+        fetesDejaVues.add(code);
+      } else if(data?.estPayee) {
+        // Fête payée sans date de prise explicite
+        counts.FETE.push({
+          date:"—", code, label:CODES_FETES[code], paye:true, source:"payee"
+        });
+        fetesDejaVues.add(code);
+      }
+    });
+  }
+
+  return counts;
+}
+
+// ─── AGENTS ──────────────────────────────────────────────────────────────────
+const AGENTS_INIT = [
+  {id:"P01",nom:"BELLISSENT",      prenom:"Christophe",grade:"CP6NIV2",poste:"CCL",          fam:"PRCI"},
+  {id:"P02",nom:"CHAHMI",          prenom:"Rochdi",    grade:"CP6NIV2",poste:"CCL",          fam:"PRCI"},
+  {id:"P03",immatriculation:"6810186B",nom:"BEFFARAL",        prenom:"Olivier",   grade:"CP6NIV2",poste:"CCL",          fam:"PRCI"},
+  {id:"P04",nom:"COIRRE",          prenom:"Yannick",   grade:"CP6NIV1",poste:"CCL",          fam:"PRCI"},
+  {id:"P05",nom:"EL ADRAOUI",      prenom:"Mounir",    grade:"CO6",    poste:"CCL",          fam:"PRCI"},
+  {id:"P06",nom:"HUTIN",           prenom:"Thomas",    grade:"CP5NIV2",poste:"Adj CCL",      fam:"PRCI"},
+  {id:"P07",nom:"FAROUIL",         prenom:"Cameron",   grade:"CO5",    poste:"Adj CCL",      fam:"PRCI"},
+  {id:"P08",nom:"MILLERAND",       prenom:"Thomas",    grade:"CP5NIV2",poste:"Adj CCL",      fam:"PRCI"},
+  {id:"P09",nom:"LOGEAIS",         prenom:"Leslie",    grade:"CP5NIV2",poste:"Adj CCL",      fam:"PRCI"},
+  {id:"P10",nom:"LAFRANCE",        prenom:"Cyril",     grade:"CP6NIV1",poste:"Adj CCL",      fam:"PRCI"},
+  {id:"P11",nom:"DUPUY",           prenom:"Victorien", grade:"CP6NIV1",poste:"Adj CCL",      fam:"PRCI"},
+  {id:"P12",nom:"BOLZER",          prenom:"Charles",   grade:"CO6",    poste:"Adj CCL",      fam:"PRCI"},
+  {id:"P13",nom:"MIGNOT",          prenom:"Olivier",   grade:"CO5",    poste:"Adj CCL",      fam:"PRCI"},
+  {id:"P14",nom:"MALY",            prenom:"Christophe",grade:"CP5NIV1",poste:"AC LC",        fam:"PRCI"},
+  {id:"P15",nom:"BENNEQUIN",       prenom:"Benjamin",  grade:"CO5",    poste:"AC LC",        fam:"PRCI"},
+  {id:"P16",nom:"FAIAD",           prenom:"Zoé",       grade:"CO5",    poste:"AC LC",        fam:"PRCI"},
+  {id:"P17",nom:"DRAME",           prenom:"Ibrahima",  grade:"CO5",    poste:"AC LC",        fam:"PRCI"},
+  {id:"P18",nom:"RINDER-BOYER",    prenom:"Jérôme",    grade:"CO5",    poste:"AC LC",        fam:"PRCI"},
+  {id:"P19",nom:"AKSSIRIOUN",      prenom:"Mohamed",   grade:"CP5NIV2",poste:"AC LC",        fam:"PRCI"},
+  {id:"P20",nom:"ZANFI",           prenom:"Yassine",   grade:"CP5NIV1",poste:"AC LNE",       fam:"PRCI"},
+  {id:"P21",nom:"CHOUAIB",         prenom:"Wassim",    grade:"CO5",    poste:"AC LNE",       fam:"PRCI"},
+  {id:"P22",nom:"AUDREN",          prenom:"Yvon",      grade:"CO5",    poste:"AC LNE",       fam:"PRCI"},
+  {id:"P23",nom:"BATY",            prenom:"Audrey",    grade:"CO5",    poste:"AC LNE",       fam:"PRCI"},
+  {id:"P24",nom:"CORDEAU",         prenom:"Maxime",    grade:"CO5",    poste:"AC LNE",       fam:"PRCI"},
+  {id:"P25",nom:"MOUAOUED",        prenom:"Abdelkhalid",grade:"CP5NIV1",poste:"AC LNE",      fam:"PRCI"},
+  {id:"P26",nom:"MENDY",           prenom:"Alexandre", grade:"CO5",    poste:"AC LNO",       fam:"PRCI"},
+  {id:"P27",nom:"JAN",             prenom:"Kevin",     grade:"CO5",    poste:"AC LNO",       fam:"PRCI"},
+  {id:"P28",nom:"OUBRAHAM",        prenom:"Adel",      grade:"CO5",    poste:"AC LNO",       fam:"PRCI"},
+  {id:"P29",nom:"MASUY",           prenom:"Thomas",    grade:"CO5",    poste:"AC LNO",       fam:"PRCI"},
+  {id:"P30",nom:"SOUNALATH",       prenom:"Vythoune",  grade:"CO5",    poste:"AC LNO",       fam:"PRCI"},
+  {id:"P31",nom:"CAILLET",         prenom:"Maxime",    grade:"CP5NIV1",poste:"AC LNO",       fam:"PRCI"},
+  {id:"P32",nom:"BOUHEND",         prenom:"Ryad",      grade:"CO5",    poste:"AC VGD",       fam:"PRCI"},
+  {id:"P33",nom:"COSAQUE",         prenom:"Patrick",   grade:"CP4NIV2",poste:"AC VGD",       fam:"PRCI"},
+  {id:"P34",nom:"LUCAS",           prenom:"Samuel",    grade:"CP4NIV1",poste:"AC VGD",       fam:"PRCI"},
+  {id:"P35",nom:"BAILLON",         prenom:"Guillaume", grade:"CP7NIV1",poste:"DPX PRCI",     fam:"PRCI"},
+  {id:"P36",nom:"CAMPOY",          prenom:"Nicolas",   grade:"CP6NIV1",poste:"Adj DPX",      fam:"PRCI"},
+  {id:"P37",nom:"HAIDER",          prenom:"Zesheen",   grade:"CP6NIV1",poste:"SD",           fam:"PRCI"},
+  {id:"P38",nom:"VICENTE CARREIRA",prenom:"Lucile",    grade:"CP5NIV2",poste:"Pauseur PA1",  fam:"PRCI"},
+  {id:"P39",nom:"AUDREN",          prenom:"Gildas",    grade:"CP4NIV2",poste:"Pauseur PA3",  fam:"PRCI"},
+  {id:"P40",nom:"BENDIKHA",        prenom:"Sofiane",   grade:"CP5NIV1",poste:"Pauseur PA2",  fam:"PRCI"},
+  {id:"P41",nom:"GUEGAIN",         prenom:"Magalie",   grade:"CP5NIV1",poste:"Pauseur PA2",  fam:"PRCI"},
+  {id:"P42",nom:"BELOTTI",         prenom:"Florent",   grade:"CP6NIV1",poste:"AFO PRCI",     fam:"PRCI"},
+  {id:"P43",nom:"GUAY",            prenom:"Sébastien", grade:"CP6NIV2",poste:"AFO PRCI",     fam:"PRCI"},
+  {id:"P44",nom:"KINET",           prenom:"Julien",    grade:"CP5NIV2",poste:"CAF",          fam:"PRCI"},
+  {id:"P45",nom:"ILIC-HERBIVO",    prenom:"Théo",      grade:"CP5NIV2",poste:"PPRCI",        fam:"PRCI"},
+  {id:"P46",nom:"DAVOST",          prenom:"Antoine",   grade:"CO5",    poste:"Disponible",   fam:"PRCI"},
+  {id:"P47",nom:"TOUNKARA",        prenom:"El-Haj",    grade:"CO5",    poste:"AC LNO",       fam:"PRCI"},
+  {id:"P48",nom:"METELSKI",        prenom:"Kevin",     grade:"CP5NIV2",poste:"SD",           fam:"PRCI"},
+  {id:"P49",nom:"BECHTOLD",        prenom:"Romain",    grade:"CO5",    poste:"AC LC",        fam:"PRCI"},
+  {id:"P50",nom:"BOUHADJEB",       prenom:"Mohammed",  grade:"CP5NIV2",poste:"AC LNE",       fam:"PRCI"},
+  {id:"P51",nom:"AUDREN",          prenom:"Yvon",      grade:"CO5",    poste:"AC LNE",       fam:"PRCI"},
+  {id:"P52",nom:"LE MOISY",        prenom:"Tom",       grade:"CP5NIV1",poste:"AC LNO",       fam:"PRCI"},
+  {id:"P53",nom:"KRAFFT",          prenom:"Eric",      grade:"CP6NIV1",poste:"CCL",          fam:"PRCI"},
+  {id:"R01",nom:"HUMEZ",           prenom:"Cindy",     grade:"CO5",    poste:"AC PAR",       fam:"PAR"},
+  {id:"R02",nom:"RACAMIER",        prenom:"Alexandre", grade:"CO5",    poste:"AC PAR",       fam:"PAR"},
+  {id:"R03",nom:"MAILLET",         prenom:"Antoine",   grade:"CO5",    poste:"AC PAR",       fam:"PAR"},
+  {id:"R04",nom:"IMART",           prenom:"Pascal",    grade:"CP6NIV2",poste:"AC PAR",       fam:"PAR"},
+  {id:"R05",nom:"MAGRINO",         prenom:"Enzo",      grade:"CO5",    poste:"AC PAR",       fam:"PAR"},
+  {id:"R06",nom:"VALES-TOLEDANO",  prenom:"Ava",       grade:"CO5",    poste:"AC PAR",       fam:"PAR"},
+  {id:"R07",nom:"BARBASTE",        prenom:"Thomas",    grade:"CO5",    poste:"AC PAR",       fam:"PAR"},
+  {id:"R08",nom:"LE MOISY",        prenom:"Tom",       grade:"CP5NIV1",poste:"AC PAR",       fam:"PAR"},
+  {id:"R09",nom:"PASTANT",         prenom:"Maxime",    grade:"CP5NIV2",poste:"AC PAR",       fam:"PAR"},
+  {id:"R10",nom:"WAVELET",         prenom:"François",  grade:"CP5NIV2",poste:"Aide AC PAR",  fam:"PAR"},
+  {id:"R11",nom:"CHENEVOTOT",      prenom:"Lionel",    grade:"CP5NIV1",poste:"Aide AC PAR",  fam:"PAR"},
+  {id:"R12",nom:"USSON",           prenom:"Antoine",   grade:"CP5NIV1",poste:"Aide AC PAR",  fam:"PAR"},
+  {id:"R13",nom:"SCHRAMM",         prenom:"Camille",   grade:"CP5NIV1",poste:"Aide AC PAR",  fam:"PAR"},
+  {id:"R14",nom:"ILIC-HERBIVO",    prenom:"Théo",      grade:"CP5NIV2",poste:"CT AC Travaux",fam:"PAR"},
+  {id:"R15",nom:"MERCIER",         prenom:"Yoann",     grade:"CP6NIV1",poste:"CT AC Travaux",fam:"PAR"},
+  {id:"R16",nom:"LAMBERT",         prenom:"Olivier",   grade:"CP6NIV1",poste:"DPX PAR",      fam:"PAR"},
+  {id:"R17",nom:"MILLES",          prenom:"Valérie",   grade:"CP5NIV3",poste:"ASMTE PAR",    fam:"PAR"},
+  {id:"R18",nom:"AUREILLE",        prenom:"Baptiste",  grade:"CP5NIV2",poste:"AFO PAR",      fam:"PAR"},
+  {id:"R19",nom:"HUON",            prenom:"Grégoire",  grade:"CP5NIV1",poste:"AC PAR",       fam:"PAR"},
+  {id:"R20",nom:"MOREAU",          prenom:"Maxence",   grade:"CP5NIV2",poste:"Aide AC PAR",  fam:"PAR"},
+  {id:"R21",nom:"MICHEL",          prenom:"François",  grade:"CP5NIV2",poste:"AC PAR",       fam:"PAR"},
+  {id:"R22",nom:"BODIN",           prenom:"Julien",    grade:"CP6NIV1",poste:"DPX PAR",      fam:"PAR"},
+  {id:"R23",nom:"SAURY",           prenom:"Stéphane",  grade:"CP5NIV2",poste:"AC PAR",       fam:"PAR"},
+  // Nouveaux agents détectés feuilles 30/05 – 01/06/2026
+  {id:"P54",nom:"LEGOGUELIN",       prenom:"Antoine",   grade:"CP5NIV2",poste:"AC LC",         fam:"PRCI"},
+].map(a=>({...a,famille:a.fam||a.famille,fam:a.fam||a.famille,initials:a.prenom[0]+(a.nom.replace(/[\s-]/g,"")[0]||"")}));
+
+// ─── COMPOSANTS DE BASE ───────────────────────────────────────────────────────
+function EqBadge({code,small,showHours}){
+  const e=EQ[code];if(!e)return null;
+  const p=POSTES_JOURNEE.find(x=>x.jsCode===code);
+  return(<span style={{display:"inline-flex",alignItems:"center",gap:4,background:e.color,color:e.textColor,borderRadius:20,padding:small?"2px 8px":"4px 12px",fontSize:small?11:12,fontWeight:700,whiteSpace:"nowrap"}}>
+    <span style={{width:6,height:6,borderRadius:"50%",background:e.dot,flexShrink:0}}/>
+    {p?`${p.jsCode} · ${p.label}`:e.label}
+    {showHours&&e.heures&&<span style={{fontSize:10,opacity:.8,marginLeft:2}}>{e.heures}</span>}
+  </span>);
+}
+function Av({initials,size=34,famille,color}){
+  const c=color||FAMILLES[famille]?.color||"#1e293b";
+  return(<div style={{width:size,height:size,borderRadius:"50%",background:c,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.33,fontWeight:800,flexShrink:0}}>{initials}</div>);
+}
+function Toggle({value,onChange,color="#10b981"}){
+  return(<button onClick={()=>onChange(!value)} style={{width:44,height:24,borderRadius:12,border:"none",cursor:"pointer",position:"relative",background:value?color:"#cbd5e1",transition:"background .2s",flexShrink:0}}>
+    <span style={{position:"absolute",top:3,left:value?22:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/>
+  </button>);
+}
+
+// ─── PIN MODAL ────────────────────────────────────────────────────────────────
+function PinModal({agent,onSuccess,onClose,mode="verify",currentPin}){
+  // mode: "verify" = déverrouiller | "set" = créer | "change" = modifier (vérifie ancien puis nouveau) | "reset" = admin reset sans vérif
+  const [digits,setDigits]=useState(["","","",""]);
+  const [confirm,setConfirm]=useState(["","","",""]);
+  const initStep = mode==="set"||mode==="reset" ? "enter" : mode==="change" ? "old" : "verify";
+  const [step,setStep]=useState(initStep);
+  const [error,setError]=useState("");
+  const p0=useRef(),p1=useRef(),p2=useRef(),p3=useRef();
+  const refs=[p0,p1,p2,p3];
+  useEffect(()=>{refs[0].current?.focus();},[step]);
+
+  const handleDigit=(i,v,arr,setArr)=>{
+    const digit=v.replace(/\D/g,'').slice(-1);
+    const next=[...arr];next[i]=digit;setArr(next);
+    if(digit&&i<3) setTimeout(()=>refs[i+1].current?.focus(),10);
+    if(!digit&&i>0) setTimeout(()=>refs[i-1].current?.focus(),10);
+  };
+  const pinStr=digits.join("");const confStr=confirm.join("");
+
+  const submit=()=>{
+    setError("");
+    if(step==="verify"){
+      if(pinStr===currentPin){onSuccess();onClose();}
+      else{setError("Code incorrect");setDigits(["","","",""]);setTimeout(()=>refs[0].current?.focus(),50);}
+    } else if(step==="old"){
+      // Vérif ancien PIN avant modification
+      if(pinStr===currentPin){setStep("enter");setDigits(["","","",""]);setTimeout(()=>refs[0].current?.focus(),50);}
+      else{setError("Code actuel incorrect");setDigits(["","","",""]);setTimeout(()=>refs[0].current?.focus(),50);}
+    } else if(step==="enter"){
+      if(pinStr.length<4){setError("4 chiffres requis");return;}
+      setStep("confirm");setConfirm(["","","",""]);setTimeout(()=>refs[0].current?.focus(),50);
+    } else {
+      // confirm
+      if(confStr!==pinStr){setError("Codes différents");setConfirm(["","","",""]);setStep("enter");setDigits(["","","",""]);setTimeout(()=>refs[0].current?.focus(),50);}
+      else{onSuccess(pinStr);onClose();}
+    }
+  };
+
+  const active=step==="confirm"?confirm:digits;
+  const setActive=step==="confirm"?setConfirm:setDigits;
+  const fam=FAMILLES[agent?.famille];
+
+  const titles={
+    verify:"Déverrouiller",
+    set:"Créer mon code",
+    old:"Code actuel",
+    enter: mode==="change"||mode==="reset"?"Nouveau code":"Créer mon code",
+    confirm:"Confirmer le code",
+  };
+  const subtitles={
+    verify:"Entre ton code à 4 chiffres",
+    set:"Choisis un code à 4 chiffres pour protéger ton planning personnel",
+    old:"Entre ton code actuel pour le modifier",
+    enter:"Choisis un nouveau code à 4 chiffres",
+    confirm:"Répète le nouveau code pour confirmer",
+  };
+  const btnLabels={verify:"Déverrouiller",old:"Vérifier",enter:"Suivant",confirm:"Confirmer"};
+
+  const headerBg = mode==="reset"
+    ? "linear-gradient(135deg,#7c3aed,#4c1d95)"
+    : `linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`;
+
+  return(<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(6px)"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:380,boxShadow:"0 24px 60px rgba(0,0,0,.3)",overflow:"hidden"}}>
+      <div style={{background:headerBg,padding:"20px 24px",textAlign:"center"}}>
+        <div style={{fontSize:28,marginBottom:6}}>{mode==="reset"?"👑":mode==="change"?"🔑":"🔐"}</div>
+        <div style={{color:"#fff",fontSize:15,fontWeight:700}}>
+          {mode==="reset"?"Réinitialisation Admin":titles[step]}
+        </div>
+        {agent&&<div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginTop:2}}>{agent.prenom} {agent.nom}</div>}
+        {mode==="reset"&&<div style={{color:"rgba(255,255,255,.5)",fontSize:11,marginTop:4}}>Action administrateur — crée un nouveau code pour cet agent</div>}
+      </div>
+
+      {/* Indicateur d'étape pour "change" */}
+      {mode==="change"&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"10px 0",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+        {["old","enter","confirm"].map((s,i)=>(
+          <div key={s} style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:step===s||((step==="enter"||step==="confirm")&&s==="old")?fam?.color||"#1e293b":"#e2e8f0",color:step===s||((step==="enter"||step==="confirm")&&s==="old")?"#fff":"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700}}>{i+1}</div>
+            {i<2&&<div style={{width:20,height:2,background:"#e2e8f0"}}/>}
+          </div>
+        ))}
+        <div style={{fontSize:10,color:"#94a3b8",marginLeft:4}}>{step==="old"?"Ancien code":step==="enter"?"Nouveau code":"Confirmation"}</div>
+      </div>}
+
+      <div style={{padding:"24px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:18}}>
+        <div style={{fontSize:13,color:"#64748b",textAlign:"center"}}>{subtitles[step]}</div>
+        <div style={{display:"flex",gap:12,position:"relative"}} onClick={()=>p0.current?.focus()}>
+          <input ref={p0} type="tel" inputMode="numeric" maxLength={4}
+            value={active.join("")}
+            onChange={e=>{
+              const val=e.target.value.replace(/\D/g,"").slice(0,4);
+              const next=["","","",""];
+              val.split("").forEach((d,i)=>{next[i]=d;});
+              setActive(next);
+              if(val.length===4) setTimeout(()=>submit(),100);
+            }}
+            onKeyDown={e=>{if(e.key==="Enter"&&active.every(d=>d))submit();}}
+            style={{position:"absolute",opacity:0,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16}}
+            autoComplete="off"
+          />
+          {[0,1,2,3].map(i=>(<div key={i} style={{width:54,height:62,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:800,border:`2px solid ${error?"#ef4444":active[i]?"#3b82f6":"#e2e8f0"}`,borderRadius:12,background:active[i]?"#f0f9ff":"#fff",transition:"all .15s",cursor:"pointer"}}>
+            {active[i]?"●":""}
+          </div>))}
+        </div>}
+        <button onClick={submit} disabled={active.some(d=>!d)} style={{width:"100%",background:active.every(d=>d)?fam?.color||"#1e293b":"#e2e8f0",color:active.every(d=>d)?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"13px 0",cursor:active.every(d=>d)?"pointer":"not-allowed",fontSize:14,fontWeight:700,transition:"all .15s"}}>
+          {btnLabels[step]||"Confirmer"}
+        </button>
+        <button onClick={onClose} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13}}>Annuler</button>
+      </div>
+    </div>
+  </div>);
+}
+
+// ─── COULEURS PÉRIODES VUE GLOBALE ───────────────────────────────────────────
+const PERIOD_COLORS = {
+  M:     { header:"#7f1d1d", border:"#fecaca", bg:"#fff5f5", badge:"#ef4444" },
+  J:     { header:"#1e3a5f", border:"#bfdbfe", bg:"#eff6ff", badge:"#3b82f6" },
+  AM:    { header:"#713f12", border:"#fde68a", bg:"#fffbeb", badge:"#f59e0b" },
+  N:     { header:"#1e1b4b", border:"#c7d2fe", bg:"#eef2ff", badge:"#6366f1" },
+  DIVERS:{ header:"#374151", border:"#e5e7eb", bg:"#f9fafb", badge:"#6b7280" },
+};
+
+// ─── VUE GLOBALE ─────────────────────────────────────────────────────────────
+function buildSections(schedule, dateKey, filterF, agents){
+  const sections=[];
+  const periodes=[
+    {id:"M",  label:"🌅 Matinée",  jsKey:"M",  equipe:"M" },
+    {id:"J",  label:"☀️ Journée",  jsKey:"J",  equipe:"J" },
+    {id:"AM", label:"🌆 Soirée",   jsKey:"AM", equipe:"AM"},
+    {id:"N",  label:"🌙 Nuit",     jsKey:"N",  equipe:"N" },
+  ];
+
+  periodes.forEach(p=>{
+    const pc=PERIOD_COLORS[p.id];const rows=[];
+
+    // PRCI 3x8 (CCL,ADJ,LNE,LNO,VGD,LC dans l'ordre)
+    if(filterF!=="PAR"){
+      POSTES_PRCI_3x8.forEach(poste=>{
+        const jsCode=poste[p.jsKey];if(!jsCode)return;
+        const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===jsCode||en.poste===poste.label)&&!EQ[en.equipe]?.prive;});
+        const dowDk=new Date(dateKey).getDay(); // 0=dim, 6=sam
+        const isLneFusion=(p.id==="N")||(p.id==="AM"&&dowDk===6)||(p.id==="M"&&dowDk===0);
+        const lneLabel=(isLneFusion&&poste.code==="LNE")?"AC LNE/VGD":poste.label;
+        rows.push({poste:{...poste,label:`${jsCode} · ${lneLabel}`},jsCode,agents:ags,famille:"PRCI",isJournee:false,maxSlots:1});
+      });
+    }
+
+    // Journée PRCI principaux uniquement (PA1J,PA2J,PA3J)
+    if(p.id==="J"&&filterF!=="PAR"){
+      POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&x.principal).forEach(poste=>{
+        const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===poste.jsCode||en.poste===poste.label)&&["J","JF"].includes(en.equipe);});
+        rows.push({poste,jsCode:poste.jsCode,agents:ags,famille:"PRCI",isJournee:true,maxSlots:poste.maxSlots,allowFormation:poste.allowFormation});
+      });
+    }
+
+    // PAR 3x8 (AC PAR, Aide AC PAR, CT AC Travaux)
+    if(filterF!=="PRCI"){
+      POSTES_PAR_3x8.forEach(poste=>{
+        const jsCode=poste[p.jsKey];if(!jsCode)return;
+        const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===jsCode||en.poste===poste.label)&&!EQ[en.equipe]?.prive;});
+        rows.push({poste:{...poste,label:`${jsCode} · ${poste.label}`},jsCode,agents:ags,famille:"PAR",isJournee:false,maxSlots:1});
+      });
+    }
+
+    // Journée PAR principaux (PAPAUJ, PAASMJ)
+    if(p.id==="J"&&filterF!=="PRCI"){
+      POSTES_JOURNEE.filter(x=>x.famille==="PAR"&&x.principal).forEach(poste=>{
+        const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===poste.jsCode||en.poste===poste.label)&&["J","JF"].includes(en.equipe);});
+        rows.push({poste,jsCode:poste.jsCode,agents:ags,famille:"PAR",isJournee:true,maxSlots:poste.maxSlots,allowFormation:poste.allowFormation});
+      });
+    }
+
+    if(rows.length)sections.push({...p,pc,rows});
+  });
+
+  // Section DIVERS (postes non principaux + dispos)
+  const diversRows=[];
+  const pcD=PERIOD_COLORS.DIVERS;
+
+  // Postes journée non principaux PRCI
+  if(filterF!=="PAR"){
+    POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&!x.principal).forEach(poste=>{
+      const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===poste.jsCode||en.poste===poste.label);});
+      if(ags.length>0)diversRows.push({poste,jsCode:poste.jsCode,agents:ags,famille:"PRCI",isJournee:true,maxSlots:poste.maxSlots||99});
+    });
+  }
+  // Postes journée non principaux PAR
+  if(filterF!=="PRCI"){
+    POSTES_JOURNEE.filter(x=>x.famille==="PAR"&&!x.principal).forEach(poste=>{
+      const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===poste.jsCode||en.poste===poste.label);});
+      if(ags.length>0)diversRows.push({poste,jsCode:poste.jsCode,agents:ags,famille:"PAR",isJournee:true,maxSlots:poste.maxSlots||99});
+    });
+  }
+  // Disponibles
+  const dispos=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.equipe==="DISPO";});
+  if(dispos.length>0){
+    diversRows.push({poste:{jsCode:"DISPO",label:"Disponibles",subtitle:""},jsCode:"DISPO",agents:dispos,famille:null,isDispo:true,maxSlots:99});
+  }
+
+  if(diversRows.length>0){
+    sections.push({id:"DIVERS",label:"🗂 Divers",equipe:"J",pc:pcD,rows:diversRows});
+  }
+
+  return sections;
+}
+
+function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin,notifications,setNotifications,currentAgentId}){
+  const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
+  const [filterF,setFilterF]=useState("ALL");
+  const [search,setSearch]=useState("");
+  const [uploading,setUploading]=useState(false);
+  const [cpsResult,setCpsResult]=useState(null);
+  const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset]);
+  const dateKey=weekDates[dayIdx];
+  const sections=useMemo(()=>buildSections(schedule,dateKey,filterF,agents),[schedule,dateKey,filterF,agents]);
+
+  const handleCpsImport=async(e)=>{
+    const file=e.target.files[0];if(!file)return;
+    setUploading(true);
+    setCpsResult(null);
+    const reader=new FileReader();
+    reader.onload=async()=>{
+      const b64=reader.result.split(",")[1];
+      try{
+        const form=new URLSearchParams();
+        form.append("apikey","K85147389088957");
+        form.append("base64Image","data:"+(file.type||"application/pdf")+";base64,"+b64);
+        form.append("filetype",file.type==="application/pdf"?"PDF":"Auto");
+        form.append("OCREngine","2");
+        form.append("isTable","true");
+        const ocrRes=await fetch("https://api.ocr.space/parse/image",{method:"POST",body:form});
+        const ocrData=await ocrRes.json();
+        if(ocrData.IsErroredOnProcessing) throw new Error(ocrData.ErrorMessage?.[0]||"Erreur OCR");
+        const text=ocrData.ParsedResults?.map(r=>r.ParsedText).join("\n")||"";
+        if(!text) throw new Error("Aucun texte extrait du document");
+        console.log("TEXTE OCR:",text);
+
+        const dateMatch=text.match(/DU\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/);
+        const dateStr=dateMatch?`${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`:new Date().toISOString().slice(0,10);
+
+        const lines=text.split(/\n/).map(l=>l.trim()).filter(Boolean);
+        let nb=0,ec=0;
+        const updates=[];
+
+        lines.forEach((line)=>{
+          const horaireMatch=line.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/);
+          if(!horaireMatch) return;
+
+          const jsCodeMatch=line.match(/\b(PA[A-Z0-9]{2,6}[-OX]?|PI[A-Z0-9]{2,6}[-OX]?)\b/);
+          const jsCode=jsCodeMatch?jsCodeMatch[1]:null;
+
+          const ag=agents.find(a=>{
+            const nomUp=a.nom.toUpperCase();
+            return line.toUpperCase().includes(nomUp);
+          });
+          if(!ag) return;
+
+          const hDebut=parseInt(horaireMatch[1]);
+          let equipe="J";
+          if(hDebut>=4&&hDebut<11) equipe="M";
+          else if(hDebut>=11&&hDebut<20) equipe="AM";
+          else equipe="N";
+          if(jsCode&&/J$/.test(jsCode)) equipe="J";
+
+          const key=`${ag.id}-${dateStr}`;
+          const existing=schedule[key];
+          const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
+
+          if(existing&&(existing.equipe!==equipe||existing.jsCode!==jsCode)) ec++;
+          updates.push({key,equipe,jsCode,horaires});
+          nb++;
+        });
+
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
 
         setSchedule(prev=>{
