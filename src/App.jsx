@@ -641,9 +641,7 @@ function buildSections(schedule, dateKey, filterF, agents){
   const pcD=PERIOD_COLORS.DIVERS;
 
   // jsCode des postes qui sont eux-memes des formations (regroupes dans le pave Formation)
-  const jsCodesFormationPostes=new Set(
-    POSTES_JOURNEE.filter(x=>x.subtitle&&/formation/i.test(x.subtitle)).map(x=>x.jsCode)
-  );
+  const jsCodesFormationPostes=new Set(["K-PAR","K-PRCI","F-PRCI","AFO PAR","AFOPRCI","F-PAR"]);
   // Postes journée non principaux PRCI (hors postes-formation)
   if(filterF!=="PAR"){
     POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&!x.principal&&!jsCodesFormationPostes.has(x.jsCode)).forEach(poste=>{
