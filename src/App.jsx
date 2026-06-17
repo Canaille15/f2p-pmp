@@ -710,7 +710,8 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           if(!horaireMatch) return;
 
           const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?)/);
-          const jsCode=jsCodeMatch?jsCodeMatch[1]:null;
+          let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
+          if(jsCode&&/PA[A-Z]+1[0]$/.test(jsCode)) jsCode=jsCode.slice(0,-1)+"O";
 
           const ag=agents.find(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
           if(!ag) return;
