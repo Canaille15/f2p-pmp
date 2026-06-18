@@ -5795,6 +5795,15 @@ export default function App(){
     setCurrentAgent(null);
     setProfileOpen(false);
   };
+  // Ecoute l'expiration de session (declenchee par client.js sur un 401) et deconnecte avec message clair
+  useEffect(()=>{
+    const onUnauthorized=()=>{
+      alert("Votre session a expire. Merci de vous reconnecter.");
+      handleLogout();
+    };
+    window.addEventListener('f2ppmp:unauthorized', onUnauthorized);
+    return ()=>window.removeEventListener('f2ppmp:unauthorized', onUnauthorized);
+  },[]);
 
   // Nettoyage archives > 3 ans
   useEffect(()=>{ setSchedule(prev=>cleanOldEntries(prev)); },[]);
