@@ -5732,8 +5732,9 @@ export default function App(){
   // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
   const [view,setView]=useState("personal");
   const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
-  // Charger les agents depuis l'API (source de verite = Railway)
+  // Charger les agents depuis l'API (source de verite = Railway) - seulement si connecte
   useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
     api.agents.getAll().then(rows=>{
       if(!rows||rows.length===0) return;
       const mapped=rows.map(r=>({
@@ -5747,7 +5748,7 @@ export default function App(){
       }));
       setAgents(mapped);
     }).catch(e=>console.error("Erreur chargement agents:",e));
-  },[]);
+  },[currentUser?.agent?.id]); // eslint-disable-line
   const [currentAgent,setCurrentAgent]=useState(null);
   const [weekOffset,setWeekOffset]=useState(0);
   const [profileOpen,setProfileOpen]=useState(false);
