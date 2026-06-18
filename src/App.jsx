@@ -5732,6 +5732,21 @@ export default function App(){
   // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
   const [view,setView]=useState("personal");
   const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
+  const [currentAgent,setCurrentAgent]=useState(null);
+  const [weekOffset,setWeekOffset]=useState(0);
+  const [profileOpen,setProfileOpen]=useState(false);
+  const [profileSearch,setProfileSearch]=useState("");
+  const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
+  const [schedule,setSchedule]=usePersist("schedule",{});
+  const [agentCouleurs, setAgentCouleurs] = React.useState({});
+  const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
+  const [importDPTarget,setImportDPTarget]=useState(null);
+  const [addAgentOpen,setAddAgentOpen]=useState(false);
+  const [notifications,setNotifications]=usePersist("notifications",[]);
+  const [departDates,setDepartDates]=usePersist("departDates",{});
+  // ── AUTH ──────────────────────────────────────────────────────────────────
+  const [authData,setAuthData]=usePersist("authData",{});
+  const [currentUser,setCurrentUser]=usePersist("currentUser",null);
   // Charger les agents depuis l'API (source de verite = Railway) - seulement si connecte
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
@@ -5749,21 +5764,6 @@ export default function App(){
       setAgents(mapped);
     }).catch(e=>console.error("Erreur chargement agents:",e));
   },[currentUser?.agent?.id]); // eslint-disable-line
-  const [currentAgent,setCurrentAgent]=useState(null);
-  const [weekOffset,setWeekOffset]=useState(0);
-  const [profileOpen,setProfileOpen]=useState(false);
-  const [profileSearch,setProfileSearch]=useState("");
-  const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
-  const [schedule,setSchedule]=usePersist("schedule",{});
-  const [agentCouleurs, setAgentCouleurs] = React.useState({});
-  const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
-  const [importDPTarget,setImportDPTarget]=useState(null);
-  const [addAgentOpen,setAddAgentOpen]=useState(false);
-  const [notifications,setNotifications]=usePersist("notifications",[]);
-  const [departDates,setDepartDates]=usePersist("departDates",{});
-  // ── AUTH ──────────────────────────────────────────────────────────────────
-  const [authData,setAuthData]=usePersist("authData",{});
-  const [currentUser,setCurrentUser]=usePersist("currentUser",null);
   const [showAuthAdmin,setShowAuthAdmin]=useState(false);
   const [loginTarget,setLoginTarget]=useState(null);
   const isAdmin=currentUser?.isAdmin||false;
