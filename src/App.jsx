@@ -751,25 +751,46 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
 
         const dateMatch=text.match(/DU\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/);
         const dateStr=dateMatch?`${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`:new Date().toISOString().slice(0,10);
-
+        // Decouper le texte en blocs par page : chaque page a son propre "DU : JJ/MM/AAAA"
+        // qui s'applique a toutes les lignes suivantes jusqu'a la prochaine occurrence.
+        const dateBlockRe=/DU\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/g;
+        const dateMarkers=[];
+        let dm;
+        while((dm=dateBlockRe.exec(text))!==null){
+          dateMarkers.push({index:dm.index, date:`${dm[3]}-${dm[2]}-${dm[1]}`});
+        }
+        const dateForIndex=(charIndex)=>{
+          let result=dateStr;
+          for(const marker of dateMarkers){
+            if(marker.index<=charIndex) result=marker.date;
+            else break;
+          }
+          return result;
+        };
         const rawLines=text.split(/\n/).map(l=>l.trim()).filter(Boolean);
         // Fusionner les lignes : si une ligne ne contient pas de debut d'horaire (HH:MM en debut/proche du debut)
         // et ne commence pas par un jsCode connu, on la rattache a la ligne precedente (cas OCR qui scinde
         // le jsCode+debut d'horaire d'un cote et la fin d'horaire+nom de l'autre cote)
         const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI)\b/;
         const lines=[];
+        const lineDates=[];
+        let searchPos=0;
         rawLines.forEach(line=>{
           const hasFullHoraire=/\d{2}:\d{2}\s*-\s*\d{2}:\d{2}/.test(line);
           const startsNewBlock=jsCodeStartRe.test(line)||hasFullHoraire;
+          const lineIndexInText=text.indexOf(line, searchPos);
+          if(lineIndexInText!==-1) searchPos=lineIndexInText;
           if(startsNewBlock||lines.length===0){
             lines.push(line);
+            lineDates.push(dateForIndex(lineIndexInText!==-1?lineIndexInText:0));
           }else{
             lines[lines.length-1]=lines[lines.length-1]+" "+line;
           }
         });
         let nb=0,ec=0;
         const updates=[];
-        lines.forEach((line)=>{
+        lines.forEach((line,lineIdx)=>{
+          const lineDateStr=lineDates[lineIdx]||dateStr;
           const horaireMatch=line.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/);
           if(!horaireMatch) return;
           const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI)/);
@@ -780,7 +801,6 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           if(jsCode&&/^PAACIX$/.test(jsCode)) jsCode="PAAC1X"; // fix OCR : I lu au lieu de 1
           if(jsCode&&/^PAACIO$/.test(jsCode)) jsCode="PAAC1O"; // fix OCR : I lu au lieu de 1
           if(jsCode&&/^PAACI-$/.test(jsCode)) jsCode="PAAC1-"; // fix OCR : I lu au lieu de 1
-          if(jsCode&&/^PIPAZJ$/.test(jsCode)) jsCode="PIPA2J"; // fix OCR : Z lu au lieu de 2
           if(jsCode&&/^PIPAZJ$/.test(jsCode)) jsCode="PIPA2J"; // fix OCR : Z lu au lieu de 2
           const candidats=agents.filter(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
           const ag=candidats.length<=1?candidats[0]:candidats.find(a=>a.prenom&&line.toUpperCase().includes(a.prenom.toUpperCase()))||candidats[0];
@@ -795,15 +815,13 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           // on ne regarde que la ligne courante pour eviter de capturer le mot-cle d'un autre agent
           if(/formation/i.test(line)) equipe="FOR";
           else if(/\bVM\b/.test(line)) equipe="VM";
-          const key=`${ag.id}-${dateStr}`;
+          const key=`${ag.id}-${lineDateStr}`;
           const existing=schedule[key];
           const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
           if(existing&&(existing.equipe!==equipe||existing.jsCode!==jsCode)) ec++;
-          updates.push({key,equipe,jsCode,horaires,cp_agent:ag.id,date_jour:dateStr,famille:ag.fam||"PAR"});
+          updates.push({key,equipe,jsCode,horaires,cp_agent:ag.id,date_jour:lineDateStr,famille:ag.fam||"PAR"});
           nb++;
         });
-        console.log("UPDATES GENERES:", JSON.stringify(updates, null, 2));
-        console.log("LIGNES FUSIONNEES:", JSON.stringify(lines, null, 2));
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
 
         // Sauvegarder en base via API (persistance Railway)
