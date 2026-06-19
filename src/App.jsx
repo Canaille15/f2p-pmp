@@ -5795,7 +5795,19 @@ export default function App(){
   const [profileOpen,setProfileOpen]=useState(false);
   const [profileSearch,setProfileSearch]=useState("");
   const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
-  const [schedule,setSchedule]=usePersist("schedule",{});
+  const [schedule,_setScheduleRaw]=usePersist("schedule",{});
+  const setSchedule = (updater) => {
+    _setScheduleRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      const beforeKeys = Object.keys(prev||{}).filter(k=>k.startsWith("6810186B"));
+      const afterKeys = Object.keys(next||{}).filter(k=>k.startsWith("6810186B"));
+      const lost = beforeKeys.filter(k=>!afterKeys.includes(k));
+      if (lost.length > 0) {
+        console.warn("PERTE DETECTEE - cles BEFFARAL perdues:", lost, new Error().stack);
+      }
+      return next;
+    });
+  };
   const [agentCouleurs, setAgentCouleurs] = React.useState({});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
   const [importDPTarget,setImportDPTarget]=useState(null);
