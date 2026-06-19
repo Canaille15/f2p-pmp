@@ -767,22 +767,29 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           }
           return result;
         };
-        const rawLines=text.split(/\n/).map(l=>l.trim()).filter(Boolean);
+        const rawLinesRaw=text.split(/\n/);
+        // Associer chaque ligne brute (non trimmee) a sa position absolue dans le texte,
+        // pour en deduire la date "DU :" correcte AVANT toute fusion.
+        let cursor=0;
+        const rawLinesWithPos=rawLinesRaw.map(l=>{
+          const startPos=cursor;
+          cursor+=l.length+1; // +1 pour le \n consomme par split
+          return {text:l.trim(), pos:startPos};
+        }).filter(o=>o.text.length>0);
+        const rawLines=rawLinesWithPos.map(o=>o.text);
         // Fusionner les lignes : si une ligne ne contient pas de debut d'horaire (HH:MM en debut/proche du debut)
         // et ne commence pas par un jsCode connu, on la rattache a la ligne precedente (cas OCR qui scinde
         // le jsCode+debut d'horaire d'un cote et la fin d'horaire+nom de l'autre cote)
         const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI)\b/;
         const lines=[];
         const lineDates=[];
-        let searchPos=0;
-        rawLines.forEach(line=>{
+        rawLinesWithPos.forEach(o=>{
+          const line=o.text;
           const hasFullHoraire=/\d{2}:\d{2}\s*-\s*\d{2}:\d{2}/.test(line);
           const startsNewBlock=jsCodeStartRe.test(line)||hasFullHoraire;
-          const lineIndexInText=text.indexOf(line, searchPos);
-          if(lineIndexInText!==-1) searchPos=lineIndexInText;
           if(startsNewBlock||lines.length===0){
             lines.push(line);
-            lineDates.push(dateForIndex(lineIndexInText!==-1?lineIndexInText:0));
+            lineDates.push(dateForIndex(o.pos));
           }else{
             lines[lines.length-1]=lines[lines.length-1]+" "+line;
           }
