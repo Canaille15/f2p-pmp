@@ -5962,6 +5962,7 @@ export default function App(){
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     api.cps.getSchedule().then(entries=>{
+      console.log("CPS ENTRIES RECUES:", Object.keys(entries||{}).length, "cles. BEFFARAL:", Object.keys(entries||{}).filter(k=>k.startsWith("6810186B")));
       if(!entries||Object.keys(entries).length===0) return;
       setSchedule(prev=>({...prev,...entries}));
     }).catch(e=>console.error("Erreur chargement CPS:",e));
