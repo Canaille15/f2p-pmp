@@ -845,7 +845,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           console.error("Erreur sauvegarde CPS:", apiErr);
         }
 
-        setCpsSchedule(prev=>{
+        setSchedule(prev=>{
           const next={...prev};
           updates.forEach(u=>{next[u.key]={equipe:u.equipe,jsCode:u.jsCode,horaires:u.horaires,prive:false,impressionAt:new Date().toISOString()};});
           return next;
