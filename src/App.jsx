@@ -845,7 +845,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           console.error("Erreur sauvegarde CPS:", apiErr);
         }
 
-        setSchedule(prev=>{
+        setCpsSchedule(prev=>{
           const next={...prev};
           updates.forEach(u=>{next[u.key]={equipe:u.equipe,jsCode:u.jsCode,horaires:u.horaires,prive:false,impressionAt:new Date().toISOString()};});
           return next;
@@ -5795,19 +5795,8 @@ export default function App(){
   const [profileOpen,setProfileOpen]=useState(false);
   const [profileSearch,setProfileSearch]=useState("");
   const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
-  const [schedule,_setScheduleRaw]=usePersist("schedule",{});
-  const setSchedule = (updater) => {
-    _setScheduleRaw(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      const beforeKeys = Object.keys(prev||{}).filter(k=>k.startsWith("6810186B"));
-      const afterKeys = Object.keys(next||{}).filter(k=>k.startsWith("6810186B"));
-      const lost = beforeKeys.filter(k=>!afterKeys.includes(k));
-      if (lost.length > 0) {
-        console.warn("PERTE DETECTEE - cles BEFFARAL perdues:", lost, new Error().stack);
-      }
-      return next;
-    });
-  };
+  const [schedule,setSchedule]=usePersist("schedule",{});
+  const [cpsSchedule,setCpsSchedule]=usePersist("cpsSchedule",{});
   const [agentCouleurs, setAgentCouleurs] = React.useState({});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
   const [importDPTarget,setImportDPTarget]=useState(null);
@@ -5974,9 +5963,8 @@ export default function App(){
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     api.cps.getSchedule().then(entries=>{
-      console.log("CPS ENTRIES RECUES:", Object.keys(entries||{}).length, "cles. BEFFARAL:", Object.keys(entries||{}).filter(k=>k.startsWith("6810186B")));
       if(!entries||Object.keys(entries).length===0) return;
-      setSchedule(prev=>({...prev,...entries}));
+      setCpsSchedule(prev=>({...prev,...entries}));
     }).catch(e=>console.error("Erreur chargement CPS:",e));
   },[currentUser?.agent?.id]); // eslint-disable-line
 
@@ -6311,7 +6299,7 @@ export default function App(){
 
     {/* CONTENU */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
-      {view==="global"&&<GlobalView agents={agents} schedule={schedule} setSchedule={setSchedule} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset}
+      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset}
         onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
         onAddAgent={()=>setAddAgentOpen(true)}
         onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
