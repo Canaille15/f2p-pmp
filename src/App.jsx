@@ -660,6 +660,11 @@ function buildSections(schedule, dateKey, filterF, agents){
   const dispos=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.equipe==="DISPO";});
   if(dispos.length>0){
     diversRows.push({poste:{jsCode:"DISPO",label:"Disponibles",subtitle:""},jsCode:"DISPO",agents:dispos,famille:null,isDispo:true,maxSlots:99});
+  // Renfort samedi (RFT SAM) - poste occasionnel, affiche uniquement si detecte
+  const renfortsSamedi=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.jsCode==="RFT SAM";});
+  if(renfortsSamedi.length>0){
+    diversRows.push({poste:{jsCode:"RFT SAM",label:"Renfort samedi",subtitle:""},jsCode:"RFT SAM",agents:renfortsSamedi,famille:null,maxSlots:99});
+  }
   }
   // Formation — pave unique : badge generique FOR + tous les postes-formation (K-PAR, K-PRCI, F-PRCI...)
   const enFormation=agents.filter(a=>{
