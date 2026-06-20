@@ -818,7 +818,40 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           if(jsCode&&/^PAACZO$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : Z lu au lieu de 2
           if(jsCode&&/^PAAC20$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : 0 chiffre lu au lieu de O lettre
           const candidats=agents.filter(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
-          const ag=candidats.length<=1?candidats[0]:candidats.find(a=>a.prenom&&line.toUpperCase().includes(a.prenom.toUpperCase()))||candidats[0];
+          // Distance de Levenshtein simple pour tolerer les erreurs OCR sur le prenom (ex: AVON vs YVON)
+          const levenshtein=(a,b)=>{
+            const m=a.length,n=b.length;
+            const dp=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);
+            for(let j=0;j<=n;j++) dp[0][j]=j;
+            for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){
+              dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+            }
+            return dp[m][n];
+          };
+          let ag;
+          if(candidats.length<=1){
+            ag=candidats[0];
+          }else{
+            // Cherche d'abord un match exact du prenom
+            ag=candidats.find(a=>a.prenom&&line.toUpperCase().includes(a.prenom.toUpperCase()));
+            if(!ag){
+              // Sinon, cherche le candidat dont le prenom est le plus proche (tolerance erreurs OCR)
+              const mots=line.toUpperCase().split(/[^A-Z]+/).filter(w=>w.length>=3);
+              let meilleurCandidat=null,meilleureDistance=Infinity;
+              candidats.forEach(a=>{
+                if(!a.prenom) return;
+                const prenomMaj=a.prenom.toUpperCase();
+                mots.forEach(mot=>{
+                  const dist=levenshtein(prenomMaj,mot);
+                  if(dist<meilleureDistance&&dist<=2){
+                    meilleureDistance=dist;
+                    meilleurCandidat=a;
+                  }
+                });
+              });
+              ag=meilleurCandidat||candidats[0];
+            }
+          }
           if(!ag) return;
           const hDebut=parseInt(horaireMatch[1]);
           let equipe="J";
