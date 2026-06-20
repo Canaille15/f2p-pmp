@@ -5829,7 +5829,7 @@ function AdminAuthPanel({ authData, setAuthData, agents, onClose }) {
 
 export default function App(){
   // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
-  const [view,setView]=useState("personal");
+  const [view,setView]=usePersist("view","personal");
   const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
   const [currentAgent,setCurrentAgent]=useState(null);
   const [weekOffset,setWeekOffset]=useState(0);
