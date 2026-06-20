@@ -809,6 +809,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           if(jsCode&&/XR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres X
           if(jsCode&&/PIADIX$/.test(jsCode)) jsCode="PIADJX"; // fix OCR : I lu au lieu de J
           if(jsCode&&/PIADAX$/.test(jsCode)) jsCode="PIADJX"; // fix OCR : A lu au lieu de J
+          if(jsCode==="PICCL"&&/2[12]:\d{2}\s*-\s*0[0-6]:\d{2}/.test(line)) jsCode="PICCLX"; // fix OCR : X final manquant (detecte via horaire de nuit)
           if(jsCode&&/^PAACIX$/.test(jsCode)) jsCode="PAAC1X"; // fix OCR : I lu au lieu de 1
           if(jsCode&&/^PAACIO$/.test(jsCode)) jsCode="PAAC1O"; // fix OCR : I lu au lieu de 1
           if(jsCode&&/^PAACI-$/.test(jsCode)) jsCode="PAAC1-"; // fix OCR : I lu au lieu de 1
