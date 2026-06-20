@@ -40,7 +40,7 @@ async function changePin(req, res) {
   const { pin_actuel, pin_nouveau } = req.body;
   const cp = req.agent.cp;
   if (!pin_actuel || !pin_nouveau) return res.status(400).json({ error: 'PINs requis' });
-  if (!/^\d{5}$/.test(pin_nouveau)) return res.status(400).json({ error: 'PIN invalide (5 chiffres)' });
+  if (!/^\d{4}$/.test(pin_nouveau)) return res.status(400).json({ error: 'PIN invalide (4 chiffres)' });
   try {
     const [rows] = await pool.query('SELECT pin_hash FROM auth WHERE cp_agent = ?', [cp]);
     if (!rows.length) return res.status(404).json({ error: 'Agent introuvable' });

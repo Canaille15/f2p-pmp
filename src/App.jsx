@@ -4915,7 +4915,7 @@ function ProfilPersoView({currentAgent}){
   if(!currentAgent)return(<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:12}}>🔄</div><div style={{fontSize:15,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div></div>);
   const soumettre=async()=>{
     setMsg(null);
-    if(!/^\d{5}$/.test(pinNouveau)){setMsg({type:"error",text:"Le nouveau PIN doit faire 5 chiffres"});return;}
+    if(!/^\d{4}$/.test(pinNouveau)){setMsg({type:"error",text:"Le nouveau PIN doit faire 5 chiffres"});return;}
     if(pinNouveau!==pinConfirme){setMsg({type:"error",text:"Les deux PIN ne correspondent pas"});return;}
     setBusy(true);
     try{
@@ -4942,13 +4942,13 @@ function ProfilPersoView({currentAgent}){
     <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
       <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>🔑 Changer mon PIN</div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <input type="password" inputMode="numeric" maxLength={5} placeholder="PIN actuel"
+        <input type="password" inputMode="numeric" maxLength={4} placeholder="PIN actuel"
           value={pinActuel} onChange={e=>setPinActuel(e.target.value.replace(/\D/g,""))}
           style={{padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:14}}/>
-        <input type="password" inputMode="numeric" maxLength={5} placeholder="Nouveau PIN (5 chiffres)"
+        <input type="password" inputMode="numeric" maxLength={4} placeholder="Nouveau PIN (4 chiffres)"
           value={pinNouveau} onChange={e=>setPinNouveau(e.target.value.replace(/\D/g,""))}
           style={{padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:14}}/>
-        <input type="password" inputMode="numeric" maxLength={5} placeholder="Confirmer le nouveau PIN"
+        <input type="password" inputMode="numeric" maxLength={4} placeholder="Confirmer le nouveau PIN"
           value={pinConfirme} onChange={e=>setPinConfirme(e.target.value.replace(/\D/g,""))}
           style={{padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:14}}/>
         {msg&&<div style={{padding:"8px 10px",borderRadius:8,fontSize:13,fontWeight:600,
@@ -6423,7 +6423,6 @@ export default function App(){
         agentCouleurs={agentCouleurs}
         setAgentCouleurs={setAgentCouleurs}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
-      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
     </div>
