@@ -813,6 +813,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           if(jsCode&&/^PIPAZJ$/.test(jsCode)) jsCode="PIPA2J"; // fix OCR : Z lu au lieu de 2
           if(jsCode&&/^PAACZX$/.test(jsCode)) jsCode="PAAC2X"; // fix OCR : Z lu au lieu de 2
           if(jsCode&&/^PAACZO$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : Z lu au lieu de 2
+          if(jsCode&&/^PAAC20$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : 0 chiffre lu au lieu de O lettre
           const candidats=agents.filter(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
           const ag=candidats.length<=1?candidats[0]:candidats.find(a=>a.prenom&&line.toUpperCase().includes(a.prenom.toUpperCase()))||candidats[0];
           if(!ag) return;
