@@ -782,7 +782,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
         // Fusionner les lignes : si une ligne ne contient pas de debut d'horaire (HH:MM en debut/proche du debut)
         // et ne commence pas par un jsCode connu, on la rattache a la ligne precedente (cas OCR qui scinde
         // le jsCode+debut d'horaire d'un cote et la fin d'horaire+nom de l'autre cote)
-        const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI)\b/;
+        const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM)\b/;
         const lines=[];
         const lineDates=[];
         rawLinesWithPos.forEach(o=>{
