@@ -747,6 +747,8 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           text=await ocrPage(b64,file.type||"image/jpeg");
         }
         console.log("TEXTE OCR:",text);
+        // Fix OCR : espace parasite a l'interieur d'un code JS (ex: "PIL CLX" -> "PILCLX")
+        text=text.replace(/\b(PI|PA)([A-Z]{2,4}) ([A-Z0-9]{1,3}[-OXJ%]?)\b/g,"$1$2$3");
         if(!text) throw new Error("Aucun texte extrait du document");
 
         const dateMatch=text.match(/DU\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/);
@@ -809,6 +811,8 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           if(jsCode&&/^PAACIO$/.test(jsCode)) jsCode="PAAC1O"; // fix OCR : I lu au lieu de 1
           if(jsCode&&/^PAACI-$/.test(jsCode)) jsCode="PAAC1-"; // fix OCR : I lu au lieu de 1
           if(jsCode&&/^PIPAZJ$/.test(jsCode)) jsCode="PIPA2J"; // fix OCR : Z lu au lieu de 2
+          if(jsCode&&/^PAACZX$/.test(jsCode)) jsCode="PAAC2X"; // fix OCR : Z lu au lieu de 2
+          if(jsCode&&/^PAACZO$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : Z lu au lieu de 2
           const candidats=agents.filter(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
           const ag=candidats.length<=1?candidats[0]:candidats.find(a=>a.prenom&&line.toUpperCase().includes(a.prenom.toUpperCase()))||candidats[0];
           if(!ag) return;
