@@ -269,7 +269,8 @@ function getWeekDates(offset=0){
   return Array.from({length:7},(_,i)=>{
     const day=new Date(d);
     day.setDate(d.getDate()+i);
-    return day.toISOString().slice(0,10);
+    const y=day.getFullYear(),m=String(day.getMonth()+1).padStart(2,"0"),dd=String(day.getDate()).padStart(2,"0");
+    return `${y}-${m}-${dd}`;
   });
 }
 
