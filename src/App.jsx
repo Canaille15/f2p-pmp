@@ -5898,7 +5898,10 @@ export default function App(){
   };
   // Ecoute l'expiration de session (declenchee par client.js sur un 401) et deconnecte avec message clair
   useEffect(()=>{
+    let alertDejaAffiche=false;
     const onUnauthorized=()=>{
+      if(alertDejaAffiche) return;
+      alertDejaAffiche=true;
       alert("Votre session a expire. Merci de vous reconnecter.");
       handleLogout();
     };
