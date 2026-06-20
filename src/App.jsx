@@ -730,7 +730,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           const texts=[];
           for(let pageNum=1;pageNum<=numPages;pageNum++){
             const page=await pdf.getPage(pageNum);
-            const scale=2.0; // haute résolution pour meilleur OCR
+            const scale=3.0; // haute résolution pour meilleur OCR
             const viewport=page.getViewport({scale});
             const canvas=document.createElement("canvas");
             canvas.width=viewport.width;
