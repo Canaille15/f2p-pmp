@@ -806,6 +806,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
           let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
           if(jsCode&&/PA[A-Z]+1[0]$/.test(jsCode)) jsCode=jsCode.slice(0,-1)+"O";
           if(jsCode&&/OR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres O
+          if(jsCode&&/XR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres X
           if(jsCode&&/PIADIX$/.test(jsCode)) jsCode="PIADJX"; // fix OCR : I lu au lieu de J
           if(jsCode&&/^PAACIX$/.test(jsCode)) jsCode="PAAC1X"; // fix OCR : I lu au lieu de 1
           if(jsCode&&/^PAACIO$/.test(jsCode)) jsCode="PAAC1O"; // fix OCR : I lu au lieu de 1
