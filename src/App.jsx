@@ -4906,6 +4906,64 @@ function EchangesView({agents,schedule,currentAgent,agentProfiles,setAgentProfil
 }
 
 // ─── IMPORT DÉROULÉ PRÉVISIONNEL ─────────────────────────────────────────────
+function ProfilPersoView({currentAgent}){
+  const [pinActuel,setPinActuel]=useState("");
+  const [pinNouveau,setPinNouveau]=useState("");
+  const [pinConfirme,setPinConfirme]=useState("");
+  const [msg,setMsg]=useState(null);
+  const [busy,setBusy]=useState(false);
+  if(!currentAgent)return(<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:12}}>🔄</div><div style={{fontSize:15,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div></div>);
+  const soumettre=async()=>{
+    setMsg(null);
+    if(!/^\d{5}$/.test(pinNouveau)){setMsg({type:"error",text:"Le nouveau PIN doit faire 5 chiffres"});return;}
+    if(pinNouveau!==pinConfirme){setMsg({type:"error",text:"Les deux PIN ne correspondent pas"});return;}
+    setBusy(true);
+    try{
+      await api.auth.changePin(pinActuel,pinNouveau);
+      setMsg({type:"success",text:"PIN modifié avec succès"});
+      setPinActuel("");setPinNouveau("");setPinConfirme("");
+    }catch(err){
+      setMsg({type:"error",text:err.message||"Erreur lors du changement de PIN"});
+    }
+    setBusy(false);
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:420,margin:"0 auto"}}>
+    <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <div style={{width:44,height:44,borderRadius:"50%",background:"#0C447C",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:16}}>
+          {currentAgent.prenom?.[0]}{currentAgent.nom?.[0]}
+        </div>
+        <div>
+          <div style={{fontWeight:700,fontSize:15}}>{currentAgent.prenom} {currentAgent.nom}</div>
+          <div style={{fontSize:12,color:"#64748b"}}>{currentAgent.grade} · CP {currentAgent.id}</div>
+        </div>
+      </div>
+    </div>
+    <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>🔑 Changer mon PIN</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <input type="password" inputMode="numeric" maxLength={5} placeholder="PIN actuel"
+          value={pinActuel} onChange={e=>setPinActuel(e.target.value.replace(/\D/g,""))}
+          style={{padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:14}}/>
+        <input type="password" inputMode="numeric" maxLength={5} placeholder="Nouveau PIN (5 chiffres)"
+          value={pinNouveau} onChange={e=>setPinNouveau(e.target.value.replace(/\D/g,""))}
+          style={{padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:14}}/>
+        <input type="password" inputMode="numeric" maxLength={5} placeholder="Confirmer le nouveau PIN"
+          value={pinConfirme} onChange={e=>setPinConfirme(e.target.value.replace(/\D/g,""))}
+          style={{padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:14}}/>
+        {msg&&<div style={{padding:"8px 10px",borderRadius:8,fontSize:13,fontWeight:600,
+          background:msg.type==="success"?"#d1fae5":"#fee2e2",
+          color:msg.type==="success"?"#065f46":"#991b1b"}}>{msg.text}</div>}
+        <button onClick={soumettre} disabled={busy||!pinActuel||!pinNouveau||!pinConfirme}
+          style={{padding:"11px 0",border:"none",borderRadius:10,fontWeight:700,fontSize:14,cursor:busy?"wait":"pointer",
+          background:(!pinActuel||!pinNouveau||!pinConfirme)?"#e2e8f0":"#0C447C",
+          color:(!pinActuel||!pinNouveau||!pinConfirme)?"#94a3b8":"#fff"}}>
+          {busy?"…":"Valider"}
+        </button>
+      </div>
+    </div>
+  </div>);
+}
 function ImportDeroulement({agent,onClose,onImport}){
   const fam=FAMILLES[agent?.famille||agent?.fam];
   const [year,setYear]=useState(new Date().getFullYear());
@@ -6194,6 +6252,7 @@ export default function App(){
     {k:"personal",l:"📊 Mon planning"},
     {k:"global",  l:"📋 CPS Officiel"},
     {k:"echanges",l:"🔄 Échanges"},
+    {k:"profil",  l:"👤 Mon profil"},
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
 
@@ -6364,6 +6423,8 @@ export default function App(){
         agentCouleurs={agentCouleurs}
         setAgentCouleurs={setAgentCouleurs}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
+      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent}/>}
+      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
     </div>
 

@@ -106,6 +106,16 @@ export const auth = {
       return null;
     }
   },
+
+  /**
+   * Changer son propre PIN (necessite de connaitre le PIN actuel)
+   */
+  async changePin(pinActuel, pinNouveau) {
+    return apiFetch('/auth/change-pin', {
+      method: 'POST',
+      body: JSON.stringify({ pin_actuel: pinActuel, pin_nouveau: pinNouveau }),
+    });
+  },
 };
 
 // ─── MODULE AGENTS ────────────────────────────────────────────────────────────
