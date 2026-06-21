@@ -691,8 +691,100 @@ function buildSections(schedule, dateKey, filterF, agents){
   return sections;
 }
 
+function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClose,onSaved}){
+  const [type,setType]=useState(null); // "echange" | "erreur_cps" | "non_tenu"
+  const [agentsChoisis,setAgentsChoisis]=useState([]);
+  const [motif,setMotif]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [search,setSearch]=useState("");
+
+  const toggleAgent=(ag)=>{
+    setAgentsChoisis(prev=>prev.find(a=>a.id===ag.id)?prev.filter(a=>a.id!==ag.id):[...prev,ag]);
+  };
+
+  const valider=async()=>{
+    setBusy(true);
+    try{
+      await api.cpsAleas.create({
+        js_code:jsCode,
+        date_jour:dateKey,
+        famille,
+        type,
+        agents_concernes: type==="non_tenu" ? [] : agentsChoisis.map(a=>a.id),
+        motif: motif||null,
+      });
+      onSaved&&onSaved();
+      onClose();
+    }catch(err){
+      alert("Erreur : "+(err.message||"impossible d'enregistrer"));
+    }
+    setBusy(false);
+  };
+
+  const agentsFiltres=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(search.toLowerCase()));
+
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:20,maxWidth:420,width:"100%",maxHeight:"85vh",overflowY:"auto"}}>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>Ajustement du poste</div>
+      <div style={{fontSize:12,color:"#64748b",marginBottom:14}}>{nomOfficiel} — {jsCode}</div>
+
+      {!type&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <button onClick={()=>setType("echange")} style={{padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:10,textAlign:"left",background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>
+          🔄 Échange / Combiné<div style={{fontSize:11,color:"#94a3b8",fontWeight:400,marginTop:2}}>Un ou plusieurs agents assurent ce poste</div>
+        </button>
+        <button onClick={()=>setType("erreur_cps")} style={{padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:10,textAlign:"left",background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>
+          ⚠️ Erreur CPS<div style={{fontSize:11,color:"#94a3b8",fontWeight:400,marginTop:2}}>Le document officiel comporte une erreur</div>
+        </button>
+        <button onClick={()=>{setType("non_tenu");}} style={{padding:"12px 14px",border:"1.5px solid #fdba74",borderRadius:10,textAlign:"left",background:"#fff7ed",cursor:"pointer",fontSize:13,fontWeight:600,color:"#c2410c"}}>
+          🚫 Poste non tenu<div style={{fontSize:11,color:"#c2410c",fontWeight:400,marginTop:2,opacity:.8}}>Personne n'assure ce poste</div>
+        </button>
+      </div>)}
+
+      {type&&type!=="non_tenu"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>{type==="echange"?"Agent(s) qui assure(nt) le poste":"Préciser l'erreur"}</div>
+        <input placeholder="Rechercher un agent…" value={search} onChange={e=>setSearch(e.target.value)}
+          style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13}}/>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:140,overflowY:"auto"}}>
+          {agentsFiltres.slice(0,30).map(a=>{
+            const selected=agentsChoisis.find(x=>x.id===a.id);
+            return(<button key={a.id} onClick={()=>toggleAgent(a)}
+              style={{padding:"5px 10px",borderRadius:8,border:`1.5px solid ${selected?"#0C447C":"#e2e8f0"}`,
+              background:selected?"#0C447C":"#fff",color:selected?"#fff":"#475569",fontSize:12,cursor:"pointer"}}>
+              {a.prenom} {a.nom}
+            </button>);
+          })}
+        </div>
+        <textarea placeholder="Motif (optionnel)" value={motif} onChange={e=>setMotif(e.target.value)}
+          style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
+        <div style={{display:"flex",gap:8,marginTop:4}}>
+          <button onClick={()=>setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Retour</button>
+          <button onClick={valider} disabled={busy||agentsChoisis.length===0}
+            style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
+            background:agentsChoisis.length===0?"#e2e8f0":"#0C447C",color:agentsChoisis.length===0?"#94a3b8":"#fff"}}>
+            {busy?"…":"Valider"}
+          </button>
+        </div>
+      </div>)}
+
+      {type==="non_tenu"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <textarea placeholder="Motif (optionnel)" value={motif} onChange={e=>setMotif(e.target.value)}
+          style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
+        <div style={{display:"flex",gap:8,marginTop:4}}>
+          <button onClick={()=>setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Retour</button>
+          <button onClick={valider} disabled={busy}
+            style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,background:"#ea580c",color:"#fff"}}>
+            {busy?"…":"Confirmer poste non tenu"}
+          </button>
+        </div>
+      </div>)}
+
+      <button onClick={onClose} style={{marginTop:14,width:"100%",padding:"8px 0",border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:12}}>Annuler</button>
+    </div>
+  </div>);
+}
 function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin}){
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
+  const [aleaTarget,setAleaTarget]=useState(null);
   const [filterF,setFilterF]=useState("ALL");
   const [search,setSearch]=useState("");
   const [uploading,setUploading]=useState(false);
@@ -979,7 +1071,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
                         <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
                         <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
                       </div>
-                      <button onClick={()=>alert("Test bouton ajustement")} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                      <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
                     </div>);
                     if(row.maxSlots<99)return(<div key={si} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.5)",border:"1.5px dashed rgba(0,0,0,.08)",borderRadius:9,padding:"4px 9px",opacity:.4}}>
                       <div style={{width:22,height:22,borderRadius:"50%",background:"#e2e8f0"}}/>
@@ -1013,6 +1105,7 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
         ))}
       </div>
     </details>
+    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)}/>}
   </div>);
 }
 
