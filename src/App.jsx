@@ -6430,7 +6430,7 @@ export default function App(){
         agentCouleurs={agentCouleurs}
         setAgentCouleurs={setAgentCouleurs}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
-      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent}/>}
+      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
     </div>
 
