@@ -160,8 +160,8 @@ const POSTES_PRCI_3x8 = [
 // Postes structurellement non tenus certains jours (regle metier fixe, distincte des aleas signales)
 const POSTES_NON_TENU_PAR_JOUR = {
   5: ["PAACXX"], // vendredi (index 4 = Ve dans dayIdx 0=Lu..6=Di, mais ici on utilise le jour ISO: 5=vendredi)
-  6: ["PIVGD-","PIPA1J","PIPA2J","PIPA3J","PIVGDO","PIADJX","PAPAUJ","PAASMJ","PAAC2O","PAAC2X","PAACXX"], // samedi
-  0: ["PIVGD-","PIPA1J","PIPA2J","PIPA3J","PIVGDO","PAAC2-","PAPAUJ","PAASMJ","PAAC2X","PAACXX"], // dimanche (0=dimanche en getDay())
+  6: ["PIPA1J","PIPA2J","PIPA3J","PIVGDO","PIADJX","PAPAUJ","PAASMJ","PAAC2O","PAAC2X","PAACXX"], // samedi (PIVGD- existe le samedi avec horaire different)
+  0: ["PIPA1J","PIPA2J","PIPA3J","PAAC2-","PAPAUJ","PAASMJ","PAAC2X","PAACXX"], // dimanche (PIVGD- et PIVGDO existent le dimanche avec horaires differents)
 };
 function estNonTenuWeekend(jsCode, dateKey){
   const jourSemaine=new Date(dateKey+"T12:00:00").getDay(); // 0=dimanche,5=vendredi,6=samedi
