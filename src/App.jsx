@@ -782,6 +782,12 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
     </div>
   </div>);
 }
+function annulerAlea(aleaId, setCpsAleas){
+  if(!window.confirm("Voulez-vous supprimer cet ajustement et revenir au planning officiel ?")) return;
+  api.cpsAleas.remove(aleaId).then(()=>{
+    setCpsAleas(prev=>prev.filter(a=>a.id!==aleaId));
+  }).catch(err=>alert("Erreur : "+(err.message||"impossible de supprimer")));
+}
 function findAlea(cpsAleas, jsCode, dateKey, famille){
   if(!cpsAleas||!cpsAleas.length) return null;
   return cpsAleas.find(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===famille) || null;
@@ -1073,6 +1079,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
                       <span style={{fontSize:16}}>⚠️</span>
                       <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
+                      <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>
                     </div>);
                     if(ag&&alea&&(alea.type==="echange"||alea.type==="erreur_cps")){
                       const nomsRemplacants=(alea.agents_concernes||[]).map(cpId=>{
@@ -1085,7 +1092,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                           <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
                         </div>
                         <div style={{fontSize:11,fontWeight:700,color:"#854d0e",paddingLeft:24}}>{nomsRemplacants||"?"}</div>
-                        <div style={{fontSize:9,color:"#a16207",paddingLeft:24}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✕</button></div>
                       </div>);
                     }
                     if(ag)return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?"#fafdf0":"rgba(255,255,255,.8)",border:`1.5px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px"}}>
