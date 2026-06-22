@@ -1103,11 +1103,32 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       </div>
                       <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
                     </div>);
-                    if(row.maxSlots<99)return(<div key={si} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.5)",border:"1.5px dashed rgba(0,0,0,.08)",borderRadius:9,padding:"4px 9px"}}>
+                    if(row.maxSlots<99){
+                      const aleaVacant=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
+                      if(aleaVacant&&aleaVacant.type==="non_tenu")return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
+                        <span style={{fontSize:16}}>⚠️</span>
+                        <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
+                        <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>
+                      </div>);
+                      if(aleaVacant&&(aleaVacant.type==="echange"||aleaVacant.type==="erreur_cps")){
+                        const nomsRemplacants=(aleaVacant.agents_concernes||[]).map(cpId=>{
+                          const a=agents.find(x=>x.id===cpId);
+                          return a?`${a.prenom} ${a.nom}`:cpId;
+                        }).join(", ");
+                        return(<div key={si} style={{display:"flex",flexDirection:"column",gap:3,background:"#fefce8",border:"1.5px solid #fde047",borderRadius:9,padding:"5px 9px"}}>
+                          <div style={{fontSize:10,fontWeight:600,color:"#94a3b8",fontStyle:"italic"}}>Vacant (officiel)</div>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#854d0e"}}>{nomsRemplacants||"?"}</div>
+                            <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✕</button>
+                          </div>
+                        </div>);
+                      }
+                      return(<div key={si} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.5)",border:"1.5px dashed rgba(0,0,0,.08)",borderRadius:9,padding:"4px 9px"}}>
                       <div style={{width:22,height:22,borderRadius:"50%",background:"#e2e8f0"}}/>
                       <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic",opacity:.4}}>Vacant</div>
                       <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant"})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
                     </div>);
+                    }
                     return null;
                   })
               }
