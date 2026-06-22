@@ -1128,7 +1128,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         ))}
       </div>
     </details>
-    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)}/>}
+    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
   </div>);
 }
 
