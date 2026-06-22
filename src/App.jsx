@@ -782,7 +782,11 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
     </div>
   </div>);
 }
-function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin}){
+function findAlea(cpsAleas, jsCode, dateKey, famille){
+  if(!cpsAleas||!cpsAleas.length) return null;
+  return cpsAleas.find(a=>a.js_code===jsCode && a.date_jour===dateKey && a.famille===famille) || null;
+}
+function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin}){
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
   const [aleaTarget,setAleaTarget]=useState(null);
   const [filterF,setFilterF]=useState("ALL");
@@ -1065,6 +1069,25 @@ function GlobalView({agents,schedule,setSchedule,weekOffset,setWeekOffset,onImpo
                 : Array.from({length:row.maxSlots<99?row.maxSlots:Math.max(row.agents.length,1)},(_,si)=>{
                     const ag=row.agents[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
                     const isForm=en?.equipe==="JF";const isMe=ag&&currentAgent?.id===ag.id;
+                    const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
+                    if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
+                      <span style={{fontSize:16}}>⚠️</span>
+                      <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
+                    </div>);
+                    if(ag&&alea&&(alea.type==="echange"||alea.type==="erreur_cps")){
+                      const nomsRemplacants=(alea.agents_concernes||[]).map(cpId=>{
+                        const a=agents.find(x=>x.id===cpId);
+                        return a?`${a.prenom} ${a.nom}`:cpId;
+                      }).join(", ");
+                      return(<div key={si} style={{display:"flex",flexDirection:"column",gap:3,background:"#fefce8",border:"1.5px solid #fde047",borderRadius:9,padding:"5px 9px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <Av initials={ag.initials} size={18} famille={ag.famille}/>
+                          <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
+                        </div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#854d0e",paddingLeft:24}}>{nomsRemplacants||"?"}</div>
+                        <div style={{fontSize:9,color:"#a16207",paddingLeft:24}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div>
+                      </div>);
+                    }
                     if(ag)return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?"#fafdf0":"rgba(255,255,255,.8)",border:`1.5px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px"}}>
                       <Av initials={ag.initials} size={22} famille={ag.famille}/>
                       <div>
@@ -5996,6 +6019,7 @@ export default function App(){
   const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
   const [schedule,setSchedule]=usePersist("schedule",{});
   const [cpsSchedule,setCpsSchedule]=usePersist("cpsSchedule",{});
+  const [cpsAleas,setCpsAleas]=usePersist("cpsAleas",[]);
   const [agentCouleurs, setAgentCouleurs] = React.useState({});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
   const [importDPTarget,setImportDPTarget]=useState(null);
@@ -6168,6 +6192,13 @@ export default function App(){
       if(!entries||Object.keys(entries).length===0) return;
       setCpsSchedule(prev=>({...prev,...entries}));
     }).catch(e=>console.error("Erreur chargement CPS:",e));
+  },[currentUser?.agent?.id]); // eslint-disable-line
+  // Charger les aleas CPS (echanges, erreurs, postes non tenus)
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    api.cpsAleas.getAll().then(rows=>{
+      setCpsAleas(rows||[]);
+    }).catch(e=>console.error("Erreur chargement aleas CPS:",e));
   },[currentUser?.agent?.id]); // eslint-disable-line
 
 
@@ -6502,7 +6533,7 @@ export default function App(){
 
     {/* CONTENU */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
-      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset}
+      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset}
         onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
         onAddAgent={()=>setAddAgentOpen(true)}
         onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
