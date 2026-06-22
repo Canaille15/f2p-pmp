@@ -784,7 +784,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
 }
 function findAlea(cpsAleas, jsCode, dateKey, famille){
   if(!cpsAleas||!cpsAleas.length) return null;
-  return cpsAleas.find(a=>a.js_code===jsCode && a.date_jour===dateKey && a.famille===famille) || null;
+  return cpsAleas.find(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===famille) || null;
 }
 function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin}){
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
