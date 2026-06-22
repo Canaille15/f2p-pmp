@@ -270,6 +270,17 @@ result[`${row.agent_id || agentId}-${date}`] = {
   },
   deleteEntry: (agentId, date) =>
     apiFetch(`/planning/${agentId}/${date}`, { method: 'DELETE' }),
+  /**
+   * Charger le planning PUBLIC de tous les agents sur une periode
+   * (pour le Planning Previsionnel Partage)
+   */
+  async getAllPublic(from, to) {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const rows = await apiFetch(`/planning/public?${params.toString()}`);
+    return rows || [];
+  }
 };
 
 // ─── MODULE PROFIL ────────────────────────────────────────────────────────────

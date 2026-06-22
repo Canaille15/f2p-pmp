@@ -65,4 +65,23 @@ async function deleteJour(req, res) {
   } catch (e) { res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
-module.exports = { getPlanning, setJour, deleteJour };
+// GET /api/planning/public?from=&to=  -> planning PUBLIC de TOUS les agents (pour planning previsionnel partage)
+async function getAllPublic(req, res) {
+  const { from, to } = req.query;
+  try {
+    const [rows] = await pool.query(
+      `SELECT pj.cp_agent, pj.date_jour, pj.source,
+              pp.ordre, pp.code_equipe, pp.code_poste,
+              pp.heure_debut, pp.heure_fin, pp.note
+       FROM planning_jour pj
+       JOIN planning_periode pp ON pp.planning_jour_id = pj.id
+       WHERE pp.prive = 0
+         AND (? IS NULL OR pj.date_jour >= ?)
+         AND (? IS NULL OR pj.date_jour <= ?)
+       ORDER BY pj.date_jour, pj.cp_agent, pp.ordre`,
+      [from||null, from||null, to||null, to||null]);
+    res.json(rows);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
+module.exports = { getPlanning, getAllPublic, setJour, deleteJour };
