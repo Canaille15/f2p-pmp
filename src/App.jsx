@@ -157,6 +157,17 @@ const POSTES_PRCI_3x8 = [
   { code:"VGD", label:"AC VGD",  M:"PIVGD-", AM:"PIVGDO", N:null     },
   { code:"LC",  label:"AC LC",   M:"PILCL-", AM:"PILCLO", N:"PILCLX" },
 ];
+// Postes structurellement non tenus certains jours (regle metier fixe, distincte des aleas signales)
+const POSTES_NON_TENU_PAR_JOUR = {
+  5: ["PAACXX"], // vendredi (index 4 = Ve dans dayIdx 0=Lu..6=Di, mais ici on utilise le jour ISO: 5=vendredi)
+  6: ["PIVGD-","PIPA1J","PIPA2J","PIPA3J","PIVGDO","PIADJX","PAPAUJ","PAASMJ","PAAC2O","PAAC2X","PAACXX"], // samedi
+  0: ["PIVGD-","PIPA1J","PIPA2J","PIPA3J","PIVGDO","PAAC2-","PAPAUJ","PAASMJ","PAAC2X","PAACXX"], // dimanche (0=dimanche en getDay())
+};
+function estNonTenuWeekend(jsCode, dateKey){
+  const jourSemaine=new Date(dateKey+"T12:00:00").getDay(); // 0=dimanche,5=vendredi,6=samedi
+  const liste=POSTES_NON_TENU_PAR_JOUR[jourSemaine];
+  return liste ? liste.includes(jsCode) : false;
+}
 const POSTES_PAR_3x8 = [
   { code:"AC1",  label:"AC PAR",        M:"PAAC1-", AM:"PAAC1O", N:"PAAC1X" },
   { code:"AC2",  label:"Aide AC PAR",   M:"PAAC2-", AM:"PAAC2O", N:"PAAC2X" },
@@ -1123,6 +1134,11 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                           </div>
                         </div>);
                       }
+                      if(estNonTenuWeekend(row.jsCode,dateKey))return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#f1f5f9",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
+                        <div style={{width:22,height:22,borderRadius:"50%",background:"#cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11}}>📅</div>
+                        <div style={{fontSize:10,color:"#475569",fontWeight:600}}>Non tenu (week-end)</div>
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant"})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                      </div>);
                       return(<div key={si} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.5)",border:"1.5px dashed rgba(0,0,0,.08)",borderRadius:9,padding:"4px 9px"}}>
                       <div style={{width:22,height:22,borderRadius:"50%",background:"#e2e8f0"}}/>
                       <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic",opacity:.4}}>Vacant</div>
