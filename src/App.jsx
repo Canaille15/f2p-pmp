@@ -6065,6 +6065,7 @@ export default function App(){
   const [schedule,setSchedule]=usePersist("schedule",{});
   const [cpsSchedule,setCpsSchedule]=usePersist("cpsSchedule",{});
   const [cpsAleas,setCpsAleas]=usePersist("cpsAleas",[]);
+  const [previsionnelSchedule,setPrevisionnelSchedule]=usePersist("previsionnelSchedule",{});
   const [agentCouleurs, setAgentCouleurs] = React.useState({});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
   const [importDPTarget,setImportDPTarget]=useState(null);
@@ -6244,6 +6245,14 @@ export default function App(){
     api.cpsAleas.getAll().then(rows=>{
       setCpsAleas(rows||[]);
     }).catch(e=>console.error("Erreur chargement aleas CPS:",e));
+  },[currentUser?.agent?.id]); // eslint-disable-line
+  // Charger le planning previsionnel partage (planning perso public de tous les agents)
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    api.planning.getAllPublic().then(entries=>{
+      if(!entries||Object.keys(entries).length===0) return;
+      setPrevisionnelSchedule(prev=>({...prev,...entries}));
+    }).catch(e=>console.error("Erreur chargement planning previsionnel:",e));
   },[currentUser?.agent?.id]); // eslint-disable-line
 
 
@@ -6429,6 +6438,7 @@ export default function App(){
     {k:"global",  l:"📋 CPS Officiel"},
     {k:"echanges",l:"🔄 Échanges"},
     {k:"profil",  l:"👤 Mon profil"},
+    {k:"previsionnel", l:"\u{1F4C5} Planning Prévisionnel"},
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
 
@@ -6600,6 +6610,7 @@ export default function App(){
         setAgentCouleurs={setAgentCouleurs}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent}/>}
+      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
     </div>
 

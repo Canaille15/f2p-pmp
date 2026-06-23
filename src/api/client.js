@@ -279,7 +279,33 @@ result[`${row.agent_id || agentId}-${date}`] = {
     if (from) params.append('from', from);
     if (to) params.append('to', to);
     const rows = await apiFetch(`/planning/public?${params.toString()}`);
-    return rows || [];
+    if (!rows) return {};
+    // Grouper par agent+date (plusieurs periodes par jour)
+    const byKey = {};
+    rows.forEach((row) => {
+      const date = row.date_jour ? row.date_jour.split('T')[0] : row.date_jour;
+      const key = `${row.cp_agent}|${date}`;
+      if (!byKey[key]) byKey[key] = [];
+      byKey[key].push(row);
+    });
+    const result = {};
+    Object.entries(byKey).forEach(([key, periodes]) => {
+      const [agentId, date] = key.split('|');
+      const p1 = periodes.find(p => p.note !== 'debut_nuit') || periodes[0];
+      const p2 = periodes.find(p => p.note === 'debut_nuit');
+      const horaires = p1.heure_debut ? (String(p1.heure_debut).slice(0,5).replace(':','h')+'–'+(p1.heure_fin||'').slice(0,5).replace(':','h')) : null;
+      const isFinNuit = p1.note === 'fin_nuit';
+      result[`${agentId}-${date}`] = {
+        equipe:   isFinNuit && !p2 ? null : (p1.code_equipe || null),
+        equipe2:  p2 ? 'N' : null,
+        jsCode:   isFinNuit && !p2 ? null : (p1.code_poste || null),
+        jsCode2:  p2 ? (p2.code_poste || null) : null,
+        horaires: isFinNuit ? null : horaires,
+        prive:    false,
+        finNuit:  isFinNuit,
+      };
+    });
+    return result;
   }
 };
 
