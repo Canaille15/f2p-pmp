@@ -145,6 +145,11 @@ export const agents = {
    */
   delete: (id) =>
     apiFetch(`/agents/${id}`, { method: 'DELETE' }),
+  /**
+   * Activer/desactiver le partage du planning perso vers le Planning Previsionnel
+   */
+  setPartagePrevisionnel: (cp, actif) =>
+    apiFetch(`/agents/${cp}`, { method: 'PATCH', body: JSON.stringify({ partage_previsionnel: actif }) }),
 };
 
 // ─── MODULE PLANNING ─────────────────────────────────────────────────────────

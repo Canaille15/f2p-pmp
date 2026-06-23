@@ -5080,6 +5080,9 @@ function ProfilPersoView({currentAgent}){
   const [pinConfirme,setPinConfirme]=useState("");
   const [msg,setMsg]=useState(null);
   const [busy,setBusy]=useState(false);
+  const [partageActif,setPartageActif]=useState(!!currentAgent?.partage_previsionnel);
+  const [partageBusy,setPartageBusy]=useState(false);
+  const [partageMsg,setPartageMsg]=useState(null);
   if(!currentAgent)return(<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:12}}>🔄</div><div style={{fontSize:15,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div></div>);
   const soumettre=async()=>{
     setMsg(null);
@@ -5094,6 +5097,19 @@ function ProfilPersoView({currentAgent}){
       setMsg({type:"error",text:err.message||"Erreur lors du changement de PIN"});
     }
     setBusy(false);
+  };
+  const togglePartage=async()=>{
+    setPartageMsg(null);
+    setPartageBusy(true);
+    const nouvelEtat=!partageActif;
+    try{
+      await api.agents.setPartagePrevisionnel(currentAgent.id,nouvelEtat?1:0);
+      setPartageActif(nouvelEtat);
+      setPartageMsg({type:"success",text:nouvelEtat?"Partage active":"Partage desactive"});
+    }catch(err){
+      setPartageMsg({type:"error",text:err.message||"Erreur lors de la mise a jour"});
+    }
+    setPartageBusy(false);
   };
   return(<div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:420,margin:"0 auto"}}>
     <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
@@ -5129,6 +5145,22 @@ function ProfilPersoView({currentAgent}){
           {busy?"…":"Valider"}
         </button>
       </div>
+    </div>
+  <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>Planning Previsionnel</div>
+      <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>Partager mon planning personnel public (M/AM/N/J/JF/FOR/DISPO) avec mes collegues dans la vue Planning Previsionnel.</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#334155"}}>Partager mon planning</div>
+        <button onClick={togglePartage} disabled={partageBusy}
+          style={{width:48,height:28,borderRadius:14,border:"none",cursor:partageBusy?"wait":"pointer",
+          background:partageActif?"#0C447C":"#e2e8f0",position:"relative",transition:"background .15s"}}>
+          <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",position:"absolute",top:3,
+            left:partageActif?23:3,transition:"left .15s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+        </button>
+      </div>
+      {partageMsg&&<div style={{marginTop:10,padding:"8px 10px",borderRadius:8,fontSize:13,fontWeight:600,
+        background:partageMsg.type==="success"?"#d1fae5":"#fee2e2",
+        color:partageMsg.type==="success"?"#065f46":"#991b1b"}}>{partageMsg.text}</div>}
     </div>
   </div>);
 }
