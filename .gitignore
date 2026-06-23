@@ -12,3 +12,14 @@ add_*.js
 cleanup_*.js
 *.zip
 api/dir
+dist/
+fix_*.js
+add_*.js
+connect_*.js
+transform_*.js
+insert_*.js
+remove_*.js
+extract_*.js
+check_*.js
+temp_*.txt
+*.note
