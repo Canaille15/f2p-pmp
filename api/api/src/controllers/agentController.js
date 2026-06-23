@@ -6,7 +6,7 @@ const bcrypt = require('bcrypt');
 async function getAll(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales,
+      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel,
               pa.familles_hab AS famille,
               au.is_admin,
               au.pin_hash IS NOT NULL AS has_pin
@@ -45,10 +45,11 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, grade, nom, prenom, poste } = req.body;
+  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
+  if (partage_previsionnel !== undefined) { fields.push('partage_previsionnel = ?'); values.push(partage_previsionnel ? 1 : 0); }
   if (req.agent.is_admin) {
     if (grade  !== undefined) { fields.push('grade = ?');  values.push(grade); }
     if (nom    !== undefined) { fields.push('nom = ?');    values.push(nom); }

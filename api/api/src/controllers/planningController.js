@@ -75,7 +75,9 @@ async function getAllPublic(req, res) {
               pp.heure_debut, pp.heure_fin, pp.note
        FROM planning_jour pj
        JOIN planning_periode pp ON pp.planning_jour_id = pj.id
+       JOIN agent a ON a.cp = pj.cp_agent
        WHERE pp.prive = 0
+         AND a.partage_previsionnel = 1
          AND (? IS NULL OR pj.date_jour >= ?)
          AND (? IS NULL OR pj.date_jour <= ?)
        ORDER BY pj.date_jour, pj.cp_agent, pp.ordre`,
