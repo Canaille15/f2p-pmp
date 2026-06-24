@@ -6468,10 +6468,10 @@ export default function App(){
 
   const VIEWS=[
     {k:"personal",l:"📊 Mon planning"},
+    {k:"previsionnel", l:"\u{1F4C5} Planning Prévisionnel"},
     {k:"global",  l:"📋 CPS Officiel"},
     {k:"echanges",l:"🔄 Échanges"},
     {k:"profil",  l:"👤 Mon profil"},
-    {k:"previsionnel", l:"\u{1F4C5} Planning Prévisionnel"},
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
 
