@@ -6283,8 +6283,8 @@ export default function App(){
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     api.planning.getAllPublic().then(entries=>{
-      if(!entries||Object.keys(entries).length===0) return;
-      setPrevisionnelSchedule(prev=>({...prev,...entries}));
+      if(!entries) return;
+      setPrevisionnelSchedule(entries);
     }).catch(e=>console.error("Erreur chargement planning previsionnel:",e));
   },[currentUser?.agent?.id]); // eslint-disable-line
 
@@ -6642,7 +6642,7 @@ export default function App(){
         agentCouleurs={agentCouleurs}
         setAgentCouleurs={setAgentCouleurs}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
-      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);}}/>}
+      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
     </div>
