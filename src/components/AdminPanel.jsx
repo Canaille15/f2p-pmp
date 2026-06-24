@@ -9,7 +9,7 @@ import api from "../api/client";
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 
-const GRADES = ["CO5","CP4NIV1","CP4NIV2","CP5NIV1","CP5NIV2","CP5NIV3","CP6NIV1","CP6NIV2","CP7NIV1","CO6"];
+const GRADES = ["CO4","CO5","CP4NIV1","CP4NIV2","CP5NIV1","CP5NIV2","CP5NIV3","CP6NIV1","CP6NIV2","CP7NIV1","CO6"];
 const FAMILLES = ["PRCI","PAR"];
 
 // ─── COMPOSANT PRINCIPAL ──────────────────────────────────────────────────────
