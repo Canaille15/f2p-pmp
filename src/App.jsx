@@ -596,7 +596,7 @@ const PERIOD_COLORS = {
 };
 
 // ─── VUE GLOBALE ─────────────────────────────────────────────────────────────
-function buildSections(schedule, dateKey, filterF, agents){
+function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
   const sections=[];
   const periodes=[
     {id:"M",  label:"🌅 Matinée",  jsKey:"M",  equipe:"M" },
@@ -616,7 +616,7 @@ function buildSections(schedule, dateKey, filterF, agents){
         const dowDk=new Date(dateKey).getDay(); // 0=dim, 6=sam
         const isLneFusion=(p.id==="N")||(p.id==="AM"&&dowDk===6)||(p.id==="M"&&dowDk===0);
         const lneLabel=(isLneFusion&&poste.code==="LNE")?"AC LNE/VGD":poste.label;
-        rows.push({poste:{...poste,label:`${jsCode} · ${lneLabel}`},jsCode,agents:ags,famille:"PRCI",isJournee:false,maxSlots:1});
+        rows.push({poste:{...poste,label:`${jsCode} · ${lneLabel}`},jsCode,agents:ags,famille:"PRCI",isJournee:false,maxSlots:isPrevisionnel?Math.max(ags.length,1):1});
       });
     }
 
@@ -633,7 +633,7 @@ function buildSections(schedule, dateKey, filterF, agents){
       POSTES_PAR_3x8.forEach(poste=>{
         const jsCode=poste[p.jsKey];if(!jsCode)return;
         const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===jsCode||en.poste===poste.label)&&!EQ[en.equipe]?.prive;});
-        rows.push({poste:{...poste,label:`${jsCode} · ${poste.label}`},jsCode,agents:ags,famille:"PAR",isJournee:false,maxSlots:1});
+        rows.push({poste:{...poste,label:`${jsCode} · ${poste.label}`},jsCode,agents:ags,famille:"PAR",isJournee:false,maxSlots:isPrevisionnel?Math.max(ags.length,1):1});
       });
     }
 
@@ -803,16 +803,95 @@ function findAlea(cpsAleas, jsCode, dateKey, famille){
   if(!cpsAleas||!cpsAleas.length) return null;
   return cpsAleas.find(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===famille) || null;
 }
-function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin,isPrevisionnel}){
+function PrevisionnelSignalementPopup({agents,agentTitulaireId,dateKey,nomTitulaire,currentAgent,onClose,onSaved}){
+  const [agentsChoisis,setAgentsChoisis]=useState([]);
+  const [motif,setMotif]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [search,setSearch]=useState("");
+
+  const toggleAgent=(ag)=>{
+    setAgentsChoisis(prev=>{
+      if(prev.find(a=>a.id===ag.id)) return prev.filter(a=>a.id!==ag.id);
+      if(prev.length>=4) return prev;
+      return [...prev,ag];
+    });
+  };
+
+  const valider=async()=>{
+    setBusy(true);
+    try{
+      await api.previsionnelSignalements.create({
+        agent_titulaire_cp: agentTitulaireId,
+        date_jour: dateKey,
+        agents_remplacants: agentsChoisis.map(a=>({cp:a.id,nom:a.nom,prenom:a.prenom})),
+        motif: motif||null,
+      });
+      onSaved&&onSaved();
+      onClose();
+    }catch(err){
+      alert("Erreur : "+(err.message||"impossible d'enregistrer"));
+    }
+    setBusy(false);
+  };
+
+  const agentsFiltres=agents.filter(a=>a.id!==agentTitulaireId&&`${a.prenom} ${a.nom}`.toLowerCase().includes(search.toLowerCase()));
+
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:20,maxWidth:420,width:"100%",maxHeight:"85vh",overflowY:"auto"}}>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:4,color:"#6d28d9"}}>📅 Signaler un changement</div>
+      <div style={{fontSize:12,color:"#64748b",marginBottom:14}}>{nomTitulaire} — {dateKey}</div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>Qui assure reellement ce poste ? (max 4)</div>
+        <input placeholder="Rechercher un agent…" value={search} onChange={e=>setSearch(e.target.value)}
+          style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13}}/>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:140,overflowY:"auto"}}>
+          {agentsFiltres.slice(0,30).map(a=>{
+            const selected=agentsChoisis.find(x=>x.id===a.id);
+            const disabled=!selected&&agentsChoisis.length>=4;
+            return(<button key={a.id} onClick={()=>!disabled&&toggleAgent(a)} disabled={disabled}
+              style={{padding:"5px 10px",borderRadius:8,border:`1.5px solid ${selected?"#7c3aed":"#e2e8f0"}`,
+              background:selected?"#7c3aed":disabled?"#f8fafc":"#fff",color:selected?"#fff":disabled?"#cbd5e1":"#475569",fontSize:12,cursor:disabled?"not-allowed":"pointer"}}>
+              {a.prenom} {a.nom}
+            </button>);
+          })}
+        </div>
+        {agentsChoisis.length>=4&&<div style={{fontSize:11,color:"#a16207"}}>Maximum 4 agents atteint</div>}
+        <textarea placeholder="Motif (optionnel)" value={motif} onChange={e=>setMotif(e.target.value)}
+          style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
+        <div style={{display:"flex",gap:8,marginTop:4}}>
+          <button onClick={onClose} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Annuler</button>
+          <button onClick={valider} disabled={busy||agentsChoisis.length===0}
+            style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
+            background:agentsChoisis.length===0?"#e2e8f0":"#7c3aed",color:agentsChoisis.length===0?"#94a3b8":"#fff"}}>
+            {busy?"…":"Valider"}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>);
+}
+function annulerPrevisionnelSignalement(id, setPrevisionnelSignalements){
+  if(!window.confirm("Voulez-vous annuler ce signalement ?")) return;
+  api.previsionnelSignalements.remove(id).then(()=>{
+    setPrevisionnelSignalements(prev=>prev.filter(s=>s.id!==id));
+  }).catch(err=>alert("Erreur : "+(err.message||"impossible d'annuler")));
+}
+function findPrevisionnelSignalement(previsionnelSignalements, agentId, dateKey){
+  if(!previsionnelSignalements||!previsionnelSignalements.length) return null;
+  return previsionnelSignalements.find(s=>s.agent_titulaire_cp===agentId && String(s.date_jour).slice(0,10)===dateKey) || null;
+}
+function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin,isPrevisionnel,previsionnelSignalements,setPrevisionnelSignalements}){
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
   const [aleaTarget,setAleaTarget]=useState(null);
+  const [previsionnelTarget,setPrevisionnelTarget]=useState(null);
   const [filterF,setFilterF]=useState("ALL");
   const [search,setSearch]=useState("");
   const [uploading,setUploading]=useState(false);
   const [cpsResult,setCpsResult]=useState(null);
   const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset]);
   const dateKey=weekDates[dayIdx];
-  const sections=useMemo(()=>buildSections(schedule,dateKey,filterF,agents),[schedule,dateKey,filterF,agents]);
+  const sections=useMemo(()=>buildSections(schedule,dateKey,filterF,agents,isPrevisionnel),[schedule,dateKey,filterF,agents,isPrevisionnel]);
 
     const handleCpsImport=async(e)=>{
     const file=e.target.files[0];if(!file)return;
@@ -1020,6 +1099,11 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     reader.readAsDataURL(file);
   };
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {isPrevisionnel&&<div style={{display:"flex",alignItems:"center",gap:8,background:"#EEEDFE",border:"1px solid #CECBF6",borderRadius:10,padding:"9px 14px"}}>
+      <span style={{fontSize:16}}>📅</span>
+      <span style={{fontSize:13,fontWeight:700,color:"#3C3489"}}>Planning prévisionnel partagé</span>
+      <span style={{fontSize:11,color:"#534AB7"}}>— basé sur les déclarations personnelles des agents</span>
+    </div>}
     <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
       <input placeholder="🔍 Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}
         style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:13,flex:1,minWidth:140,outline:"none"}}/>
@@ -1032,7 +1116,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       {cpsResult&&<span style={{fontSize:10,background:"#f0fdf4",color:"#16a34a",borderRadius:8,padding:"4px 10px",fontWeight:700}}>✅ {cpsResult.nb} agents · {cpsResult.date}</span>}
       <div style={{display:"flex",gap:3,background:"#f1f5f9",borderRadius:10,padding:3}}>
         {[["ALL","Tous"],["PRCI","PRCI"],["PAR","PAR"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setFilterF(k)} style={{border:"none",borderRadius:8,padding:"6px 13px",cursor:"pointer",background:filterF===k?"#fff":"transparent",color:filterF===k?"#1e293b":"#94a3b8",fontSize:12,fontWeight:filterF===k?700:400}}>{l}</button>
+          <button key={k} onClick={()=>setFilterF(k)} style={{border:"none",borderRadius:8,padding:"6px 13px",cursor:"pointer",background:filterF===k?"#0C447C":"transparent",color:filterF===k?"#fff":"#475569",fontSize:12,fontWeight:filterF===k?700:600}}>{l}</button>
         ))}
       </div>
       
@@ -1065,13 +1149,14 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           const fam=row.famille?FAMILLES[row.famille]:null;
           const pc=section.pc;
           const pJ=POSTES_JOURNEE.find(x=>x.jsCode===row.jsCode);
-          return(<div key={`${row.jsCode}-${ri}`} style={{display:"flex",alignItems:"stretch",borderBottom:ri<section.rows.length-1?`1px solid ${pc.border}`:"none",background:ri%2===0?pc.bg:"#fff"}}>
+          return(<div key={`${row.jsCode}-${ri}`} style={{display:"flex",alignItems:"stretch",borderBottom:ri<section.rows.length-1?`1px solid ${pc.border}`:"none",background:ri%2===0?pc.bg:"#fff",borderLeft:`4px solid ${fam?.accent||"transparent"}`}}>
             <div style={{width:210,flexShrink:0,padding:"9px 14px",borderRight:`1px solid ${pc.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                <span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,color:fam?.color||"#7c3aed",background:(fam?.color||"#7c3aed")+"18",borderRadius:5,padding:"1px 6px"}}>{row.jsCode}</span>
-                {fam&&<span style={{fontSize:9,background:fam.light,color:fam.color,borderRadius:10,padding:"1px 6px",fontWeight:700}}>{row.famille}</span>}
+                <span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,color:"#fff",background:fam?.color||"#7c3aed",borderRadius:5,padding:"2px 7px"}}>{row.jsCode}</span>
+                {fam&&<span style={{fontSize:9,background:fam.accent,color:"#fff",borderRadius:10,padding:"1px 7px",fontWeight:800}}>{row.famille}</span>}
                 {row.allowFormation&&<span style={{fontSize:9,background:"#bbf7d0",color:"#14532d",borderRadius:10,padding:"1px 6px",fontWeight:700}}>/F</span>}
                 {(row.maxSlots||1)>1&&row.maxSlots<99&&<span style={{fontSize:9,background:"#dbeafe",color:"#1e40af",borderRadius:10,padding:"1px 5px",fontWeight:700}}>×{row.maxSlots}</span>}
+                {isPrevisionnel&&row.agents.length>1&&<span style={{fontSize:12,background:"#fee2e2",color:"#dc2626",borderRadius:10,padding:"2px 8px",fontWeight:800}}>⚠ Conflit</span>}
               </div>
               <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginTop:3}}>{pJ?`${pJ.jsCode} · ${pJ.label}`:row.poste.label}</div>
               {pJ?.subtitle&&<div style={{fontSize:9,color:"#94a3b8",fontStyle:"italic"}}>{pJ.subtitle}</div>}
@@ -1106,7 +1191,29 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✕</button></div>
                       </div>);
                     }
-                    if(ag)return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?"#fafdf0":"rgba(255,255,255,.8)",border:`1.5px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px"}}>
+                    if(ag&&isPrevisionnel){
+                      const sig=findPrevisionnelSignalement(previsionnelSignalements,ag.id,dateKey);
+                      if(sig){
+                        const nomsRemplacants=(sig.agents_remplacants||[]).map(r=>`${r.prenom} ${r.nom}`).join(", ");
+                        return(<div key={si} style={{display:"flex",flexDirection:"column",gap:3,background:"#f5f3ff",border:"1.5px solid #c4b5fd",borderRadius:9,padding:"5px 9px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <Av initials={ag.initials} size={18} famille={ag.famille}/>
+                            <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
+                          </div>
+                          <div style={{fontSize:11,fontWeight:700,color:"#6d28d9",paddingLeft:24}}>{nomsRemplacants||"?"}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#7c3aed"}}>📅 Signalement</div><button onClick={()=>annulerPrevisionnelSignalement(sig.id,setPrevisionnelSignalements)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#7c3aed",opacity:.6,marginLeft:"auto"}}>✕</button></div>
+                        </div>);
+                      }
+                      return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isMe?"#fafdf0":(fam?.light||"rgba(255,255,255,.8)"),border:`1.5px solid ${isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px"}}>
+                        <Av initials={ag.initials} size={22} famille={ag.famille}/>
+                        <div>
+                          <div style={{fontSize:11,fontWeight:700,color:row.agents.length>1?"#dc2626":"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
+                          <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
+                        </div>
+                        <button onClick={()=>setPrevisionnelTarget({agentId:ag.id,nomTitulaire:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                      </div>);
+                    }
+                    if(ag)return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?"#fafdf0":(fam?.light||"rgba(255,255,255,.8)"),border:`1.5px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px"}}>
                       <Av initials={ag.initials} size={22} famille={ag.famille}/>
                       <div>
                         <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
@@ -1137,12 +1244,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       if(estNonTenuWeekend(row.jsCode,dateKey))return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#f1f5f9",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
                         <div style={{width:22,height:22,borderRadius:"50%",background:"#cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11}}>📅</div>
                         <div style={{fontSize:10,color:"#475569",fontWeight:600}}>Non tenu (week-end)</div>
-                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant"})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                        {!isPrevisionnel&&<button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant"})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
                       </div>);
                       return(<div key={si} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.5)",border:"1.5px dashed rgba(0,0,0,.08)",borderRadius:9,padding:"4px 9px"}}>
                       <div style={{width:22,height:22,borderRadius:"50%",background:"#e2e8f0"}}/>
                       <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic",opacity:.4}}>Vacant</div>
-                      <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant"})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                      {!isPrevisionnel&&<button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant"})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
                     </div>);
                     }
                     return null;
@@ -1174,6 +1281,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       </div>
     </details>
     {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
+    {previsionnelTarget&&<PrevisionnelSignalementPopup agents={agents} agentTitulaireId={previsionnelTarget.agentId} dateKey={dateKey} nomTitulaire={previsionnelTarget.nomTitulaire} currentAgent={currentAgent} onClose={()=>setPrevisionnelTarget(null)} onSaved={()=>{api.previsionnelSignalements.getAll().then(rows=>setPrevisionnelSignalements(rows||[]));}}/>}
   </div>);
 }
 
@@ -6098,6 +6206,7 @@ export default function App(){
   const [schedule,setSchedule]=usePersist("schedule",{});
   const [cpsSchedule,setCpsSchedule]=usePersist("cpsSchedule",{});
   const [cpsAleas,setCpsAleas]=usePersist("cpsAleas",[]);
+  const [previsionnelSignalements,setPrevisionnelSignalements]=usePersist("previsionnelSignalements",[]);
   const [previsionnelSchedule,setPrevisionnelSchedule]=usePersist("previsionnelSchedule",{});
   const [agentCouleurs, setAgentCouleurs] = React.useState({});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
@@ -6278,6 +6387,23 @@ export default function App(){
     api.cpsAleas.getAll().then(rows=>{
       setCpsAleas(rows||[]);
     }).catch(e=>console.error("Erreur chargement aleas CPS:",e));
+  },[currentUser?.agent?.id]); // eslint-disable-line
+  // Rafraichir le previsionnel partage quand le planning perso change (debounce 1.5s)
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    const timer = setTimeout(()=>{
+      api.planning.getAllPublic().then(entries=>{
+        if(entries) setPrevisionnelSchedule(entries);
+      }).catch(e=>console.error("Erreur rafraichissement previsionnel:",e));
+    }, 1500);
+    return ()=>clearTimeout(timer);
+  },[schedule]); // eslint-disable-line
+  // Charger les signalements du planning previsionnel (resolution automatique cote backend)
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    api.previsionnelSignalements.getAll().then(rows=>{
+      setPrevisionnelSignalements(rows||[]);
+    }).catch(e=>console.error("Erreur chargement signalements previsionnel:",e));
   },[currentUser?.agent?.id]); // eslint-disable-line
   // Charger le planning previsionnel partage (planning perso public de tous les agents)
   useEffect(()=>{
@@ -6621,7 +6747,7 @@ export default function App(){
 
     {/* CONTENU */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
-      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset}
+      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} previsionnelSignalements={[]} setPrevisionnelSignalements={()=>{}}
         onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
         onAddAgent={()=>setAddAgentOpen(true)}
         onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
@@ -6643,7 +6769,7 @@ export default function App(){
         setAgentCouleurs={setAgentCouleurs}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
-      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true}/>}
+      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
     </div>
 

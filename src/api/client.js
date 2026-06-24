@@ -612,6 +612,36 @@ const cpsAleas = {
   },
 };
 
+const previsionnelSignalements = {
+  /**
+   * Charger tous les signalements actifs sur une periode
+   * (la resolution automatique est appliquee cote backend)
+   */
+  async getAll(from, to) {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const rows = await apiFetch(`/previsionnel-signalements?${params.toString()}`);
+    return rows || [];
+  },
+  /**
+   * Signaler qui assure reellement le poste
+   * @param {object} data { agent_titulaire_cp, date_jour, agents_remplacants, motif }
+   */
+  async create(data) {
+    return apiFetch('/previsionnel-signalements', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  /**
+   * Annuler un signalement (manuel, en cas d'erreur)
+   */
+  async remove(id) {
+    return apiFetch(`/previsionnel-signalements/${id}`, { method: 'DELETE' });
+  },
+};
+
 const api = {
   auth,
   agents,
@@ -624,6 +654,7 @@ const api = {
   fetes,
   cps,
   cpsAleas,
+  previsionnelSignalements,
 };
 
 export default api;
