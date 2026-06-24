@@ -5074,7 +5074,7 @@ function EchangesView({agents,schedule,currentAgent,agentProfiles,setAgentProfil
 }
 
 // ─── IMPORT DÉROULÉ PRÉVISIONNEL ─────────────────────────────────────────────
-function ProfilPersoView({currentAgent}){
+function ProfilPersoView({currentAgent,onPartageChange}){
   const [pinActuel,setPinActuel]=useState("");
   const [pinNouveau,setPinNouveau]=useState("");
   const [pinConfirme,setPinConfirme]=useState("");
@@ -5105,6 +5105,7 @@ function ProfilPersoView({currentAgent}){
     try{
       await api.agents.setPartagePrevisionnel(currentAgent.id,nouvelEtat?1:0);
       setPartageActif(nouvelEtat);
+      onPartageChange?.(nouvelEtat);
       setPartageMsg({type:"success",text:nouvelEtat?"Partage active":"Partage desactive"});
     }catch(err){
       setPartageMsg({type:"error",text:err.message||"Erreur lors de la mise a jour"});
@@ -6641,7 +6642,7 @@ export default function App(){
         agentCouleurs={agentCouleurs}
         setAgentCouleurs={setAgentCouleurs}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
-      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent}/>}
+      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
     </div>

@@ -154,6 +154,34 @@ export const agents = {
 
 // ─── MODULE PLANNING ─────────────────────────────────────────────────────────
 
+function convertirCodePosteVersJsCode(codePoste, equipe) {
+  if (!codePoste) return null;
+  const mapping3x8 = {
+    CCL:  { M: "PICCL-", AM: "PICCLO", N: "PICCLX" },
+    ADJ:  { M: "PIADJ-", AM: "PIADJO", N: "PIADJX" },
+    LNE:  { M: "PILNE-", AM: "PILNEO", N: "PILNEX" },
+    LNO:  { M: "PILNO-", AM: "PILNOO", N: "PILNOX" },
+    VGD:  { M: "PIVGD-", AM: "PIVGDO", N: null },
+    LC:   { M: "PILCL-", AM: "PILCLO", N: "PILCLX" },
+    AC1:  { M: "PAAC1-", AM: "PAAC1O", N: "PAAC1X" },
+    AC2:  { M: "PAAC2-", AM: "PAAC2O", N: "PAAC2X" },
+    ACXX: { M: null, AM: null, N: "PAACXX" },
+  };
+  const mappingJournee = {
+    PA1J: "PIPA1J", PA2J: "PIPA2J", PA3J: "PIPA3J",
+    DPXJ: "PIDPXJ", ASSJ: "PIASSJ", AFOPR: "AFOPRCI",
+    PARJ: "PAPAUJ", DPXP: "PADPXJ", ASMP: "PAASMJ",
+    PPRCI: "PPRCI",
+  };
+  if (equipe === "J" || equipe === "JF") {
+    return mappingJournee[codePoste] || null;
+  }
+  if (mapping3x8[codePoste]) {
+    return mapping3x8[codePoste][equipe] || null;
+  }
+  return null;
+}
+
 export const planning = {
   /**
    * Charger tout le planning d'un agent
@@ -181,8 +209,8 @@ export const planning = {
         // Si fin_nuit seule : equipe=null, finNuit=true
         equipe:   isFinNuit && !p2 ? null : (p1.code_equipe || null),
         equipe2:  p2 ? 'N' : null,
-        jsCode:   isFinNuit && !p2 ? null : (p1.code_poste || null),
-        jsCode2:  p2 ? (p2.code_poste || null) : null,
+        jsCode:   isFinNuit && !p2 ? null : convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe),
+        jsCode2:  p2 ? convertirCodePosteVersJsCode(p2.code_poste, 'N') : null,
         horaires: isFinNuit ? null : horaires,
         prive:    !!p1.prive,
         finNuit:  isFinNuit,
@@ -279,6 +307,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
    * Charger le planning PUBLIC de tous les agents sur une periode
    * (pour le Planning Previsionnel Partage)
    */
+
   async getAllPublic(from, to) {
     const params = new URLSearchParams();
     if (from) params.append('from', from);
