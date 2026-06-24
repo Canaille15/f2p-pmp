@@ -209,8 +209,8 @@ export const planning = {
         // Si fin_nuit seule : equipe=null, finNuit=true
         equipe:   isFinNuit && !p2 ? null : (p1.code_equipe || null),
         equipe2:  p2 ? 'N' : null,
-        jsCode:   isFinNuit && !p2 ? null : convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe),
-        jsCode2:  p2 ? convertirCodePosteVersJsCode(p2.code_poste, 'N') : null,
+        jsCode:   isFinNuit && !p2 ? null : (p1.code_poste || null),
+        jsCode2:  p2 ? (p2.code_poste || null) : null,
         horaires: isFinNuit ? null : horaires,
         prive:    !!p1.prive,
         finNuit:  isFinNuit,
@@ -332,8 +332,8 @@ result[`${row.agent_id || agentId}-${date}`] = {
       result[`${agentId}-${date}`] = {
         equipe:   isFinNuit && !p2 ? null : (p1.code_equipe || null),
         equipe2:  p2 ? 'N' : null,
-        jsCode:   isFinNuit && !p2 ? null : (p1.code_poste || null),
-        jsCode2:  p2 ? (p2.code_poste || null) : null,
+        jsCode:   isFinNuit && !p2 ? null : convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe),
+        jsCode2:  p2 ? convertirCodePosteVersJsCode(p2.code_poste, 'N') : null,
         horaires: isFinNuit ? null : horaires,
         prive:    false,
         finNuit:  isFinNuit,
