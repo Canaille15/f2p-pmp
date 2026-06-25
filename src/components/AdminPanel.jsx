@@ -14,7 +14,7 @@ const FAMILLES = ["PRCI","PAR"];
 
 // ─── COMPOSANT PRINCIPAL ──────────────────────────────────────────────────────
 
-export default function AdminPanel({ currentUser }) {
+export default function AdminPanel({ currentUser, onAgentsChanged }) {
   const [agents, setAgents]           = useState([]);
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
@@ -57,6 +57,7 @@ export default function AdminPanel({ currentUser }) {
       afficherMsg("ok", `Agent ${data.prenom} ${data.nom} créé`);
       setModal(null);
       charger();
+      onAgentsChanged?.();
     } catch (e) {
       afficherMsg("err", e.message || "Erreur création");
     }
@@ -68,6 +69,7 @@ export default function AdminPanel({ currentUser }) {
       afficherMsg("ok", `${agent.prenom} ${agent.nom} supprimé`);
       setModal(null);
       charger();
+      onAgentsChanged?.();
     } catch (e) {
       afficherMsg("err", e.message || "Erreur suppression");
     }

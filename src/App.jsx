@@ -1161,7 +1161,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           return(<div key={`${row.jsCode}-${ri}`} style={{display:"flex",alignItems:"stretch",borderBottom:ri<section.rows.length-1?`1px solid ${pc.border}`:"none",background:ri%2===0?pc.bg:"#fff",borderLeft:`4px solid ${fam?.accent||"transparent"}`}}>
             <div style={{width:210,flexShrink:0,padding:"9px 14px",borderRight:`1px solid ${pc.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
-                <span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,color:"#fff",background:fam?.color||"#7c3aed",borderRadius:5,padding:"2px 7px"}}>{row.jsCode}</span>
+                {!row.isJourneeSpeciale&&<span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,color:"#fff",background:fam?.color||"#7c3aed",borderRadius:5,padding:"2px 7px"}}>{row.jsCode}</span>}
                 {fam&&<span style={{fontSize:9,background:fam.accent,color:"#fff",borderRadius:10,padding:"1px 7px",fontWeight:800}}>{row.famille}</span>}
                 {row.allowFormation&&<span style={{fontSize:9,background:"#bbf7d0",color:"#14532d",borderRadius:10,padding:"1px 6px",fontWeight:700}}>/F</span>}
                 {(row.maxSlots||1)>1&&row.maxSlots<99&&<span style={{fontSize:9,background:"#dbeafe",color:"#1e40af",borderRadius:10,padding:"1px 5px",fontWeight:700}}>×{row.maxSlots}</span>}
@@ -6230,8 +6230,7 @@ export default function App(){
   const [authData,setAuthData]=usePersist("authData",{});
   const [currentUser,setCurrentUser]=usePersist("currentUser",null);
   // Charger les agents depuis l'API (source de verite = Railway) - seulement si connecte
-  useEffect(()=>{
-    if(!currentUser?.agent?.id) return;
+    const rechargerAgents = () => {
     api.agents.getAll().then(rows=>{
       if(!rows||rows.length===0) return;
       const mapped=rows.map(r=>({
@@ -6245,6 +6244,10 @@ export default function App(){
       }));
       setAgents(mapped);
     }).catch(e=>console.error("Erreur chargement agents:",e));
+  };
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    rechargerAgents();
   },[currentUser?.agent?.id]); // eslint-disable-line
   const [showAuthAdmin,setShowAuthAdmin]=useState(false);
   const [loginTarget,setLoginTarget]=useState(null);
@@ -6782,7 +6785,7 @@ export default function App(){
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements}/>}
-      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser}/>}
+      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
     </div>
 
     {/* MODALS */}
