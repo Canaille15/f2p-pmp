@@ -1170,6 +1170,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                   </div>))
                 : Array.from({length:row.maxSlots<99?row.maxSlots:Math.max(row.agents.length,1)},(_,si)=>{
                     const ag=row.agents[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
+                    if(search&&ag&&!`${ag.prenom} ${ag.nom}`.toLowerCase().includes(search.toLowerCase()))return null;
                     const isForm=en?.equipe==="JF";const isMe=ag&&currentAgent?.id===ag.id;
                     const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
                     if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>

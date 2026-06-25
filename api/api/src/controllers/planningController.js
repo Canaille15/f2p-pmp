@@ -10,7 +10,7 @@ async function getPlanning(req, res) {
     const [rows] = await pool.query(
       `SELECT pj.id, pj.date_jour, pj.source,
               pp.ordre, pp.code_equipe, pp.code_poste,
-              pp.heure_debut, pp.heure_fin, pp.prive, pp.note
+              pp.heure_debut, pp.heure_fin, pp.prive, pp.note, pp.note_perso
        FROM planning_jour pj
        JOIN planning_periode pp ON pp.planning_jour_id = pj.id
        WHERE pj.cp_agent = ?
@@ -42,10 +42,10 @@ async function setJour(req, res) {
     for (const p of periodes) {
       const prive = p.prive !== undefined ? (p.prive?1:0) : (CODES_PUBLICS.has(p.code_equipe)?0:1);
       await conn.query(
-        `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note)
-         VALUES (?,?,?,?,?,?,?,?)`,
+        `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
         [jour.id, p.ordre||1, p.code_equipe||(p.note==='fin_nuit'?'N':null), p.code_poste||null,
-         p.heure_debut||null, p.heure_fin||null, prive, p.note||null]);
+         p.heure_debut||null, p.heure_fin||null, prive, p.note||null, p.note_perso||null]);
     }
     await conn.commit();
     res.json({ message: 'Journée enregistrée', id: jour.id });
