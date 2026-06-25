@@ -45,7 +45,7 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel } = req.body;
+  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel, famille } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
@@ -56,10 +56,15 @@ async function update(req, res) {
     if (prenom !== undefined) { fields.push('prenom = ?'); values.push(prenom); }
     if (poste  !== undefined) { fields.push('poste = ?');  values.push(poste); }
   }
-  if (!fields.length) return res.status(400).json({ error: 'Rien à modifier' });
+  if (!fields.length && famille === undefined) return res.status(400).json({ error: 'Rien à modifier' });
   values.push(cp);
   try {
-    await pool.query(`UPDATE agent SET ${fields.join(', ')} WHERE cp = ?`, values);
+    if (fields.length) {
+      await pool.query(`UPDATE agent SET ${fields.join(', ')} WHERE cp = ?`, values);
+    }
+    if (req.agent.is_admin && famille !== undefined) {
+      await pool.query('UPDATE profil_agent SET familles_hab = ? WHERE cp_agent = ?', [famille, cp]);
+    }
     res.json({ message: 'Agent mis à jour' });
   } catch (e) {
     console.error(e);
