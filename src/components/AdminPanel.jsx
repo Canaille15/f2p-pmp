@@ -75,6 +75,17 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
     }
   }
 
+  async function handleUpdate(agent, data) {
+    try {
+      await api.agents.update(agent.cp, data);
+      afficherMsg("ok", `${data.prenom} ${data.nom} modifie`);
+      setModal(null);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur modification");
+    }
+  }
   async function handleResetPin(agent, newPin) {
     try {
       await api.agents.resetPin(agent.cp, newPin);
@@ -185,6 +196,16 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                   <td style={{ padding: "8px 12px" }}>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
+                        onClick={() => setModal({ type: "edit", agent: a })}
+                        title="Modifier l'agent"
+                        style={{
+                          background: "#eff6ff", color: "#1d4ed8", border: "none",
+                          borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+                          fontSize: 11, fontWeight: 700
+                        }}>
+                        Modifier
+                      </button>
+                      <button
                         onClick={() => setModal({ type: "reset", agent: a })}
                         title="Réinitialiser le PIN"
                         style={{
@@ -225,6 +246,9 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       {/* Modals */}
       {modal === "create" && (
         <ModalCreer onConfirm={handleCreate} onClose={() => setModal(null)} />
+      )}
+      {modal?.type === "edit" && (
+        <ModalModifier agent={modal.agent} onConfirm={(data) => handleUpdate(modal.agent, data)} onClose={() => setModal(null)} />
       )}
       {modal?.type === "delete" && (
         <ModalSupprimer agent={modal.agent} onConfirm={() => handleDelete(modal.agent)} onClose={() => setModal(null)} />
@@ -300,6 +324,73 @@ function ModalCreer({ onConfirm, onClose }) {
 }
 
 // ─── MODAL SUPPRIMER ─────────────────────────────────────────────────────────
+
+function ModalModifier({ agent, onConfirm, onClose }) {
+  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI" });
+  const [nouveauCp, setNouveauCp] = useState(agent.cp || "");
+  const [err, setErr] = useState("");
+
+  function submit() {
+    if (!form.nom.trim()) return setErr("Le nom est obligatoire");
+    if (!form.prenom.trim()) return setErr("Le prenom est obligatoire");
+    if (!nouveauCp.trim()) return setErr("Le CP est obligatoire");
+    const cpChange = nouveauCp.trim().toUpperCase() !== agent.cp;
+    if (cpChange && !window.confirm(`Changer le CP de ${agent.cp} vers ${nouveauCp.trim().toUpperCase()} ? Cette action met a jour toutes les donnees liees a cet agent.`)) return;
+    setErr("");
+    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
+  }
+
+  return (
+    <Modal title={`Modifier ${agent.prenom} ${agent.nom}`} onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>CP SNCF</div>
+          <input value={nouveauCp} onChange={e => setNouveauCp(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}/>
+        </div>
+        {[
+          { label: "Nom *", key: "nom", placeholder: "ex: DUPONT" },
+          { label: "Prenom *", key: "prenom", placeholder: "ex: Jean" },
+        ].map(({ label, key, placeholder }) => (
+          <div key={key}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>{label}</div>
+            <input
+              value={form[key]}
+              onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
+              placeholder={placeholder}
+              style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}
+            />
+          </div>
+        ))}
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Grade</div>
+          <select value={form.grade} onChange={e => setForm(p => ({ ...p, grade: e.target.value }))}
+            style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13 }}>
+            {GRADES.map(g => <option key={g}>{g}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Famille</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {FAMILLES.map(f => (
+              <button key={f} onClick={() => setForm(p => ({ ...p, famille: f }))}
+                style={{
+                  flex: 1, padding: "8px", border: "none", borderRadius: 8, cursor: "pointer",
+                  fontWeight: 700, fontSize: 13,
+                  background: form.famille === f ? (f === "PRCI" ? "#1d4ed8" : "#065f46") : "#f1f5f9",
+                  color: form.famille === f ? "#fff" : "#64748b"
+                }}>{f}</button>
+            ))}
+          </div>
+        </div>
+        {err && <div style={{ color: "#dc2626", fontSize: 12, fontWeight: 600 }}>! {err}</div>}
+        <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
+          <button onClick={submit} style={{ flex: 1, padding: "10px", background: "#1e293b", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Enregistrer</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 function ModalSupprimer({ agent, onConfirm, onClose }) {
   return (

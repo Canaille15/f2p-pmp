@@ -138,7 +138,7 @@ export const agents = {
    * Mettre à jour un agent (admin)
    */
   update: (id, data) =>
-    apiFetch(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    apiFetch(`/agents/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   /**
    * Supprimer un agent (admin)
