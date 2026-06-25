@@ -6249,6 +6249,12 @@ export default function App(){
     if(!currentUser?.agent?.id) return;
     rechargerAgents();
   },[currentUser?.agent?.id]); // eslint-disable-line
+  // Verification periodique des agents (synchro entre appareils, toutes les 45s)
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    const interval = setInterval(()=>{ rechargerAgents(); }, 45000);
+    return ()=>clearInterval(interval);
+  },[currentUser?.agent?.id]); // eslint-disable-line
   const [showAuthAdmin,setShowAuthAdmin]=useState(false);
   const [loginTarget,setLoginTarget]=useState(null);
   const isAdmin=currentUser?.isAdmin||false;
