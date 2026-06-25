@@ -654,9 +654,10 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
 
   // jsCode des postes qui sont eux-memes des formations (regroupes dans le pave Formation)
   const jsCodesFormationPostes=new Set(["K-PAR","K-PRCI","F-PRCI","AFO PAR","AFOPRCI","F-PAR"]);
+  const jsCodesJourneeSpecialePostes=new Set(["PPRCI","PPAR"]);
   // Postes journée non principaux PRCI (hors postes-formation)
   if(filterF!=="PAR"){
-    POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&!x.principal&&!jsCodesFormationPostes.has(x.jsCode)).forEach(poste=>{
+    POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&!x.principal&&!jsCodesFormationPostes.has(x.jsCode)&&!jsCodesJourneeSpecialePostes.has(x.jsCode)).forEach(poste=>{
       const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===poste.jsCode||en.poste===poste.label);});
       if(ags.length>0)diversRows.push({poste,jsCode:poste.jsCode,agents:ags,famille:"PRCI",isJournee:true,maxSlots:poste.maxSlots||99});
     });
@@ -685,6 +686,14 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
   });
   if(enFormation.length>0){
     diversRows.push({poste:{jsCode:"FOR",label:"Formation",subtitle:""},jsCode:"FOR",agents:enFormation,famille:null,isFormation:true,maxSlots:99});
+  }
+  // Journee speciale (PPRCI/PPAR) - regroupes ensemble, plusieurs agents possibles
+  const enJourneeSpeciale=agents.filter(a=>{
+    const en=schedule[`${a.id}-${dateKey}`];
+    return en&&jsCodesJourneeSpecialePostes.has(en.jsCode);
+  });
+  if(enJourneeSpeciale.length>0){
+    diversRows.push({poste:{jsCode:"JOURNEE_SPECIALE",label:"Journee speciale",subtitle:""},jsCode:"JOURNEE_SPECIALE",agents:enJourneeSpeciale,famille:null,isJourneeSpeciale:true,maxSlots:99});
   }
   // VM (visite medicale)
   const enVM=agents.filter(a=>{
@@ -980,7 +989,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         // Fusionner les lignes : si une ligne ne contient pas de debut d'horaire (HH:MM en debut/proche du debut)
         // et ne commence pas par un jsCode connu, on la rattache a la ligne precedente (cas OCR qui scinde
         // le jsCode+debut d'horaire d'un cote et la fin d'horaire+nom de l'autre cote)
-        const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)\b/;
+        const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)\b/;
         const lines=[];
         const lineDates=[];
         rawLinesWithPos.forEach(o=>{
@@ -1000,7 +1009,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           const lineDateStr=lineDates[lineIdx]||dateStr;
           const horaireMatch=line.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/);
           if(!horaireMatch) return;
-          const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)/);
+          const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)/);
           let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
           if(jsCode&&/PA[A-Z]+1[0]$/.test(jsCode)) jsCode=jsCode.slice(0,-1)+"O";
           if(jsCode&&/OR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres O
@@ -4230,6 +4239,7 @@ justifyContent: "flex-start",
           horaires: newEntry.horaires !== undefined ? (newEntry.horaires||null) : (prevEntry.horaires||null),
           prive:    newEntry.prive||false,
           finNuit:  newEntry.finNuit !== undefined ? newEntry.finNuit : (prevEntry.finNuit||false),
+          notePerso: newEntry.notePerso !== undefined ? (newEntry.notePerso||null) : (prevEntry.notePerso||null),
           impressionAt: null,
         };
         // Sauvegarder localement

@@ -64,6 +64,7 @@ const POSTES_PAR = [
   {code:"PARJ", label:"Pauseur PAR", types:["J"]},
   {code:"DPXP", label:"DPX PAR",     types:["J"]},
   {code:"ASMP", label:"ASMTE PAR",   types:["J"]},
+  {code:"PPAR", label:"PPAR (journee speciale)", types:["J"]},
 ];
 
 const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
@@ -113,6 +114,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
   const [posteN,    setPosteN]    = useState(initPosteN);
   // 🌙 finNuit : toggle indépendant, coexiste avec tout
   const [finNuit,   setFinNuit]   = useState(!!entry?.finNuit);
+  const [notePerso, setNotePerso] = useState(entry?.notePerso || "");
   const [showFetes, setShowFetes] = useState(false);
 
   const dateObj = new Date(date + "T12:00:00");
@@ -162,7 +164,8 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
       jsCodeNuit: typeN ? (posteN || null) : null,
       prive:      (type1===null&&typeN==="N") ? false : !["M","AM","N","J","JF","FOR","DISPO",
                     ...FETES.map(f=>f.code)].includes(type1),
-      finNuit:    finNuit,   // indépendant, sauvegardé tel quel
+      finNuit:    finNuit,
+      notePerso:  (poste1==="PPRCI"||poste1==="PPAR") ? (notePerso||null) : null,   // indépendant, sauvegardé tel quel
     };
     onSave(newEntry);
   };
@@ -364,6 +367,27 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
             </div>
           )}
 
+                    {(poste1==="PPRCI"||poste1==="PPAR") && (
+            <div>
+              <div style={{
+                fontSize:10, color:"#94a3b8", fontWeight:700,
+                marginBottom:5, textTransform:"uppercase", letterSpacing:.5,
+              }}>
+                Pense-bete (visible uniquement par toi)
+              </div>
+              <input
+                value={notePerso}
+                onChange={e => setNotePerso(e.target.value)}
+                placeholder="ex: Reunion service, visite de poste..."
+                style={{
+                  width:"100%", padding:"10px 12px",
+                  border:"1.5px solid #1e293b", borderRadius:8,
+                  fontSize:14, fontWeight:600, color:"#1e293b",
+                  outline:"none", boxSizing:"border-box",
+                }}
+              />
+            </div>
+          )}
           {/* ── Horaires ── */}
           {isTravailJ && (
             <div>

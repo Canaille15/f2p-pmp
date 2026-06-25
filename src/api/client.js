@@ -214,6 +214,7 @@ export const planning = {
         horaires: isFinNuit ? null : horaires,
         prive:    !!p1.prive,
         finNuit:  isFinNuit,
+        notePerso: p1.note_perso || null,
         impressionAt: null,
       };
     });
@@ -257,6 +258,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
         heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
         prive: entry.prive || false,
         note: entry.finNuit ? 'fin_nuit' : null,
+        note_perso: entry.notePerso || null,
       });
     }
     // Periode nuit ce soir (si equipe2=N)
