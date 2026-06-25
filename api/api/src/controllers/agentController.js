@@ -45,7 +45,7 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel, famille } = req.body;
+  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel, famille, nouveau_cp } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
@@ -65,8 +65,16 @@ async function update(req, res) {
     if (req.agent.is_admin && famille !== undefined) {
       await pool.query('UPDATE profil_agent SET familles_hab = ? WHERE cp_agent = ?', [famille, cp]);
     }
-    res.json({ message: 'Agent mis à jour' });
+    let cpFinal = cp;
+    if (req.agent.is_admin && nouveau_cp !== undefined && nouveau_cp.toUpperCase() !== cp) {
+      cpFinal = nouveau_cp.toUpperCase();
+      await pool.query('UPDATE agent SET cp = ? WHERE cp = ?', [cpFinal, cp]);
+    }
+    res.json({ message: 'Agent mis a jour', cp: cpFinal });
   } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Ce CP existe deja pour un autre agent' });
+    }
     console.error(e);
     res.status(500).json({ error: 'Erreur serveur' });
   }
