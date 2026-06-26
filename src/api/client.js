@@ -172,6 +172,7 @@ function convertirCodePosteVersJsCode(codePoste, equipe) {
     DPXJ: "PIDPXJ", ASSJ: "PIASSJ", AFOPR: "AFOPRCI",
     PARJ: "PAPAUJ", DPXP: "PADPXJ", ASMP: "PAASMJ",
     PPRCI: "PPRCI",
+    PPAR: "PPAR",
   };
   if (equipe === "J" || equipe === "JF") {
     return mappingJournee[codePoste] || null;
@@ -644,6 +645,31 @@ const previsionnelSignalements = {
   },
 };
 
+const journeeSpecialeNotes = {
+  /**
+   * Charger tous les messages publics Journee speciale
+   */
+  async getAll() {
+    const rows = await apiFetch('/journee-speciale-notes');
+    return rows || [];
+  },
+  /**
+   * Ecrire ou mettre a jour le message public d'un agent pour une date donnee
+   * @param {object} data { cp_agent, date_jour, message }
+   */
+  async save(data) {
+    return apiFetch('/journee-speciale-notes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  /**
+   * Supprimer un message
+   */
+  async remove(id) {
+    return apiFetch(`/journee-speciale-notes/${id}`, { method: 'DELETE' });
+  },
+};
 const api = {
   auth,
   agents,
@@ -657,6 +683,7 @@ const api = {
   cps,
   cpsAleas,
   previsionnelSignalements,
+  journeeSpecialeNotes,
 };
 
 export default api;

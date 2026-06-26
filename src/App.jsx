@@ -890,10 +890,41 @@ function findPrevisionnelSignalement(previsionnelSignalements, agentId, dateKey)
   if(!previsionnelSignalements||!previsionnelSignalements.length) return null;
   return previsionnelSignalements.find(s=>s.agent_titulaire_cp===agentId && String(s.date_jour).slice(0,10)===dateKey) || null;
 }
-function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin,isPrevisionnel,previsionnelSignalements,setPrevisionnelSignalements}){
+function findJourneeSpecialeNote(notes, agentId, dateKey){
+  if(!notes||!notes.length) return null;
+  return notes.find(n=>n.cp_agent===agentId && String(n.date_jour).slice(0,10)===dateKey) || null;
+}
+function JourneeSpecialeNotePopup({agentId,agentNom,dateKey,currentMessage,onClose,onSaved}){
+  const [message,setMessage]=useState(currentMessage||"");
+  const [busy,setBusy]=useState(false);
+  const valider=async()=>{
+    if(!message.trim())return;
+    setBusy(true);
+    try{
+      await api.journeeSpecialeNotes.save({cp_agent:agentId,date_jour:dateKey,message:message.trim()});
+      onSaved();
+      onClose();
+    }catch(e){console.error(e);}
+    setBusy(false);
+  };
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:18,maxWidth:380,width:"100%",display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:14,fontWeight:800,color:"#1e293b"}}>📝 Message public — {agentNom}</div>
+      <div style={{fontSize:11,color:"#64748b"}}>Visible par tous dans le CPS Officiel et le Previsionnel.</div>
+      <textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="ex: Reunion service, visite de poste..." rows={3} style={{border:"1.5px solid #e2e8f0",borderRadius:9,padding:"8px 10px",fontSize:13,outline:"none",resize:"vertical",fontFamily:"inherit"}}/>
+      <div style={{display:"flex",gap:8,marginTop:4}}>
+        <button onClick={onClose} style={{flex:1,padding:"9px",background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,cursor:"pointer",fontWeight:600,fontSize:13}}>Annuler</button>
+        <button onClick={valider} disabled={busy||!message.trim()} style={{flex:1,padding:"9px",background:message.trim()?"#1e293b":"#e2e8f0",color:message.trim()?"#fff":"#94a3b8",border:"none",borderRadius:8,cursor:message.trim()?"pointer":"not-allowed",fontWeight:700,fontSize:13}}>{busy?"...":"Enregistrer"}</button>
+      </div>
+    </div>
+  </div>);
+}
+
+function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin,isPrevisionnel,previsionnelSignalements,setPrevisionnelSignalements,journeeSpecialeNotes,setJourneeSpecialeNotes}){
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
   const [aleaTarget,setAleaTarget]=useState(null);
   const [previsionnelTarget,setPrevisionnelTarget]=useState(null);
+  const [journeeSpecialeNoteTarget,setJourneeSpecialeNoteTarget]=useState(null);
   const [filterF,setFilterF]=useState("ALL");
   const [search,setSearch]=useState("");
   const [uploading,setUploading]=useState(false);
@@ -1219,8 +1250,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         <div>
                           <div style={{fontSize:11,fontWeight:700,color:row.agents.length>1?"#dc2626":"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
                           <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
+                          {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
                         </div>
-                        <button onClick={()=>setPrevisionnelTarget({agentId:ag.id,nomTitulaire:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                        {row.isJourneeSpeciale?
+                        <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>📝</button>
+                        :
+                        <button onClick={()=>setPrevisionnelTarget({agentId:ag.id,nomTitulaire:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
                       </div>);
                     }
                     if(ag)return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?"#fafdf0":(fam?.light||"rgba(255,255,255,.8)"),border:`1.5px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px"}}>
@@ -1228,8 +1263,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       <div>
                         <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
                         <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
+                          {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
                       </div>
-                      <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                      {row.isJourneeSpeciale?
+                      <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>📝</button>
+                      :
+                      <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
                     </div>);
                     if(row.maxSlots<99){
                       const aleaVacant=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
@@ -1292,6 +1331,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     </details>
     {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
     {previsionnelTarget&&<PrevisionnelSignalementPopup agents={agents} agentTitulaireId={previsionnelTarget.agentId} dateKey={dateKey} nomTitulaire={previsionnelTarget.nomTitulaire} currentAgent={currentAgent} onClose={()=>setPrevisionnelTarget(null)} onSaved={()=>{api.previsionnelSignalements.getAll().then(rows=>setPrevisionnelSignalements(rows||[]));}}/>}
+    {journeeSpecialeNoteTarget&&<JourneeSpecialeNotePopup agentId={journeeSpecialeNoteTarget.agentId} agentNom={journeeSpecialeNoteTarget.agentNom} dateKey={dateKey} currentMessage={journeeSpecialeNoteTarget.currentMessage} onClose={()=>setJourneeSpecialeNoteTarget(null)} onSaved={()=>{api.journeeSpecialeNotes.getAll().then(rows=>setJourneeSpecialeNotes(rows||[]));}}/>}
   </div>);
 }
 
@@ -4165,6 +4205,7 @@ justifyContent: "flex-start",
               }}>
                 <span>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
+                {en?.notePerso&&<span style={{fontSize:8,opacity:.85,fontWeight:500,fontStyle:"italic"}}>{en.notePerso}</span>}
               </div>}
 
               {/* ZONE 3 — Nuit (toujours en bas) */}
@@ -6219,6 +6260,7 @@ export default function App(){
   const [cpsSchedule,setCpsSchedule]=usePersist("cpsSchedule",{});
   const [cpsAleas,setCpsAleas]=usePersist("cpsAleas",[]);
   const [previsionnelSignalements,setPrevisionnelSignalements]=usePersist("previsionnelSignalements",[]);
+  const [journeeSpecialeNotes,setJourneeSpecialeNotes]=usePersist("journeeSpecialeNotes",[]);
   const [previsionnelSchedule,setPrevisionnelSchedule]=usePersist("previsionnelSchedule",{});
   const [agentCouleurs, setAgentCouleurs] = React.useState({});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
@@ -6425,6 +6467,13 @@ export default function App(){
     api.previsionnelSignalements.getAll().then(rows=>{
       setPrevisionnelSignalements(rows||[]);
     }).catch(e=>console.error("Erreur chargement signalements previsionnel:",e));
+  },[currentUser?.agent?.id]); // eslint-disable-line
+  // Charger les messages publics Journee speciale (chargement journee speciale notes)
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    api.journeeSpecialeNotes.getAll().then(rows=>{
+      setJourneeSpecialeNotes(rows||[]);
+    }).catch(e=>console.error("Erreur chargement notes journee speciale:",e));
   },[currentUser?.agent?.id]); // eslint-disable-line
   // Charger le planning previsionnel partage (planning perso public de tous les agents)
   useEffect(()=>{
@@ -6768,7 +6817,7 @@ export default function App(){
 
     {/* CONTENU */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
-      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} previsionnelSignalements={[]} setPrevisionnelSignalements={()=>{}}
+      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} previsionnelSignalements={[]} setPrevisionnelSignalements={()=>{}} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}
         onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
         onAddAgent={()=>setAddAgentOpen(true)}
         onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
@@ -6790,7 +6839,7 @@ export default function App(){
         setAgentCouleurs={setAgentCouleurs}/>}
       {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
-      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements}/>}
+      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
     </div>
 

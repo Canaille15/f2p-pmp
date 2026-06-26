@@ -64,7 +64,7 @@ const POSTES_PAR = [
   {code:"PARJ", label:"Pauseur PAR", types:["J"]},
   {code:"DPXP", label:"DPX PAR",     types:["J"]},
   {code:"ASMP", label:"ASMTE PAR",   types:["J"]},
-  {code:"PPAR", label:"PPAR (journee speciale)", types:["J"]},
+  {code:"PPAR", label:"PPAR", types:["J"]},
 ];
 
 const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
@@ -89,6 +89,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
     const postes = tous_postes.filter(p => p.types.includes(type));
     if (habCodes.length === 0) return postes;
     return postes.filter(p =>
+      p.code === "PPRCI" || p.code === "PPAR" ||
       habCodes.some(h => h.includes(p.code) || p.code.includes(h.slice(0,4)))
     );
   };
