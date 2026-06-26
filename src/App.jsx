@@ -6159,94 +6159,7 @@ const handleLogin = async () => {
 }
 
 // Panneau de gestion des comptes (admin)
-function AdminAuthPanel({ authData, setAuthData, agents, onClose }) {
-  const [search, setSearch] = useState("");
-  const [confirmReset, setConfirmReset] = useState(null);
-
-  const filtered = agents.filter(a =>
-    `${a.prenom} ${a.nom}`.toLowerCase().includes(search.toLowerCase()) ||
-    (a.immatriculation||"").toLowerCase().includes(search.toLowerCase())
-  );
-
-  const toggleAdmin = (mat) => {
-    const m = mat.toUpperCase();
-    setAuthData(prev => ({
-      ...prev,
-      [m]: { ...(prev[m]||{}), isAdmin: !prev[m]?.isAdmin }
-    }));
-  };
-
-  const resetPin = (mat) => {
-    const m = mat.toUpperCase();
-    setAuthData(prev => {
-      const next = {...prev};
-      if (next[m]) { delete next[m].pinHash; next[m].resetAt = new Date().toISOString(); }
-      return next;
-    });
-    setConfirmReset(null);
-  };
-
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.7)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 24px 60px rgba(0,0,0,.3)",overflow:"hidden"}}>
-        <div style={{background:"linear-gradient(135deg,#7c3aed,#4c1d95)",padding:"16px 20px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <span style={{fontSize:20}}>👑</span>
-          <div style={{flex:1,color:"#fff",fontSize:14,fontWeight:800}}>Gestion des comptes — Admin</div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:14}}>✕</button>
-        </div>
-        <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",flexShrink:0}}>
-          <input placeholder="Rechercher un agent…" value={search} onChange={e=>setSearch(e.target.value)}
-            style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
-        </div>
-        <div style={{overflowY:"auto",flex:1}}>
-          {filtered.map(ag => {
-            const mat = (ag.immatriculation||"").toUpperCase();
-            const stored = authData[mat]||{};
-            const hasPin = !!stored.pinHash;
-            const isAdmin = stored.isAdmin || ADMIN_MATRICULES_DEFAULT.includes(mat);
-            return (
-              <div key={ag.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:"1px solid #f8fafc"}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:isAdmin?"#7c3aed":"#0f4c81",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>
-                  {ag.initials||ag.prenom[0]}
-                </div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}</div>
-                  <div style={{fontSize:10,color:"#94a3b8",fontFamily:"monospace"}}>{mat||"—"} · {ag.grade}</div>
-                </div>
-                <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  {/* Statut compte */}
-                  <span style={{fontSize:9,background:hasPin?"#d1fae5":"#fee2e2",color:hasPin?"#065f46":"#991b1b",borderRadius:8,padding:"2px 7px",fontWeight:700}}>
-                    {hasPin?"✓ Compte":"Pas de compte"}
-                  </span>
-                  {/* Toggle admin */}
-                  <button onClick={()=>toggleAdmin(mat)} style={{fontSize:9,background:isAdmin?"#f5f3ff":"#f1f5f9",color:isAdmin?"#7c3aed":"#94a3b8",border:`1px solid ${isAdmin?"#c4b5fd":"#e2e8f0"}`,borderRadius:8,padding:"3px 8px",cursor:"pointer",fontWeight:700}}>
-                    {isAdmin?"👑 Admin":"Rendre admin"}
-                  </button>
-                  {/* Reset PIN */}
-                  {hasPin && (
-                    confirmReset===mat
-                    ? <div style={{display:"flex",gap:4}}>
-                        <button onClick={()=>resetPin(mat)} style={{fontSize:9,background:"#dc2626",color:"#fff",border:"none",borderRadius:7,padding:"3px 8px",cursor:"pointer",fontWeight:700}}>Confirmer</button>
-                        <button onClick={()=>setConfirmReset(null)} style={{fontSize:9,background:"#f1f5f9",color:"#475569",border:"none",borderRadius:7,padding:"3px 8px",cursor:"pointer"}}>✕</button>
-                      </div>
-                    : <button onClick={()=>setConfirmReset(mat)} style={{fontSize:9,background:"#fef3c7",color:"#92400e",border:"1px solid #fde68a",borderRadius:8,padding:"3px 8px",cursor:"pointer",fontWeight:700}}>🔑 Reset PIN</button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{padding:"12px 16px",borderTop:"1px solid #e2e8f0",flexShrink:0,fontSize:11,color:"#94a3b8",textAlign:"center"}}>
-          {Object.keys(authData).length} compte(s) créé(s) · {Object.values(authData).filter(d=>d.isAdmin).length} admin(s)
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── APP PRINCIPALE ───────────────────────────────────────────────────────────
-
+// DEAD_CODE_REMOVED_MARKER (ancien AdminAuthPanel, remplace par toggle admin reel dans AdminPanel.jsx)
 export default function App(){
   // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
   const [view,setView]=usePersist("view","personal");
@@ -6254,6 +6167,7 @@ export default function App(){
   const [currentAgent,setCurrentAgent]=useState(null);
   const [weekOffset,setWeekOffset]=useState(0);
   const [profileOpen,setProfileOpen]=useState(false);
+  const [menuOpen,setMenuOpen]=useState(false);
   const [profileSearch,setProfileSearch]=useState("");
   const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
   const [schedule,setSchedule]=usePersist("schedule",{});
@@ -6297,7 +6211,7 @@ export default function App(){
     const interval = setInterval(()=>{ rechargerAgents(); }, 45000);
     return ()=>clearInterval(interval);
   },[currentUser?.agent?.id]); // eslint-disable-line
-  const [showAuthAdmin,setShowAuthAdmin]=useState(false);
+  
   const [loginTarget,setLoginTarget]=useState(null);
   const isAdmin=currentUser?.isAdmin||false;
 
@@ -6683,6 +6597,13 @@ export default function App(){
       <div style={{maxWidth:1100,margin:"0 auto",
         display:"flex",alignItems:"center",gap:8,
         height:48,padding:"0 12px"}}>
+        <button onClick={()=>setMenuOpen(true)} style={{border:"none",background:"none",cursor:"pointer",padding:6,marginRight:2,flexShrink:0,display:"flex",alignItems:"center"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            <div style={{width:18,height:2,background:"#475569",borderRadius:1}}/>
+            <div style={{width:18,height:2,background:"#475569",borderRadius:1}}/>
+            <div style={{width:18,height:2,background:"#475569",borderRadius:1}}/>
+          </div>
+        </button>
 
         {/* Logo */}
         <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
@@ -6702,20 +6623,11 @@ export default function App(){
         {isAdmin&&<div style={{display:"flex",alignItems:"center",gap:4}}>
           <div style={{background:"#fff8e1",border:"1px solid #fde68a",borderRadius:6,
             padding:"2px 6px",fontSize:9,fontWeight:700,color:"#92400e"}}>👑</div>
-          <button onClick={()=>setShowAuthAdmin(true)}
-            style={{background:"#f5f3ff",border:"1px solid #c4b5fd",borderRadius:6,
-              padding:"2px 7px",fontSize:9,fontWeight:700,color:"#7c3aed",cursor:"pointer"}}>
-            ⚙️
-          </button>
+          
         </div>}
 
         {/* Déco */}
-        <button onClick={handleLogout}
-          style={{border:"1.5px solid #fee2e2",borderRadius:8,padding:"5px 8px",
-            background:"#fff",cursor:"pointer",fontSize:11,color:"#ef4444",
-            fontWeight:600,flexShrink:0}}>
-          🚪
-        </button>
+        
 
         {/* Profil selector */}
         <div style={{position:"relative",flexShrink:0}}>
@@ -6789,7 +6701,7 @@ export default function App(){
         WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
         <div style={{display:"flex",minWidth:"max-content",
           padding:"0 12px",gap:2}}>
-          {VIEWS.map(({k,l})=>{
+          {VIEWS.filter(v=>["personal","previsionnel","global"].includes(v.k)).map(({k,l})=>{
             const actif = view===k;
             return(
               <button key={k} onClick={()=>setView(k)}
@@ -6815,6 +6727,25 @@ export default function App(){
       </div>
     </div>
 
+    {menuOpen&&<div style={{position:"fixed",inset:0,zIndex:300,display:"flex"}}>
+      <div onClick={()=>setMenuOpen(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,.4)"}}/>
+      <div style={{position:"relative",width:260,maxWidth:"80vw",height:"100%",background:"#fff",boxShadow:"4px 0 24px rgba(0,0,0,.15)",display:"flex",flexDirection:"column",padding:"16px 0",overflowY:"auto"}}>
+        <div style={{padding:"0 16px 12px",borderBottom:"1px solid #f1f5f9",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{fontSize:14,fontWeight:800,color:"#0f4c81"}}>F2P.PMP</div>
+          <button onClick={()=>setMenuOpen(false)} style={{border:"none",background:"none",cursor:"pointer",fontSize:18,color:"#94a3b8",padding:4}}>×</button>
+        </div>
+        {VIEWS.map(({k,l})=>{
+          const actif=view===k;
+          return(<button key={k} onClick={()=>{setView(k);setMenuOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,border:"none",background:actif?"#eff6ff":"transparent",padding:"12px 16px",cursor:"pointer",fontSize:14,fontWeight:actif?700:500,color:actif?"#0f4c81":"#1e293b",textAlign:"left",width:"100%"}}>
+            {l}
+          </button>);
+        })}
+        <div style={{flex:1}}/>
+        <button onClick={()=>{setMenuOpen(false);handleLogout();}} style={{display:"flex",alignItems:"center",gap:10,border:"none",borderTop:"1px solid #f1f5f9",background:"transparent",padding:"14px 16px",cursor:"pointer",fontSize:14,fontWeight:600,color:"#ef4444",textAlign:"left",width:"100%"}}>
+          Déconnexion
+        </button>
+      </div>
+    </div>}
     {/* CONTENU */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
       {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} previsionnelSignalements={[]} setPrevisionnelSignalements={()=>{}} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}
@@ -6847,7 +6778,7 @@ export default function App(){
       {importDPTarget&&<ImportDeroulement agent={importDPTarget} onClose={()=>setImportDPTarget(null)} onImport={jours=>handleImportSchedule(importDPTarget.id,jours)}/>}
     {addAgentOpen&&<AddAgentModal onClose={()=>setAddAgentOpen(false)} onAdd={ag=>{setAgents(p=>[...p,ag]);}}/>}
     {profileOpen&&<div onClick={()=>setProfileOpen(false)} style={{position:"fixed",inset:0,zIndex:49}}/>}
-    {showAuthAdmin&&<AdminAuthPanel authData={authData} setAuthData={setAuthData} agents={agents} onClose={()=>setShowAuthAdmin(false)}/>}
+    
 
     {/* Modale login pour accéder au profil d'un autre agent */}
     {loginTarget&&(()=>{

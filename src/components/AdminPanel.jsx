@@ -86,6 +86,16 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       afficherMsg("err", e.message || "Erreur modification");
     }
   }
+  async function handleToggleAdmin(agent) {
+    try {
+      await api.agents.update(agent.cp, { is_admin: !agent.is_admin });
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} ${agent.is_admin ? "n'est plus" : "est maintenant"} admin`);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur modification droits admin");
+    }
+  }
   async function handleResetPin(agent, newPin) {
     try {
       await api.agents.resetPin(agent.cp, newPin);
@@ -204,6 +214,18 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                           fontSize: 11, fontWeight: 700
                         }}>
                         Modifier
+                      </button>
+                      <button
+                        onClick={() => handleToggleAdmin(a)}
+                        title={a.is_admin ? "Retirer les droits admin" : "Donner les droits admin"}
+                        style={{
+                          background: a.is_admin ? "#f5f3ff" : "#f1f5f9",
+                          color: a.is_admin ? "#7c3aed" : "#94a3b8",
+                          border: `1px solid ${a.is_admin ? "#c4b5fd" : "#e2e8f0"}`,
+                          borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+                          fontSize: 11, fontWeight: 700
+                        }}>
+                        {a.is_admin ? "Admin" : "Rendre admin"}
                       </button>
                       <button
                         onClick={() => setModal({ type: "reset", agent: a })}
