@@ -268,7 +268,8 @@ const EQ_COLORS = Object.fromEntries(
     prive: v.prive||false,
   }])
 );
-const TODAY=new Date().toISOString().slice(0,10);
+const _todayDate=new Date();
+const TODAY=`${_todayDate.getFullYear()}-${String(_todayDate.getMonth()+1).padStart(2,"0")}-${String(_todayDate.getDate()).padStart(2,"0")}`;
 
 const DAYS_L=["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
 const DAYS_S=["Di","Lu","Ma","Me","Je","Ve","Sa"];
@@ -3831,6 +3832,25 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const [calView,setCalView]=useState("mois");
   const [dayPopup,setDayPopup]=useState(null); // {dk, entry}
   const [monthOff,setMonthOff]=useState(0);
+  const personalDateJumpRef=useRef();
+  const jumpToWeekDate=(dateStr)=>{
+    const target=new Date(dateStr+"T12:00:00");
+    const targetDow=target.getDay();
+    const targetMondayOffset=targetDow===0?-6:1-targetDow;
+    const targetMonday=new Date(target); targetMonday.setDate(target.getDate()+targetMondayOffset); targetMonday.setHours(12,0,0,0);
+    const today=new Date();
+    const todayDow=today.getDay();
+    const todayMondayOffset=todayDow===0?-6:1-todayDow;
+    const currentMonday=new Date(today); currentMonday.setDate(today.getDate()+todayMondayOffset); currentMonday.setHours(12,0,0,0);
+    const diffWeeks=Math.round((targetMonday-currentMonday)/(7*24*60*60*1000));
+    setWeekOffset(diffWeeks);
+  };
+  const jumpToMonthDate=(dateStr)=>{
+    const target=new Date(dateStr+"T12:00:00");
+    const today=new Date();
+    const diffMonths=(target.getFullYear()*12+target.getMonth())-(today.getFullYear()*12+today.getMonth());
+    setMonthOff(diffMonths);
+  };
   const [showColorPicker,setShowColorPicker]=useState(false);
   // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate
   // Source unique de vérité : agentProfiles[agent.id].agentColors
@@ -4020,18 +4040,21 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
       </div>
       {/* Nav selon la vue */}
       {calView==="semaine"?<>
-        <button onClick={()=>setWeekOffset(w=>w-1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>‹</button>
-        <span style={{fontSize:12,fontWeight:600,color:"#475569",flex:1,textAlign:"center"}}>{weekDates[0]?.slice(8)}/{weekDates[0]?.slice(5,7)}–{weekDates[6]?.slice(8)}/{weekDates[6]?.slice(5,7)}</span>
-        <button onClick={()=>setWeekOffset(0)} style={{border:"1.5px solid #6366f1",background:"#eef2ff",color:"#4f46e5",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:700,opacity:weekOffset===0?0.4:1}}>Auj.</button>
-        <button onClick={()=>setWeekOffset(w=>w+1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>›</button>
+        <button onClick={()=>setWeekOffset(0)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:weekOffset===0?"#f1f5f9":"#eef2ff",color:weekOffset===0?"#94a3b8":"#4f46e5",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>Aujourd'hui</button>
+        <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",flex:1}}>
+          <span style={{fontSize:12,fontWeight:600,color:"#475569",fontWeight:700}}>{weekDates[0]?.slice(8)}/{weekDates[0]?.slice(5,7)}–{weekDates[6]?.slice(8)}/{weekDates[6]?.slice(5,7)}</span>
+          <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
+        </button>
       </>:<>
-        <button onClick={()=>setMonthOff(m=>m-1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>‹</button>
-        <span style={{fontSize:13,fontWeight:700,color:"#1e293b",flex:1,textAlign:"center"}}>{MOIS_L[curMonth].slice(0,4)} {curYear}</span>
-        <button onClick={()=>setMonthOff(0)} style={{border:"1.5px solid #6366f1",background:"#eef2ff",color:"#4f46e5",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0,opacity:monthOff===0?0.4:1}}>Auj.</button>
-        <button onClick={()=>setMonthOff(m=>m+1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"5px 9px",cursor:"pointer",fontSize:13}}>›</button>
+        <button onClick={()=>setMonthOff(0)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#94a3b8":"#4f46e5",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
+        <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",flex:1}}>
+          <span style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>{MOIS_L[curMonth].slice(0,4)} {curYear}</span>
+          <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
+        </button>
       </>}
     </div>
 
+    <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value){if(calView==="semaine")jumpToWeekDate(e.target.value);else jumpToMonthDate(e.target.value);}}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
     {/* ── VUE SEMAINE ── */}
     {calView==="semaine"&&<>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
