@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 26/06/2026 — commit `9ac2b3b`
+**Dernière mise à jour** : 26/06/2026 — commit `74dc0e0`
 
 ---
 
@@ -17,15 +17,23 @@
 
 ---
 
+## 0. Navigation
+
+- **Barre du haut** : les 3 plannings principaux toujours visibles (Mon planning / Planning Prévisionnel / CPS Officiel)
+- **Menu latéral** ☰ (bouton à gauche du logo, glisse depuis la gauche) : regroupe les 3 plannings (par cohérence) + Échanges + Mon profil + Admin (si admin) + Déconnexion, en texte complet
+- L'application retient la dernière vue ouverte tant qu'on ne se déconnecte pas (persistant sur l'appareil)
+
 ## 1. Authentification & gestion des agents
 
 - Connexion par CP SNCF + code PIN (4 chiffres), multi-appareils
 - Premier login : création de PIN obligatoire
 - Mot de passe oublié : réinitialisation par un administrateur
 - **Panneau Admin** (réservé aux comptes admin, ex: CP 6810186B) :
+  - Indicateur visuel 👑 en haut de l'écran : affiché uniquement quand on est connecté avec les droits admin actifs (n'apparaît pas pour un compte normal)
   - Liste complète des agents avec recherche et filtre PRCI/PAR
   - Création d'un nouvel agent (CP, nom, prénom, grade, famille)
   - **Modification d'un agent** : nom, prénom, grade, famille, et **CP** (avec confirmation — cascade automatique sur les 17 tables liées, aucune perte de données)
+  - **Donner/retirer les droits admin** à un agent (bouton "Rendre admin" / "Admin")
   - Réinitialisation du PIN d'un agent
   - Suppression d'un agent
   - Rafraîchissement automatique de la liste (à chaque création/modification/suppression, + vérification périodique toutes les 45 secondes pour la synchro entre appareils)
@@ -150,3 +158,4 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 | 23/06 | Timezone fix, persistance vues, OCR amélioré, **CPS aléas** (échange/erreur/non tenu) |
 | 25/06 | **Planning Prévisionnel Partagé** complet (toggle partage, signalement, résolution auto), Admin (création/modification agent), polling 45s |
 | 26/06 | **Journée spéciale** complète (PPRCI/PPAR, pense-bête privé, message public partagé), corrections CP modifiable (cascade FK), recherche dans cases, multiples bugs OCR/agents manquants corrigés |
+| 26/06 (suite) | UX recherche agent dans popups (liste cachée tant qu'aucune saisie), **menu latéral coulissant** (3 plannings visibles + reste regroupé), toggle admin réel dans Admin, suppression du panneau admin obsolète (AdminAuthPanel, code mort lié à l'ancien système d'auth local) |
