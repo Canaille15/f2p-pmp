@@ -922,6 +922,31 @@ function JourneeSpecialeNotePopup({agentId,agentNom,dateKey,currentMessage,onClo
 
 function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onAddAgent,onRemoveAgent,isAdmin,isPrevisionnel,previsionnelSignalements,setPrevisionnelSignalements,journeeSpecialeNotes,setJourneeSpecialeNotes}){
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
+  const goToDay=(delta)=>{
+    let newIdx=dayIdx+delta;
+    if(newIdx>6){setWeekOffset(w=>w+1);setDayIdx(0);}
+    else if(newIdx<0){setWeekOffset(w=>w-1);setDayIdx(6);}
+    else{setDayIdx(newIdx);}
+  };
+  const goToToday=()=>{
+    setWeekOffset(0);
+    const d=new Date().getDay();
+    setDayIdx(d===0?6:d-1);
+  };
+  const jumpToDate=(dateStr)=>{
+    const target=new Date(dateStr+"T12:00:00");
+    const targetDow=target.getDay();
+    const targetMondayOffset=targetDow===0?-6:1-targetDow;
+    const targetMonday=new Date(target); targetMonday.setDate(target.getDate()+targetMondayOffset); targetMonday.setHours(12,0,0,0);
+    const today=new Date();
+    const todayDow=today.getDay();
+    const todayMondayOffset=todayDow===0?-6:1-todayDow;
+    const currentMonday=new Date(today); currentMonday.setDate(today.getDate()+todayMondayOffset); currentMonday.setHours(12,0,0,0);
+    const diffWeeks=Math.round((targetMonday-currentMonday)/(7*24*60*60*1000));
+    setWeekOffset(diffWeeks);
+    setDayIdx(targetDow===0?6:targetDow-1);
+  };
+  const dateJumpRef=useRef();
   const [aleaTarget,setAleaTarget]=useState(null);
   const [previsionnelTarget,setPrevisionnelTarget]=useState(null);
   const [journeeSpecialeNoteTarget,setJourneeSpecialeNoteTarget]=useState(null);
@@ -1164,14 +1189,17 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
 
     {/* Nav semaine */}
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
-      <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>
-        <button onClick={()=>setWeekOffset(w=>w-1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:14}}>‹</button>
-        <button onClick={()=>setWeekOffset(0)} style={{border:"1.5px solid #378ADD",background:weekOffset===0?"#f1f5f9":"#E6F1FB",color:weekOffset===0?"#94a3b8":"#0C447C",borderRadius:8,padding:"6px 14px",cursor:"pointer",fontSize:11,fontWeight:700}}>Auj.</button>
-        <button onClick={()=>setWeekOffset(w=>w+1)} style={{border:"1.5px solid #e2e8f0",background:"#fff",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:14}}>›</button>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <button onClick={()=>{try{dateJumpRef.current.showPicker();}catch(e){dateJumpRef.current&&dateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",padding:"4px 0",cursor:"pointer"}}>
+          <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{MOIS_L[new Date(dateKey).getMonth()]} {new Date(dateKey).getFullYear()}</span>
+          <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
+        </button>
+        <button onClick={goToToday} style={{display:"flex",alignItems:"center",gap:6,border:"none",background:weekOffset===0?"#f1f5f9":"#E6F1FB",color:weekOffset===0?"#94a3b8":"#0C447C",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>📅 Aujourd'hui</button>
       </div>
-      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+      <input ref={dateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
+      <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
         {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
-          <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #378ADD":"1.5px solid #cbd5e1",borderRadius:10,padding:"5px 10px",cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"#fff",color:dayIdx===i?"#fff":isToday?"#0C447C":"#334155",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
+          <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #378ADD":"1.5px solid #cbd5e1",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"#fff",color:dayIdx===i?"#fff":isToday?"#0C447C":"#334155",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
             {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
           </button>);})}
       </div>
