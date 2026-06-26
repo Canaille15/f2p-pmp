@@ -87,6 +87,25 @@ async function sbDeleteEntry(agentId, dk) {
 }
 
 // ─── PERSISTANCE LOCALE (localStorage) ───────────────────────────────────────
+function useSwipeHandlers(onSwipeLeft, onSwipeRight, threshold=50){
+  const startX=useRef(null);
+  const startY=useRef(null);
+  const onTouchStart=(e)=>{
+    startX.current=e.touches[0].clientX;
+    startY.current=e.touches[0].clientY;
+  };
+  const onTouchEnd=(e)=>{
+    if(startX.current===null)return;
+    const deltaX=e.changedTouches[0].clientX-startX.current;
+    const deltaY=e.changedTouches[0].clientY-startY.current;
+    if(Math.abs(deltaX)>threshold&&Math.abs(deltaX)>Math.abs(deltaY)*1.5){
+      if(deltaX<0)onSwipeLeft&&onSwipeLeft();
+      else onSwipeRight&&onSwipeRight();
+    }
+    startX.current=null;startY.current=null;
+  };
+  return {onTouchStart,onTouchEnd};
+}
 function usePersist(key, defaultValue) {
   const [value, setValue] = useState(() => {
     try {
@@ -947,6 +966,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     setWeekOffset(diffWeeks);
     setDayIdx(targetDow===0?6:targetDow-1);
   };
+  const swipeDay=useSwipeHandlers(()=>goToDay(1),()=>goToDay(-1));
   const dateJumpRef=useRef();
   const [aleaTarget,setAleaTarget]=useState(null);
   const [previsionnelTarget,setPrevisionnelTarget]=useState(null);
@@ -1208,6 +1228,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     </div>
 
     {/* Sections */}
+    <div onTouchStart={swipeDay.onTouchStart} onTouchEnd={swipeDay.onTouchEnd}>
     {sections.map(section=>(
       <div key={section.id} style={{border:`1.5px solid ${section.pc.border}`,borderRadius:14,overflow:"hidden",background:"#fff"}}>
         <div style={{background:section.pc.header,padding:"9px 18px",display:"flex",alignItems:"center",gap:10}}>
@@ -1338,6 +1359,8 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         })}
       </div>
     ))}
+
+    </div>
 
     {/* Non renseignés */}
     <details style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:12}}>
