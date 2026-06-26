@@ -24,6 +24,7 @@ app.use('/api/pauses',        require('./src/routes/pauses'));
 app.use('/api/notifications', require('./src/routes/notifications'));
 app.use('/api/echanges',      require('./src/routes/echanges'));
 app.use('/api/previsionnel-signalements', require('./src/routes/previsionnelSignalements'));
+app.use('/api/journee-speciale-notes', require('./src/routes/journeeSpecialeNotes'));
 
 app.get('/health', (req, res) => res.json({ status: 'ok', routes: 9, ts: new Date() }));
 app.use((req, res) => res.status(404).json({ error: 'Route introuvable' }));
