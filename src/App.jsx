@@ -764,8 +764,8 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
         <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>{type==="echange"?"Agent(s) qui assure(nt) le poste":"Préciser l'erreur"}</div>
         <input placeholder="Rechercher un agent…" value={search} onChange={e=>setSearch(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13}}/>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:140,overflowY:"auto"}}>
-          {agentsFiltres.slice(0,30).map(a=>{
+        {search.trim().length>0?(<div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:140,overflowY:"auto"}}>
+          {agentsFiltres.slice(0,8).map(a=>{
             const selected=agentsChoisis.find(x=>x.id===a.id);
             return(<button key={a.id} onClick={()=>toggleAgent(a)}
               style={{padding:"5px 10px",borderRadius:8,border:`1.5px solid ${selected?"#0C447C":"#e2e8f0"}`,
@@ -773,7 +773,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
               {a.prenom} {a.nom}
             </button>);
           })}
-        </div>
+        </div>):(<div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic",padding:"4px 2px"}}>Tapez un nom pour rechercher un agent...</div>)}
         <textarea placeholder="Motif (optionnel)" value={motif} onChange={e=>setMotif(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
@@ -854,8 +854,8 @@ function PrevisionnelSignalementPopup({agents,agentTitulaireId,dateKey,nomTitula
         <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>Qui assure reellement ce poste ? (max 4)</div>
         <input placeholder="Rechercher un agent…" value={search} onChange={e=>setSearch(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13}}/>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:140,overflowY:"auto"}}>
-          {agentsFiltres.slice(0,30).map(a=>{
+        {search.trim().length>0?(<div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:140,overflowY:"auto"}}>
+          {agentsFiltres.slice(0,8).map(a=>{
             const selected=agentsChoisis.find(x=>x.id===a.id);
             const disabled=!selected&&agentsChoisis.length>=4;
             return(<button key={a.id} onClick={()=>!disabled&&toggleAgent(a)} disabled={disabled}
@@ -864,7 +864,7 @@ function PrevisionnelSignalementPopup({agents,agentTitulaireId,dateKey,nomTitula
               {a.prenom} {a.nom}
             </button>);
           })}
-        </div>
+        </div>):(<div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic",padding:"4px 2px"}}>Tapez un nom pour rechercher un agent...</div>)}
         {agentsChoisis.length>=4&&<div style={{fontSize:11,color:"#a16207"}}>Maximum 4 agents atteint</div>}
         <textarea placeholder="Motif (optionnel)" value={motif} onChange={e=>setMotif(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
