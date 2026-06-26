@@ -3874,6 +3874,8 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     const diffMonths=(target.getFullYear()*12+target.getMonth())-(today.getFullYear()*12+today.getMonth());
     setMonthOff(diffMonths);
   };
+  const swipeWeek=useSwipeHandlers(()=>setWeekOffset(w=>w+1),()=>setWeekOffset(w=>w-1));
+  const swipeMonth=useSwipeHandlers(()=>setMonthOff(m=>m+1),()=>setMonthOff(m=>m-1));
   const [showColorPicker,setShowColorPicker]=useState(false);
   // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate
   // Source unique de vérité : agentProfiles[agent.id].agentColors
@@ -4080,7 +4082,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
     <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value){if(calView==="semaine")jumpToWeekDate(e.target.value);else jumpToMonthDate(e.target.value);}}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
     {/* ── VUE SEMAINE ── */}
     {calView==="semaine"&&<>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
+      <div onTouchStart={swipeWeek.onTouchStart} onTouchEnd={swipeWeek.onTouchEnd} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
         {weekDates.map((dk,i)=>{
           const en=schedule[`${agent.id}-${dk}`];
           const code=en?.equipe;
@@ -4204,7 +4206,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
     {calView==="mois"&&<>
 
       {/* Grille mensuelle */}
-      <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+      <div onTouchStart={swipeMonth.onTouchStart} onTouchEnd={swipeMonth.onTouchEnd} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
         {/* En-têtes jours */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
           {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d=>(
@@ -4423,7 +4425,7 @@ justifyContent: "flex-start",
       onSave={hab=>{setProfile({habilitations:hab});setShowHabRoul(false);}}
       onClose={()=>setShowHabRoul(false)}/>}
     {/* ── VUE PLANNING ── */}
-    {calView==="planning"&&<>
+    {calView==="planning"&&<div onTouchStart={swipeMonth.onTouchStart} onTouchEnd={swipeMonth.onTouchEnd}>
       <VuePlanning
         dates={monthDates}
         agent={agent}
@@ -4433,7 +4435,7 @@ justifyContent: "flex-start",
         isOwnProfile={isOwnProfile}
         onDayClick={(dk,en)=>setDayPopup({dk,entry:en||null})}
       />
-    </>}
+    </div>}
 
     {/* Tableau de bord compteurs */}
     {agent&&<DashboardCompteurs agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
