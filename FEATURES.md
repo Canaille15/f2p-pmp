@@ -133,26 +133,30 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 
 ---
 
-## ⚠️ Points de vigilance connus (dette technique)
+## 📌 Chantiers en attente (inventaire exhaustif au 27/06)
 
-1. **Ré-import CPS et régression OCR** : si l'OCR lit mal une ligne lors d'un second import, la donnée correcte précédente peut être écrasée par une donnée incomplète (`jsCode: null`). Pas de protection actuelle — solution de contournement : réimporter à nouveau.
-2. **`AddAgentModal`** (composant dans `App.jsx`, avec import IA photo/PDF) semble redondant avec le vrai formulaire de création utilisé dans le panneau Admin. À clarifier : doit-il être supprimé, ou rebranché quelque part ?
-3. **Nettoyage du dépôt** : résidus de terminal accidentellement commités/non gérés (`cd`, `node`, `powershell`, `vite`, fichiers mal nommés) — nettoyage prévu mais non fait.
-4. **Gestion des noms identiques** (ex: deux agents prénommés Yvon) : sujet identifié, pas encore traité en profondeur.
+**Nouveaux modules à créer**
+- **Module Formation dédié** : actuellement juste un badge/regroupement basique dans CPS/Prévisionnel — prévoir un vrai module (suivi, planification, historique)
+- **Annuaire des agents** : liste/recherche centralisée avec coordonnées, postes, habilitations
+- **Refonte du module Fêtes SNCF** : le suivi existe (section 2) mais une refonte plus ergonomique était évoquée
+- **Vue "Comparaison" CPS Officiel vs Prévisionnel** : détection automatique des écarts entre les deux plannings (actuellement repéré manuellement, comme on l'a fait pour HERN/PIVGD-)
+- **Import planning PDF général** : pour le planning personnel directement (au-delà du seul CPS)
+- **Calendrier cliquable multi-mois** : navigation rapide entre mois éloignés (en partie couvert par le sélecteur de date ajouté aujourd'hui — à réévaluer si toujours nécessaire)
+- **Documentation PDF imprimable** : à construire à partir de ce document `FEATURES.md`, avec liens cliquables, gardée dans l'application
 
-✅ **Résolu cette session** : bug de décalage de date (`TODAY` calculé en UTC au lieu de l'heure locale, pouvait afficher le mauvais jour) — corrigé. Ancien panneau "Gestion des comptes" (`AdminAuthPanel`, code mort lié à l'authentification locale d'avant la migration backend) supprimé, remplacé par un vrai toggle admin connecté au serveur dans le panneau Admin.
+**Améliorations ergonomie/affichage**
+- Affichage du motif des aléas CPS directement sur les cases (actuellement visible seulement en ouvrant le détail)
+- Repositionner le bouton "Échanges" (mentionné comme mal placé)
+- Vérification fonctionnelle complète du panneau Admin (au-delà du toggle admin et de la modification d'agent déjà faits)
 
----
+**Dette technique**
+1. **Ré-import CPS et régression OCR** : un ré-import peut écraser un `jsCode` valide par `null` si l'OCR lit moins bien la seconde fois — pas de garde-fou
+2. **`AddAgentModal`** (composant dans `App.jsx` avec import IA photo/PDF) semble redondant avec le vrai formulaire d'Admin — à clarifier (supprimer ou rebrancher)
+3. **Nettoyage du dépôt** : résidus de terminal (`cd`, `node`, `powershell`, `vite`, fichiers mal nommés) jamais faits
+4. **Gestion des noms identiques** (ex: deux agents prénommés Yvon) : identifié, pas creusé
+5. **Bug clavier PIN mobile** : signalé anciennement, statut à réévaluer (peut-être déjà résolu indirectement par les corrections de focus de connexion faites aujourd'hui — à vérifier)
 
-## 📌 Chantiers en attente (non commencés)
-
-- **Vue "Comparaison"** CPS Officiel vs Prévisionnel : détection automatique des écarts (actuellement détectés manuellement)
-- **Module Formation** dédié (au-delà du simple badge actuel)
-- **Annuaire** des agents
-- **Import planning PDF général** (pour le planning personnel, hors CPS)
-- **Calendrier cliquable** multi-mois (navigation rapide)
-- **Documentation PDF complète**, avec liens cliquables, à garder dans l'application et imprimable — *ce document (FEATURES.md) en est la base*
-- **Bug clavier PIN mobile** (signalé anciennement, statut à vérifier)
+✅ **Résolu cette session (27/06)** : bug de décalage de date (`TODAY` UTC vs heure locale), panneau admin obsolète remplacé par un vrai toggle connecté au serveur, focus de connexion (CP avant PIN).
 
 ---
 
