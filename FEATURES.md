@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 26/06/2026 — commit `7de3450`
+**Dernière mise à jour** : 26/06/2026 — commit `9ac2b3b`
 
 ---
 
@@ -62,6 +62,7 @@
 - **Badge "⚠ Conflit"** : alerte visuelle quand plusieurs agents apparaissent sur le même poste 3x8
 - **Recherche** : filtre les agents affichés dans toutes les cases
 - **Bouton import** : visible uniquement côté CPS Officiel (masqué côté Prévisionnel)
+- **Popups signalement/aléa** : la liste de noms n'apparaît qu'après avoir tapé une recherche (plus de liste complète affichée d'office)
 
 ---
 
@@ -130,7 +131,6 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 
 ## 📌 Chantiers en attente (non commencés)
 
-- **Recherche d'agent améliorée** dans les popups (signalement, aléas) : passer d'une liste complète affichée à un champ de saisie qui filtre dynamiquement, avec affichage des résultats cliquables seulement après saisie — à appliquer de manière cohérente sur les 3 plannings concernés
 - **Vue "Comparaison"** CPS Officiel vs Prévisionnel : détection automatique des écarts (actuellement détectés manuellement)
 - **Module Formation** dédié (au-delà du simple badge actuel)
 - **Annuaire** des agents
