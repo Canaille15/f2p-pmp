@@ -45,7 +45,7 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel, famille, nouveau_cp } = req.body;
+  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel, famille, nouveau_cp, is_admin } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
@@ -56,7 +56,7 @@ async function update(req, res) {
     if (prenom !== undefined) { fields.push('prenom = ?'); values.push(prenom); }
     if (poste  !== undefined) { fields.push('poste = ?');  values.push(poste); }
   }
-  if (!fields.length && famille === undefined) return res.status(400).json({ error: 'Rien à modifier' });
+  if (!fields.length && famille === undefined && is_admin === undefined) return res.status(400).json({ error: 'Rien à modifier' });
   values.push(cp);
   try {
     if (fields.length) {
@@ -64,6 +64,9 @@ async function update(req, res) {
     }
     if (req.agent.is_admin && famille !== undefined) {
       await pool.query('UPDATE profil_agent SET familles_hab = ? WHERE cp_agent = ?', [famille, cp]);
+    }
+    if (req.agent.is_admin && is_admin !== undefined) {
+      await pool.query('UPDATE auth SET is_admin = ? WHERE cp_agent = ?', [is_admin ? 1 : 0, cp]);
     }
     let cpFinal = cp;
     if (req.agent.is_admin && nouveau_cp !== undefined && nouveau_cp.toUpperCase() !== cp) {
