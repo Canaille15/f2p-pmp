@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 26/06/2026 — commit `74dc0e0`
+**Dernière mise à jour** : 27/06/2026 — commit `f9d986c`
 
 ---
 
@@ -22,6 +22,11 @@
 - **Barre du haut** : les 3 plannings principaux toujours visibles (Mon planning / Planning Prévisionnel / CPS Officiel)
 - **Menu latéral** ☰ (bouton à gauche du logo, glisse depuis la gauche) : regroupe les 3 plannings (par cohérence) + Échanges + Mon profil + Admin (si admin) + Déconnexion, en texte complet
 - L'application retient la dernière vue ouverte tant qu'on ne se déconnecte pas (persistant sur l'appareil)
+- **Navigation par date** (CPS Officiel, Prévisionnel, et Mon planning - Semaine/Mois/Planning) :
+  - "Aujourd'hui" + titre cliquable (mois/année) groupés à gauche — le clic sur le titre ouvre un sélecteur de date natif pour sauter directement à une date lointaine, sans avoir à cliquer plusieurs fois
+  - Plus de flèches précédent/suivant (jugées redondantes avec le clic direct sur les jours et le glissement tactile)
+  - **Glissement tactile (swipe)** : glisser le doigt vers la gauche/droite sur la zone de contenu change de jour (CPS/Prévisionnel) ou de semaine/mois (planning perso)
+  - Rangée des 7 jours (Lu-Di) : défilement horizontal plutôt que retour à la ligne, robuste sur tous les écrans
 
 ## 1. Authentification & gestion des agents
 
@@ -135,6 +140,8 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 3. **Nettoyage du dépôt** : résidus de terminal accidentellement commités/non gérés (`cd`, `node`, `powershell`, `vite`, fichiers mal nommés) — nettoyage prévu mais non fait.
 4. **Gestion des noms identiques** (ex: deux agents prénommés Yvon) : sujet identifié, pas encore traité en profondeur.
 
+✅ **Résolu cette session** : bug de décalage de date (`TODAY` calculé en UTC au lieu de l'heure locale, pouvait afficher le mauvais jour) — corrigé. Ancien panneau "Gestion des comptes" (`AdminAuthPanel`, code mort lié à l'authentification locale d'avant la migration backend) supprimé, remplacé par un vrai toggle admin connecté au serveur dans le panneau Admin.
+
 ---
 
 ## 📌 Chantiers en attente (non commencés)
@@ -159,3 +166,4 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 | 25/06 | **Planning Prévisionnel Partagé** complet (toggle partage, signalement, résolution auto), Admin (création/modification agent), polling 45s |
 | 26/06 | **Journée spéciale** complète (PPRCI/PPAR, pense-bête privé, message public partagé), corrections CP modifiable (cascade FK), recherche dans cases, multiples bugs OCR/agents manquants corrigés |
 | 26/06 (suite) | UX recherche agent dans popups (liste cachée tant qu'aucune saisie), **menu latéral coulissant** (3 plannings visibles + reste regroupé), toggle admin réel dans Admin, suppression du panneau admin obsolète (AdminAuthPanel, code mort lié à l'ancien système d'auth local) |
+| 27/06 | **Refonte complète de la navigation par date** sur les 3 plannings : Aujourd'hui + sélecteur de date groupés à gauche, suppression des flèches, **glissement tactile (swipe)** partout, rangée de jours défilante, **fix du bug timezone TODAY** (UTC vs heure locale) |
