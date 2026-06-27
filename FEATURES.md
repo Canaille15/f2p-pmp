@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 27/06/2026 — commit `e38074e`
+**Dernière mise à jour** : 27/06/2026 — commit `372feb6`
 
 ---
 
@@ -65,6 +65,7 @@
 
 ## 3. CPS Officiel (planning officiel SNCF)
 
+- **Postes Pauseur PRCI renommés clairement** : PIPA1J → "Pauseur CCL", PIPA2J → "Pauseur Adjoint", PIPA3J → "Pauseur VGD" (au lieu des codes génériques PA1/PA2/PA3, peu parlants) — badge "/F" (allowFormation) retiré sur ces postes + PAASMJ, jugé inutile
 - **Bandeau d'en-tête** : "FEUILLE DE PRESENCE JOURNALIERE" (fond bleu marine plein, icône 📋), pour identifier clairement la vue
 - **Message explicatif en bas de page** (texte exact, à reprendre dans la notice utilisateur) :
   > "La feuille de présence officielle ne peut pas être modifiée ici.
