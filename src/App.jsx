@@ -1152,7 +1152,8 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           const existing=schedule[key];
           const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
           if(existing&&(existing.equipe!==equipe||existing.jsCode!==jsCode)) ec++;
-          updates.push({key,equipe,jsCode,horaires,cp_agent:ag.id,date_jour:lineDateStr,famille:ag.fam||"PAR"});
+          const finalJsCode=jsCode||existing?.jsCode||null;
+          updates.push({key,equipe,jsCode:finalJsCode,horaires,cp_agent:ag.id,date_jour:lineDateStr,famille:ag.fam||"PAR"});
           nb++;
         });
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
