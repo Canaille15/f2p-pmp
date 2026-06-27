@@ -10,6 +10,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   charset: 'utf8mb4',
+  dateStrings: ['DATE'], // évite le décalage d'un jour dû au fuseau horaire sur les colonnes DATE
 });
 
 pool.getConnection()
