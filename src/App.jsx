@@ -1185,10 +1185,18 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     reader.readAsDataURL(file);
   };
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {isPrevisionnel&&<div style={{display:"flex",alignItems:"center",gap:8,background:"#EEEDFE",border:"1px solid #CECBF6",borderRadius:10,padding:"9px 14px"}}>
-      <span style={{fontSize:16}}>📅</span>
-      <span style={{fontSize:13,fontWeight:700,color:"#3C3489"}}>Planning prévisionnel partagé</span>
-      <span style={{fontSize:11,color:"#534AB7"}}>— basé sur les déclarations personnelles des agents</span>
+    {isPrevisionnel&&<div style={{display:"flex",alignItems:"center",gap:10,background:"#4338CA",borderRadius:12,padding:"12px 16px",flexWrap:"wrap"}}>
+      <span style={{fontSize:20}}>📅</span>
+      <div style={{display:"flex",flexDirection:"column",gap:2,flex:1,minWidth:200}}>
+        <span style={{fontSize:15,fontWeight:800,color:"#fff"}}>Planning prévisionnel partagé</span>
+        <span style={{fontSize:12,color:"#E0E7FF"}}>Basé sur les déclarations personnelles des agents</span>
+      </div>
+    </div>}
+    {!isPrevisionnel&&<div style={{display:"flex",alignItems:"center",gap:10,background:"#0C447C",borderRadius:12,padding:"12px 16px",flexWrap:"wrap"}}>
+      <span style={{fontSize:20}}>📋</span>
+      <div style={{display:"flex",flexDirection:"column",gap:2,flex:1,minWidth:200}}>
+        <span style={{fontSize:15,fontWeight:800,color:"#fff"}}>FEUILLE DE PRESENCE JOURNALIERE</span>
+      </div>
     </div>}
     <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
       <input placeholder="🔍 Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}
