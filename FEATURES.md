@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 27/06/2026 — commit `463ffa8`
+**Dernière mise à jour** : 27/06/2026 — commit `e38074e`
 
 ---
 
@@ -159,13 +159,12 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 - Vérification fonctionnelle complète du panneau Admin (au-delà du toggle admin et de la modification d'agent déjà faits)
 
 **Dette technique**
-1. **Ré-import CPS et régression OCR** : un ré-import peut écraser un `jsCode` valide par `null` si l'OCR lit moins bien la seconde fois — pas de garde-fou
-2. **`AddAgentModal`** (composant dans `App.jsx` avec import IA photo/PDF) semble redondant avec le vrai formulaire d'Admin — à clarifier (supprimer ou rebrancher)
-3. **Nettoyage du dépôt** : résidus de terminal (`cd`, `node`, `powershell`, `vite`, fichiers mal nommés) jamais faits
-4. **Gestion des noms identiques** (ex: deux agents prénommés Yvon) : identifié, pas creusé
-5. **Bug clavier PIN mobile** : signalé anciennement, statut à réévaluer (peut-être déjà résolu indirectement par les corrections de focus de connexion faites aujourd'hui — à vérifier)
+1. **`AddAgentModal`** (composant dans `App.jsx` avec import IA photo/PDF) semble redondant avec le vrai formulaire d'Admin — à clarifier (supprimer ou rebrancher)
+2. **Nettoyage du dépôt** : résidus de terminal (`cd`, `node`, `powershell`, `vite`, fichiers mal nommés) jamais faits
+3. **Gestion des noms identiques** (ex: deux agents prénommés Yvon) : identifié, pas creusé
+4. **Bug clavier PIN mobile** : signalé anciennement, statut à réévaluer (peut-être déjà résolu indirectement par les corrections de focus de connexion faites le 27/06 — à vérifier)
 
-✅ **Résolu cette session (27/06)** : bug de décalage de date (`TODAY` UTC vs heure locale), panneau admin obsolète remplacé par un vrai toggle connecté au serveur, focus de connexion (CP avant PIN).
+✅ **Résolu cette session (27/06)** : bug de décalage de date (`TODAY` UTC vs heure locale), panneau admin obsolète remplacé par un vrai toggle connecté au serveur, focus de connexion (CP avant PIN), **protection contre la régression OCR** au ré-import CPS (un `jsCode` valide n'est plus écrasé par `null` si l'OCR rate sa lecture lors d'un second import — la valeur précédente est automatiquement conservée).
 
 ---
 
