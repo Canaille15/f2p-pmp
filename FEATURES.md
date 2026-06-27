@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 27/06/2026 — commit `f9d986c`
+**Dernière mise à jour** : 27/06/2026 — commit `463ffa8`
 
 ---
 
@@ -65,6 +65,10 @@
 
 ## 3. CPS Officiel (planning officiel SNCF)
 
+- **Bandeau d'en-tête** : "FEUILLE DE PRESENCE JOURNALIERE" (fond bleu marine plein, icône 📋), pour identifier clairement la vue
+- **Message explicatif en bas de page** (texte exact, à reprendre dans la notice utilisateur) :
+  > "La feuille de présence officielle ne peut pas être modifiée ici.
+  > Seuls les signalements 🔄 (échange de poste, erreur CPS) viennent s'ajouter par-dessus, à titre indicatif."
 - **Import automatique** par photo ou PDF de la feuille de présence journalière :
   - OCR via OCR.space (extraction du texte)
   - Reconnaissance des codes de poste (PICCL-, PIADJ-, PPRCI, PPAR, etc.)
@@ -81,6 +85,11 @@
 
 ## 4. Planning Prévisionnel
 
+- **Bandeau d'en-tête** : "Planning prévisionnel partagé" + sous-titre (fond violet plein, icône 📅), pour bien différencier du CPS Officiel
+- **Message explicatif en bas de page** (texte exact, à reprendre dans la notice utilisateur) :
+  > "Ici, chaque agent partage volontairement son planning personnel (à activer dans Mon Profil) pour aider à s'organiser collectivement.
+  > Seules les journées de travail sont partagées — le reste (congés, absences...) ne l'est pas.
+  > Ces informations restent indicatives et ne remplacent jamais la feuille de présence officielle — en cas d'écart, rapproche-toi de l'encadrement."
 - Basé sur les **plannings personnels partagés** des agents (toggle "Partager mon planning", activable dans Mon Profil)
 - Synchronisation automatique : au login, après modification du planning perso (avec délai de 1.5s), et toutes les 45s
 - **Bandeau d'identité visuelle** dédié ("📅 Planning prévisionnel partagé") pour bien différencier de la vue CPS Officiel
