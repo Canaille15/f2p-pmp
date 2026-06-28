@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 28/06/2026 — commit `238c3d4`
+**Dernière mise à jour** : 28/06/2026 — commit `40b20b1`
 
 ---
 
@@ -202,3 +202,13 @@ Module reconstruit le 28/06 (l'ancien système — candidatures/validations avec
 - Bandeau des 3 onglets rendu fixe sur mobile (plus de défilement horizontal involontaire) et contraste des libellés renforcé.
 
 **Reste en attente** : contraste des jours dans les cellules du calendrier (vues Mois/Semaine de Mon Planning) signalé illisible — distinct du bandeau d'onglets déjà traité ici.
+
+
+## 28/06 (suite 2) — Passe de contraste et tailles responsives
+
+Suite aux remarques d'Olivier (texte trop petit/fade, surtout sur ordinateur et tablette), passage en tailles **responsives** (CSS `clamp()`) plutôt qu'en pixels fixes pour les éléments de navigation des calendriers : compact sur mobile, nettement plus grand sur tablette/ordinateur, sans média-query.
+
+- Cellules du calendrier Mon Planning (vues Mois et Semaine) : numéro/nom du jour agrandis, gris clair remplacé par des couleurs à fort contraste.
+- Toggle Mois/Semaine/Planning et les 3 boutons "Aujourd'hui" (Mon Planning + CPS Officiel/Prévisionnel) : agrandis et **harmonisés** (taille strictement identique partout, ne change plus en changeant d'onglet).
+- Bandeau des 3 onglets du haut : texte responsive, poids de police uniforme entre onglet actif/inactif (la sélection ne se voit plus que par la couleur et le soulignement).
+- Bloc "Postes habilités" (profil réserviste) : libellé et badges plus contrastés.
