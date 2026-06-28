@@ -287,18 +287,6 @@ result[`${row.agent_id || agentId}-${date}`] = {
       });
     }
     if (periodes.length === 0) periodes.push({ordre:1, code_equipe:'N', code_poste:null, heure_debut:null, heure_fin:null, prive:false, note:null});
-    // Ajouter periode de nuit si debut de nuit ce soir
-    if (entry.equipe2 === 'N') {
-      periodes.push({
-        ordre: 2,
-        code_equipe: 'N',
-        code_poste: (entry.jsCode2 && !/^(PI|PA)/.test(entry.jsCode2)) ? entry.jsCode2 : null,
-        heure_debut: '22:15',
-        heure_fin: '06:17',
-        prive: false,
-        note: 'debut_nuit',
-      });
-    }
     return apiFetch(`/planning/${agentId}/${date}`, {
       method: 'PUT',
       body: JSON.stringify({ periodes, source: 'manuel' }),
@@ -529,19 +517,34 @@ export const notifications = {
 // ─── MODULE ÉCHANGES ─────────────────────────────────────────────────────────
 
 export const echanges = {
-  /** Toutes les demandes d'échange visibles pour un agent */
-  getAll: (agentId) => apiFetch(`/echanges?agentId=${agentId}`),
+  /** Toutes les demandes d'échange, triées par date la plus proche */
+  getAll: () => apiFetch('/echanges'),
 
-  /** Créer une demande d'échange */
+  /** Liste des agents intéressés par une demande */
+  getInteresses: (id) => apiFetch(`/echanges/${id}/interesses`),
+
+  /** Créer une demande d'échange pour une journée */
   create: (data) =>
     apiFetch('/echanges', { method: 'POST', body: JSON.stringify(data) }),
 
-  /** Répondre à une demande */
-  repondre: (echangeId, agentId, statut) =>
-    apiFetch(`/echanges/${echangeId}/reponse`, {
-      method: 'PUT',
-      body: JSON.stringify({ agentId, statut }),
+  /** Modifier les critères d'une demande (seul le demandeur, tant qu'ouverte) */
+  update: (id, data) =>
+    apiFetch(`/echanges/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+  /** Se déclarer intéressé / retirer son intérêt (bascule) */
+  toggleInteret: (id) =>
+    apiFetch(`/echanges/${id}/interet`, { method: 'POST' }),
+
+  /** Clôturer la demande en précisant avec qui l'échange a eu lieu */
+  cloturer: (id, cpEchangeAvec) =>
+    apiFetch(`/echanges/${id}/cloturer`, {
+      method: 'POST',
+      body: JSON.stringify({ cp_echange_avec: cpEchangeAvec }),
     }),
+
+  /** Supprimer une demande (seul le demandeur, à tout moment) */
+  delete: (id) =>
+    apiFetch(`/echanges/${id}`, { method: 'DELETE' }),
 };
 
 // ─── MODULE PAUSES ────────────────────────────────────────────────────────────
