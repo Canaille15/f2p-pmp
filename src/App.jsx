@@ -3217,6 +3217,13 @@ function getPlageMinutes(code) {
 }
 
 function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onDayClick}){
+  const todayRowRef = useRef(null);
+  useEffect(()=>{ todayRowRef.current?.scrollIntoView({block:"center"}); },[dates]);
+  useEffect(()=>{
+    const handler=()=>todayRowRef.current?.scrollIntoView({block:"center",behavior:"smooth"});
+    window.addEventListener("f2ppmp:scrolltoday",handler);
+    return ()=>window.removeEventListener("f2ppmp:scrolltoday",handler);
+  },[]);
   // Vue liste verticale scrollable (style Google Agenda mobile)
   // Un jour par ligne, bloc horaire visuel à droite
 
@@ -3287,7 +3294,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
               {l.dow===1&&i>0&&<div style={{height:1,background:"#e2e8f0",margin:"0 14px"}}/>}
 
               {/* Ligne jour */}
-              <div onClick={()=>onDayClick&&onDayClick(l.dk, schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]||null)} style={{
+              <div ref={l.isToday?todayRowRef:null} onClick={()=>onDayClick&&onDayClick(l.dk, schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]||null)} style={{
                 display:"flex",alignItems:"stretch",
                 minHeight:48,
                 background:l.isToday?"#eef2ff":l.isWE?"#fafafa":"#fff",
@@ -4094,7 +4101,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
           <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
         </button>
       </>:<>
-        <button onClick={()=>setMonthOff(0)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#94a3b8":"#4f46e5",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
+        <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#94a3b8":"#4f46e5",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
         <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",flex:1}}>
           <span style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>{MOIS_L[curMonth].slice(0,4)} {curYear}</span>
           <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
