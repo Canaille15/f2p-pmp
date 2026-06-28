@@ -1224,7 +1224,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{MOIS_L[new Date(dateKey).getMonth()]} {new Date(dateKey).getFullYear()}</span>
           <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
         </button>
-        <button onClick={goToToday} style={{display:"flex",alignItems:"center",gap:6,border:"none",background:weekOffset===0?"#f1f5f9":"#E6F1FB",color:weekOffset===0?"#94a3b8":"#0C447C",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>📅 Aujourd'hui</button>
+        <button onClick={goToToday} style={{display:"flex",alignItems:"center",gap:6,border:"none",background:weekOffset===0?"#f1f5f9":"#E6F1FB",color:weekOffset===0?"#475569":"#0C447C",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700}}>📅 Aujourd'hui</button>
       </div>
       <input ref={dateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
       <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
@@ -3478,7 +3478,7 @@ function BarreSaisieReserviste({habilitations, famillesHab, codeActif, setCodeAc
       {/* Postes habilités */}
       {postesHabilites.length>0&&(
         <div>
-          <div style={{fontSize:9,fontWeight:700,color:"#64748b",marginBottom:4,letterSpacing:.5}}>
+          <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginBottom:5,letterSpacing:.5}}>
             POSTES HABILITÉS ({postesHabilites.length})
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
@@ -3502,7 +3502,7 @@ function BarreSaisieReserviste({habilitations, famillesHab, codeActif, setCodeAc
                     width:10,height:10,borderRadius:"50%",
                     background:"#6366f1",border:"2px solid #fff"}}/>}
                   <span style={{fontSize:11,fontWeight:800,lineHeight:1}}>{p.label}</span>
-                  <span style={{fontSize:8,opacity:.7,lineHeight:1,fontWeight:400}}>
+                  <span style={{fontSize:10,opacity:.9,lineHeight:1,fontWeight:600}}>
                     {p.type==="3x8"?"3×8":"J"}{niv?` · ${niv.label}`:""}
                   </span>
                 </button>
@@ -4088,20 +4088,20 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
     <div style={{display:"flex",alignItems:"center",gap:8}}>
       <div style={{display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,gap:2}}>
         {[["mois","📆 Mois"],["semaine","📅 Semaine"],["planning","📋 Planning"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setCalView(k)} style={{border:"none",borderRadius:8,padding:"6px 14px",cursor:"pointer",background:calView===k?"#fff":"transparent",color:calView===k?"#1e293b":"#94a3b8",fontSize:12,fontWeight:calView===k?700:400,boxShadow:calView===k?"0 1px 4px rgba(0,0,0,.08)":"none"}}>
+          <button key={k} onClick={()=>setCalView(k)} style={{border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",background:calView===k?"#fff":"transparent",color:calView===k?"#1e293b":"#475569",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:calView===k?700:600,boxShadow:calView===k?"0 1px 4px rgba(0,0,0,.08)":"none"}}>
             {l}
           </button>
         ))}
       </div>
       {/* Nav selon la vue */}
       {calView==="semaine"?<>
-        <button onClick={()=>setWeekOffset(0)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:weekOffset===0?"#f1f5f9":"#eef2ff",color:weekOffset===0?"#94a3b8":"#4f46e5",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>Aujourd'hui</button>
+        <button onClick={()=>setWeekOffset(0)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:weekOffset===0?"#f1f5f9":"#eef2ff",color:weekOffset===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700}}>Aujourd'hui</button>
         <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",flex:1}}>
           <span style={{fontSize:12,fontWeight:600,color:"#475569",fontWeight:700}}>{weekDates[0]?.slice(8)}/{weekDates[0]?.slice(5,7)}–{weekDates[6]?.slice(8)}/{weekDates[6]?.slice(5,7)}</span>
           <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
         </button>
       </>:<>
-        <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#94a3b8":"#4f46e5",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
+        <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
         <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",flex:1}}>
           <span style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>{MOIS_L[curMonth].slice(0,4)} {curYear}</span>
           <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
@@ -4155,11 +4155,11 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               borderBottom:"1px solid #f1f5f9",
               background:isToday?"#f5f3ff":isWE?"#f8fafc":"#fff",
             }}>
-              <div style={{fontSize:11,fontWeight:isToday?800:600,
-                color:isToday?"#6366f1":isWE?"#94a3b8":"#475569"}}>
+              <div style={{fontSize:"clamp(11px,1.4vw,15px)",fontWeight:isToday?800:700,
+                color:isToday?"#6366f1":isWE?"#b45309":"#1e293b"}}>
                 {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"][i]}
               </div>
-              <div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>
+              <div style={{fontSize:"clamp(11px,1.4vw,15px)",fontWeight:700,color:isToday?"#6366f1":"#334155",marginTop:1}}>
                 {dk?.slice(8)}/{dk?.slice(5,7)}
               </div>
             </div>
@@ -4240,7 +4240,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
         {/* En-têtes jours */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
           {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d=>(
-            <div key={d} style={{padding:"6px 4px",textAlign:"center",fontSize:9,fontWeight:800,color:"#94a3b8",letterSpacing:.3}}>{d}</div>
+            <div key={d} style={{padding:"6px 4px",textAlign:"center",fontSize:"clamp(9px,1.2vw,13px)",fontWeight:800,color:"#475569",letterSpacing:.3}}>{d}</div>
           ))}
         </div>
         {/* Jours du mois */}
@@ -4287,8 +4287,8 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 justifyContent: "flex-start",
               }}>
        {/* Numéro du jour */}
-              <div style={{fontSize:11,fontWeight:isToday?800:500,
-                color:isToday?"#6366f1":isWE?"#94a3b8":"#374151",
+              <div style={{fontSize:"clamp(13px,1.8vw,18px)",fontWeight:isToday?800:700,
+                color:isToday?"#6366f1":isWE?"#b45309":"#1e293b",
                 lineHeight:1.3, marginBottom:1}}>{dayNum}</div>
 
               {/* ZONE 1 — 🌙 descente de nuit (toujours en haut) */}
@@ -6924,7 +6924,7 @@ export default function App(){
                 style={{
                   border:"none",background:"transparent",
                   padding:"9px 6px",cursor:"pointer",flex:1,minWidth:0,
-                  fontSize:11,fontWeight:actif?800:600,
+                  fontSize:"clamp(11px,1.6vw,15px)",fontWeight:700,
                   color:actif?"#0a3a63":"#334155",
                   borderBottom:actif?"2.5px solid #0a3a63":"2.5px solid transparent",
                   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",position:"relative",
