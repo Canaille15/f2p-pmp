@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 27/06/2026 — commit `372feb6`
+**Dernière mise à jour** : 28/06/2026 — commit `238c3d4`
 
 ---
 
@@ -121,9 +121,15 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 
 ## 7. Échanges entre agents
 
-- Proposition d'échange de service entre agents habilités sur le même poste
-- Réponses : Accepté / Refusé / Occasionnel
-- Option "Pas d'échange" désactivable par agent
+Module reconstruit le 28/06 (l'ancien système — candidatures/validations avec modification automatique du planning — a été abandonné sans jamais avoir été réellement utilisé).
+
+- **Principe** : une demande = une journée. L'agent choisit la date à échanger ; le poste et les horaires qu'il occupe ce jour-là sont **récupérés automatiquement** depuis son planning personnel (jamais saisis à la main), avec gestion du cas particulier d'une nuit (le poste réel est cherché sur le début de nuit de la veille si le jour choisi n'affiche qu'une fin de nuit)
+- **Critères de recherche** : créneau souhaité (matin / journée / soirée / nuit / indifférent), case "urgent" (garde d'enfant, médical...), motif libre visible par tous
+- **Aucune modification automatique du planning** de qui que ce soit (version "tableau d'annonces") : le bouton "Je suis intéressé" n'est qu'un signal de contact, plusieurs agents peuvent se déclarer intéressés sur la même demande pour débloquer des échanges à plusieurs
+- **Droits** : seul le demandeur peut modifier (y compris changer la date, avec recalcul automatique du poste), clôturer (en précisant avec qui l'échange a eu lieu, avec rappel à l'écran de le reporter manuellement dans le CPS Officiel), ou supprimer sa demande, à tout moment
+- **Statuts visuels** : orange (ouverte), rouge (ouverte + urgent), vert (clôturée, en attente de la date d'échange), gris (date passée)
+- **Purge automatique** : les demandes dont la date est passée depuis plus de 2 mois sont supprimées de la base à chaque chargement de la liste
+- **Accès** : lien "Échanges" dans le menu latéral, avec une cloche affichant le nombre de demandes ouvertes ; un bandeau identique apparaît aussi dans Mon Planning (peut être masqué avec ✕, ne doit revenir qu'en cas de nouvelle demande)
 
 ---
 
@@ -156,7 +162,6 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 
 **Améliorations ergonomie/affichage**
 - Affichage du motif des aléas CPS directement sur les cases (actuellement visible seulement en ouvrant le détail)
-- Repositionner le bouton "Échanges" (mentionné comme mal placé)
 - Vérification fonctionnelle complète du panneau Admin (au-delà du toggle admin et de la modification d'agent déjà faits)
 
 **Dette technique**
@@ -167,6 +172,10 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 
 ✅ **Résolu cette session (27/06)** : bug de décalage de date (`TODAY` UTC vs heure locale), panneau admin obsolète remplacé par un vrai toggle connecté au serveur, focus de connexion (CP avant PIN), **protection contre la régression OCR** au ré-import CPS (un `jsCode` valide n'est plus écrasé par `null` si l'OCR rate sa lecture lors d'un second import — la valeur précédente est automatiquement conservée).
 
+
+✅ **Résolu cette session (28/06)** : module Échanges entièrement reconstruit et déployé (voir section 7) ; bug de décalage d'1 jour sur l'affichage des dates partout dans l'appli corrigé (`dateStrings` dans la config DB) ; bug de doublon de la ligne "début de nuit" lors de la sauvegarde d'une nuit corrigé ; bug "Sélectionne ton profil" sur la page Échanges après F5 corrigé.
+
+📌 **Nouveaux points en attente** : table `poste` (référentiel des codes/libellés) toujours vide, jamais peuplée ; contraste des jours dans Mon Planning signalé illisible ; comportement de réapparition du bandeau Échanges pas formellement revérifié.
 ---
 
 ## Historique des sessions
@@ -180,3 +189,5 @@ Fonctionnalité couvrant les journées hors poste habituel (réunion, visite de 
 | 26/06 | **Journée spéciale** complète (PPRCI/PPAR, pense-bête privé, message public partagé), corrections CP modifiable (cascade FK), recherche dans cases, multiples bugs OCR/agents manquants corrigés |
 | 26/06 (suite) | UX recherche agent dans popups (liste cachée tant qu'aucune saisie), **menu latéral coulissant** (3 plannings visibles + reste regroupé), toggle admin réel dans Admin, suppression du panneau admin obsolète (AdminAuthPanel, code mort lié à l'ancien système d'auth local) |
 | 27/06 | **Refonte complète de la navigation par date** sur les 3 plannings : Aujourd'hui + sélecteur de date groupés à gauche, suppression des flèches, **glissement tactile (swipe)** partout, rangée de jours défilante, **fix du bug timezone TODAY** (UTC vs heure locale) |
+
+| 28/06 | **Module Échanges** reconstruit de zéro et déployé (création, créneau souhaité, urgent, motif, "Je suis intéressé", clôture, suppression, cloche+compteur, bandeau fermable, date modifiable, purge auto 2 mois) ; fix décalage date (lecture, `db.js`) ; fix doublon "début de nuit" (sauvegarde, `client.js`) ; fix page Échanges bloquée après F5 |
