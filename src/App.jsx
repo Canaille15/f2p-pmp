@@ -5404,10 +5404,10 @@ function EchangesView({agents,currentAgent}){
 
         {e.motif&&<div style={{fontSize:13,color:"#64748b",marginBottom:8,fontStyle:"italic"}}>"{e.motif}"</div>}
 
-        {e.statut==="ouverte"&&<div style={{fontSize:13,color:"#94a3b8",marginBottom:8}}>{e.nb_interets>0?(e.nb_interets+" intéressé(s)"):"Aucun intéressé"}</div>}
+        {e.statut==="ouverte"&&<div style={{fontSize:13,color:"#94a3b8",marginBottom:8}}>{e.nb_interets>0?("Intéressé(s) : "+e.interesses_noms):"Aucun intéressé"}</div>}
 
         <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          {!estDemandeur&&e.statut==="ouverte"&&<button onClick={()=>interesser(e.id)} style={{border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#475569",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700}}>🤝 Je suis intéressé</button>}
+          {!estDemandeur&&e.statut==="ouverte"&&<button onClick={()=>interesser(e.id)} style={{border:"1.5px solid "+(e.mon_interet?"#1e293b":"#e2e8f0"),background:e.mon_interet?"#1e293b":"#f8fafc",color:e.mon_interet?"#fff":"#475569",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700}}>{e.mon_interet?"✅ Intéressé":"🤝 Je suis intéressé"}</button>}
 
           {estDemandeur&&e.statut==="ouverte"&&cloturantId!==e.id&&<button onClick={()=>ouvrirEdition(e)} style={{border:"1.5px solid #e2e8f0",background:"#fff",color:"#475569",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700}}>Modifier</button>}
 
