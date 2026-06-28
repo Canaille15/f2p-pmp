@@ -3864,7 +3864,8 @@ function detectFamillesReserviste(agentId, schedule){
   return null;
 }
 
-function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,agentCouleurs,setAgentCouleurs}){
+function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,agentCouleurs,setAgentCouleurs,echangesCount,onOpenEchanges}){
+  const [echangesDismissedCount,setEchangesDismissedCount]=usePersist("echangesDismissedCount",0);
   const [showHab,setShowHab]=useState(false);
   const [showHabRoul,setShowHabRoul]=useState(false);
   const [calView,setCalView]=useState("mois");
@@ -4053,6 +4054,13 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
     {/* ── BANDEAU PROFIL ÉTENDU ── */}
    
 <AgentHeader agent={agent} profile={profile} counts={counts} compteurYear={compteurYear} setCompteurYear={setCompteurYear} onImportDP={onImportDP} onDemandeConges={()=>setShowDemandeConges(true)} onCouleurs={()=>setShowColorPicker(true)} onHabilitations={()=>setShowHab(true)} onRoulementChange={r=>setProfile({roulement:r})} onReservisteChange={v=>setProfile({isReserve:v})} isOwnProfile={isOwnProfile}/>
+    {typeof onOpenEchanges==="function"&&(echangesCount||0)>echangesDismissedCount&&<div style={{display:"flex",alignItems:"stretch",gap:6,border:"1.5px solid "+(echangesCount>0?"#fdba74":"#e2e8f0"),background:echangesCount>0?"#fef3c7":"#f8fafc",borderRadius:12,padding:"4px 4px 4px 16px"}}>
+      <button onClick={onOpenEchanges} style={{display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",background:"none",cursor:"pointer",fontSize:14,fontWeight:700,color:"#1e293b",flex:1,padding:"8px 0",textAlign:"left"}}>
+        <span>🔄 Échanges</span>
+        {echangesCount>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:10,padding:"2px 9px",fontSize:12,fontWeight:700,marginRight:8}}>{echangesCount}</span>}
+      </button>
+      <button onClick={()=>setEchangesDismissedCount(echangesCount||0)} title="Masquer ce bandeau" style={{border:"none",background:"none",cursor:"pointer",fontSize:17,color:"#94a3b8",padding:"0 10px"}}>✕</button>
+    </div>}
     {demandeCourante&&(()=>{
       const acc=accords.find(a=>a.demandeId===demandeCourante.id);
       const isAccorde=acc&&acc.accorde; const isRefuse=acc&&!acc.accorde;
@@ -5260,71 +5268,167 @@ Retourne UNIQUEMENT un JSON valide sans markdown :
 
 // ─── ÉCHANGES ─────────────────────────────────────────────────────────────────
 
-function EchangesView({agents,schedule,currentAgent,agentProfiles,setAgentProfiles}){
-  const [demandes,setDemandes]=useState([]);
+function EchangesView({agents,currentAgent}){
+  const [echanges,setEchanges]=useState([]);
+  const [loading,setLoading]=useState(true);
   const [showForm,setShowForm]=useState(false);
-  const [form,setForm]=useState({date:"",motif:""});
-  const myProfile=currentAgent?agentProfiles[currentAgent.id]||{}:{};
-  const pasEchange=myProfile.pasEchange||false;
-  const setPasEchange=v=>currentAgent&&setAgentProfiles(p=>({...p,[currentAgent.id]:{...(p[currentAgent.id]||{}),pasEchange:v}}));
-  const habilis=agents.filter(a=>{if(!currentAgent||a.id===currentAgent.id)return false;return a.poste===currentAgent?.poste;});
+  const [editingId,setEditingId]=useState(null);
+  const [form,setForm]=useState({date:"",creneaux:[],urgent:false,motif:""});
+  const [cloturantId,setCloturantId]=useState(null);
+  const [cloturantCp,setCloturantCp]=useState("");
 
-  if(!currentAgent)return(<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:12}}>🔄</div><div style={{fontSize:15,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div></div>);
+  const CRENEAUX=[["matin","Matin"],["journee","Journée"],["soiree","Soirée"],["nuit","Nuit"],["indifferent","Indifférent"]];
 
-  const soumettre=()=>{
-    if(!form.date||!currentAgent)return;
-    const en=schedule[`${currentAgent.id}-${form.date}`];if(!en)return;
-    setDemandes(p=>[{id:Date.now().toString(),demandeur:currentAgent,date:form.date,jsCode:en.jsCode,equipe:en.equipe,motif:form.motif,reponses:{},createdAt:new Date().toISOString()},...p]);
-    setShowForm(false);setForm({date:"",motif:""});
+  const charger=useCallback(()=>{
+    api.echanges.getAll().then(rows=>{setEchanges(rows||[]);setLoading(false);}).catch(()=>setLoading(false));
+  },[]);
+
+  useEffect(()=>{
+    charger();
+    const idInterval=setInterval(charger,45000);
+    return ()=>clearInterval(idInterval);
+  },[charger]);
+
+  if(!currentAgent)return(<div style={{textAlign:"center",padding:"62px 22px",color:"#94a3b8"}}><div style={{fontSize:42,marginBottom:12}}>🔄</div><div style={{fontSize:17,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div></div>);
+
+  const toggleVal=(arr,v)=>arr.includes(v)?arr.filter(x=>x!==v):[...arr,v];
+
+  const resetForm=()=>{setForm({date:"",creneaux:[],urgent:false,motif:""});setEditingId(null);setShowForm(false);};
+
+  const soumettre=async()=>{
+    if(!form.date){alert("Choisis une date.");return;}
+    try{
+      if(editingId){
+        await api.echanges.update(editingId,{date_jour:form.date,creneaux_souhaites:form.creneaux,urgent:form.urgent,motif:form.motif||null});
+      }else{
+        await api.echanges.create({date_jour:form.date,creneaux_souhaites:form.creneaux,urgent:form.urgent,motif:form.motif||null});
+      }
+      resetForm();
+      charger();
+    }catch(e){alert(e.message||"Erreur lors de l'enregistrement.");}
   };
-  const repondre=(id,agId,statut)=>setDemandes(p=>p.map(d=>d.id===id?{...d,reponses:{...d.reponses,[agId]:statut}}:d));
-  const STATUS={ACCEPTE:{label:"Accepté ✓",color:"#d1fae5",tc:"#065f46"},REFUSE:{label:"Refusé ✗",color:"#fee2e2",tc:"#991b1b"},OCCASIONNEL:{label:"Occasionnel ⚡",color:"#fef3c7",tc:"#92400e"}};
+
+  const ouvrirEdition=(e)=>{
+    setEditingId(e.id);
+    const d=(e.date_jour||"").split("T")[0];
+    setForm({date:d,creneaux:(e.creneaux_souhaites||"").split(",").filter(Boolean),urgent:!!e.urgent,motif:e.motif||""});
+    setShowForm(true);
+  };
+
+  const interesser=async(id)=>{
+    try{await api.echanges.toggleInteret(id);charger();}catch(e){alert(e.message||"Erreur.");}
+  };
+
+  const supprimer=async(id)=>{
+    if(!window.confirm("Supprimer cette demande d'échange ?"))return;
+    try{await api.echanges.delete(id);charger();}catch(e){alert(e.message||"Erreur.");}
+  };
+
+  const cloturer=async(id)=>{
+    if(!cloturantCp){alert("Choisis avec qui tu as échangé.");return;}
+    if(!window.confirm("Rappel : n'oublie pas d'indiquer cet échange dans le planning CPS officiel.\n\nConfirmer la clôture ?"))return;
+    try{await api.echanges.cloturer(id,cloturantCp);setCloturantId(null);setCloturantCp("");charger();}catch(e){alert(e.message||"Erreur.");}
+  };
+
+  const STATUT_STYLE={
+    ouverte_urgent:{border:"#fca5a5",bg:"#fee2e2",tc:"#991b1b",label:"urgent"},
+    ouverte:{border:"#fdba74",bg:"#fef3c7",tc:"#92400e",label:"ouverte"},
+    cloturee:{border:"#86efac",bg:"#d1fae5",tc:"#065f46",label:"clôturée"},
+    expiree:{border:"#e2e8f0",bg:"#f1f5f9",tc:"#94a3b8",label:"expirée"},
+  };
+  const styleFor=e=>e.statut==="ouverte"?(e.urgent?STATUT_STYLE.ouverte_urgent:STATUT_STYLE.ouverte):(STATUT_STYLE[e.statut]||STATUT_STYLE.expiree);
+
+  const mesDemandes=echanges.filter(e=>e.cp_demandeur===currentAgent.id);
+  const autresDemandes=echanges.filter(e=>e.cp_demandeur!==currentAgent.id);
+  const listeAffichee=[...mesDemandes,...autresDemandes];
 
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
-    <div style={{background:"#fff",border:`1.5px solid ${pasEchange?"#fca5a5":"#e2e8f0"}`,borderRadius:14,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div>
-        <div style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>Mon statut d'échange</div>
-        <div style={{fontSize:11,color:"#94a3b8",marginTop:1}}>{pasEchange?"Pas d'échange en ce moment":"Disponible pour des échanges"}</div>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:12,color:pasEchange?"#991b1b":"#065f46",fontWeight:600}}>{pasEchange?"🚫 Fermé":"✅ Ouvert"}</span>
-        <Toggle value={pasEchange} onChange={setPasEchange} color="#ef4444"/>
-      </div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{fontSize:18,fontWeight:700,color:"#1e293b"}}>🔄 Échanges</div>
+      <button onClick={()=>{resetForm();setShowForm(true);}} style={{background:"#1e293b",color:"#fff",border:"none",borderRadius:12,padding:"12px 20px",cursor:"pointer",fontSize:15,fontWeight:700}}>+ Nouvelle demande</button>
     </div>
-    {!pasEchange&&<button onClick={()=>setShowForm(p=>!p)} style={{background:"#1e293b",color:"#fff",border:"none",borderRadius:12,padding:"11px 20px",cursor:"pointer",fontSize:13,fontWeight:700}}>🔄 Demander un échange</button>}
-    {showForm&&(<div style={{background:"#f8fafc",borderRadius:12,padding:"14px 16px",border:"1.5px solid #e2e8f0",display:"flex",flexDirection:"column",gap:10}}>
-      <input type="date" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:13,outline:"none"}}/>
-      <input value={form.motif} onChange={e=>setForm(p=>({...p,motif:e.target.value}))} placeholder="Motif (optionnel)" style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:13,outline:"none"}}/>
-      <div style={{display:"flex",gap:8}}>
-        <button onClick={soumettre} style={{flex:1,background:"#1e293b",color:"#fff",border:"none",borderRadius:9,padding:"9px 0",cursor:"pointer",fontSize:13,fontWeight:700}}>Envoyer</button>
-        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:9,padding:"9px 12px",cursor:"pointer",fontSize:13}}>Annuler</button>
+
+    {showForm&&(<div style={{background:"#f8fafc",borderRadius:12,padding:"18px 20px",border:"1.5px solid #e2e8f0",display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:15,fontWeight:700,color:"#1e293b"}}>{editingId?"Modifier la demande":"Nouvelle demande d'échange"}</div>
+
+      <div>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:4}}>Journée à échanger</div>
+        <input type="date" value={form.date} onChange={ev=>setForm(p=>({...p,date:ev.target.value}))} style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"10px 12px",fontSize:15,outline:"none"}}/>
       </div>
-    </div>)}
-    {demandes.length===0&&<div style={{textAlign:"center",padding:"30px 20px",color:"#94a3b8",fontSize:13}}>Aucune demande en cours.</div>}
-    {demandes.filter(d=>d.demandeur?.id===currentAgent.id).map(d=>(
-      <div key={d.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"13px 15px"}}>
-        <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginBottom:6}}>{d.date} · <EqBadge code={d.equipe} small/> {d.jsCode}</div>
-        {d.motif&&<div style={{fontSize:11,color:"#64748b",marginBottom:8,fontStyle:"italic"}}>"{d.motif}"</div>}
-        <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-          {Object.entries(d.reponses).map(([agId,st])=>{const ag=agents.find(a=>a.id===agId);const s=STATUS[st];return ag?<span key={agId} style={{fontSize:10,background:s?.color,color:s?.tc,borderRadius:10,padding:"2px 8px",fontWeight:700}}>{ag.prenom} {ag.nom} — {s?.label}</span>:null;})}
-          {Object.keys(d.reponses).length===0&&<span style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>En attente…</span>}
+
+      <div>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:6}}>Créneau recherché</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {CRENEAUX.map(c=>{const v=c[0],l=c[1];const actif=form.creneaux.includes(v);return(<button key={v} onClick={()=>setForm(p=>({...p,creneaux:toggleVal(p.creneaux,v)}))} style={{border:"1.5px solid "+(actif?"#1e293b":"#e2e8f0"),background:actif?"#1e293b":"#fff",color:actif?"#fff":"#475569",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:600}}>{l}</button>);})}
         </div>
       </div>
-    ))}
-    {demandes.filter(d=>d.demandeur?.id!==currentAgent.id&&habilis.some(h=>h.id===d.demandeur?.id)).map(d=>{
-      const monStatut=d.reponses[currentAgent.id];const s=monStatut?STATUS[monStatut]:null;
-      return(<div key={d.id} style={{background:"#fff",border:`1.5px solid ${s?s.color:"#e2e8f0"}`,borderRadius:12,padding:"13px 15px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><Av initials={d.demandeur?.initials||"?"} size={26} famille={d.demandeur?.famille}/><div><div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{d.demandeur?.prenom} {d.demandeur?.nom}</div><div style={{fontSize:10,color:"#94a3b8"}}>{d.date}</div></div></div>
-        {d.motif&&<div style={{fontSize:11,color:"#64748b",marginBottom:8,fontStyle:"italic"}}>"{d.motif}"</div>}
-        {!pasEchange&&<div style={{display:"flex",gap:6}}>
-          {["ACCEPTE","REFUSE","OCCASIONNEL"].map(st=>{const s2=STATUS[st];return(<button key={st} onClick={()=>repondre(d.id,currentAgent.id,st)} style={{border:`1.5px solid ${monStatut===st?"#1e293b":"#e2e8f0"}`,background:monStatut===st?s2.color:"#f8fafc",color:monStatut===st?s2.tc:"#475569",borderRadius:9,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>{s2.label}</button>);})}
-        </div>}
+
+      <label style={{display:"flex",alignItems:"center",gap:8,fontSize:15,color:"#475569",cursor:"pointer"}}>
+        <input type="checkbox" checked={form.urgent} onChange={ev=>setForm(p=>({...p,urgent:ev.target.checked}))}/>
+        Urgent (garde d'enfant, médical...)
+      </label>
+
+      <input value={form.motif} onChange={ev=>setForm(p=>({...p,motif:ev.target.value}))} placeholder="Motif (facultatif, visible par tous)" style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"10px 12px",fontSize:15,outline:"none"}}/>
+
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={soumettre} style={{flex:1,background:"#1e293b",color:"#fff",border:"none",borderRadius:9,padding:"9px 0",cursor:"pointer",fontSize:15,fontWeight:700}}>{editingId?"Enregistrer":"Publier la demande"}</button>
+        <button onClick={resetForm} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:9,padding:"11px 14px",cursor:"pointer",fontSize:15}}>Annuler</button>
+      </div>
+    </div>)}
+
+    {loading&&<div style={{textAlign:"center",padding:"32px 22px",color:"#94a3b8",fontSize:15}}>Chargement…</div>}
+    {!loading&&listeAffichee.length===0&&<div style={{textAlign:"center",padding:"32px 22px",color:"#94a3b8",fontSize:15}}>Aucune demande en cours.</div>}
+
+    {listeAffichee.map(e=>{
+      const s=styleFor(e);
+      const estDemandeur=e.cp_demandeur===currentAgent.id;
+      const creneaux=(e.creneaux_souhaites||"").split(",").filter(Boolean);
+            const dateAff=(e.date_jour||"").split("T")[0];
+      const horaireTxt=e.heure_debut?(" · "+String(e.heure_debut).slice(0,5)+"–"+String(e.heure_fin||"").slice(0,5)):"";
+      const rechercheTxt=creneaux.length?creneaux.join(", "):"indifférent";
+            return(<div key={e.id} style={{background:"#fff",border:"1.5px solid "+s.border,borderRadius:12,padding:"15px 17px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <Av initials={(e.prenom?e.prenom[0]:"")+(e.nom?e.nom[0]:"")} size={30}/>
+            <div>
+              <div style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{e.prenom} {e.nom}{estDemandeur?" (toi)":""}</div>
+              <div style={{fontSize:12,color:"#94a3b8"}}>{dateAff}</div>
+            </div>
+          </div>
+          <span style={{fontSize:12,background:s.bg,color:s.tc,borderRadius:10,padding:"5px 11px",fontWeight:700,textTransform:"uppercase"}}>{s.label}</span>
+        </div>
+
+        {e.statut==="ouverte"&&<div style={{fontSize:14,color:"#475569",marginBottom:6}}><b>{e.poste_label||e.code_poste||"Poste"}</b>{horaireTxt} → recherche {rechercheTxt}</div>}
+
+        {e.statut==="cloturee"&&<div style={{fontSize:14,color:"#475569",marginBottom:6}}>Échangé avec <b>{e.echange_avec_prenom} {e.echange_avec_nom}</b></div>}
+
+        {e.motif&&<div style={{fontSize:13,color:"#64748b",marginBottom:8,fontStyle:"italic"}}>"{e.motif}"</div>}
+
+        {e.statut==="ouverte"&&<div style={{fontSize:13,color:"#94a3b8",marginBottom:8}}>{e.nb_interets>0?(e.nb_interets+" intéressé(s)"):"Aucun intéressé"}</div>}
+
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+          {!estDemandeur&&e.statut==="ouverte"&&<button onClick={()=>interesser(e.id)} style={{border:"1.5px solid #e2e8f0",background:"#f8fafc",color:"#475569",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700}}>🤝 Je suis intéressé</button>}
+
+          {estDemandeur&&e.statut==="ouverte"&&cloturantId!==e.id&&<button onClick={()=>ouvrirEdition(e)} style={{border:"1.5px solid #e2e8f0",background:"#fff",color:"#475569",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700}}>Modifier</button>}
+
+          {estDemandeur&&e.statut==="ouverte"&&cloturantId===e.id&&<>
+            <select value={cloturantCp} onChange={ev=>setCloturantCp(ev.target.value)} style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:13}}>
+              <option value="">Échangé avec…</option>
+              {agents.filter(a=>a.id!==currentAgent.id).map(a=>(<option key={a.id} value={a.id}>{a.prenom} {a.nom}</option>))}
+            </select>
+            <button onClick={()=>cloturer(e.id)} style={{border:"none",background:"#065f46",color:"#fff",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700}}>Confirmer</button>
+            <button onClick={()=>{setCloturantId(null);setCloturantCp("");}} style={{border:"none",background:"#f1f5f9",color:"#475569",borderRadius:9,padding:"8px 12px",cursor:"pointer",fontSize:13}}>✕</button>
+          </>}
+
+          {estDemandeur&&e.statut==="ouverte"&&cloturantId!==e.id&&<button onClick={()=>setCloturantId(e.id)} style={{border:"1.5px solid #86efac",background:"#d1fae5",color:"#065f46",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700}}>Clôturer</button>}
+
+          {estDemandeur&&<button onClick={()=>supprimer(e.id)} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,marginLeft:"auto"}}>Supprimer</button>}
+        </div>
       </div>);
     })}
   </div>);
 }
 
-// ─── IMPORT DÉROULÉ PRÉVISIONNEL ─────────────────────────────────────────────
 function ProfilPersoView({currentAgent,onPartageChange}){
   const [pinActuel,setPinActuel]=useState("");
   const [pinNouveau,setPinNouveau]=useState("");
@@ -6303,6 +6407,20 @@ export default function App(){
     const interval = setInterval(()=>{ rechargerAgents(); }, 45000);
     return ()=>clearInterval(interval);
   },[currentUser?.agent?.id]); // eslint-disable-line
+
+  const [echangesOuvertesCount,setEchangesOuvertesCount]=useState(0);
+  const rechargerEchangesCount=()=>{
+    if(!currentUser?.agent?.id) return;
+    api.echanges.getAll().then(rows=>{
+      setEchangesOuvertesCount((rows||[]).filter(r=>r.statut==="ouverte").length);
+    }).catch(()=>{});
+  };
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    rechargerEchangesCount();
+    const echInterval=setInterval(rechargerEchangesCount,45000);
+    return ()=>clearInterval(echInterval);
+  },[currentUser?.agent?.id]); // eslint-disable-line
   
   const [loginTarget,setLoginTarget]=useState(null);
   const isAdmin=currentUser?.isAdmin||false;
@@ -6828,8 +6946,10 @@ export default function App(){
         </div>
         {VIEWS.map(({k,l})=>{
           const actif=view===k;
-          return(<button key={k} onClick={()=>{setView(k);setMenuOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,border:"none",background:actif?"#eff6ff":"transparent",padding:"12px 16px",cursor:"pointer",fontSize:14,fontWeight:actif?700:500,color:actif?"#0f4c81":"#1e293b",textAlign:"left",width:"100%"}}>
+          const aDesEchanges=k==="echanges"&&echangesOuvertesCount>0;
+          return(<button key={k} onClick={()=>{setView(k);setMenuOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,border:"none",background:actif?"#eff6ff":(aDesEchanges?"#fef3c7":"transparent"),padding:"12px 16px",cursor:"pointer",fontSize:14,fontWeight:actif?700:500,color:actif?"#0f4c81":"#1e293b",textAlign:"left",width:"100%"}}>
             {l}
+            {aDesEchanges&&<span style={{marginLeft:"auto",background:"#dc2626",color:"#fff",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:700}}>{echangesOuvertesCount}</span>}
           </button>);
         })}
         <div style={{flex:1}}/>
@@ -6859,8 +6979,10 @@ export default function App(){
         isAdmin={isAdmin}
         currentUser={currentUser}
         agentCouleurs={agentCouleurs}
-        setAgentCouleurs={setAgentCouleurs}/>}
-      {view==="echanges"&&<EchangesView agents={agents} schedule={schedule} currentAgent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>}
+        setAgentCouleurs={setAgentCouleurs}
+        echangesCount={echangesOuvertesCount}
+        onOpenEchanges={()=>setView("echanges")}/>}
+      {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
