@@ -212,3 +212,13 @@ Suite aux remarques d'Olivier (texte trop petit/fade, surtout sur ordinateur et 
 - Toggle Mois/Semaine/Planning et les 3 boutons "Aujourd'hui" (Mon Planning + CPS Officiel/Prévisionnel) : agrandis et **harmonisés** (taille strictement identique partout, ne change plus en changeant d'onglet).
 - Bandeau des 3 onglets du haut : texte responsive, poids de police uniforme entre onglet actif/inactif (la sélection ne se voit plus que par la couleur et le soulignement).
 - Bloc "Postes habilités" (profil réserviste) : libellé et badges plus contrastés.
+
+
+## 28/06 (suite 3) — Sélecteur de profil corrigé + admin en lecture seule
+
+**Bug corrigé** : les agents chargés depuis l'API n'avaient que le champ `fam`, pas `famille` — le sélecteur de profil (avatar + prénom en haut à droite) regroupait par `famille`, donc la liste PRCI/PAR restait toujours vide, même en tapant un nom de recherche.
+
+**Comportements clarifiés**
+- Le sélecteur de profil est désormais **réservé aux admins** (non-admins ne peuvent plus l'ouvrir) — cohérent avec le principe "chacun gère son propre planning".
+- Quand un admin visualise un autre agent, son planning est maintenant **rechargé automatiquement** (et actualisé toutes les 45s) — avant, seul l'agent réellement connecté avait son planning en mémoire, donc l'admin voyait un calendrier vide pour les autres agents.
+- **Admin = lecture seule** sur le planning des autres agents : cliquer sur un jour (vues Mois/Semaine/Planning) n'ouvre plus la popup d'édition tant que ce n'est pas son propre profil. Pour modifier quoi que ce soit, l'admin doit revenir sur son propre profil via le sélecteur. Objectif : éviter toute modification involontaire du planning d'un agent par un admin.
