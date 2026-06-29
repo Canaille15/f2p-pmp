@@ -4128,7 +4128,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
           return <div key={dk}
             onClick={()=>{
-              setDayPopup({dk, entry:en||null});
+              if(isOwnProfile) setDayPopup({dk, entry:en||null});
             }}
             style={{
             borderRadius:12,
@@ -4275,7 +4275,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
             const isNuitSeuleCell = code === "N" && !en?.equipe2 && !en?.finNuit;
             return <div key={dk}
-              onClick={()=>{ setDayPopup({dk, entry:en||null}); }}
+              onClick={()=>{ if(isOwnProfile) setDayPopup({dk, entry:en||null}); }}
               style={{
                 background:"#fff",
                 border:isToday?"2px solid #6366f1":"1px solid #e8edf2",
@@ -4463,7 +4463,7 @@ justifyContent: "flex-start",
         getColor={getColor}
         getTc={getTc}
         isOwnProfile={isOwnProfile}
-        onDayClick={(dk,en)=>setDayPopup({dk,entry:en||null})}
+        onDayClick={(dk,en)=>{ if(isOwnProfile) setDayPopup({dk,entry:en||null}); }}
       />
     </div>}
 
@@ -6400,6 +6400,7 @@ export default function App(){
         grade: r.grade,
         poste: r.poste||"",
         fam: r.famille||"PRCI",
+        famille: r.famille||"PRCI",
       }));
       setAgents(mapped);
     }).catch(e=>console.error("Erreur chargement agents:",e));
@@ -6428,6 +6429,24 @@ export default function App(){
     const echInterval=setInterval(rechargerEchangesCount,45000);
     return ()=>clearInterval(echInterval);
   },[currentUser?.agent?.id]); // eslint-disable-line
+
+  // Recharge le planning de l'agent visualisé quand un admin bascule sur un autre agent,
+  // et continue à l'actualiser toutes les 45s tant que cet agent est affiché
+  // (le chargement initial dans handleLogin ne couvre que l'agent réellement connecté)
+  useEffect(()=>{
+    if(!currentAgent) return;
+    const agId = currentAgent.immatriculation||currentAgent.cp||currentAgent.id;
+    const myId = currentUser?.agent?.immatriculation||currentUser?.agent?.cp||currentUser?.agent?.id;
+    if(!agId||agId===myId) return;
+    const chargerPlanningVisualise=()=>{
+      api.planning.getSchedule(agId).then(entries=>{
+        if(entries) setSchedule(prev=>({...prev,...entries}));
+      }).catch(()=>{});
+    };
+    chargerPlanningVisualise();
+    const interval=setInterval(chargerPlanningVisualise,45000);
+    return ()=>clearInterval(interval);
+  },[currentAgent]); // eslint-disable-line
   
   const [loginTarget,setLoginTarget]=useState(null);
   const isAdmin=currentUser?.isAdmin||false;
@@ -6848,9 +6867,9 @@ export default function App(){
 
         {/* Profil selector */}
         <div style={{position:"relative",flexShrink:0}}>
-          <button onClick={()=>setProfileOpen(p=>!p)}
+          <button onClick={()=>{if(isAdmin) setProfileOpen(p=>!p);}}
             style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"5px 8px",
-              background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",
+              background:"#fff",cursor:isAdmin?"pointer":"default",display:"flex",alignItems:"center",
               gap:5,fontSize:11,color:"#1e293b",fontWeight:700,maxWidth:130}}>
             {currentAgent&&<Av initials={currentAgent.initials} size={18} famille={currentAgent.famille}/>}
             <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
