@@ -3,7 +3,7 @@
 > Document vivant, mis à jour à la fin de chaque session de développement.
 > Servira de base à la documentation PDF imprimable (à venir).
 
-**Dernière mise à jour** : 28/06/2026 — commit `40b20b1`
+**Dernière mise à jour** : 01/07/2026 — Import Bulletin de Commande
 
 ---
 
@@ -133,7 +133,44 @@ Module reconstruit le 28/06 (l'ancien système — candidatures/validations avec
 
 ---
 
-## 8. Congés et absences
+## 8. Import Bulletin de Commande / Roulement (Mon Planning)
+
+Permet à un agent d'importer directement dans son planning personnel un bulletin de commande SNCF (PDF ou photo/scan), sans ressaisir chaque jour manuellement.
+
+**Accès et restrictions**
+- Bouton "Importer bulletin de commande / roulement" dans Mon Planning, à droite du toggle Mois/Semaine/Planning — visible uniquement par le titulaire du planning (même un admin ne peut pas importer sur le planning d'un autre agent, conformément à la règle "admin = lecture seule").
+- Formats acceptés : PDF texte natif (extraction directe via pdfjs-dist, cas le plus courant) ou photo/scan (fallback OCR via OCR.space).
+
+**Ce qui est extrait automatiquement**
+- La date d'édition du bulletin ("Edition le JJ/MM/AAAA, HH:MM"), utilisée pour la priorité chronologique.
+- Pour chaque jour : date, code poste (colonne "Utilisation"), horaires PS/FS si présents.
+- Codes reconnus : RP, RU, RQ, congés (C/CA), DISPO, fêtes (F1-F9, FV), formation (F-XXX), et tous les codes postes 3×8 (PICCL-, PIADJ-, PILNE-, PIPA2J...).
+- Le libellé du poste (ex. "CCL", "AC LNE") s'affiche automatiquement dans le calendrier (vues Mois, Semaine, Planning) sous le badge Matinée/Soirée/Nuit, pour toute saisie manuelle ou importée.
+
+**Règle de fusion (priorité chronologique)**
+- Un bulletin plus récent écrase toujours les données existantes pour les jours concernés, y compris une saisie manuelle.
+- Un bulletin plus ancien (ou de même date d'édition) qu'une donnée déjà enregistrée est ignoré silencieusement pour ce jour — jamais de régression involontaire.
+
+**Gestion des échecs partiels**
+- Si certains jours du bulletin sont illisibles (défaut d'impression/scan du document source), ils sont signalés à l'agent avec leur date après l'import — le reste est importé normalement.
+- L'agent complète les jours concernés via la saisie manuelle normale (popup du jour).
+
+**Stockage**
+- Nouvelles colonnes sur `planning_jour` : `source` (ENUM, valeur `'bulletin'` ajoutée) et `source_edition_date` (DATETIME).
+- Rien n'est stocké du document brut en base (même principe que l'import CPS) — seulement les valeurs extraites appliquées au planning.
+- Le prévisionnel partagé est automatiquement alimenté via le mécanisme existant (toggle de partage), sans aucune modification spécifique.
+
+**Fichiers**
+- Backend : `api/api/src/controllers/bulletinImportController.js`, route `POST /api/planning/:cp/import-bulletin`.
+- Frontend : fonctions `extraireTextePdfNatif`, `ocrImageViaOcrSpace`, `parseBulletinCommande`, `getPosteLabelFromCode`, composant `BulletinImportButton` dans `src/App.jsx`.
+
+**À mentionner dans la notice utilisateur**
+- L'import écrase les saisies manuelles existantes sur les jours couverts — vérifier son planning après chaque import.
+- Le format irrégulier de certains bulletins (qualité variable d'impression/scan) peut générer des cases vides ponctuellement — compléter à la main via le popup du jour, comme pour n'importe quelle journée. L'import reste un gain de temps global même s'il laisse un jour à corriger ici ou là.
+
+---
+
+## 9. Congés et absences
 
 - Formulaire de demande d'absence (génération PDF au format SNCF + envoi par mail)
 - Suivi des accords/refus
@@ -141,7 +178,7 @@ Module reconstruit le 28/06 (l'ancien système — candidatures/validations avec
 
 ---
 
-## 9. Notifications
+## 10. Notifications
 
 - Rappels automatiques liés aux fêtes SNCF (échéances de péremption)
 - Alertes de reliquats de congés
@@ -156,7 +193,6 @@ Module reconstruit le 28/06 (l'ancien système — candidatures/validations avec
 - **Annuaire des agents** : liste/recherche centralisée avec coordonnées, postes, habilitations
 - **Refonte du module Fêtes SNCF** : le suivi existe (section 2) mais une refonte plus ergonomique était évoquée
 - **Vue "Comparaison" CPS Officiel vs Prévisionnel** : détection automatique des écarts entre les deux plannings (actuellement repéré manuellement, comme on l'a fait pour HERN/PIVGD-)
-- **Import planning PDF général** : pour le planning personnel directement (au-delà du seul CPS)
 - **Calendrier cliquable multi-mois** : navigation rapide entre mois éloignés (en partie couvert par le sélecteur de date ajouté aujourd'hui — à réévaluer si toujours nécessaire)
 - **Documentation PDF imprimable** : à construire à partir de ce document `FEATURES.md`, avec liens cliquables, gardée dans l'application
 
@@ -222,3 +258,16 @@ Suite aux remarques d'Olivier (texte trop petit/fade, surtout sur ordinateur et 
 - Le sélecteur de profil est désormais **réservé aux admins** (non-admins ne peuvent plus l'ouvrir) — cohérent avec le principe "chacun gère son propre planning".
 - Quand un admin visualise un autre agent, son planning est maintenant **rechargé automatiquement** (et actualisé toutes les 45s) — avant, seul l'agent réellement connecté avait son planning en mémoire, donc l'admin voyait un calendrier vide pour les autres agents.
 - **Admin = lecture seule** sur le planning des autres agents : cliquer sur un jour (vues Mois/Semaine/Planning) n'ouvre plus la popup d'édition tant que ce n'est pas son propre profil. Pour modifier quoi que ce soit, l'admin doit revenir sur son propre profil via le sélecteur. Objectif : éviter toute modification involontaire du planning d'un agent par un admin.
+
+
+## 01/07/2026 — Import Bulletin de Commande / Roulement
+
+**Nouvelle fonctionnalité** : import d'un bulletin de commande SNCF (PDF ou photo) directement dans Mon Planning.
+
+- Extraction texte PDF native via `pdfjs-dist` (zéro coût, fiable) + fallback OCR.space pour photos/scans.
+- Parsing robuste face aux défauts réels d'extraction : découpage par date (pas par nom de jour, souvent corrompu), fenêtre de recherche du code par proximité, détection du code Pauseur via son sous-code, horaires par tri chronologique des heures trouvées.
+- Règle de priorité chronologique par date d'édition du bulletin : un import plus récent écrase, un plus ancien est ignoré silencieusement.
+- Libellé court du poste (CCL, AC LNE...) affiché dans les 3 vues du calendrier (Mois, Semaine, Planning) pour toute saisie, manuelle ou importée.
+- Testé sur 2 vrais bulletins SNCF (Dupuy PRCI + Pastant PAR) : 37/38 et 32/33 jours détectés (jours manquants = dates réellement illisibles dans les documents sources).
+- Accès : titulaire uniquement (cohérent avec la règle admin = lecture seule).
+- DB : `planning_jour.source` ENUM étendu + colonne `source_edition_date DATETIME` ajoutée.

@@ -287,6 +287,287 @@ const EQ_COLORS = Object.fromEntries(
     prive: v.prive||false,
   }])
 );
+// ─── IMPORT BULLETIN DE COMMANDE / DÉROULÉ PRÉVISIONNEL ──────────────────────
+const BULLETIN_OCR_APIKEY = "K85147389088957";
+
+async function ocrImageViaOcrSpace(imageB64, mimeType) {
+  const form = new URLSearchParams();
+  form.append("apikey", BULLETIN_OCR_APIKEY);
+  form.append("base64Image", "data:" + mimeType + ";base64," + imageB64);
+  form.append("filetype", "Auto");
+  form.append("OCREngine", "2");
+  form.append("isTable", "true");
+  const res = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: form });
+  const data = await res.json();
+  if (data.IsErroredOnProcessing) throw new Error(data.ErrorMessage?.[0] || "Erreur OCR");
+  return data.ParsedResults?.map(r => r.ParsedText).join("\n") || "";
+}
+
+async function extraireTextePdfNatif(base64Pdf) {
+  const pdfjsLib = await import("pdfjs-dist");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
+  const raw = atob(base64Pdf);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+  const pages = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    const tcontent = await page.getTextContent();
+    const rows = {};
+    tcontent.items.forEach(it => {
+      const y = Math.round(it.transform[5]);
+      if (!rows[y]) rows[y] = [];
+      rows[y].push({ x: it.transform[4], s: it.str });
+    });
+    const ys = Object.keys(rows).map(Number).sort((a, b) => b - a);
+    const lines = ys.map(y => rows[y].sort((a, b) => a.x - b.x).map(o => o.s).join(" ").replace(/\s+/g, " ").trim()).filter(Boolean);
+    pages.push(lines.join("\n"));
+  }
+  return pages.join("\n");
+}
+
+// Déduit le code_equipe (M/AM/N/J/RP/CA/...) depuis le code brut "Utilisation" du bulletin
+function deriveCodeEquipeBulletin(code, heureDebut) {
+  if (/^RP$/.test(code)) return "RP";
+  if (/^RU$/.test(code)) return "RU";
+  if (/^RQ$/.test(code)) return "RQ";
+  if (/^C$/.test(code) || /^CA$/.test(code)) return "CA";
+  if (/^F\d$/.test(code)) return "JF";
+  if (/^F-[A-Z]{2,5}$/.test(code)) return "FOR";
+  if (/^DISPO$/i.test(code)) return "DISPO";
+  if (code.endsWith("J")) return "J";
+  if (code.endsWith("-")) return "M";
+  if (code.endsWith("O")) return "AM";
+  if (code.endsWith("X")) return "N";
+  if (heureDebut) {
+    const h = parseInt(heureDebut.slice(0, 2), 10);
+    if (h >= 4 && h < 11) return "M";
+    if (h >= 11 && h < 20) return "AM";
+    return "N";
+  }
+  return null;
+}
+
+// Déroulé prévisionnel : pas d'horaire fourni dans le document -> horaire générique de l'équipe (EQUIPES)
+function deduireHoraireGeneriqueEquipe(codeEquipe) {
+  const eq = EQ[codeEquipe];
+  if (!eq || !eq.heures) return { heure_debut: null, heure_fin: null };
+  const m = eq.heures.match(/(\d{2})h(\d{2}).(\d{2})h(\d{2})/);
+  if (!m) return { heure_debut: null, heure_fin: null };
+  return { heure_debut: `${m[1]}:${m[2]}:00`, heure_fin: `${m[3]}:${m[4]}:00` };
+}
+
+// Retrouve le libellé lisible d'un poste (ex: "CCL", "AC PAR") à partir de son code jsCode (ex: "PICCL-")
+function getPosteLabelFromCode(jsCode) {
+  if (!jsCode) return null;
+  const tousPostes3x8 = [...POSTES_PRCI_3x8, ...POSTES_PAR_3x8];
+  const p3x8 = tousPostes3x8.find(p => p.M === jsCode || p.AM === jsCode || p.N === jsCode);
+  if (p3x8) return p3x8.label;
+  const pj = POSTES_JOURNEE.find(p => p.jsCode === jsCode);
+  if (pj) return pj.label;
+  return null;
+}
+
+// Parse un bulletin de commande SNCF (texte déjà extrait, PDF natif ou OCR) :
+// capture la date d'édition + chaque jour (code "Utilisation" + PS/FS si présents)
+function parseBulletinCommande(text) {
+  const editionMatch = text.match(/Edition le\s*(\d{2})[\/1](\d{2})\/(\d{4})\s*,?\s*(\d{2}):(\d{2})/i);
+  const editionDate = editionMatch
+    ? `${editionMatch[3]}-${editionMatch[2]}-${editionMatch[1]} ${editionMatch[4]}:${editionMatch[5]}:00`
+    : null;
+
+  // Codes valides reconnus (postes 3x8 PI/PA se terminant par -, O, X ou J ; codes spéciaux ;
+  // codes formation type "F-PAR", avec ou sans espace après le tiret)
+  const CODE_RE = /\b(?:RP|RU|RQ|CA|DISPO|F[0-9V]|F-\s?[A-Z]{2,5}|C)\b|\b(?:PI|PA)[A-Z0-9]{2,6}[-OXJ]/g;
+
+  // On neutralise les dates des lignes d'en-tête ("Edition le..." et "Commande allant du...")
+  // pour qu'elles ne soient pas prises pour des jours du tableau (même longueur de texte
+  // préservée pour ne pas décaler les positions utilisées ensuite).
+  let workText = text;
+  const editionLine = text.match(/Edition le\s*\d{2}[\/1]\d{2}\/\d{4}\s*,?\s*\d{2}:\d{2}/i);
+  if (editionLine) workText = workText.slice(0, editionLine.index) + " ".repeat(editionLine[0].length) + workText.slice(editionLine.index + editionLine[0].length);
+  const periodeLine = workText.match(/Commande allant du\s*\d{2}[\/1]\d{2}\/\d{4}\s*au\s*\d{2}[\/1]\d{2}\/\d{4}/i);
+  if (periodeLine) workText = workText.slice(0, periodeLine.index) + " ".repeat(periodeLine[0].length) + workText.slice(periodeLine.index + periodeLine[0].length);
+
+  // Découpage par DATE (JJ/MM/AAAA) plutôt que par nom de jour : les dates restent quasi
+  // toujours intactes, contrairement aux noms de jour (ex: "Ven" -> "yen"). On tolère aussi
+  // un "/" mal reconnu en "1" (ex: "04107/2026"), défaut récurrent observé sur plusieurs bulletins.
+  const dateRe = /(\d{2})[\/1](\d{2})\/(\d{4})/g;
+  const dateMatches = [...workText.matchAll(dateRe)];
+  const jours = [];
+  const echecs = [];
+
+  for (let i = 0; i < dateMatches.length; i++) {
+    const dm = dateMatches[i];
+    // Fenêtre commune autour de la date : du milieu avec la date précédente
+    // au milieu avec la date suivante. Le code peut apparaître avant OU après
+    // la date selon l'ordre d'extraction du PDF — on cherche dans toute la fenêtre
+    // et on retient le code physiquement le plus proche de la date.
+    const winStart = i === 0 ? 0 : Math.floor((dateMatches[i - 1].index + dateMatches[i - 1][0].length + dm.index) / 2);
+    const winEnd = i + 1 < dateMatches.length ? Math.floor((dm.index + dm[0].length + dateMatches[i + 1].index) / 2) : text.length;
+    const fenetre = text.slice(winStart, winEnd);
+    const offset = winStart;
+    // Zone horaires : large, jusqu'à la date suivante (PS/FS apparaissent toujours après
+    // la date dans le document, contrairement au code qui peut se trouver avant OU après)
+    const finZone = i + 1 < dateMatches.length ? dateMatches[i + 1].index : text.length;
+    const zoneHoraires = text.slice(dm.index + dm[0].length, finZone);
+
+    const dateJour = `${dm[3]}-${dm[2]}-${dm[1]}`;
+
+    let code = null;
+    let bestDist = Infinity;
+    let cm;
+
+    // Cas particulier "Pauseur" : le code affiché (ex. PIPA2J) manque parfois entièrement
+    // du texte extrait, alors que le sous-code "du PIPA2E" lui est toujours présent dans
+    // la zone horaires du jour. On le détecte en priorité et on en déduit le code (E -> J).
+    const pauseurMatch = zoneHoraires.match(/\bdu\s+PIPA([123])E\b/i);
+    if (pauseurMatch) {
+      code = `PIPA${pauseurMatch[1]}J`;
+    }
+
+    if (!code) {
+      CODE_RE.lastIndex = 0;
+      while ((cm = CODE_RE.exec(fenetre)) !== null) {
+        const before = fenetre.slice(Math.max(0, cm.index - 5), cm.index);
+        if (/\bdu\s*$/i.test(before)) continue;
+        const dist = Math.abs((offset + cm.index) - dm.index);
+        if (dist < bestDist) { bestDist = dist; code = cm[0]; }
+      }
+    }
+    if (!code) { echecs.push({ date: dateJour, motif: "code_illisible" }); continue; }
+    code = code.replace(/^(F-)\s+/, "$1"); // normalise "F- PAR" -> "F-PAR"
+
+    // Toutes les heures HH:MM trouvées dans la zone, triées chronologiquement : la plus
+    // tôt est l'heure de début, la plus tardive la fin (inversé pour la nuit, qui traverse
+    // minuit). Plus robuste que d'associer chaque label PS/FS à une valeur, l'ordre du texte
+    // étant trop variable selon les défauts d'extraction du PDF.
+    const valeurs = [...zoneHoraires.matchAll(/(\d{2}):(\d{2})/g)]
+      .map(m => ({ h: m[1], mn: m[2], total: parseInt(m[1], 10) * 60 + parseInt(m[2], 10) }))
+      .sort((a, b) => a.total - b.total);
+    const codeEquipeProvisoire = deriveCodeEquipeBulletin(code, null);
+    let heureDebut = null, heureFin = null;
+    if (valeurs.length === 1) {
+      heureDebut = `${valeurs[0].h}:${valeurs[0].mn}:00`;
+    } else if (valeurs.length >= 2) {
+      const min = valeurs[0], max = valeurs[valeurs.length - 1];
+      if (codeEquipeProvisoire === "N") {
+        heureDebut = `${max.h}:${max.mn}:00`;
+        heureFin = `${min.h}:${min.mn}:00`;
+      } else {
+        heureDebut = `${min.h}:${min.mn}:00`;
+        heureFin = `${max.h}:${max.mn}:00`;
+      }
+    }
+
+    const codeEquipe = deriveCodeEquipeBulletin(code, heureDebut);
+    const estCodeSpecial = /^(RP|RU|RQ|C|CA|DISPO)$/.test(code) || /^F[0-9V]$/.test(code) || /^F-[A-Z]{2,5}$/.test(code);
+
+    jours.push({
+      date_jour: dateJour,
+      code_poste: estCodeSpecial ? null : code,
+      code_equipe: codeEquipe,
+      heure_debut: heureDebut,
+      heure_fin: heureFin,
+      source_edition_date: editionDate,
+    });
+  }
+  // Diagnostic : comparer à la période complète "Commande allant du... au..." pour
+  // repérer les jours qui n'ont même pas été détectés comme bloc (pas juste en échec de code)
+  const periodeMatch = text.match(/Commande allant du\s*(\d{2})\/(\d{2})\/(\d{4})\s*au\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+  if (periodeMatch) {
+    const debut = new Date(`${periodeMatch[3]}-${periodeMatch[2]}-${periodeMatch[1]}T12:00:00`);
+    const fin = new Date(`${periodeMatch[6]}-${periodeMatch[5]}-${periodeMatch[4]}T12:00:00`);
+    const datesDetectees = new Set(jours.map(j => j.date_jour));
+    const datesEnEchec = new Set(echecs.filter(e => e.date).map(e => e.date));
+    for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
+      const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (!datesDetectees.has(dk) && !datesEnEchec.has(dk)) {
+        echecs.push({ date: dk, motif: "jour_non_detecte" });
+      }
+    }
+  }
+
+  return { editionDate, jours, echecs };
+}
+function BulletinImportButton({ agentCp, onImported }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    setBusy(true); setResult(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const b64 = reader.result.split(",")[1];
+        let text = "";
+        if (file.type === "application/pdf") {
+          text = await extraireTextePdfNatif(b64);
+          if (!text || text.replace(/\s/g, "").length < 30) {
+            // PDF scanné sans texte natif -> fallback OCR page par page
+            const pdfjsLib = await import("pdfjs-dist");
+            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
+            const raw = atob(b64); const bytes = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+            const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+            const texts = [];
+            for (let n = 1; n <= pdf.numPages; n++) {
+              const page = await pdf.getPage(n);
+              const viewport = page.getViewport({ scale: 3.0 });
+              const canvas = document.createElement("canvas");
+              canvas.width = viewport.width; canvas.height = viewport.height;
+              await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+              const pageB64 = canvas.toDataURL("image/png").split(",")[1];
+              texts.push(await ocrImageViaOcrSpace(pageB64, "image/png"));
+            }
+            text = texts.join("\n");
+          }
+        } else {
+          text = await ocrImageViaOcrSpace(b64, file.type || "image/jpeg");
+        }
+        if (!text) throw new Error("Aucun texte extrait du document");
+
+        const { jours, echecs } = parseBulletinCommande(text);
+        if (jours.length === 0) throw new Error("Aucun jour reconnu — vérifie le format du document");
+
+        const entries = jours.map(j => {
+          if (!j.heure_debut && j.code_equipe && ["M", "AM", "N", "J"].includes(j.code_equipe)) {
+            const h = deduireHoraireGeneriqueEquipe(j.code_equipe);
+            return { ...j, heure_debut: h.heure_debut, heure_fin: h.heure_fin };
+          }
+          return j;
+        });
+
+        const resp = await api.planning.importBulletin(agentCp, entries, "bulletin");
+        const postesLabels = [...new Set(entries.map(e => getPosteLabelFromCode(e.code_poste)).filter(Boolean))];
+        setResult({ nb: resp?.nb_appliques || 0, ignores: resp?.ignores || [], echecs, postesLabels });
+        if (typeof onImported === "function") onImported();
+      } catch (err) {
+        setResult({ error: err.message });
+      }
+      setBusy(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, alignSelf: "flex-start", width: "fit-content" }}>
+      <label style={{ cursor: "pointer", alignSelf: "flex-start" }}>
+        <div style={{ background: busy ? "#94a3b8" : "#0f4c81", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+          {busy ? "⏳ Analyse…" : "📥 Importer bulletin de commande / roulement"}
+        </div>
+        <input type="file" accept=".pdf,image/*" onChange={handleFile} style={{ display: "none" }} disabled={busy} />
+      </label>
+      {result?.nb !== undefined && !result.error && <span style={{ fontSize: 10, background: "#f0fdf4", color: "#16a34a", borderRadius: 8, padding: "4px 10px", fontWeight: 700 }}>
+        ✅ {result.nb} jour(s) importé(s){result.ignores?.length ? ` · ${result.ignores.length} ignoré(s) (déjà à jour)` : ""}{result.echecs?.length ? ` · ${result.echecs.length} jour(s) à vérifier manuellement (${[...new Set(result.echecs.map(e=>e.date).filter(Boolean))].join(", ")})` : ""}{result.postesLabels?.length ? ` · Postes : ${result.postesLabels.join(", ")}` : ""}
+      </span>}
+      {result?.error && <span style={{ fontSize: 10, background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "4px 10px", fontWeight: 700 }}>❌ {result.error}</span>}
+    </div>
+  );
+}
+
 const _todayDate=new Date();
 const TODAY=`${_todayDate.getFullYear()}-${String(_todayDate.getMonth()+1).padStart(2,"0")}-${String(_todayDate.getDate()).padStart(2,"0")}`;
 
@@ -4085,7 +4366,8 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
 
     {/* Toggle vue semaine / mois */}
     {/* Toggle vue semaine / mois */}
-    <div style={{display:"flex",alignItems:"center",gap:8}}>
+    {/* BULLETIN_IMPORT_REPOSITIONNE */}
+    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
       <div style={{display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,gap:2}}>
         {[["mois","📆 Mois"],["semaine","📅 Semaine"],["planning","📋 Planning"]].map(([k,l])=>(
           <button key={k} onClick={()=>setCalView(k)} style={{border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",background:calView===k?"#fff":"transparent",color:calView===k?"#1e293b":"#475569",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:calView===k?700:600,boxShadow:calView===k?"0 1px 4px rgba(0,0,0,.08)":"none"}}>
@@ -4107,6 +4389,10 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
           <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
         </button>
       </>}
+      {isOwnProfile && <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
+        const agCp=agent.immatriculation||agent.cp||agent.id;
+        api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>({...prev, ...entries})); });
+      }}/>}
     </div>
 
     <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value){if(calView==="semaine")jumpToWeekDate(e.target.value);else jumpToMonthDate(e.target.value);}}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
@@ -4180,8 +4466,10 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 background:getColor(code),color:getTc(code),
                 borderRadius:8,padding:"4px 8px",
                 fontSize:10,fontWeight:700,textAlign:"center",
+                display:"flex",flexDirection:"column",gap:2,
               }}>
-                {CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)}
+                <span>{CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)}</span>
+                {en?.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{getPosteLabelFromCode(en.jsCode)||en.jsCode}</span>}
               </div>}
 
               {/* ZONE 3 — Nuit (bas) */}
@@ -4192,7 +4480,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 display:"flex",flexDirection:"column",gap:2,
               }}>
                 <span>Nuit</span>
-                {(code==="N"?en?.jsCode:en?.jsCode2)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{code==="N"?en?.jsCode:en?.jsCode2}</span>}
+                {(code==="N"?en?.jsCode:en?.jsCode2)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{getPosteLabelFromCode(code==="N"?en?.jsCode:en?.jsCode2)||(code==="N"?en?.jsCode:en?.jsCode2)}</span>}
               </div>}
 
 
@@ -4270,8 +4558,8 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
             const isDescente = !!(en?.finNuit && !en?.equipe2 && showData);
             const couleurNuit = getColor("N");
             const tcNuit = getTc("N");
-            const posteNuitLabel = en?.jsCode2 || null;
-            const posteLabel = en?.jsCode && !["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode) ? en.jsCode : null;
+            const posteNuitLabel = en?.jsCode2 ? (getPosteLabelFromCode(en.jsCode2) || en.jsCode2) : null;
+            const posteLabel = en?.jsCode && !["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode) ? (getPosteLabelFromCode(en.jsCode) || en.jsCode) : null;
 
             const isNuitSeuleCell = code === "N" && !en?.equipe2 && !en?.finNuit;
             return <div key={dk}

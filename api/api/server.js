@@ -14,6 +14,7 @@ app.use('/api', apiLimiter);
 app.use('/api/auth',          require('./src/routes/auth'));
 app.use('/api/agents',        require('./src/routes/agents'));
 app.use('/api/planning',      require('./src/routes/planning'));
+app.use('/api/planning',      require('./src/routes/bulletinImport'));
 app.use('/api/cps',            require('./src/routes/cps'));
 app.use('/api/cps-aleas',      require('./src/routes/aleas'));
 app.use('/api/claude', require('./src/routes/claude'));

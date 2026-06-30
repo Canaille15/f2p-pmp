@@ -295,6 +295,18 @@ result[`${row.agent_id || agentId}-${date}`] = {
   deleteEntry: (agentId, date) =>
     apiFetch(`/planning/${agentId}/${date}`, { method: 'DELETE' }),
   /**
+   * Importer un lot de jours extraits d'un bulletin de commande ou d'un déroulé prévisionnel.
+   * @param {string} agentId - CP de l'agent (toujours l'agent connecté lui-même)
+   * @param {Array}  entries - [{date_jour, code_equipe, code_poste, heure_debut, heure_fin, source_edition_date}]
+   * @param {string} sourceType - 'bulletin' | 'previsionnel'
+   * @returns {Promise<{message, nb_appliques, appliques, ignores}>}
+   */
+  importBulletin: (agentId, entries, sourceType) =>
+    apiFetch(`/planning/${agentId}/import-bulletin`, {
+      method: 'POST',
+      body: JSON.stringify({ entries, source_type: sourceType || 'bulletin' }),
+    }),
+  /**
    * Charger le planning PUBLIC de tous les agents sur une periode
    * (pour le Planning Previsionnel Partage)
    */
