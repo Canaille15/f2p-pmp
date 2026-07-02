@@ -53,7 +53,9 @@ async function importBulletin(req, res) {
         }
       }
 
-      if (!e.code_equipe) {
+      // Accepter les entrées multi-périodes (déroulé prévisionnel) ou entrées directes (bulletin)
+      const hasPeriodes = e.periodes && e.periodes.length > 0 && e.periodes[0].code_equipe;
+      if (!e.code_equipe && !hasPeriodes) {
         ignores.push({ date: e.date_jour, motif: 'code_equipe_manquant' });
         continue;
       }
@@ -69,13 +71,24 @@ async function importBulletin(req, res) {
       );
       await conn.query('DELETE FROM planning_periode WHERE planning_jour_id=?', [jour.id]);
 
-      const codeEquipe = e.code_equipe || null;
-      const prive = CODES_PUBLICS.has(codeEquipe) ? 0 : 1;
-      await conn.query(
-        `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
-         VALUES (?,1,?,?,?,?,?,?,?)`,
-        [jour.id, codeEquipe, e.code_poste || null, e.heure_debut || null, e.heure_fin || null, prive, null, null]
-      );
+      // Support multi-périodes : déroulé prévisionnel envoie e.periodes[], bulletin envoie champs directs
+      const periodes = e.periodes || [{
+        code_equipe: e.code_equipe || null,
+        code_poste: e.code_poste || null,
+        heure_debut: e.heure_debut || null,
+        heure_fin: e.heure_fin || null,
+        ordre: 1,
+      }];
+
+      for (const p of periodes) {
+        if (!p.code_equipe) continue;
+        const prive = CODES_PUBLICS.has(p.code_equipe) ? 0 : 1;
+        await conn.query(
+          `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
+          [jour.id, p.ordre || 1, p.code_equipe, p.code_poste || null, p.heure_debut || null, p.heure_fin || null, prive, null, null]
+        );
+      }
       appliques.push(e.date_jour);
     }
 

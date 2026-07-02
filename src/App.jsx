@@ -491,6 +491,257 @@ function parseBulletinCommande(text) {
 
   return { editionDate, jours, echecs };
 }
+// ─── PARSER DÉROULÉ PRÉVISIONNEL ──────────────────────────────────────────────
+async function extraireItemsPdfAvecPositions(base64Pdf) {
+  const pdfjsLib = await import("pdfjs-dist");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
+  const raw = atob(base64Pdf);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+  const allItems = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    const tc = await page.getTextContent();
+    tc.items.forEach(it => {
+      const s = it.str.trim();
+      if (s) allItems.push({ x: it.transform[4], y: it.transform[5], text: s });
+    });
+  }
+  return allItems;
+}
+
+function parseDeroulePrevisionnel(text) {
+  const editionMatch = text.match(/Le\s*(\d{2})[/1](\d{2})[/1](\d{4})/i);
+  const editionDate = editionMatch
+    ? `${editionMatch[3]}-${editionMatch[2]}-${editionMatch[1]} 00:00:00`
+    : null;
+
+  const yearCounts = {};
+  for (const m of text.matchAll(/(\d{2})\/(\d{4})/g)) {
+    yearCounts[m[2]] = (yearCounts[m[2]] || 0) + 1;
+  }
+  const annee = Object.entries(yearCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
+    || String(new Date().getFullYear());
+  const year = parseInt(annee, 10);
+
+  const normaliseNum = n => n.replace(/[Ii]/g, "1").replace(/[Ss]/g, "5");
+  const normaliseCode = c => {
+    if (!c) return null; c = c.trim();
+    c = c.replace(/\bHP\b/g, "RP");
+    c = c.replace(/P[IO][CO][CO]L/g, "PICCL");
+    c = c.replace(/ccx/gi, "PICCLX"); c = c.replace(/^(F-)\s+/, "$1");
+    return c || null;
+  };
+  const getHoraires = eq => {
+    const e = EQ[eq];
+    if (!e?.heures) return { heure_debut: null, heure_fin: null };
+    const mh = e.heures.match(/(\d{2})h(\d{2}).(\d{2})h(\d{2})/);
+    if (!mh) return { heure_debut: null, heure_fin: null };
+    return { heure_debut: `${mh[1]}:${mh[2]}:00`, heure_fin: `${mh[3]}:${mh[4]}:00` };
+  };
+
+  // Séparer les deux blocs au séparateur "___"
+  const sepIdx = text.search(/_{6,}/);
+  const sepEnd = sepIdx >= 0 ? text.indexOf("\n", sepIdx) : -1;
+  const texteBloc1 = sepEnd > 0 ? text.slice(0, sepEnd) : text;
+  const texteBloc2 = sepEnd > 0 ? text.slice(sepEnd) : "";
+
+  const MOIS_BLOC1 = new Set(["01","02","03","04","05","06"]);
+  const MOIS_BLOC2 = new Set(["07","08","09","10","11","12"]);
+
+  const detectOrdre = (t, moisSet) => {
+    const re = new RegExp("(\\d{2})\\/" + annee, "g");
+    const seen = new Set(); const ordre = []; let m;
+    while ((m = re.exec(t)) !== null) {
+      const mm = m[1];
+      if (!seen.has(mm) && moisSet.has(mm)) { seen.add(mm); ordre.push(mm); }
+    }
+    for (const mm of moisSet) { if (!ordre.includes(mm)) ordre.push(mm); }
+    return ordre;
+  };
+  const ord1 = detectOrdre(text, MOIS_BLOC1);
+  const ord2 = detectOrdre(text, MOIS_BLOC2);
+
+  const ABBR_FROM_DAY = ["Di","Lu","Ma","Me","Je","Ve","Sa"];
+  const buildCandidates = (moisSet, ordre) => {
+    const map = {};
+    for (const mm of moisSet) {
+      const daysInMonth = new Date(year, parseInt(mm, 10), 0).getDate();
+      for (let day = 1; day <= daysInMonth; day++) {
+        const d = new Date(year, parseInt(mm, 10) - 1, day);
+        const abbr = ABBR_FROM_DAY[d.getDay()];
+        const key = `${abbr}_${day}`;
+        if (!map[key]) map[key] = [];
+        map[key].push(mm);
+      }
+    }
+    for (const key in map) {
+      map[key].sort((a, b) => {
+        const ia = ordre.indexOf(a), ib = ordre.indexOf(b);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+    }
+    return map;
+  };
+  const cmap1 = buildCandidates(MOIS_BLOC1, ord1);
+  const cmap2 = buildCandidates(MOIS_BLOC2, ord2);
+
+  const DAY_ABBRS = new Set(["Je","Ve","Sa","Di","Lu","Ma","Me"]);
+  const CODE_VALID = /^(RP|RU|RQ|CA|C|DISPO|F[0-9V]|F-[A-Z]{2,}|PI[A-Z0-9-]{2,}|PA[A-Z0-9-]{2,})$/;
+  const SPECIAL = new Set(["RP","RU","RQ","CA","C","DISPO"]);
+  const DAY_RE = /(Je|Ve|Va|Sa|Di|Dl|Lu|Ma|Me)\s+(\d+|[IiSs5])(?:\s+([A-Z][A-Z0-9-]+)(?:\s+([A-Z][A-Z0-9-]+))?)?/g;
+
+  const seen = new Set();
+  const jours = [];
+
+  const processBloc = (texte, cmap) => {
+    const usedCounts = {};
+    let m;
+    DAY_RE.lastIndex = 0;
+    while ((m = DAY_RE.exec(texte)) !== null) {
+      let [, abbr, numRaw, c1Raw, c2Raw] = m;
+      if (abbr === "Va") abbr = "Ve";
+      if (abbr === "Dl") abbr = "Di";
+      const num = normaliseNum(numRaw);
+      if (!/^\d+$/.test(num)) continue;
+      const dayNum = parseInt(num, 10);
+      if (dayNum < 1 || dayNum > 31) continue;
+
+      const key = `${abbr}_${dayNum}`;
+      const candidates = cmap[key];
+      if (!candidates || candidates.length === 0) continue;
+
+      const idx = (usedCounts[key] || 0) % candidates.length;
+      usedCounts[key] = (usedCounts[key] || 0) + 1;
+      const mm = candidates[idx];
+
+      const c1 = normaliseCode(c1Raw);
+      if (!c1 || DAY_ABBRS.has(c1) || !CODE_VALID.test(c1)) continue;
+
+      const day = String(dayNum).padStart(2, "0");
+      const dateJour = `${annee}-${mm}-${day}`;
+      if (seen.has(dateJour)) continue;
+      seen.add(dateJour);
+
+      const eq1 = deriveCodeEquipeBulletin(c1, null);
+      const sp1 = SPECIAL.has(c1) || /^F[0-9V]$/.test(c1) || /^F-[A-Z]+$/.test(c1);
+      const h1 = getHoraires(eq1);
+      const periodes = [{
+        code_equipe: eq1, code_poste: sp1 ? null : c1,
+        heure_debut: h1.heure_debut, heure_fin: h1.heure_fin, ordre: 1,
+      }];
+
+      const c2 = normaliseCode(c2Raw);
+      if (c2 && !DAY_ABBRS.has(c2) && CODE_VALID.test(c2)) {
+        const eq2 = deriveCodeEquipeBulletin(c2, null);
+        const sp2 = SPECIAL.has(c2);
+        const h2 = getHoraires(eq2);
+        periodes.push({
+          code_equipe: eq2, code_poste: sp2 ? null : c2,
+          heure_debut: h2.heure_debut, heure_fin: h2.heure_fin, ordre: 2,
+        });
+      }
+
+      jours.push({ date_jour: dateJour, periodes, source_edition_date: editionDate });
+    }
+  };
+
+  processBloc(texteBloc1, cmap1);
+  if (texteBloc2) processBloc(texteBloc2, cmap2);
+
+  // ── Second passage : prises de nuit orphelines ──────────────────────────────
+  // "RP PICCLX" orphelin est sur la MÊME ligne que les autres entrées du même jour.
+  // Ex: "RP PICCLX Lu 2 PICOLO Je 2 PICCL- 2" → jour 2, chercher dans la même ligne.
+  const LINES = text.split(/\n/);
+  const DAY_NUM_RE3 = /(Je|Ve|Sa|Di|Lu|Ma|Me)\s+(\d+|[IiSs5])/g;
+  const NUIT_LINE_RE = /^[ \t]*(RP|RU)\s+(PICC[A-Z0-9-]+|PICO[A-Z0-9-]+)/;
+
+  let lineOffset = 0;
+  for (const line of LINES) {
+    const nuitMatch = NUIT_LINE_RE.exec(line);
+    if (nuitMatch) {
+      const rpCode   = nuitMatch[1];
+      const nuitCode = normaliseCode(nuitMatch[2]);
+      if (nuitCode) {
+        // Chercher le numéro de jour le plus fréquent sur cette ligne
+        const dayNums = [];
+        DAY_NUM_RE3.lastIndex = 0;
+        let dm3;
+        while ((dm3 = DAY_NUM_RE3.exec(line)) !== null) {
+          const n3 = parseInt(normaliseNum(dm3[2]), 10);
+          if (n3 >= 1 && n3 <= 31) dayNums.push(n3);
+        }
+        // Aussi détecter les nombres isolés sur la ligne (ex: "... 2" à la fin)
+        const isolatedNums = [...line.matchAll(/(?<![A-Za-z/])\b(\d{1,2})\b(?![/A-Za-z])/g)]
+          .map(m => parseInt(m[1], 10)).filter(n => n >= 1 && n <= 31);
+        dayNums.push(...isolatedNums);
+
+        if (dayNums.length > 0) {
+          // Prendre le numéro le plus fréquent
+          const freq3 = {};
+          dayNums.forEach(n => { freq3[n] = (freq3[n] || 0) + 1; });
+          const dayNum3 = parseInt(Object.entries(freq3).sort((a,b) => b[1]-a[1])[0][0], 10);
+
+          const isBloc2line = sepEnd > 0 && lineOffset > sepEnd;
+          const cmap3 = isBloc2line ? cmap2 : cmap1;
+
+          // Chercher toutes les abréviations de jours sur cette ligne pour trouver la bonne
+          const lineAbbrs = [];
+          DAY_NUM_RE3.lastIndex = 0;
+          while ((dm3 = DAY_NUM_RE3.exec(line)) !== null) {
+            const n3 = parseInt(normaliseNum(dm3[2]), 10);
+            if (n3 === dayNum3) lineAbbrs.push(dm3[1]);
+          }
+
+          // Essayer chaque abbr trouvée sur la ligne
+          let handled = false;
+          for (const abbr3 of lineAbbrs) {
+            const key3 = `${abbr3}_${dayNum3}`;
+            const cands3 = cmap3[key3];
+            if (!cands3) continue;
+            for (const mm3 of cands3) {
+              const dateJour3 = `${annee}-${mm3}-${String(dayNum3).padStart(2,"0")}`;
+              const existing3 = jours.find(j => j.date_jour === dateJour3);
+              if (existing3 && !existing3.periodes.some(p => p.code_equipe === "N")) {
+                const eq2 = deriveCodeEquipeBulletin(nuitCode, null);
+                const h2  = getHoraires(eq2);
+                existing3.periodes.push({
+                  code_equipe: eq2, code_poste: nuitCode,
+                  heure_debut: h2.heure_debut, heure_fin: h2.heure_fin, ordre: 2,
+                });
+                handled = true; break;
+              } else if (!existing3 && !seen.has(dateJour3)) {
+                seen.add(dateJour3);
+                const eq1 = deriveCodeEquipeBulletin(rpCode, null);
+                const h1  = getHoraires(eq1);
+                const eq2 = deriveCodeEquipeBulletin(nuitCode, null);
+                const h2  = getHoraires(eq2);
+                jours.push({
+                  date_jour: dateJour3,
+                  periodes: [
+                    { code_equipe: eq1, code_poste: null, heure_debut: h1.heure_debut, heure_fin: h1.heure_fin, ordre: 1 },
+                    { code_equipe: eq2, code_poste: nuitCode, heure_debut: h2.heure_debut, heure_fin: h2.heure_fin, ordre: 2 },
+                  ],
+                  source_edition_date: editionDate,
+                });
+                handled = true; break;
+              }
+              if (handled) break;
+            }
+            if (handled) break;
+          }
+        }
+      }
+    }
+    lineOffset += line.length + 1; // +1 pour le 
+
+  }
+
+  return { editionDate, jours, echecs: [] };
+}
+
+
 function BulletinImportButton({ agentCp, onImported }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -529,19 +780,28 @@ function BulletinImportButton({ agentCp, onImported }) {
         }
         if (!text) throw new Error("Aucun texte extrait du document");
 
-        const { jours, echecs } = parseBulletinCommande(text);
-        if (jours.length === 0) throw new Error("Aucun jour reconnu — vérifie le format du document");
+        // Détection auto : déroulé prévisionnel (grille annuelle) ou bulletin de commande
+        const isDeroule = /D.+roul.+Pr.+visionnel/i.test(text) || /Affectations de l.agent/i.test(text);
+        let entries, sourceType, echecs;
 
-        const entries = jours.map(j => {
-          if (!j.heure_debut && j.code_equipe && ["M", "AM", "N", "J"].includes(j.code_equipe)) {
-            const h = deduireHoraireGeneriqueEquipe(j.code_equipe);
-            return { ...j, heure_debut: h.heure_debut, heure_fin: h.heure_fin };
-          }
-          return j;
-        });
+        if (isDeroule) {
+          const res = parseDeroulePrevisionnel(text);
+          echecs = res.echecs;
+          // Pour le déroulé : entries contient des objets {date_jour, periodes[], source_edition_date}
+          entries = res.jours;
+          sourceType = "previsionnel";
+          if (entries.length === 0) throw new Error("Aucun jour reconnu dans le déroulé — vérifie le format du document");
+        } else {
+          const res = parseBulletinCommande(text);
+          echecs = res.echecs;
+          entries = res.jours;
+          sourceType = "bulletin";
+          if (entries.length === 0) throw new Error("Aucun jour reconnu — vérifie le format du document");
+        }
 
-        const resp = await api.planning.importBulletin(agentCp, entries, "bulletin");
-        const postesLabels = [...new Set(entries.map(e => getPosteLabelFromCode(e.code_poste)).filter(Boolean))];
+        const resp = await api.planning.importBulletin(agentCp, entries, sourceType);
+        const allCodes = entries.flatMap(e => e.periodes ? e.periodes.map(p => p.code_poste) : [e.code_poste]);
+        const postesLabels = [...new Set(allCodes.map(c => getPosteLabelFromCode(c)).filter(Boolean))];
         setResult({ nb: resp?.nb_appliques || 0, ignores: resp?.ignores || [], echecs, postesLabels });
         if (typeof onImported === "function") onImported();
       } catch (err) {
