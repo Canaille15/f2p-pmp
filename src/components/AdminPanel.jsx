@@ -470,9 +470,6 @@ function ModalResetPin({ agent, onConfirm, onClose }) {
           />
         </div>
         {err && <div style={{ color: "#dc2626", fontSize: 12, fontWeight: 600 }}>⚠️ {err}</div>}
-        <div style={{ fontSize: 11, color: "#94a3b8" }}>
-          ℹ️ Si vous laissez vide, l'agent devra créer son PIN à la prochaine connexion.
-        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
           <button onClick={submit} style={{ flex: 1, padding: "10px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Réinitialiser</button>
