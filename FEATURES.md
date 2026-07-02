@@ -270,4 +270,24 @@ Suite aux remarques d'Olivier (texte trop petit/fade, surtout sur ordinateur et 
 - Libellé court du poste (CCL, AC LNE...) affiché dans les 3 vues du calendrier (Mois, Semaine, Planning) pour toute saisie, manuelle ou importée.
 - Testé sur 2 vrais bulletins SNCF (Dupuy PRCI + Pastant PAR) : 37/38 et 32/33 jours détectés (jours manquants = dates réellement illisibles dans les documents sources).
 - Accès : titulaire uniquement (cohérent avec la règle admin = lecture seule).
-- DB : `planning_jour.source` ENUM étendu + colonne `source_edition_date DATETIME` ajoutée.
+- DB : `planning_jour.source` ENUM étendu + colonne `source_edition_date DATETIME` ajoutée.## [03/07/2026] Panneau Admin + Partage Prévisionnel
+
+### Fix : Réinitialisation PIN admin
+- Ajout de `agents.resetPin` dans `client.js` (appelait une fonction inexistante)
+- Ajout de la fonction `resetPin` dans `profilController.js` (bcrypt + invalidation sessions)
+- Ajout de la route `PUT /profil/:cp/pin` dans `profil.js`
+- Le bouton 🔑 PIN du panneau admin est désormais pleinement fonctionnel
+
+### Panneau Admin - vue responsive
+- Remplacement du tableau par des cartes empilées (grille `auto-fill minmax 340px`)
+- Mobile portrait : 1 colonne pleine largeur, plus de débordement
+- Textes plus grands, meilleur contraste, badges colorés (CP, famille, PIN)
+- Correction du `maxWidth:900` qui causait le débordement sur téléphone
+
+### Fix : Partage Prévisionnel
+- `getAllPublic` dans `client.js` : ajout du fallback `|| p1.code_poste` sur `jsCode`
+- `convertirCodePosteVersJsCode` ne convertissait pas les codes complets (ex: "PICCL-")
+- Les journées M/AM/N/J importées via bulletin ou saisie manuelle sont maintenant visibles dans le Planning Prévisionnel partagé
+
+---
+
