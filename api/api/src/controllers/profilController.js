@@ -126,4 +126,24 @@ async function addFamille(req, res) {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
-module.exports = { getProfil, updateProfil, setRoulement, getRoulementActif, setHabilitations, addFamille };
+// PUT /api/profil/:cp/pin — réinitialiser le PIN (admin uniquement)
+async function resetPin(req, res) {
+  const { cp } = req.params;
+  if (!req.agent.is_admin)
+    return res.status(403).json({ error: 'Réservé aux administrateurs' });
+  const { pin } = req.body;
+  if (!pin || !/^\d{4}$/.test(pin))
+    return res.status(400).json({ error: 'PIN invalide (4 chiffres requis)' });
+  try {
+    const bcrypt = require('bcrypt');
+    const hash = await bcrypt.hash(pin, 12);
+    const [result] = await pool.query('UPDATE auth SET pin_hash=? WHERE cp_agent=?', [hash, cp]);
+    if (result.affectedRows === 0)
+      return res.status(404).json({ error: 'Agent introuvable dans auth' });
+    // Invalider toutes ses sessions
+    await pool.query('DELETE FROM session WHERE cp_agent=?', [cp]);
+    res.json({ message: 'PIN réinitialisé' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
+module.exports = { getProfil, updateProfil, setRoulement, getRoulementActif, setHabilitations, addFamille, resetPin };
