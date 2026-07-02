@@ -108,7 +108,7 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
 
   // ─── RENDU ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: "16px", maxWidth: 900, margin: "0 auto" }}>
+    <div style={{ padding: "12px", maxWidth: "100%", boxSizing: "border-box", overflowX: "hidden" }}>
 
       {/* Titre */}
       <div style={{ marginBottom: 20 }}>
