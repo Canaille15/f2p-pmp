@@ -338,8 +338,8 @@ result[`${row.agent_id || agentId}-${date}`] = {
       result[`${agentId}-${date}`] = {
         equipe:   isFinNuit && !p2 ? null : (p1.code_equipe || null),
         equipe2:  p2 ? 'N' : null,
-        jsCode:   isFinNuit && !p2 ? null : convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe),
-        jsCode2:  p2 ? convertirCodePosteVersJsCode(p2.code_poste, 'N') : null,
+        jsCode:   isFinNuit && !p2 ? null : (convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe) || p1.code_poste || null),
+        jsCode2:  p2 ? (convertirCodePosteVersJsCode(p2.code_poste, 'N') || p2.code_poste || null) : null,
         horaires: isFinNuit ? null : horaires,
         prive:    false,
         finNuit:  isFinNuit,
