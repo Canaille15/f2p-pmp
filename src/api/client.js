@@ -150,6 +150,9 @@ export const agents = {
    */
   setPartagePrevisionnel: (cp, actif) =>
     apiFetch(`/agents/${cp}`, { method: 'PATCH', body: JSON.stringify({ partage_previsionnel: actif }) }),
+
+  resetPin: (cp, newPin) =>
+    apiFetch(`/profil/${cp}/pin`, { method: 'PUT', body: JSON.stringify({ pin: newPin }) }),
 };
 
 // ─── MODULE PLANNING ─────────────────────────────────────────────────────────
