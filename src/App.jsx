@@ -2897,16 +2897,16 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
   };
 
   return(
-    <div style={{marginTop:14,border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden",background:"#fff"}}>
+    <div style={{marginTop:14,border:"2px solid #e2e8f0",borderRadius:14,overflow:"hidden",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
 
       {/* ── HEADER cliquable ── */}
       <div onClick={()=>setOuvert(o=>!o)}
-        style={{background:"linear-gradient(135deg,#9d174d,#be185d)",padding:"11px 16px",
-          display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none",flexWrap:"wrap"}}>
+        style={{background:"linear-gradient(135deg,#831843,#9d174d)",padding:"16px 20px",
+          display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",flexWrap:"wrap"}}>
 
         {/* Titre */}
-        <span style={{fontSize:15,flexShrink:0}}>🩷</span>
-        <span style={{fontSize:13,fontWeight:800,color:"#fff",flex:1,minWidth:120}}>
+        <span style={{fontSize:20,flexShrink:0}}>🩷</span>
+        <span style={{fontSize:17,fontWeight:800,color:"#fff",flex:1,minWidth:140}}>
           Suivi des fêtes légales {year}
         </span>
 
@@ -2915,43 +2915,43 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
 
           {/* Année en cours — prises */}
           {nbPrises>0&&<span style={{
-            background:"rgba(22,163,74,.85)",color:"#fff",
-            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}>
+            background:"rgba(22,163,74,.95)",color:"#fff",
+            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}>
             ✅ {nbPrises} prise{nbPrises>1?"s":""} {year}
           </span>}
 
           {/* Année en cours — payées */}
           {nbPayees>0&&<span style={{
-            background:"rgba(59,130,246,.85)",color:"#fff",
-            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}>
+            background:"rgba(59,130,246,.95)",color:"#fff",
+            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}>
             💶 {nbPayees} payée{nbPayees>1?"s":""} {year}
           </span>}
 
           {/* Fêtes T4 de N-1 encore en cours — prises */}
           {nbPrisesN1>0&&<span style={{
-            background:"rgba(22,163,74,.7)",color:"#fff",
-            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}
+            background:"rgba(22,163,74,.82)",color:"#fff",
+            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}
             title={fetesN1Prises.map(l=>`${l.code} – ${l.label}`).join(", ")}>
             ✅ {nbPrisesN1} prise{nbPrisesN1>1?"s":""} ({yearMoins1})
           </span>}
 
           {/* Fêtes T4 de N-1 — en attente (délai pas encore dépassé) */}
           {nbAttenteN1>0&&<span style={{
-            background:"rgba(245,158,11,.8)",color:"#fff",
-            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}
+            background:"rgba(245,158,11,.92)",color:"#fff",
+            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}
             title={`À prendre avant le 31 mars ${year} : ${fetesN1Attente.map(l=>l.code).join(", ")}`}>
             ⏳ {nbAttenteN1} à prendre ({yearMoins1})
           </span>}
 
           {/* Fêtes T4 de N-1 — payées */}
           {nbPayeesN1>0&&<span style={{
-            background:"rgba(59,130,246,.7)",color:"#fff",
-            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:3,flexShrink:0}}
+            background:"rgba(59,130,246,.82)",color:"#fff",
+            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
+            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}
             title={fetesN1Payees.map(l=>`${l.code} – ${l.label}`).join(", ")}>
             💶 {nbPayeesN1} payée{nbPayeesN1>1?"s":""} ({yearMoins1})
           </span>}
@@ -2959,13 +2959,13 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
           {/* Rappels */}
           {notifCount>0&&<span style={{
             background:"#ef4444",color:"#fff",
-            borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,flexShrink:0}}>
+            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,flexShrink:0}}>
             ⚠️ {notifCount} rappel{notifCount>1?"s":""}
           </span>}
         </div>
 
-        <span style={{fontSize:9,color:"rgba(255,255,255,.35)",fontStyle:"italic",flexShrink:0}}>GRH00143</span>
-        <span style={{color:"#fff",fontSize:14,fontWeight:700,transition:"transform .2s",
+        <span style={{fontSize:11,color:"rgba(255,255,255,.55)",fontStyle:"italic",flexShrink:0}}>GRH00143</span>
+        <span style={{color:"#fff",fontSize:18,fontWeight:700,transition:"transform .2s",
           display:"inline-block",transform:ouvert?"rotate(0deg)":"rotate(-90deg)",flexShrink:0}}>
           ▼
         </span>
@@ -2975,13 +2975,13 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
         {/* ── Alertes actives ── */}
         {lignes.filter(l=>l.notifActive).map(l=>(
           <div key={"alert-"+l.code} style={{background:"#fff7ed",borderBottom:"1px solid #fed7aa",
-            padding:"9px 14px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <span style={{fontSize:15,flexShrink:0}}>⚠️</span>
+            padding:"12px 16px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <span style={{fontSize:19,flexShrink:0}}>⚠️</span>
             <div style={{flex:1,minWidth:160}}>
-              <div style={{fontSize:11,fontWeight:800,color:"#c2410c"}}>
+              <div style={{fontSize:14,fontWeight:800,color:"#c2410c"}}>
                 🩷 {l.code} — {l.label}
               </div>
-              <div style={{fontSize:10,color:"#92400e",marginTop:1}}>
+              <div style={{fontSize:12,color:"#92400e",marginTop:2}}>
                 À prendre avant le <strong>
                   {new Date(l.limiteDate).toLocaleDateString("fr-FR",{
                     day:"2-digit",month:"long",
@@ -2990,13 +2990,13 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                 </strong>
               </div>
             </div>
-            {canEdit&&<div style={{display:"flex",gap:5,flexShrink:0}}>
+            {canEdit&&<div style={{display:"flex",gap:7,flexShrink:0}}>
               <button onClick={e=>{e.stopPropagation();prendreEnCompte(l.code);}}
-                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,
-                  padding:"5px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>✓ Pris</button>
+                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:8,
+                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,minHeight:36}}>✓ Pris</button>
               <button onClick={e=>{e.stopPropagation();snooze10j(l.code);}}
-                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",
-                  borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:10}}>⏰ +10j</button>
+                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",
+                  borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600,minHeight:36}}>⏰ +10j</button>
             </div>}
           </div>
         ))}
@@ -3014,24 +3014,24 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                 background:s.bg,
               }}>
                 {/* Ligne principale */}
-                <div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px"}}>
 
                   {/* Badge code fête */}
                   <span style={{
                     background:"#ec4899",color:"#fff",
-                    borderRadius:7,padding:"3px 8px",
-                    fontFamily:"monospace",fontSize:11,fontWeight:800,
-                    flexShrink:0,minWidth:36,textAlign:"center",
+                    borderRadius:8,padding:"5px 10px",
+                    fontFamily:"monospace",fontSize:13,fontWeight:800,
+                    flexShrink:0,minWidth:44,textAlign:"center",
                   }}>🩷{l.code}</span>
 
                   {/* Nom + date fête */}
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:11,fontWeight:700,color:"#1e293b",
+                    <div style={{fontSize:14,fontWeight:700,color:"#1e293b",
                       overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                       {l.label}
-                      {l.estDimanche&&<span style={{fontSize:9,color:"#dc2626",marginLeft:5,fontWeight:800}}>⚠️Dim.</span>}
+                      {l.estDimanche&&<span style={{fontSize:11,color:"#dc2626",marginLeft:6,fontWeight:800}}>⚠️Dim.</span>}
                     </div>
-                    <div style={{fontSize:9,color:"#64748b",marginTop:1,display:"flex",gap:6,flexWrap:"wrap"}}>
+                    <div style={{fontSize:11,color:"#475569",marginTop:2,display:"flex",gap:7,flexWrap:"wrap"}}>
                       <span style={{fontFamily:"monospace"}}>
                         {new Date(l.dateFete).toLocaleDateString("fr-FR",{
                           weekday:"short",day:"2-digit",month:"2-digit"
@@ -3039,7 +3039,7 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                       </span>
                       <span style={{color:"#94a3b8"}}>→</span>
                       <span style={{
-                        fontWeight:600,
+                        fontWeight:700,
                         color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#475569"
                       }}>
                         {new Date(l.limiteDate).toLocaleDateString("fr-FR",{
@@ -3053,8 +3053,8 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                   {/* Statut badge */}
                   <span style={{
                     background:s.badge,color:s.badgeTc,
-                    borderRadius:20,padding:"3px 9px",
-                    fontSize:9,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
+                    borderRadius:20,padding:"5px 12px",
+                    fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
                   }}>
                     {s.icon} {s.label}
                     {l.statut==="payee"&&` ${MOIS_NOMS[l.moisPaye-1]}`}
@@ -3063,78 +3063,79 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                 </div>
 
                 {/* Ligne prise le + actions */}
-                <div style={{display:"flex",alignItems:"center",gap:6,
-                  padding:"0 12px 8px",flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,
+                  padding:"0 14px 11px",flexWrap:"wrap"}}>
 
                   {/* Prise le */}
                   {isEditing?(
-                    <div style={{display:"flex",gap:4,alignItems:"center",flex:1}}>
+                    <div style={{display:"flex",gap:6,alignItems:"center",flex:1}}>
                       <input type="date" defaultValue={l.priseLe||""} 
                         onChange={e=>setEditVal(e.target.value)}
-                        style={{border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 7px",
-                          fontSize:10,outline:"none",flex:1}}/>
+                        style={{border:"1px solid #cbd5e1",borderRadius:7,padding:"6px 9px",
+                          fontSize:13,outline:"none",flex:1,minHeight:34}}/>
                       <button onClick={()=>setManualDate(l.code,editVal)}
                         style={{background:"#16a34a",color:"#fff",border:"none",
-                          borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10}}>✓</button>
+                          borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✓</button>
                       <button onClick={()=>setEditingCode(null)}
-                        style={{background:"#f1f5f9",color:"#475569",border:"none",
-                          borderRadius:5,padding:"3px 8px",cursor:"pointer",fontSize:10}}>✕</button>
+                        style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",
+                          borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕</button>
                     </div>
                   ):(
-                    <div style={{flex:1,fontSize:10}}>
+                    <div style={{flex:1,fontSize:12}}>
                       {priseLe
                         ? <span style={{color:"#16a34a",fontWeight:700}}>{priseLe}</span>
                         : l.statut==="payee"
-                          ? <span style={{color:"#3b82f6",fontWeight:600}}>
+                          ? <span style={{color:"#2563eb",fontWeight:700}}>
                               💶 Fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
                             </span>
                         : l.statut==="payee_auto"
                           ? <div>
-                              <div style={{color:"#3b82f6",fontWeight:700,fontSize:10}}>
+                              <div style={{color:"#2563eb",fontWeight:700,fontSize:12}}>
                                 💶 Paiement fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
                               </div>
-                              <div style={{color:"#f59e0b",fontWeight:600,fontSize:9,marginTop:2,
-                                display:"flex",alignItems:"center",gap:3}}>
+                              <div style={{color:"#b45309",fontWeight:700,fontSize:11,marginTop:3,
+                                display:"flex",alignItems:"center",gap:4}}>
                                 ⚠️ À vérifier sur votre fiche de paie de {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
                               </div>
                             </div>
-                          : <span style={{color:"#94a3b8",fontStyle:"italic"}}>Non renseigné</span>
+                          : <span style={{color:"#64748b",fontStyle:"italic"}}>Non renseigné</span>
                       }
                     </div>
                   )}
 
                   {/* Boutons actions */}
-                  {canEdit&&!isEditing&&<div style={{display:"flex",gap:4,flexShrink:0}}>
+                  {canEdit&&!isEditing&&<div style={{display:"flex",gap:6,flexShrink:0}}>
                     <button onClick={()=>{setEditingCode(l.code);setEditVal(l.priseLe||"");}}
                       title="Modifier la date de prise"
-                      style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:6,
-                        padding:"3px 7px",cursor:"pointer",fontSize:10}}>📅</button>
+                      style={{background:"#f1f5f9",border:"1px solid #cbd5e1",borderRadius:8,
+                        padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>📅</button>
                     <button onClick={()=>setManualPayee(l.code,!l.estPayee)}
                       title={l.estPayee?"Non payé":"Marquer payé"}
                       style={{background:l.estPayee?"#dbeafe":"#f1f5f9",
-                        border:`1px solid ${l.estPayee?"#bfdbfe":"#e2e8f0"}`,
-                        borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:10}}>💶</button>
+                        border:`1.5px solid ${l.estPayee?"#93c5fd":"#cbd5e1"}`,
+                        borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>💶</button>
                     {/* Bouton motif réglementaire */}
                     {l.motifReglementaire&&<button
                       onClick={()=>setMotifOuvert(motifVisible?null:l.code)}
                       title="Motif réglementaire"
                       style={{background:motifVisible?"#fce7f3":"#f1f5f9",
-                        border:`1px solid ${motifVisible?"#fbcfe8":"#e2e8f0"}`,
-                        borderRadius:6,padding:"3px 7px",cursor:"pointer",fontSize:10,
+                        border:`1.5px solid ${motifVisible?"#f9a8d4":"#cbd5e1"}`,
+                        borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,
+                        minWidth:38,minHeight:38,
                         color:motifVisible?"#9d174d":"#64748b"}}>📋</button>}
                   </div>}
                 </div>
 
                 {/* Motif réglementaire déroulant */}
                 {motifVisible&&l.motifReglementaire&&<div style={{
-                  margin:"0 12px 10px",
+                  margin:"0 14px 12px",
                   background:l.estPerdue?"#fef2f2":l.code==="VN"?"#faf5ff":"#f8fafc",
-                  borderRadius:8,padding:"8px 10px",
-                  fontSize:9,lineHeight:1.5,
-                  color:l.estPerdue?"#991b1b":l.code==="VN"?"#6b21a8":"#475569",
-                  border:`1px solid ${l.estPerdue?"#fecaca":l.code==="VN"?"#e9d5ff":"#e2e8f0"}`,
+                  borderRadius:8,padding:"10px 13px",
+                  fontSize:12,lineHeight:1.55,
+                  color:l.estPerdue?"#991b1b":l.code==="VN"?"#6b21a8":"#334155",
+                  border:`1.5px solid ${l.estPerdue?"#fecaca":l.code==="VN"?"#e9d5ff":"#cbd5e1"}`,
                 }}>
-                  {l.estPerdue&&<div style={{fontWeight:800,fontSize:10,marginBottom:3}}>❌ PERDUE</div>}
+                  {l.estPerdue&&<div style={{fontWeight:800,fontSize:13,marginBottom:4}}>❌ PERDUE</div>}
                   {l.motifReglementaire}
                 </div>}
               </div>
@@ -3143,8 +3144,8 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
         </div>
 
         {/* ── Légende compacte ── */}
-        <div style={{padding:"7px 12px",borderTop:"1px solid #f1f5f9",
-          display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",background:"#fafafa"}}>
+        <div style={{padding:"11px 14px",borderTop:"1px solid #e2e8f0",
+          display:"flex",gap:11,flexWrap:"wrap",alignItems:"center",background:"#f8fafc"}}>
           {[
             {bg:"#16a34a",l:"Prise"},
             {bg:"#f59e0b",l:"Attente"},
@@ -3154,13 +3155,13 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
             {bg:"#7c3aed",l:"Indét."},
             {bg:"#94a3b8",l:"À venir"},
           ].map(({bg,l})=>(
-            <span key={l} style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:9}}>
-              <span style={{width:7,height:7,borderRadius:"50%",background:bg,flexShrink:0}}/>
-              <span style={{color:"#64748b"}}>{l}</span>
+            <span key={l} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11}}>
+              <span style={{width:10,height:10,borderRadius:"50%",background:bg,flexShrink:0}}/>
+              <span style={{color:"#475569",fontWeight:600}}>{l}</span>
             </span>
           ))}
           <span style={{flex:1}}/>
-          <span style={{fontSize:8,color:"#cbd5e1",fontStyle:"italic"}}>GRH00143</span>
+          <span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>GRH00143</span>
         </div>
       </>}
     </div>
