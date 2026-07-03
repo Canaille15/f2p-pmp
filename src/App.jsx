@@ -258,6 +258,7 @@ const EQUIPES = [
   { code:"JF",   label:"Fête",  heures:"",            color:"#ec4899", textColor:"#fff", dot:"#fce7f3", prive:false, compteur:"FETE",    bg:"#ec4899" },
   // ── REPOS / RÉSERVISTE — fond coloré, texte blanc ────────────────────────
   { code:"RP",   label:"RP",         heures:"",            color:"#16a34a", textColor:"#fff", dot:"#bbf7d0", prive:true,  compteur:"RP",      bg:"#16a34a" },
+  { code:"RPP",  label:"RPP",        heures:"",            color:"#0d9488", textColor:"#fff", dot:"#99f6e4", prive:true,  compteur:"RP",      bg:"#0d9488" },
   { code:"RU",   label:"RU",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
   { code:"RQ",   label:"RQ",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
   { code:"TC",   label:"TC",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
@@ -2009,7 +2010,7 @@ function firstDayOfMonth(year,month){
 // La vue globale utilise toujours les couleurs de EQUIPES (non modifiables)
 const DEFAULT_COLORS = {
   M:"#8B0000", AM:"#8B0000", N:"#8B0000", J:"#8B0000", JF:"#8B0000",
-  RP:"#16a34a", RU:"#ca8a04", RQ:"#ca8a04", TC:"#0284c7", TY:"#0284c7", RN:"#4338ca",
+  RP:"#16a34a", RPP:"#0d9488", RU:"#ca8a04", RQ:"#ca8a04", TC:"#0284c7", TY:"#0284c7", RN:"#4338ca",
   NU:"#475569", CA:"#eab308", CP:"#eab308",
   MA:"#dc2626", ABS:"#dc2626", VT:"#eab308", VM:"#6b7280",
   FOR:"#b45309", DISPO:"#059669",
@@ -2031,7 +2032,7 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
   // Labels lisibles pour chaque code
   const CODE_LABELS = {
     M:"Matinée", AM:"Soirée", N:"Nuit", J:"Journée", JF:"Fête (travaillée)",
-    RP:"RP", RU:"RU", RQ:"RQ", TC:"TC", TY:"TY", RN:"RN",
+    RP:"RP", RPP:"RPP", RU:"RU", RQ:"RQ", TC:"TC", TY:"TY", RN:"RN",
     NU:"NU", CA:"Congés", CP:"Congés", MA:"Maladie",
     ABS:"Absent", VT:"VT", VM:"Visite méd.", FOR:"Formation", DISPO:"Dispo",
     FETE:"Fêtes légales",
@@ -2049,8 +2050,8 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
     {
       id:"repos",
       label:"🟢 Repos",
-      codes:["RP","RU","RQ","TC","TY","RN"],
-      note:"RP = Repos Périodique · RU/RQ = Repos Utilisation · TC/TY = Temps Compensé · RN = Repos Nuit",
+      codes:["RP","RPP","RU","RQ","TC","TY","RN"],
+      note:"RP = Repos Périodique · RPP = variante RP (palette dissociée) · RU/RQ = Repos Utilisation · TC/TY = Temps Compensé · RN = Repos Nuit",
     },
     {
       id:"nu",
@@ -2265,7 +2266,9 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
       } else if(["M","AM","N","J"].includes(eq)){
         c.travail++;
       }
-      if(c[eq]!==undefined) c[eq]++;
+      // RPP alimente le même compteur que RP (palette dissociée, même comptabilisation)
+      const eqCompteur = eq==="RPP" ? "RP" : eq;
+      if(c[eqCompteur]!==undefined) c[eqCompteur]++;
     });
     return c;
   },[agent,schedule,year]);
@@ -3917,6 +3920,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                 <div style={{flex:1,padding:"6px 10px",display:"flex",
                   flexDirection:"column",justifyContent:"center",gap:4}}>
                   {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.finNuit&&<div style={{fontSize:11,color:"#0369a1",background:"#f0f9ff",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>🌙 Descente de nuit</div>}
+                  {isOwnProfile&&schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.notePerso&&<div style={{fontSize:11,color:"#b45309",background:"#fffbeb",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>📝 {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`].notePerso}</div>}
                     {l.code&&l.showData?(
                     <div>
                       {/* Badge code + label */}
@@ -4766,6 +4770,13 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 display:"inline-flex",alignItems:"center",gap:4,
                 alignSelf:"flex-start",
               }}>🌙</div>}
+              {isOwnProfile&&en?.notePerso&&!code&&<div title={en.notePerso} style={{
+                background:"#fffbeb",color:"#b45309",
+                borderRadius:5,padding:"2px 6px",
+                fontSize:10,fontWeight:700,
+                display:"inline-flex",alignItems:"center",gap:4,
+                alignSelf:"flex-start",
+              }}>📝 Note</div>}
 
               {/* ZONE 2 — Utilisation journée (milieu) */}
               {code&&showData&&code!=="N"&&<div style={{
@@ -4776,6 +4787,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               }}>
                 <span>{CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)}</span>
                 {en?.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{getPosteLabelFromCode(en.jsCode)||en.jsCode}</span>}
+                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,opacity:.85,fontWeight:500,fontStyle:"italic"}}>📝 {en.notePerso}</span>}
               </div>}
 
               {/* ZONE 3 — Nuit (bas) */}
@@ -4885,7 +4897,7 @@ justifyContent: "flex-start",
                 color:isToday?"#6366f1":isWE?"#b45309":"#1e293b",
                 lineHeight:1.3, marginBottom:1}}>{dayNum}</div>
 
-              {/* ZONE 1 — 🌙 descente de nuit (toujours en haut) */}
+              {/* ZONE 1 — 🌙 descente de nuit + 📝 note perso (toujours en haut) */}
               {en?.finNuit&&<div style={{
                 background:"#f0f9ff", color:"#0369a1",
                 borderRadius:5, padding:"2px 6px",
@@ -4895,9 +4907,18 @@ justifyContent: "flex-start",
               }}>
                 🌙
               </div>}
+              {isOwnProfile&&en?.notePerso&&!code&&<div title={en.notePerso} style={{
+                background:"#fffbeb", color:"#b45309",
+                borderRadius:5, padding:"2px 6px",
+                fontSize:10, fontWeight:700,
+                display:"inline-flex", alignItems:"center", gap:4,
+                alignSelf:"flex-start",
+              }}>
+                📝
+              </div>}
 
        {/* ZONE 2 — Utilisation journée (milieu) */}
-              {code&&showData&&code!=="N"&&<div style={{
+              {code&&showData&&code!=="N"&&code!=="RPP"&&<div style={{
                 background:getColor(code), color:getTc(code),
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
@@ -4905,8 +4926,22 @@ justifyContent: "flex-start",
               }}>
                 <span>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
-                {en?.notePerso&&<span style={{fontSize:8,opacity:.85,fontWeight:500,fontStyle:"italic"}}>{en.notePerso}</span>}
+                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,opacity:.85,fontWeight:500,fontStyle:"italic"}}>📝 {en.notePerso}</span>}
               </div>}
+
+              {/* ZONE 2bis — RPP : badge rond dédié, palette dissociée de RP */}
+              {code==="RPP"&&showData&&<div title={isOwnProfile?(en?.notePerso||""):""} style={{
+                display:"flex", alignItems:"center", justifyContent:"center",
+                width:26, height:26, borderRadius:"50%",
+                background:getColor("RPP"), color:getTc("RPP"),
+                fontSize:9, fontWeight:800, alignSelf:"flex-start",
+                flexShrink:0,
+              }}>
+                RPP
+              </div>}
+              {code==="RPP"&&showData&&isOwnProfile&&en?.notePerso&&<span style={{
+                fontSize:8, color:"#94a3b8", fontStyle:"italic", marginTop:-2,
+              }}>📝 {en.notePerso}</span>}
 
               {/* ZONE 3 — Nuit (toujours en bas) */}
               {(code==="N"||en?.equipe2==="N")&&showData&&<div style={{

@@ -10,7 +10,8 @@ async function getPlanning(req, res) {
     const [rows] = await pool.query(
       `SELECT pj.id, pj.date_jour, pj.source,
               pp.ordre, pp.code_equipe, pp.code_poste,
-              pp.heure_debut, pp.heure_fin, pp.prive, pp.note, pp.note_perso
+              pp.heure_debut, pp.heure_fin, pp.prive, pp.note,
+              CASE WHEN ? THEN pp.note_perso ELSE NULL END AS note_perso
        FROM planning_jour pj
        JOIN planning_periode pp ON pp.planning_jour_id = pj.id
        WHERE pj.cp_agent = ?
@@ -18,7 +19,7 @@ async function getPlanning(req, res) {
          AND (? IS NULL OR pj.date_jour <= ?)
          AND (pp.prive = 0 OR ? OR ?)
        ORDER BY pj.date_jour, pp.ordre`,
-      [cp, from||null, from||null, to||null, to||null, isSelf?1:0, isAdmin?1:0]);
+      [isSelf?1:0, cp, from||null, from||null, to||null, to||null, isSelf?1:0, isAdmin?1:0]);
     res.json(rows);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }

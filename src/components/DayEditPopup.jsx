@@ -11,6 +11,7 @@ import { useState, useMemo } from "react";
 
 const CODES_REPOS = [
   { code:"RP",  label:"RP",        color:"#16a34a" },
+  { code:"RPP", label:"RPP",       color:"#0d9488" },
   { code:"RU",  label:"RU",        color:"#ca8a04" },
   { code:"RQ",  label:"RQ",        color:"#ca8a04" },
   { code:"TC",  label:"TC",        color:"#0284c7" },
@@ -166,7 +167,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
       prive:      (type1===null&&typeN==="N") ? false : !["M","AM","N","J","JF","FOR","DISPO",
                     ...FETES.map(f=>f.code)].includes(type1),
       finNuit:    finNuit,
-      notePerso:  (poste1==="PPRCI"||poste1==="PPAR") ? (notePerso||null) : null,   // indépendant, sauvegardé tel quel
+      notePerso:  notePerso || null,   // indépendant, disponible sur tout type de jour, sauvegardé tel quel
     };
     onSave(newEntry);
   };
@@ -211,6 +212,13 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
                   padding:"2px 8px", borderRadius:5,
                 }}>🌙</span>
               )}
+              {notePerso && (
+                <span style={{
+                  background:"#422006", border:"1px solid #d97706",
+                  color:"#fcd34d", fontSize:10, fontWeight:700,
+                  padding:"2px 8px", borderRadius:5,
+                }}>📝</span>
+              )}
               {type1 && (
                 <span style={{
                   background:getColor(type1), color:"#fff",
@@ -229,7 +237,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
                   Nuit{posteN ? " · "+posteN : ""} ↓
                 </span>
               )}
-              {!finNuit && !type1 && !typeN && (
+              {!finNuit && !type1 && !typeN && !notePerso && (
                 <span style={{color:"#475569",fontSize:10}}>case vide</span>
               )}
             </div>
@@ -269,6 +277,29 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
               {finNuit ? "actif" : "inactif"}
             </span>
           </button>
+
+          {/* ── 📝 Note perso — indépendant, visible uniquement par toi ── */}
+          <div>
+            <div style={{
+              fontSize:10, color:"#94a3b8", fontWeight:700,
+              marginBottom:5, textTransform:"uppercase", letterSpacing:.5,
+              display:"flex", alignItems:"center", gap:5,
+            }}>
+              📝 Note (visible uniquement par toi)
+            </div>
+            <input
+              value={notePerso}
+              onChange={e => setNotePerso(e.target.value)}
+              placeholder="ex: Réunion service, visite de poste, rappel..."
+              style={{
+                width:"100%", padding:"10px 12px",
+                border: notePerso ? "1.5px solid #1e293b" : "1.5px dashed #cbd5e1",
+                borderRadius:8,
+                fontSize:14, fontWeight:600, color:"#1e293b",
+                outline:"none", boxSizing:"border-box",
+              }}
+            />
+          </div>
 
           {/* ── Repos / Absences ── */}
           <div>
@@ -368,27 +399,6 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
             </div>
           )}
 
-                    {(poste1==="PPRCI"||poste1==="PPAR") && (
-            <div>
-              <div style={{
-                fontSize:10, color:"#94a3b8", fontWeight:700,
-                marginBottom:5, textTransform:"uppercase", letterSpacing:.5,
-              }}>
-                Pense-bete (visible uniquement par toi)
-              </div>
-              <input
-                value={notePerso}
-                onChange={e => setNotePerso(e.target.value)}
-                placeholder="ex: Reunion service, visite de poste..."
-                style={{
-                  width:"100%", padding:"10px 12px",
-                  border:"1.5px solid #1e293b", borderRadius:8,
-                  fontSize:14, fontWeight:600, color:"#1e293b",
-                  outline:"none", boxSizing:"border-box",
-                }}
-              />
-            </div>
-          )}
           {/* ── Horaires ── */}
           {isTravailJ && (
             <div>
