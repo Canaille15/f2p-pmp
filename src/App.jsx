@@ -1137,7 +1137,7 @@ function PinModal({agent,onSuccess,onClose,mode="verify",currentPin}){
           {[0,1,2,3].map(i=>(<div key={i} style={{width:54,height:62,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:800,border:`2px solid ${error?"#ef4444":active[i]?"#3b82f6":"#e2e8f0"}`,borderRadius:12,background:active[i]?"#f0f9ff":"#fff",transition:"all .15s",cursor:"pointer"}}>
             {active[i]?"●":""}
           </div>))}
-        </div>}
+        </div>
         <button onClick={submit} disabled={active.some(d=>!d)} style={{width:"100%",background:active.every(d=>d)?fam?.color||"#1e293b":"#e2e8f0",color:active.every(d=>d)?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"13px 0",cursor:active.every(d=>d)?"pointer":"not-allowed",fontSize:14,fontWeight:700,transition:"all .15s"}}>
           {btnLabels[step]||"Confirmer"}
         </button>
@@ -2589,19 +2589,20 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
   // Corrections manuelles fêtes (stockées dans agentProfiles)
   const fetesData = agentProfiles[agent?.id]?.fetesTracking?.[year] || {};
   
-  const setFetesData = (updater) => {
+  const setFetesDataYear = (targetYear, updater) => {
     setAgentProfiles(prev=>{
-      const curr = prev[agent.id]?.fetesTracking?.[year] || {};
+      const curr = prev[agent.id]?.fetesTracking?.[targetYear] || {};
       const next = typeof updater === 'function' ? updater(curr) : updater;
       return {...prev, [agent.id]:{
         ...(prev[agent.id]||{}),
         fetesTracking:{
           ...(prev[agent.id]?.fetesTracking||{}),
-          [year]: next,
+          [targetYear]: next,
         }
       }};
     });
   };
+  const setFetesData = (updater) => setFetesDataYear(year, updater);
 
   const datesFetes = getDatesFetesAnnee(year);
   
@@ -2791,19 +2792,27 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
   const [editingCode, setEditingCode] = useState(null);
   const [editVal, setEditVal] = useState("");
 
-  const prendreEnCompte = (code) => {
-    setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:null,priseLe:today,priseType:"manuel"}}));
+  const prendreEnCompte = (code, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:null,priseLe:today,priseType:"manuel"}}));
   };
-  const snooze10j = (code) => {
+  const snooze10j = (code, targetYear=year) => {
     const d = new Date(); d.setDate(d.getDate()+10);
-    setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:d.toISOString().slice(0,10)}}));
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:d.toISOString().slice(0,10)}}));
   };
-  const setManualDate = (code, val) => {
-    setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),priseLe:val||null,priseType:val?"manuel":null}}));
+  const setManualDate = (code, val, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),priseLe:val||null,priseType:val?"manuel":null}}));
     setEditingCode(null);
   };
-  const setManualPayee = (code, val) => {
-    setFetesData(prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
+  const setManualPayee = (code, val, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
+  };
+  const resetManuel = (code, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>{
+      const next = {...prev};
+      delete next[code];
+      return next;
+    });
+    setEditingCode(null);
   };
 
   const notifCount   = lignes.filter(l=>l.notifActive).length;
@@ -2826,20 +2835,20 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     if(getTrimestre(moisFete) !== 4) return null; // seulement T4
     // La limite est bien 31 mars N
     const limiteDate = limiteT4N1;
-    // Si on est après la limite, plus pertinent de l'afficher
-    // (sauf si payée ou prise, on garde pour info)
+    const {moisPaye, anneePaye} = getFeteRegles(dateFete);
 
     const override = fetesDataN1[code] || {};
 
     // Détection prise dans le planning
     let priseLe = null;
+    let priseType = null;
     // Chercher dans N-1 ET dans N (car la récup peut être prise en jan-mars N)
     Object.entries(schedule).forEach(([k,v])=>{
       if(!k.startsWith(agent.id+"-")) return;
       const dk = k.slice(agent.id.length+1);
       // Fenêtre : date fête → 31 mars N
       if(dk < dateFete || dk > limiteDate) return;
-      if(v?.equipe===code) priseLe = dk;
+      if(v?.equipe===code){ priseLe = dk; priseType = "code"; }
     });
     // RP dans le trimestre suivant (janv-mars N)
     if(!priseLe){
@@ -2847,10 +2856,10 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
         if(!k.startsWith(agent.id+"-")) return;
         const dk = k.slice(agent.id.length+1);
         if(dk < `${year}-01-01` || dk > limiteDate) return;
-        if(v?.equipe==="RP"){ priseLe = dk; }
+        if(v?.equipe==="RP"){ priseLe = dk; priseType = "RP"; }
       });
     }
-    if(override.priseLe!==undefined) priseLe = override.priseLe;
+    if(override.priseLe!==undefined){ priseLe = override.priseLe; priseType = override.priseType||"manuel"; }
     const estPayee = override.estPayee || (!priseLe && today2 > limiteDate);
 
     let statut;
@@ -2859,7 +2868,13 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     else if(today2 > limiteDate) statut = "payee_auto";
     else             statut = "attente";
 
-    return {code, label, dateFete, limiteDate, priseLe, statut};
+    return {
+      code, label, dateFete, limiteDate, priseLe, priseType, statut,
+      estPayee, moisPaye, anneePaye,
+      estDimanche:false, estF3Dimanche:false, estPerdue:false,
+      motifReglementaire:`Fête légale de ${yearMoins1} reportable jusqu'au 31 mars ${year} (trimestre civil suivant). (Réf. GRH00143)`,
+      override,
+    };
   }).filter(Boolean);
 
   // Grouper par statut pour affichage bandeau
@@ -2871,6 +2886,7 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
   const nbAttenteN1 = fetesN1Attente.length;
 
   const [ouvert, setOuvert] = useState(false);
+  const [ouvertN1, setOuvertN1] = useState(false);
   const [motifOuvert, setMotifOuvert] = useState(null);
 
   // Couleurs par statut
@@ -2894,6 +2910,154 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     if(l.priseType==="code")  return `${d} 🩷${l.code}`;
     if(l.priseType==="manuel") return `${d} ✎`;
     return d;
+  };
+
+  // Carte détaillée d'une fête, réutilisée pour l'année en cours (year) et le report N-1 (yearMoins1)
+  const renderFeteCard = (l, targetYear) => {
+    const s = statutStyle[l.statut]||statutStyle.futur;
+    const editKey = `${targetYear}:${l.code}`;
+    const isEditing = editingCode===editKey;
+    const motifVisible = motifOuvert===editKey;
+    const priseLe = labelPriseLe(l);
+    return(
+      <div key={editKey} style={{
+        borderBottom:"1px solid #f1f5f9",
+        background:s.bg,
+      }}>
+        {/* Ligne principale */}
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px"}}>
+
+          {/* Badge code fête */}
+          <span style={{
+            background:"#ec4899",color:"#fff",
+            borderRadius:8,padding:"5px 10px",
+            fontFamily:"monospace",fontSize:13,fontWeight:800,
+            flexShrink:0,minWidth:44,textAlign:"center",
+          }}>🩷{l.code}</span>
+
+          {/* Nom + date fête */}
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#1e293b",
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {l.label}
+              {l.estDimanche&&<span style={{fontSize:11,color:"#dc2626",marginLeft:6,fontWeight:800}}>⚠️Dim.</span>}
+            </div>
+            <div style={{fontSize:11,color:"#475569",marginTop:2,display:"flex",gap:7,flexWrap:"wrap"}}>
+              <span style={{fontFamily:"monospace"}}>
+                {new Date(l.dateFete).toLocaleDateString("fr-FR",{
+                  weekday:"short",day:"2-digit",month:"2-digit"
+                })}
+              </span>
+              <span style={{color:"#94a3b8"}}>→</span>
+              <span style={{
+                fontWeight:700,
+                color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#475569"
+              }}>
+                {new Date(l.limiteDate).toLocaleDateString("fr-FR",{
+                  day:"2-digit",month:"short",
+                  year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined
+                })}
+              </span>
+            </div>
+          </div>
+
+          {/* Statut badge */}
+          <span style={{
+            background:s.badge,color:s.badgeTc,
+            borderRadius:20,padding:"5px 12px",
+            fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
+          }}>
+            {s.icon} {s.label}
+            {l.statut==="payee"&&` ${MOIS_NOMS[l.moisPaye-1]}`}
+            {l.statut==="payee_auto"&&` ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==year?` ${l.anneePaye}`:""}`}
+          </span>
+        </div>
+
+        {/* Ligne prise le + actions */}
+        <div style={{display:"flex",alignItems:"center",gap:8,
+          padding:"0 14px 11px",flexWrap:"wrap"}}>
+
+          {/* Prise le */}
+          {isEditing?(
+            <div style={{display:"flex",gap:6,alignItems:"center",flex:1}}>
+              <input type="date" defaultValue={l.priseLe||""} 
+                onChange={e=>setEditVal(e.target.value)}
+                style={{border:"1px solid #cbd5e1",borderRadius:7,padding:"6px 9px",
+                  fontSize:13,outline:"none",flex:1,minHeight:34}}/>
+              <button onClick={()=>setManualDate(l.code,editVal,targetYear)}
+                style={{background:"#16a34a",color:"#fff",border:"none",
+                  borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✓</button>
+              <button onClick={()=>setEditingCode(null)}
+                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",
+                  borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕</button>
+            </div>
+          ):(
+            <div style={{flex:1,fontSize:12}}>
+              {priseLe
+                ? <span style={{color:"#16a34a",fontWeight:700}}>{priseLe}</span>
+                : l.statut==="payee"
+                  ? <span style={{color:"#2563eb",fontWeight:700}}>
+                      💶 Fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                    </span>
+                : l.statut==="payee_auto"
+                  ? <div>
+                      <div style={{color:"#2563eb",fontWeight:700,fontSize:12}}>
+                        💶 Paiement fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                      </div>
+                      <div style={{color:"#b45309",fontWeight:700,fontSize:11,marginTop:3,
+                        display:"flex",alignItems:"center",gap:4}}>
+                        ⚠️ À vérifier sur votre fiche de paie de {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                      </div>
+                    </div>
+                  : <span style={{color:"#64748b",fontStyle:"italic"}}>Non renseigné</span>
+              }
+            </div>
+          )}
+
+          {/* Boutons actions */}
+          {canEdit&&!isEditing&&<div style={{display:"flex",gap:6,flexShrink:0}}>
+            <button onClick={()=>{setEditingCode(editKey);setEditVal(l.priseLe||"");}}
+              title="Modifier la date de prise"
+              style={{background:"#f1f5f9",border:"1px solid #cbd5e1",borderRadius:8,
+                padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>📅</button>
+            <button onClick={()=>setManualPayee(l.code,!l.estPayee,targetYear)}
+              title={l.estPayee?"Non payé":"Marquer payé"}
+              style={{background:l.estPayee?"#dbeafe":"#f1f5f9",
+                border:`1.5px solid ${l.estPayee?"#93c5fd":"#cbd5e1"}`,
+                borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>💶</button>
+            {/* Bouton réinitialiser — visible seulement si une correction manuelle a été posée sur cette fête */}
+            {(l.override?.priseLe!==undefined||l.override?.estPayee!==undefined)&&<button
+              onClick={()=>resetManuel(l.code,targetYear)}
+              title="Annuler la correction manuelle et revenir au calcul automatique"
+              style={{background:"#fff7ed",border:"1.5px solid #fdba74",borderRadius:8,
+                padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38,
+                color:"#c2410c"}}>↺</button>}
+            {/* Bouton motif réglementaire */}
+            {l.motifReglementaire&&<button
+              onClick={()=>setMotifOuvert(motifVisible?null:editKey)}
+              title="Motif réglementaire"
+              style={{background:motifVisible?"#fce7f3":"#f1f5f9",
+                border:`1.5px solid ${motifVisible?"#f9a8d4":"#cbd5e1"}`,
+                borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,
+                minWidth:38,minHeight:38,
+                color:motifVisible?"#9d174d":"#64748b"}}>📋</button>}
+          </div>}
+        </div>
+
+        {/* Motif réglementaire déroulant */}
+        {motifVisible&&l.motifReglementaire&&<div style={{
+          margin:"0 14px 12px",
+          background:l.estPerdue?"#fef2f2":l.code==="VN"?"#faf5ff":"#f8fafc",
+          borderRadius:8,padding:"10px 13px",
+          fontSize:12,lineHeight:1.55,
+          color:l.estPerdue?"#991b1b":l.code==="VN"?"#6b21a8":"#334155",
+          border:`1.5px solid ${l.estPerdue?"#fecaca":l.code==="VN"?"#e9d5ff":"#cbd5e1"}`,
+        }}>
+          {l.estPerdue&&<div style={{fontWeight:800,fontSize:13,marginBottom:4}}>❌ PERDUE</div>}
+          {l.motifReglementaire}
+        </div>}
+      </div>
+    );
   };
 
   return(
@@ -3003,145 +3167,27 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
 
         {/* ── Cartes portrait (1 par fête) ── */}
         <div style={{display:"flex",flexDirection:"column",gap:0}}>
-          {lignes.map((l,i)=>{
-            const s = statutStyle[l.statut]||statutStyle.futur;
-            const isEditing = editingCode===l.code;
-            const motifVisible = motifOuvert===l.code;
-            const priseLe = labelPriseLe(l);
-            return(
-              <div key={l.code} style={{
-                borderBottom:"1px solid #f1f5f9",
-                background:s.bg,
-              }}>
-                {/* Ligne principale */}
-                <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px"}}>
-
-                  {/* Badge code fête */}
-                  <span style={{
-                    background:"#ec4899",color:"#fff",
-                    borderRadius:8,padding:"5px 10px",
-                    fontFamily:"monospace",fontSize:13,fontWeight:800,
-                    flexShrink:0,minWidth:44,textAlign:"center",
-                  }}>🩷{l.code}</span>
-
-                  {/* Nom + date fête */}
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:700,color:"#1e293b",
-                      overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                      {l.label}
-                      {l.estDimanche&&<span style={{fontSize:11,color:"#dc2626",marginLeft:6,fontWeight:800}}>⚠️Dim.</span>}
-                    </div>
-                    <div style={{fontSize:11,color:"#475569",marginTop:2,display:"flex",gap:7,flexWrap:"wrap"}}>
-                      <span style={{fontFamily:"monospace"}}>
-                        {new Date(l.dateFete).toLocaleDateString("fr-FR",{
-                          weekday:"short",day:"2-digit",month:"2-digit"
-                        })}
-                      </span>
-                      <span style={{color:"#94a3b8"}}>→</span>
-                      <span style={{
-                        fontWeight:700,
-                        color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#475569"
-                      }}>
-                        {new Date(l.limiteDate).toLocaleDateString("fr-FR",{
-                          day:"2-digit",month:"short",
-                          year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined
-                        })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Statut badge */}
-                  <span style={{
-                    background:s.badge,color:s.badgeTc,
-                    borderRadius:20,padding:"5px 12px",
-                    fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
-                  }}>
-                    {s.icon} {s.label}
-                    {l.statut==="payee"&&` ${MOIS_NOMS[l.moisPaye-1]}`}
-                    {l.statut==="payee_auto"&&` ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==year?` ${l.anneePaye}`:""}`}
-                  </span>
-                </div>
-
-                {/* Ligne prise le + actions */}
-                <div style={{display:"flex",alignItems:"center",gap:8,
-                  padding:"0 14px 11px",flexWrap:"wrap"}}>
-
-                  {/* Prise le */}
-                  {isEditing?(
-                    <div style={{display:"flex",gap:6,alignItems:"center",flex:1}}>
-                      <input type="date" defaultValue={l.priseLe||""} 
-                        onChange={e=>setEditVal(e.target.value)}
-                        style={{border:"1px solid #cbd5e1",borderRadius:7,padding:"6px 9px",
-                          fontSize:13,outline:"none",flex:1,minHeight:34}}/>
-                      <button onClick={()=>setManualDate(l.code,editVal)}
-                        style={{background:"#16a34a",color:"#fff",border:"none",
-                          borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✓</button>
-                      <button onClick={()=>setEditingCode(null)}
-                        style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",
-                          borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕</button>
-                    </div>
-                  ):(
-                    <div style={{flex:1,fontSize:12}}>
-                      {priseLe
-                        ? <span style={{color:"#16a34a",fontWeight:700}}>{priseLe}</span>
-                        : l.statut==="payee"
-                          ? <span style={{color:"#2563eb",fontWeight:700}}>
-                              💶 Fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
-                            </span>
-                        : l.statut==="payee_auto"
-                          ? <div>
-                              <div style={{color:"#2563eb",fontWeight:700,fontSize:12}}>
-                                💶 Paiement fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
-                              </div>
-                              <div style={{color:"#b45309",fontWeight:700,fontSize:11,marginTop:3,
-                                display:"flex",alignItems:"center",gap:4}}>
-                                ⚠️ À vérifier sur votre fiche de paie de {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
-                              </div>
-                            </div>
-                          : <span style={{color:"#64748b",fontStyle:"italic"}}>Non renseigné</span>
-                      }
-                    </div>
-                  )}
-
-                  {/* Boutons actions */}
-                  {canEdit&&!isEditing&&<div style={{display:"flex",gap:6,flexShrink:0}}>
-                    <button onClick={()=>{setEditingCode(l.code);setEditVal(l.priseLe||"");}}
-                      title="Modifier la date de prise"
-                      style={{background:"#f1f5f9",border:"1px solid #cbd5e1",borderRadius:8,
-                        padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>📅</button>
-                    <button onClick={()=>setManualPayee(l.code,!l.estPayee)}
-                      title={l.estPayee?"Non payé":"Marquer payé"}
-                      style={{background:l.estPayee?"#dbeafe":"#f1f5f9",
-                        border:`1.5px solid ${l.estPayee?"#93c5fd":"#cbd5e1"}`,
-                        borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>💶</button>
-                    {/* Bouton motif réglementaire */}
-                    {l.motifReglementaire&&<button
-                      onClick={()=>setMotifOuvert(motifVisible?null:l.code)}
-                      title="Motif réglementaire"
-                      style={{background:motifVisible?"#fce7f3":"#f1f5f9",
-                        border:`1.5px solid ${motifVisible?"#f9a8d4":"#cbd5e1"}`,
-                        borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,
-                        minWidth:38,minHeight:38,
-                        color:motifVisible?"#9d174d":"#64748b"}}>📋</button>}
-                  </div>}
-                </div>
-
-                {/* Motif réglementaire déroulant */}
-                {motifVisible&&l.motifReglementaire&&<div style={{
-                  margin:"0 14px 12px",
-                  background:l.estPerdue?"#fef2f2":l.code==="VN"?"#faf5ff":"#f8fafc",
-                  borderRadius:8,padding:"10px 13px",
-                  fontSize:12,lineHeight:1.55,
-                  color:l.estPerdue?"#991b1b":l.code==="VN"?"#6b21a8":"#334155",
-                  border:`1.5px solid ${l.estPerdue?"#fecaca":l.code==="VN"?"#e9d5ff":"#cbd5e1"}`,
-                }}>
-                  {l.estPerdue&&<div style={{fontWeight:800,fontSize:13,marginBottom:4}}>❌ PERDUE</div>}
-                  {l.motifReglementaire}
-                </div>}
-              </div>
-            );
-          })}
+          {lignes.map(l=>renderFeteCard(l, year))}
         </div>
+
+        {/* ── Report N-1 (fêtes de fin d'année précédente encore en délai) ── */}
+        {fetesReportN1.length>0&&<div style={{borderTop:"2px solid #e2e8f0"}}>
+          <div onClick={()=>setOuvertN1(o=>!o)}
+            style={{background:"#fdf2f8",padding:"10px 14px",display:"flex",alignItems:"center",
+              gap:8,cursor:"pointer",userSelect:"none"}}>
+            <span style={{fontSize:13,fontWeight:700,color:"#9d174d",flex:1}}>
+              📋 Report {yearMoins1} ({fetesReportN1.length})
+            </span>
+            <span style={{fontSize:11,color:"#be185d"}}>
+              {ouvertN1?"Masquer":"Afficher"}
+            </span>
+            <span style={{color:"#9d174d",fontSize:13,fontWeight:700,transition:"transform .2s",
+              display:"inline-block",transform:ouvertN1?"rotate(0deg)":"rotate(-90deg)"}}>▼</span>
+          </div>
+          {ouvertN1&&<div style={{display:"flex",flexDirection:"column",gap:0}}>
+            {fetesReportN1.map(l=>renderFeteCard(l, yearMoins1))}
+          </div>}
+        </div>}
 
         {/* ── Légende compacte ── */}
         <div style={{padding:"11px 14px",borderTop:"1px solid #e2e8f0",
@@ -3800,8 +3846,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
     return {dk, code, eq, label, plage, couleur, tc, isWE, isToday, dow, jsCode, showData,
       jourNom: JOURS_LONG[dow],
       jourNum: d.getDate(),
-      moisNom: d.toLocaleDateString("fr-FR",{month:"short"}),
-      showData};
+      moisNom: d.toLocaleDateString("fr-FR",{month:"short"})};
   });
 
   // Grouper par semaine pour afficher un séparateur
@@ -4640,7 +4685,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
       {calView==="semaine"?<>
         <button onClick={()=>setWeekOffset(0)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:weekOffset===0?"#f1f5f9":"#eef2ff",color:weekOffset===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700}}>Aujourd'hui</button>
         <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",flex:1}}>
-          <span style={{fontSize:12,fontWeight:600,color:"#475569",fontWeight:700}}>{weekDates[0]?.slice(8)}/{weekDates[0]?.slice(5,7)}–{weekDates[6]?.slice(8)}/{weekDates[6]?.slice(5,7)}</span>
+          <span style={{fontSize:12,color:"#475569",fontWeight:700}}>{weekDates[0]?.slice(8)}/{weekDates[0]?.slice(5,7)}–{weekDates[6]?.slice(8)}/{weekDates[6]?.slice(5,7)}</span>
           <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
         </button>
       </>:<>
