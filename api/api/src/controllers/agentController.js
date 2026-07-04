@@ -45,11 +45,12 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel, famille, nouveau_cp, is_admin } = req.body;
+  const { email, telephone, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, famille, nouveau_cp, is_admin } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
   if (partage_previsionnel !== undefined) { fields.push('partage_previsionnel = ?'); values.push(partage_previsionnel ? 1 : 0); }
+  if (annuaire_visible !== undefined) { fields.push('annuaire_visible = ?'); values.push(annuaire_visible ? 1 : 0); }
   if (req.agent.is_admin) {
     if (grade  !== undefined) { fields.push('grade = ?');  values.push(grade); }
     if (nom    !== undefined) { fields.push('nom = ?');    values.push(nom); }

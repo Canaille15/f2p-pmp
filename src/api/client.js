@@ -615,6 +615,39 @@ export const fetes = {
     }),
 };
 
+// ─── MODULE ANNUAIRE ──────────────────────────────────────────────────────────
+
+export const annuaire = {
+  /** Agents visibles dans l'annuaire (tel/email déchiffrés, filtrés sur annuaire_visible) */
+  getAgents: () => apiFetch('/annuaire/agents'),
+
+  /** Fiches UO (unités opérationnelles, par poste/fonction) */
+  getUo: () => apiFetch('/annuaire/uo'),
+  createUo: (data) =>
+    apiFetch('/annuaire/uo', { method: 'POST', body: JSON.stringify(data) }),
+  updateUo: (id, data) =>
+    apiFetch(`/annuaire/uo/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteUo: (id) =>
+    apiFetch(`/annuaire/uo/${id}`, { method: 'DELETE' }),
+
+  /** Accès rapide (ex: Astreinte) */
+  getAccesRapide: () => apiFetch('/annuaire/acces-rapide'),
+  createAccesRapide: (data) =>
+    apiFetch('/annuaire/acces-rapide', { method: 'POST', body: JSON.stringify(data) }),
+  updateAccesRapide: (id, data) =>
+    apiFetch(`/annuaire/acces-rapide/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAccesRapide: (id) =>
+    apiFetch(`/annuaire/acces-rapide/${id}`, { method: 'DELETE' }),
+
+  /** Activer/désactiver sa propre visibilité dans l'annuaire */
+  setVisible: (cp, visible) =>
+    apiFetch(`/agents/${cp}`, { method: 'PATCH', body: JSON.stringify({ annuaire_visible: visible ? 1 : 0 }) }),
+
+  /** Mettre à jour ses propres email/téléphone (réutilise la route agents existante) */
+  updateMesCoordonnees: (cp, data) =>
+    apiFetch(`/agents/${cp}`, { method: 'PATCH', body: JSON.stringify(data) }),
+};
+
 // ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────
 
 // ─── ALEAS CPS (echanges, erreurs, postes non tenus) ───────────────────────
@@ -716,6 +749,7 @@ const api = {
   cpsAleas,
   previsionnelSignalements,
   journeeSpecialeNotes,
+  annuaire,
 };
 
 export default api;
