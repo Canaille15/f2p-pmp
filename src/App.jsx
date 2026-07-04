@@ -330,6 +330,7 @@ async function extraireTextePdfNatif(base64Pdf) {
 
 // Déduit le code_equipe (M/AM/N/J/RP/CA/...) depuis le code brut "Utilisation" du bulletin
 function deriveCodeEquipeBulletin(code, heureDebut) {
+  if (/^RPP$/.test(code)) return "RPP";
   if (/^RP$/.test(code)) return "RP";
   if (/^RU$/.test(code)) return "RU";
   if (/^RQ$/.test(code)) return "RQ";
@@ -380,7 +381,7 @@ function parseBulletinCommande(text) {
 
   // Codes valides reconnus (postes 3x8 PI/PA se terminant par -, O, X ou J ; codes spéciaux ;
   // codes formation type "F-PAR", avec ou sans espace après le tiret)
-  const CODE_RE = /\b(?:RP|RU|RQ|CA|DISPO|F[0-9V]|F-\s?[A-Z]{2,5}|C)\b|\b(?:PI|PA)[A-Z0-9]{2,6}[-OXJ]/g;
+  const CODE_RE = /\b(?:RPP|RP|RU|RQ|CA|DISPO|F[0-9V]|F-\s?[A-Z]{2,5}|C)\b|\b(?:PI|PA)[A-Z0-9]{2,6}[-OXJ]/g;
 
   // On neutralise les dates des lignes d'en-tête ("Edition le..." et "Commande allant du...")
   // pour qu'elles ne soient pas prises pour des jours du tableau (même longueur de texte
@@ -463,7 +464,7 @@ function parseBulletinCommande(text) {
     }
 
     const codeEquipe = deriveCodeEquipeBulletin(code, heureDebut);
-    const estCodeSpecial = /^(RP|RU|RQ|C|CA|DISPO)$/.test(code) || /^F[0-9V]$/.test(code) || /^F-[A-Z]{2,5}$/.test(code);
+    const estCodeSpecial = /^(RPP|RP|RU|RQ|C|CA|DISPO)$/.test(code) || /^F[0-9V]$/.test(code) || /^F-[A-Z]{2,5}$/.test(code);
 
     jours.push({
       date_jour: dateJour,
@@ -589,8 +590,8 @@ function parseDeroulePrevisionnel(text) {
   const cmap2 = buildCandidates(MOIS_BLOC2, ord2);
 
   const DAY_ABBRS = new Set(["Je","Ve","Sa","Di","Lu","Ma","Me"]);
-  const CODE_VALID = /^(RP|RU|RQ|CA|C|DISPO|F[0-9V]|F-[A-Z]{2,}|PI[A-Z0-9-]{2,}|PA[A-Z0-9-]{2,})$/;
-  const SPECIAL = new Set(["RP","RU","RQ","CA","C","DISPO"]);
+  const CODE_VALID = /^(RPP|RP|RU|RQ|CA|C|DISPO|F[0-9V]|F-[A-Z]{2,}|PI[A-Z0-9-]{2,}|PA[A-Z0-9-]{2,})$/;
+  const SPECIAL = new Set(["RPP","RP","RU","RQ","CA","C","DISPO"]);
   const DAY_RE = /(Je|Ve|Va|Sa|Di|Dl|Lu|Ma|Me)\s+(\d+|[IiSs5])(?:\s+([A-Z][A-Z0-9-]+)(?:\s+([A-Z][A-Z0-9-]+))?)?/g;
 
   const seen = new Set();
@@ -656,7 +657,7 @@ function parseDeroulePrevisionnel(text) {
   // Ex: "RP PICCLX Lu 2 PICOLO Je 2 PICCL- 2" → jour 2, chercher dans la même ligne.
   const LINES = text.split(/\n/);
   const DAY_NUM_RE3 = /(Je|Ve|Sa|Di|Lu|Ma|Me)\s+(\d+|[IiSs5])/g;
-  const NUIT_LINE_RE = /^[ \t]*(RP|RU)\s+(PICC[A-Z0-9-]+|PICO[A-Z0-9-]+)/;
+  const NUIT_LINE_RE = /^[ \t]*(RPP|RP|RU)\s+(PICC[A-Z0-9-]+|PICO[A-Z0-9-]+)/;
 
   let lineOffset = 0;
   for (const line of LINES) {
@@ -4156,7 +4157,7 @@ function BarreSaisieReserviste({habilitations, famillesHab, codeActif, setCodeAc
 // Adaptée roulement (boutons poste+horaire) et réserviste (postes habilités)
 // Règle vue équipe : M/AM/N/J/JF + FOR + DISPO → prive:false
 //                   RP/RU/CA/MA/ABS/FETE…     → prive:true
-const CODES_PRIVES = new Set(["RP","RU","RQ","RN","TC","TY","CA","CP","MA","ABS","VT","VM","NU",...Object.keys(CODES_FETES),"JF"]);
+const CODES_PRIVES = new Set(["RP","RPP","RU","RQ","RN","TC","TY","CA","CP","MA","ABS","VT","VM","NU",...Object.keys(CODES_FETES),"JF"]);
 
 function BarreSaisie({profile, habilitations, codeActif, setCodeActif, getColor, getTc, setDay, schedule, agentId}){
   const [showRepos, setShowRepos] = useState(false);
