@@ -1,0 +1,37 @@
+// patch_bulletin_import_fusion_meme_date.js
+// BUG corrige dans bulletinImportController.js : quand un bulletin envoie
+// DEUX entrees separees pour le MEME jour calendaire (ex: 'NU' la journee
+// + une nuit de formation le soir meme), la boucle d'import traitait
+// chaque entree l'une apres l'autre et faisait un DELETE FROM
+// planning_periode a chaque fois -> la deuxieme entree effacait
+// silencieusement les periodes deja inserees par la premiere. Resultat :
+// seule la derniere des deux (ex: NU) restait, la nuit disparaissait.
+// Corrige : toutes les entrees partageant la meme date sont fusionnees
+// en une seule entree multi-periodes AVANT le traitement principal.
+// Usage : cd C:\Users\olive\Desktop\f2p-pmp && node patch_bulletin_import_fusion_meme_date.js
+
+const fs = require('fs');
+const path = require('path');
+
+const filePath = path.join(__dirname, 'api', 'api', 'src', 'controllers', 'bulletinImportController.js');
+let content = fs.readFileSync(filePath, 'utf8');
+
+function mustReplaceOnce(content, oldStr, newStr, label) {
+  const idx = content.indexOf(oldStr);
+  if (idx === -1) {
+    throw new Error('ANCRE INTROUVABLE (' + label + ') - ' + 'le fichier differe de la version attendue.');
+  }
+  const idx2 = content.indexOf(oldStr, idx + 1);
+  if (idx2 !== -1) {
+    throw new Error('ANCRE NON UNIQUE (' + label + ') - trouvee plusieurs fois, patch annule par securite.');
+  }
+  return content.slice(0, idx) + newStr + content.slice(idx + oldStr.length);
+}
+
+let count = 0;
+content = mustReplaceOnce(content, "  const appliques = [];\n  const ignores = [];\n\n  const conn = await pool.getConnection();\n  try {\n    await conn.beginTransaction();\n\n    for (const e of entries) {\n      if (!e.date_jour) continue;\n\n      const [[existing]] = await conn.query(\n        'SELECT id, source_edition_date FROM planning_jour WHERE cp_agent=? AND date_jour=?',\n        [cp, e.date_jour]\n      );\n\n      const newEdition = e.source_edition_date || null;\n      if (existing && existing.source_edition_date && newEdition) {\n        const existingDate = new Date(existing.source_edition_date).getTime();\n        const candidateDate = new Date(newEdition).getTime();\n        if (candidateDate <= existingDate) {\n          ignores.push({ date: e.date_jour, motif: 'edition_plus_ancienne' });\n          continue;\n        }\n      }\n\n      // Accepter les entr\u00e9es multi-p\u00e9riodes (d\u00e9roul\u00e9 pr\u00e9visionnel) ou entr\u00e9es directes (bulletin)\n      const hasPeriodes = e.periodes && e.periodes.length > 0 && e.periodes[0].code_equipe;\n      if (!e.code_equipe && !hasPeriodes) {\n        ignores.push({ date: e.date_jour, motif: 'code_equipe_manquant' });\n        continue;\n      }\n\n      await conn.query(\n        `INSERT INTO planning_jour (cp_agent, date_jour, source, source_edition_date)\n         VALUES (?,?,?,?)\n         ON DUPLICATE KEY UPDATE source=VALUES(source), source_edition_date=VALUES(source_edition_date), modifie_le=NOW()`,\n        [cp, e.date_jour, sourceDb, newEdition]\n      );\n      const [[jour]] = await conn.query(\n        'SELECT id FROM planning_jour WHERE cp_agent=? AND date_jour=?', [cp, e.date_jour]\n      );\n      await conn.query('DELETE FROM planning_periode WHERE planning_jour_id=?', [jour.id]);\n\n      // Support multi-p\u00e9riodes : d\u00e9roul\u00e9 pr\u00e9visionnel envoie e.periodes[], bulletin envoie champs directs\n      const periodes = e.periodes || [{\n        code_equipe: e.code_equipe || null,\n        code_poste: e.code_poste || null,\n        heure_debut: e.heure_debut || null,\n        heure_fin: e.heure_fin || null,\n        ordre: 1,\n      }];\n", "  // Fusion des entr\u00e9es partageant la m\u00eame date_jour AVANT tout traitement. Un\n  // bulletin peut envoyer DEUX entr\u00e9es s\u00e9par\u00e9es pour le m\u00eame jour calendaire\n  // (ex: \"NU\" la journ\u00e9e + une nuit de formation le soir m\u00eame) : sans cette\n  // fusion, la boucle principale traite chaque entr\u00e9e l'une apr\u00e8s l'autre et\n  // fait un DELETE FROM planning_periode a chaque fois, ce qui efface\n  // silencieusement les p\u00e9riodes de la premi\u00e8re entr\u00e9e quand la deuxi\u00e8me est\n  // trait\u00e9e pour la m\u00eame date.\n  const entriesByDate = new Map();\n  for (const e of entries) {\n    if (!e.date_jour) continue;\n    const periodesDeE = (e.periodes && e.periodes.length > 0)\n      ? e.periodes\n      : (e.code_equipe ? [{\n          code_equipe: e.code_equipe,\n          code_poste: e.code_poste || null,\n          heure_debut: e.heure_debut || null,\n          heure_fin: e.heure_fin || null,\n        }] : []);\n    if (!entriesByDate.has(e.date_jour)) {\n      entriesByDate.set(e.date_jour, { date_jour: e.date_jour, source_edition_date: e.source_edition_date || null, periodes: [] });\n    }\n    const merged = entriesByDate.get(e.date_jour);\n    merged.periodes.push(...periodesDeE);\n    // Garder la date d'\u00e9dition la plus r\u00e9cente si plusieurs entr\u00e9es diff\u00e8rent\n    if (e.source_edition_date && (!merged.source_edition_date || new Date(e.source_edition_date) > new Date(merged.source_edition_date))) {\n      merged.source_edition_date = e.source_edition_date;\n    }\n  }\n  const mergedEntries = [...entriesByDate.values()].map(e => ({\n    ...e,\n    periodes: e.periodes.map((p, i) => ({ ...p, ordre: i + 1 })),\n  }));\n\n  const appliques = [];\n  const ignores = [];\n\n  const conn = await pool.getConnection();\n  try {\n    await conn.beginTransaction();\n\n    for (const e of mergedEntries) {\n      if (!e.date_jour) continue;\n\n      const [[existing]] = await conn.query(\n        'SELECT id, source_edition_date FROM planning_jour WHERE cp_agent=? AND date_jour=?',\n        [cp, e.date_jour]\n      );\n\n      const newEdition = e.source_edition_date || null;\n      if (existing && existing.source_edition_date && newEdition) {\n        const existingDate = new Date(existing.source_edition_date).getTime();\n        const candidateDate = new Date(newEdition).getTime();\n        if (candidateDate <= existingDate) {\n          ignores.push({ date: e.date_jour, motif: 'edition_plus_ancienne' });\n          continue;\n        }\n      }\n\n      // Apr\u00e8s fusion, toutes les entr\u00e9es ont d\u00e9sormais un tableau periodes[]\n      const hasPeriodes = e.periodes && e.periodes.length > 0 && e.periodes[0].code_equipe;\n      if (!hasPeriodes) {\n        ignores.push({ date: e.date_jour, motif: 'code_equipe_manquant' });\n        continue;\n      }\n\n      await conn.query(\n        `INSERT INTO planning_jour (cp_agent, date_jour, source, source_edition_date)\n         VALUES (?,?,?,?)\n         ON DUPLICATE KEY UPDATE source=VALUES(source), source_edition_date=VALUES(source_edition_date), modifie_le=NOW()`,\n        [cp, e.date_jour, sourceDb, newEdition]\n      );\n      const [[jour]] = await conn.query(\n        'SELECT id FROM planning_jour WHERE cp_agent=? AND date_jour=?', [cp, e.date_jour]\n      );\n      await conn.query('DELETE FROM planning_periode WHERE planning_jour_id=?', [jour.id]);\n\n      const periodes = e.periodes;\n", 'hunk_0_L31');
+count++;
+
+fs.writeFileSync(filePath, content, 'utf8');
+console.log('OK - ' + count + ' remplacements appliques sur ' + filePath);
+console.log('Redemarre le backend (node server.js) pour appliquer le changement.');

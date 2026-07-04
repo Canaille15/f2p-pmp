@@ -335,9 +335,19 @@ function deriveCodeEquipeBulletin(code, heureDebut) {
   if (/^RU$/.test(code)) return "RU";
   if (/^RQ$/.test(code)) return "RQ";
   if (/^C$/.test(code) || /^CA$/.test(code)) return "CA";
-  if (/^F\d$/.test(code)) return "JF";
+  if (/^F[0-9V]$/.test(code)) return code; // fête précise (F1..F9, F0, FV) — conservée telle quelle pour le suivi exact
   if (/^F-[A-Z]{2,5}$/.test(code)) return "FOR";
-  if (/^DISPO$/i.test(code)) return "DISPO";
+  if (/^NU$/.test(code)) return "NU";
+  // Formation en doublon sur un poste : le marqueur "/" en fin de code (ex: "PIADJX/")
+  // est parfois corrompu en "J" à l'extraction ("PIADJXJ") — dans ce cas précis (un
+  // second suffixe -/O/X/J directement après un premier -/O/X), c'est le PREMIER
+  // suffixe qui donne la véritable équipe (ici X = Nuit), pas le second.
+  if (code.length >= 2 && code[code.length - 1] === "J" && /[-OX]/.test(code[code.length - 2])) {
+    const base = code[code.length - 2];
+    if (base === "-") return "M";
+    if (base === "O") return "AM";
+    return "N";
+  }
   if (code.endsWith("J")) return "J";
   if (code.endsWith("-")) return "M";
   if (code.endsWith("O")) return "AM";
@@ -380,8 +390,8 @@ function parseBulletinCommande(text) {
     : null;
 
   // Codes valides reconnus (postes 3x8 PI/PA se terminant par -, O, X ou J ; codes spéciaux ;
-  // codes formation type "F-PAR", avec ou sans espace après le tiret)
-  const CODE_RE = /\b(?:RPP|RP|RU|RQ|CA|DISPO|F[0-9V]|F-\s?[A-Z]{2,5}|C)\b|\b(?:PI|PA)[A-Z0-9]{2,6}[-OXJ]/g;
+  // codes formation type "F-PAR", avec ou sans espace après le tiret ; NU ; RFT SAM)
+  const CODE_RE = /\b(?:RPP|RP|RU|RQ|CA|NU|DISPO|F[0-9V]|F-\s?[A-Z]{2,5}|C)\b|\bRFT\s?SAM\b|\b(?:P[Ii]|P[Aa])[A-Z0-9]{2,6}[-OXJ]/g;
 
   // On neutralise les dates des lignes d'en-tête ("Edition le..." et "Commande allant du...")
   // pour qu'elles ne soient pas prises pour des jours du tableau (même longueur de texte
@@ -392,60 +402,63 @@ function parseBulletinCommande(text) {
   const periodeLine = workText.match(/Commande allant du\s*\d{2}[\/1]\d{2}\/\d{4}\s*au\s*\d{2}[\/1]\d{2}\/\d{4}/i);
   if (periodeLine) workText = workText.slice(0, periodeLine.index) + " ".repeat(periodeLine[0].length) + workText.slice(periodeLine.index + periodeLine[0].length);
 
-  // Découpage par DATE (JJ/MM/AAAA) plutôt que par nom de jour : les dates restent quasi
-  // toujours intactes, contrairement aux noms de jour (ex: "Ven" -> "yen"). On tolère aussi
-  // un "/" mal reconnu en "1" (ex: "04107/2026"), défaut récurrent observé sur plusieurs bulletins.
+  // Découpage par DATE (JJ/MM/AAAA) : les dates restent quasi toujours intactes, contrairement
+  // aux noms de jour (ex: "Ven" -> "yen"). On tolère aussi un "/" mal reconnu en "1"
+  // (ex: "04107/2026"), défaut récurrent observé sur plusieurs bulletins.
   const dateRe = /(\d{2})[\/1](\d{2})\/(\d{4})/g;
   const dateMatches = [...workText.matchAll(dateRe)];
+
+  // Association jour <-> code : ancrée sur l'abréviation du jour (Sam/Dim/Lun...) plutôt que
+  // sur la proximité textuelle avec la date. La proximité pure se plante quand deux jours sont
+  // très rapprochés dans le texte (ex: "RP" suivi d'une annotation courte) : le point milieu de
+  // la fenêtre de recherche peut tomber EN PLEIN MILIEU du mot du code juste avant la date, le
+  // rendant invisible — le code du jour SUIVANT se fait alors voler sa place, un décalage qui se
+  // propage ensuite en cascade sur tous les jours suivants. L'abréviation du jour précède
+  // toujours son propre code sans ambiguïté, quelle que soit la longueur du contenu : ancrage
+  // bien plus fiable, confirmé sur bulletin réel (04/2026, agent 9308712R).
+  const DAY_ABBR_RE = /\b(Mer|Jeu|Ven|Sam|Dim|Lun|Mar)\b/g;
+  const dayMatches = [...workText.matchAll(DAY_ABBR_RE)];
+  const codesParJour = dayMatches.map((dayM, idx) => {
+    const zoneStart = dayM.index + dayM[0].length;
+    const zoneEnd = idx + 1 < dayMatches.length ? dayMatches[idx + 1].index : workText.length;
+    const zone = workText.slice(zoneStart, zoneEnd);
+    // Cas particulier "Pauseur" : le code affiché (ex. PIPA2J) manque parfois entièrement
+    // du texte extrait, alors que le sous-code "du PIPA2E" lui est toujours présent. On le
+    // détecte en priorité et on en déduit le code (E -> J).
+    const pauseurMatch = zone.match(/\bdu\s+PIPA([123])E\b/i);
+    if (pauseurMatch) return `PIPA${pauseurMatch[1]}J`;
+    CODE_RE.lastIndex = 0;
+    let cm;
+    while ((cm = CODE_RE.exec(zone)) !== null) {
+      const before = zone.slice(Math.max(0, cm.index - 5), cm.index);
+      if (/\bdu\s*$/i.test(before)) continue;
+      return cm[0].replace(/^(F-)\s+/, "$1"); // normalise "F- PAR" -> "F-PAR"
+    }
+    return null;
+  });
+
   const jours = [];
   const echecs = [];
 
   for (let i = 0; i < dateMatches.length; i++) {
     const dm = dateMatches[i];
-    // Fenêtre commune autour de la date : du milieu avec la date précédente
-    // au milieu avec la date suivante. Le code peut apparaître avant OU après
-    // la date selon l'ordre d'extraction du PDF — on cherche dans toute la fenêtre
-    // et on retient le code physiquement le plus proche de la date.
-    const winStart = i === 0 ? 0 : Math.floor((dateMatches[i - 1].index + dateMatches[i - 1][0].length + dm.index) / 2);
-    const winEnd = i + 1 < dateMatches.length ? Math.floor((dm.index + dm[0].length + dateMatches[i + 1].index) / 2) : text.length;
-    const fenetre = text.slice(winStart, winEnd);
-    const offset = winStart;
-    // Zone horaires : large, jusqu'à la date suivante (PS/FS apparaissent toujours après
-    // la date dans le document, contrairement au code qui peut se trouver avant OU après)
+    const dateJour = `${dm[3]}-${dm[2]}-${dm[1]}`;
+    // Zone horaires : jusqu'à la date suivante (PS/FS apparaissent toujours après la date
+    // dans le document). Sert aussi à détecter l'annotation RPP juste après la date.
     const finZone = i + 1 < dateMatches.length ? dateMatches[i + 1].index : text.length;
     const zoneHoraires = text.slice(dm.index + dm[0].length, finZone);
 
-    const dateJour = `${dm[3]}-${dm[2]}-${dm[1]}`;
-
-    let code = null;
-    let bestDist = Infinity;
-    let cm;
-
-    // Cas particulier "Pauseur" : le code affiché (ex. PIPA2J) manque parfois entièrement
-    // du texte extrait, alors que le sous-code "du PIPA2E" lui est toujours présent dans
-    // la zone horaires du jour. On le détecte en priorité et on en déduit le code (E -> J).
-    const pauseurMatch = zoneHoraires.match(/\bdu\s+PIPA([123])E\b/i);
-    if (pauseurMatch) {
-      code = `PIPA${pauseurMatch[1]}J`;
-    }
-
-    if (!code) {
-      CODE_RE.lastIndex = 0;
-      while ((cm = CODE_RE.exec(fenetre)) !== null) {
-        const before = fenetre.slice(Math.max(0, cm.index - 5), cm.index);
-        if (/\bdu\s*$/i.test(before)) continue;
-        const dist = Math.abs((offset + cm.index) - dm.index);
-        if (dist < bestDist) { bestDist = dist; code = cm[0]; }
-      }
-    }
+    const code = codesParJour[i];
     if (!code) { echecs.push({ date: dateJour, motif: "code_illisible" }); continue; }
-    code = code.replace(/^(F-)\s+/, "$1"); // normalise "F- PAR" -> "F-PAR"
 
     // Toutes les heures HH:MM trouvées dans la zone, triées chronologiquement : la plus
     // tôt est l'heure de début, la plus tardive la fin (inversé pour la nuit, qui traverse
     // minuit). Plus robuste que d'associer chaque label PS/FS à une valeur, l'ordre du texte
-    // étant trop variable selon les défauts d'extraction du PDF.
-    const valeurs = [...zoneHoraires.matchAll(/(\d{2}):(\d{2})/g)]
+    // étant trop variable selon les défauts d'extraction du PDF. Le ":" est parfois perdu à
+    // l'extraction et remplacé par un simple espace (ex: "13 00" au lieu de "13:00") : on
+    // tolère les deux, avec limite de minutes (0-59) pour éviter de confondre avec d'autres
+    // paires de nombres fortuites.
+    const valeurs = [...zoneHoraires.matchAll(/\b([01]\d|2[0-3])[:\s]([0-5]\d)\b/g)]
       .map(m => ({ h: m[1], mn: m[2], total: parseInt(m[1], 10) * 60 + parseInt(m[2], 10) }))
       .sort((a, b) => a.total - b.total);
     const codeEquipeProvisoire = deriveCodeEquipeBulletin(code, null);
@@ -463,8 +476,19 @@ function parseBulletinCommande(text) {
       }
     }
 
-    const codeEquipe = deriveCodeEquipeBulletin(code, heureDebut);
-    const estCodeSpecial = /^(RPP|RP|RU|RQ|C|CA|DISPO)$/.test(code) || /^F[0-9V]$/.test(code) || /^F-[A-Z]{2,5}$/.test(code);
+    const codeEquipeBrut = deriveCodeEquipeBulletin(code, heureDebut);
+    // Sur le bulletin réel, un RPP est imprimé comme "RP" suivi d'une ligne
+    // d'annotation juste après la date (le mot "RPP", mais le "R" initial
+    // disparaît systématiquement à l'extraction : on observe "PP", "Pp", "p"
+    // ou ":PP" selon les jours). On cherche cette annotation juste après la
+    // date, avant tout autre contenu — un vrai RP simple n'a rien à cet
+    // endroit (le jour suivant s'enchaîne directement).
+    let codeEquipe = codeEquipeBrut;
+    if (codeEquipeBrut === "RP") {
+      const apresDate = zoneHoraires.replace(/^\s+/, "");
+      if (/^:?\s*[pP]{1,2}\b/.test(apresDate)) codeEquipe = "RPP";
+    }
+    const estCodeSpecial = /^(RPP|RP|RU|RQ|C|CA|DISPO|NU)$/.test(code) || /^RFT\s?SAM$/i.test(code) || /^F[0-9V]$/.test(code) || /^F-[A-Z]{2,5}$/.test(code);
 
     jours.push({
       date_jour: dateJour,
@@ -4801,7 +4825,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 fontSize:10,fontWeight:700,textAlign:"center",
                 display:"flex",flexDirection:"column",gap:2,
               }}>
-                <span>{CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)}</span>
+                <span style={CODES_FETES[code]?{fontSize:15,fontWeight:800}:undefined}>{CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)}</span>
                 {en?.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{getPosteLabelFromCode(en.jsCode)||en.jsCode}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:9,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 5px",marginTop:1}}>📝 {en.notePerso}</span>}
               </div>}
@@ -4952,11 +4976,11 @@ justifyContent: "flex-start",
        {/* ZONE 2 — Utilisation journée (milieu) */}
               {code&&showData&&code!=="N"&&code!=="RPP"&&<div style={{
                 background:getColor(code), color:getTc(code),
-                borderRadius:5, padding:"2px 5px",
+                borderRadius:5, padding:CODES_FETES[code]?"4px 7px":"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", flexDirection:"column",
               }}>
-                <span>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
+                <span style={CODES_FETES[code]?{fontSize:14,fontWeight:800}:undefined}>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"inline-block"}}>📝 {en.notePerso}</span>}
               </div>}
