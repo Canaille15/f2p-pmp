@@ -10,8 +10,7 @@ async function getPlanning(req, res) {
     const [rows] = await pool.query(
       `SELECT pj.id, pj.date_jour, pj.source,
               pp.ordre, pp.code_equipe, pp.code_poste,
-              pp.heure_debut, pp.heure_fin, pp.prive, pp.note,
-              CASE WHEN ? THEN pp.note_perso ELSE NULL END AS note_perso
+              pp.heure_debut, pp.heure_fin, pp.prive, pp.note, pp.note_perso
        FROM planning_jour pj
        JOIN planning_periode pp ON pp.planning_jour_id = pj.id
        WHERE pj.cp_agent = ?
@@ -19,7 +18,15 @@ async function getPlanning(req, res) {
          AND (? IS NULL OR pj.date_jour <= ?)
          AND (pp.prive = 0 OR ? OR ?)
        ORDER BY pj.date_jour, pp.ordre`,
-      [isSelf?1:0, cp, from||null, from||null, to||null, to||null, isSelf?1:0, isAdmin?1:0]);
+      [cp, from||null, from||null, to||null, to||null, isSelf?1:0, isAdmin?1:0]);
+    // note_perso est une donnee strictement personnelle : jamais renvoyee
+    // a quelqu'un d'autre que le titulaire du planning, meme un admin,
+    // meme sur une ligne publique (M/AM/N/J...). Filtrage fait ici en JS
+    // plutot qu'en SQL pour eviter tout comportement incertain d'un
+    // parametre lie a l'interieur d'un CASE WHEN selon le driver/version.
+    if (!isSelf) {
+      for (const row of rows) row.note_perso = null;
+    }
     res.json(rows);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }

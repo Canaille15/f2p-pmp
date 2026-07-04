@@ -74,6 +74,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
 
   const agKey = agent?.immatriculation || agent?.cp || agent?.id;
   const profile = agentProfiles?.[agKey] || {};
+  const noteColor = profile.agentColors?.NOTE || "#b45309";
   const famille = agent?.famille || "PRCI";
   const tous_postes = famille === "PAR"
     ? [...POSTES_PAR, ...POSTES_PRCI]
@@ -279,26 +280,54 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
           </button>
 
           {/* ── 📝 Note perso — indépendant, visible uniquement par toi ── */}
-          <div>
+          <div style={{
+            padding:"10px 14px",
+            background: notePerso ? "#1a1207" : "#f8fafc",
+            border: `2px solid ${notePerso ? noteColor : "#cbd5e1"}`,
+            borderStyle: notePerso ? "solid" : "dashed",
+            borderRadius:10,
+            transition:"all .15s",
+          }}>
             <div style={{
-              fontSize:10, color:"#94a3b8", fontWeight:700,
-              marginBottom:5, textTransform:"uppercase", letterSpacing:.5,
-              display:"flex", alignItems:"center", gap:5,
+              fontSize:12, fontWeight:700,
+              color: notePerso ? noteColor : "#64748b",
+              display:"flex", alignItems:"center", gap:8,
+              marginBottom:8,
             }}>
               📝 Note (visible uniquement par toi)
+              <span style={{
+                marginLeft:"auto", fontSize:10, fontWeight:700,
+                background: notePerso ? noteColor : "#e2e8f0",
+                color: notePerso ? "#fff" : "#94a3b8",
+                borderRadius:6, padding:"1px 8px",
+              }}>
+                {notePerso ? "actif" : "inactif"}
+              </span>
             </div>
-            <input
-              value={notePerso}
-              onChange={e => setNotePerso(e.target.value)}
-              placeholder="ex: Réunion service, visite de poste, rappel..."
-              style={{
-                width:"100%", padding:"10px 12px",
-                border: notePerso ? "1.5px solid #1e293b" : "1.5px dashed #cbd5e1",
-                borderRadius:8,
-                fontSize:14, fontWeight:600, color:"#1e293b",
-                outline:"none", boxSizing:"border-box",
-              }}
-            />
+            <div style={{display:"flex", gap:6, alignItems:"center"}}>
+              <input
+                value={notePerso}
+                onChange={e => setNotePerso(e.target.value)}
+                placeholder="ex: Réunion service, visite de poste, rappel..."
+                style={{
+                  flex:1, padding:"9px 11px",
+                  border: `1.5px solid ${notePerso ? noteColor : "#e2e8f0"}`,
+                  borderRadius:8, background:"#fff",
+                  fontSize:14, fontWeight:600, color:"#1e293b",
+                  outline:"none", boxSizing:"border-box",
+                }}
+              />
+              {notePerso && (
+                <button onClick={() => setNotePerso("")} title="Effacer la note"
+                  style={{
+                    flexShrink:0, width:36, height:36,
+                    background:"#fff", border:"1.5px solid #fca5a5",
+                    borderRadius:8, cursor:"pointer",
+                    color:"#dc2626", fontSize:15, fontWeight:800,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                  }}>✕</button>
+              )}
+            </div>
           </div>
 
           {/* ── Repos / Absences ── */}

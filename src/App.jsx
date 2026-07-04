@@ -2013,7 +2013,7 @@ const DEFAULT_COLORS = {
   RP:"#16a34a", RPP:"#0d9488", RU:"#ca8a04", RQ:"#ca8a04", TC:"#0284c7", TY:"#0284c7", RN:"#4338ca",
   NU:"#475569", CA:"#eab308", CP:"#eab308",
   MA:"#dc2626", ABS:"#dc2626", VT:"#eab308", VM:"#6b7280",
-  FOR:"#b45309", DISPO:"#059669",
+  FOR:"#b45309", DISPO:"#059669", NOTE:"#b45309",
 };
 
 // Texte blanc sur fonds sombres, noir sur fonds clairs
@@ -2035,7 +2035,7 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
     RP:"RP", RPP:"RPP", RU:"RU", RQ:"RQ", TC:"TC", TY:"TY", RN:"RN",
     NU:"NU", CA:"Congés", CP:"Congés", MA:"Maladie",
     ABS:"Absent", VT:"VT", VM:"Visite méd.", FOR:"Formation", DISPO:"Dispo",
-    FETE:"Fêtes légales",
+    FETE:"Fêtes légales", NOTE:"Note perso",
   };
 
   // Tous les groupes complets — incluant JF, TY, CP, FETE
@@ -2088,6 +2088,12 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
       label:"🩷 Fêtes légales",
       codes:["FETE"],
       note:"Couleur appliquée à tous les codes F1, F2… dans l'agenda",
+    },
+    {
+      id:"note",
+      label:"📝 Note perso",
+      codes:["NOTE"],
+      note:"Couleur du badge/texte affiché pour ta note personnelle dans le planning",
     },
   ];
 
@@ -3920,11 +3926,20 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                 <div style={{flex:1,padding:"6px 10px",display:"flex",
                   flexDirection:"column",justifyContent:"center",gap:4}}>
                   {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.finNuit&&<div style={{fontSize:11,color:"#0369a1",background:"#f0f9ff",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>🌙 Descente de nuit</div>}
-                  {isOwnProfile&&schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.notePerso&&<div style={{fontSize:11,color:"#b45309",background:"#fffbeb",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>📝 {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`].notePerso}</div>}
+                  {isOwnProfile&&schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.notePerso&&<div style={{fontSize:11,color:"#fff",background:getColor("NOTE"),borderRadius:6,padding:"3px 9px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>📝 {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`].notePerso}</div>}
                     {l.code&&l.showData?(
                     <div>
                       {/* Badge code + label */}
                       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                        {l.code==="RPP"?(
+                          <span style={{
+                            display:"flex",alignItems:"center",justifyContent:"center",
+                            width:36,height:36,borderRadius:"50%",
+                            background:l.couleur,color:l.tc,
+                            fontSize:11,fontWeight:800,
+                            boxShadow:"0 1px 3px rgba(0,0,0,.12)",
+                          }}>RPP</span>
+                        ):(
                         <span style={{
                           background:l.couleur,color:l.tc,
                           borderRadius:8,padding:"3px 10px",
@@ -3933,6 +3948,7 @@ function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onD
                         }}>
                           {CODES_FETES[l.code]?"🩷":""}{l.label}
                         {l.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(l.jsCode)?<span style={{fontSize:10,opacity:.8}}> / {l.jsCode}</span>:null}</span>
+                        )}
                         {l.eq?.heures&&<span style={{
                           fontSize:10,color:"#64748b",fontWeight:600,
                           fontFamily:"monospace",
@@ -4770,16 +4786,15 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
                 display:"inline-flex",alignItems:"center",gap:4,
                 alignSelf:"flex-start",
               }}>🌙</div>}
-              {isOwnProfile&&en?.notePerso&&!code&&<div title={en.notePerso} style={{
-                background:"#fffbeb",color:"#b45309",
-                borderRadius:5,padding:"2px 6px",
-                fontSize:10,fontWeight:700,
-                display:"inline-flex",alignItems:"center",gap:4,
-                alignSelf:"flex-start",
-              }}>📝 Note</div>}
+              {isOwnProfile&&en?.notePerso&&!code&&<div style={{
+                background:getColor("NOTE"),color:"#fff",
+                borderRadius:5,padding:"3px 7px",
+                fontSize:10,fontWeight:700,lineHeight:1.3,
+                display:"flex",alignItems:"flex-start",gap:4,
+              }}>📝 <span>{en.notePerso}</span></div>}
 
               {/* ZONE 2 — Utilisation journée (milieu) */}
-              {code&&showData&&code!=="N"&&<div style={{
+              {code&&showData&&code!=="N"&&code!=="RPP"&&<div style={{
                 background:getColor(code),color:getTc(code),
                 borderRadius:8,padding:"4px 8px",
                 fontSize:10,fontWeight:700,textAlign:"center",
@@ -4787,8 +4802,24 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
               }}>
                 <span>{CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)}</span>
                 {en?.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{getPosteLabelFromCode(en.jsCode)||en.jsCode}</span>}
-                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,opacity:.85,fontWeight:500,fontStyle:"italic"}}>📝 {en.notePerso}</span>}
+                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:9,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 5px",marginTop:1}}>📝 {en.notePerso}</span>}
               </div>}
+
+              {/* ZONE 2bis — RPP : badge rond dédié, centré, palette dissociée de RP */}
+              {code==="RPP"&&showData&&<div style={{
+                display:"flex", alignItems:"center", justifyContent:"center",
+                width:32, height:32, borderRadius:"50%",
+                background:getColor("RPP"), color:getTc("RPP"),
+                fontSize:10, fontWeight:800, alignSelf:"center",
+                flexShrink:0, margin:"2px auto",
+              }}>
+                RPP
+              </div>}
+              {code==="RPP"&&showData&&isOwnProfile&&en?.notePerso&&<span style={{
+                fontSize:9, color:"#fff", fontWeight:700,
+                background:getColor("NOTE"), borderRadius:4, padding:"1px 6px",
+                textAlign:"center", display:"block", margin:"0 auto",
+              }}>📝 {en.notePerso}</span>}
 
               {/* ZONE 3 — Nuit (bas) */}
               {(code==="N"||en?.equipe2==="N")&&showData&&<div style={{
@@ -4907,14 +4938,14 @@ justifyContent: "flex-start",
               }}>
                 🌙
               </div>}
-              {isOwnProfile&&en?.notePerso&&!code&&<div title={en.notePerso} style={{
-                background:"#fffbeb", color:"#b45309",
-                borderRadius:5, padding:"2px 6px",
-                fontSize:10, fontWeight:700,
-                display:"inline-flex", alignItems:"center", gap:4,
-                alignSelf:"flex-start",
+              {isOwnProfile&&en?.notePerso&&!code&&<div style={{
+                background:getColor("NOTE"), color:"#fff",
+                borderRadius:5, padding:"2px 5px",
+                fontSize:8, fontWeight:700, lineHeight:1.25,
+                display:"flex", alignItems:"flex-start", gap:3,
+                alignSelf:"stretch", width:"100%", boxSizing:"border-box",
               }}>
-                📝
+                📝 <span style={{overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",flex:1,minWidth:0}}>{en.notePerso}</span>
               </div>}
 
        {/* ZONE 2 — Utilisation journée (milieu) */}
@@ -4926,7 +4957,7 @@ justifyContent: "flex-start",
               }}>
                 <span>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
-                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,opacity:.85,fontWeight:500,fontStyle:"italic"}}>📝 {en.notePerso}</span>}
+                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"inline-block"}}>📝 {en.notePerso}</span>}
               </div>}
 
               {/* ZONE 2bis — RPP : badge rond dédié, palette dissociée de RP */}
@@ -4934,13 +4965,15 @@ justifyContent: "flex-start",
                 display:"flex", alignItems:"center", justifyContent:"center",
                 width:26, height:26, borderRadius:"50%",
                 background:getColor("RPP"), color:getTc("RPP"),
-                fontSize:9, fontWeight:800, alignSelf:"flex-start",
-                flexShrink:0,
+                fontSize:9, fontWeight:800, alignSelf:"center",
+                flexShrink:0, margin:"2px auto",
               }}>
                 RPP
               </div>}
               {code==="RPP"&&showData&&isOwnProfile&&en?.notePerso&&<span style={{
-                fontSize:8, color:"#94a3b8", fontStyle:"italic", marginTop:-2,
+                fontSize:8, color:"#fff", fontWeight:700,
+                background:getColor("NOTE"), borderRadius:4, padding:"1px 5px",
+                textAlign:"center", display:"block", margin:"0 auto",
               }}>📝 {en.notePerso}</span>}
 
               {/* ZONE 3 — Nuit (toujours en bas) */}
@@ -5020,20 +5053,21 @@ justifyContent: "flex-start",
         };
         // Sauvegarder localement
         setDayPopup(null);
-        // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit) : supprimer la case
-        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit);
+        // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit, pas de note) : supprimer la case
+        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit || fullEntry.notePerso);
         if(!hasContent) {
           setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
           try { await api.planning.deleteEntry(agCp, dk); } catch(e){}
           return;
         }
         setSchedule(prev=>({...prev,[agCp+'-'+dk]:fullEntry}));
-        // Recharger depuis Railway pour synchroniser
-        setTimeout(()=>api.planning.getSchedule(agCp).then(entries=>{if(entries)setSchedule(prev=>({...prev,...entries}));}),500);
-        // Sauvegarder en base (sequentiel pour eviter deadlock)
+        // Sauvegarder en base, PUIS seulement recharger depuis Railway pour
+        // synchroniser (jamais avant confirmation, sinon on risque de
+        // recuperer l'ancienne version et d'ecraser silencieusement l'affichage
+        // correct si la sauvegarde met plus de 500ms a aboutir).
         try {
           await api.planning.saveEntry(agCp, dk, fullEntry);
-       
+          api.planning.getSchedule(agCp).then(entries=>{if(entries)setSchedule(prev=>({...prev,...entries}));});
         } catch(e) { console.error('Erreur save:', e); }
       }}
       onDelete={async (type)=>{

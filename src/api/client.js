@@ -209,13 +209,22 @@ export const planning = {
       const p2 = periodes.find(p => p.note === 'debut_nuit');
       const horaires = p1.heure_debut ? (p1.heure_debut.slice(0,5).replace(':','h')+'–'+(p1.heure_fin||'').slice(0,5).replace(':','h')) : null;
       const isFinNuit = p1.note === 'fin_nuit';
+      // Deux marqueurs synthétiques différents peuvent forcer code_equipe='N'
+      // sans que ce soit une vraie nuit :
+      // (a) 'fin_nuit' : SEULE la case "descente de nuit" est cochée.
+      // (b) 'note_seule' : il ne reste QUE la note, plus aucun contenu du tout
+      //     (repli total dans saveEntry côté sauvegarde).
+      // Dans les deux cas, ce 'N' est un simple repère technique, pas une
+      // vraie nuit → il faut l'ignorer. Mais si une VRAIE équipe (RP, M...)
+      // a en plus la case "descente de nuit" cochée, il ne faut surtout pas
+      // effacer cette équipe réelle (d'où la condition code_equipe==='N').
+      const isPlaceholder = (p1.note === 'fin_nuit' || p1.note === 'note_seule') && p1.code_equipe === 'N' && !p2;
       result[`${agentId}-${date}`] = {
-        // Si fin_nuit seule : equipe=null, finNuit=true
-        equipe:   isFinNuit && !p2 ? null : (p1.code_equipe || null),
+        equipe:   isPlaceholder ? null : (p1.code_equipe || null),
         equipe2:  p2 ? 'N' : null,
-        jsCode:   isFinNuit && !p2 ? null : (p1.code_poste || null),
+        jsCode:   isPlaceholder ? null : (p1.code_poste || null),
         jsCode2:  p2 ? (p2.code_poste || null) : null,
-        horaires: isFinNuit ? null : horaires,
+        horaires: isPlaceholder ? null : horaires,
         prive:    !!p1.prive,
         finNuit:  isFinNuit,
         notePerso: p1.note_perso || null,
@@ -267,6 +276,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
     }
     // Periode nuit ce soir (si equipe2=N)
     if (entry.equipe2 === 'N') {
+      const estPeriodeUnique = periodes.length === 0; // cas "nuit seule" : pas de journée avant
       periodes.push({
         ordre: periodes.length + 1,
         code_equipe: 'N',
@@ -275,6 +285,9 @@ result[`${row.agent_id || agentId}-${date}`] = {
         heure_fin: '06:17',
         prive: false,
         note: 'debut_nuit',
+        // Si nuit seule, cette periode fait office de periode N°1 : elle doit
+        // porter la note (sinon la note n'a nulle part ou etre sauvegardee).
+        ...(estPeriodeUnique ? {note_perso: entry.notePerso || null} : {}),
       });
     }
     // Si rien du tout mais finNuit : juste noter la fin de nuit
@@ -287,9 +300,10 @@ result[`${row.agent_id || agentId}-${date}`] = {
         heure_fin: null,
         prive: false,
         note: 'fin_nuit',
+        note_perso: entry.notePerso || null,
       });
     }
-    if (periodes.length === 0) periodes.push({ordre:1, code_equipe:'N', code_poste:null, heure_debut:null, heure_fin:null, prive:false, note:null});
+    if (periodes.length === 0) periodes.push({ordre:1, code_equipe:'N', code_poste:null, heure_debut:null, heure_fin:null, prive:false, note:'note_seule', note_perso: entry.notePerso || null});
     return apiFetch(`/planning/${agentId}/${date}`, {
       method: 'PUT',
       body: JSON.stringify({ periodes, source: 'manuel' }),
