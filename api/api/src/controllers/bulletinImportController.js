@@ -58,7 +58,16 @@ async function importBulletin(req, res) {
   }
   const mergedEntries = [...entriesByDate.values()].map(e => ({
     ...e,
-    periodes: e.periodes.map((p, i) => ({ ...p, ordre: i + 1 })),
+    // Le frontend (client.js getSchedule) n'affiche la 2e période d'un jour QUE
+    // si elle porte le marqueur note='debut_nuit' (c'est ainsi qu'il reconnaît
+    // "ceci est la nuit qui accompagne ce jour"). Sans ce marqueur, une 2e
+    // période nuit fusionnée ici serait silencieusement ignorée à l'affichage,
+    // même si elle est bien enregistrée en base.
+    periodes: e.periodes.map((p, i) => ({
+      ...p,
+      ordre: i + 1,
+      note: (i > 0 && p.code_equipe === 'N') ? 'debut_nuit' : (p.note || null),
+    })),
   }));
 
   const appliques = [];
@@ -112,7 +121,7 @@ async function importBulletin(req, res) {
         await conn.query(
           `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
            VALUES (?,?,?,?,?,?,?,?,?)`,
-          [jour.id, p.ordre || 1, p.code_equipe, p.code_poste || null, p.heure_debut || null, p.heure_fin || null, prive, null, null]
+          [jour.id, p.ordre || 1, p.code_equipe, p.code_poste || null, p.heure_debut || null, p.heure_fin || null, prive, p.note || null, null]
         );
       }
       appliques.push(e.date_jour);
