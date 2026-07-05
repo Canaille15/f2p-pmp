@@ -31,8 +31,12 @@ async function getOne(req, res) {
     const [rows] = await pool.query('SELECT * FROM agent WHERE cp = ?', [cp]);
     if (!rows.length) return res.status(404).json({ error: 'Agent introuvable' });
     const a = rows[0];
-    if (a.email)     a.email     = decrypt(a.email);
-    if (a.telephone) a.telephone = decrypt(a.telephone);
+    // Déchiffrement protégé : une valeur illisible (ex: chiffrée avec une
+    // clé antérieure à une rotation de sécurité) ne doit jamais faire
+    // planter la requête entière — elle devient simplement null.
+    const decryptSafe = (v) => { try { return v ? decrypt(v) : v; } catch (e) { console.error('Déchiffrement impossible (donnée conservée illisible) :', e.message); return null; } };
+    a.email     = decryptSafe(a.email);
+    a.telephone = decryptSafe(a.telephone);
     res.json(a);
   } catch (e) {
     console.error(e);

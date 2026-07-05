@@ -6335,7 +6335,7 @@ function AnnuaireView({currentAgent,isAdmin}){
 
   if(loading)return(<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>Chargement de l'annuaire…</div>);
 
-  return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:640,margin:"0 auto"}}>
+  return(<div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:640,margin:"0 auto"}}>
 
     {loadError&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 14px",borderRadius:10,background:"#fee2e2",border:"1.5px solid #fca5a5"}}>
       <span style={{fontSize:13,fontWeight:600,color:"#991b1b"}}>{loadError}</span>
@@ -6343,23 +6343,21 @@ function AnnuaireView({currentAgent,isAdmin}){
     </div>}
 
     <div>
-      <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"#94a3b8",marginBottom:8,paddingLeft:2}}>Accès rapide</div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(78px,1fr))",gap:8}}>
+      <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"#94a3b8",marginBottom:6,paddingLeft:2}}>Accès rapide</div>
+      {accesRapide.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(78px,1fr))",gap:8}}>
         {accesRapide.map(a=>(
           <a key={a.id} href={`tel:${a.numero}`} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"10px 4px",borderRadius:12,border:"1.5px solid #e2e8f0",background:"#fff",textDecoration:"none"}}>
             <div style={{width:36,height:36,borderRadius:"50%",background:"#D85A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📞</div>
             <span style={{fontSize:11,fontWeight:600,textAlign:"center",lineHeight:1.2,color:"#1e293b"}}>{a.libelle}</span>
           </a>
         ))}
-        <button onClick={()=>{setGererAcces(true);setNouvelAcces(true);}} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"10px 4px",borderRadius:12,border:"1.5px dashed #cbd5e1",background:"transparent",cursor:"pointer"}}>
-          <div style={{width:36,height:36,borderRadius:"50%",border:"1.5px dashed #cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#94a3b8"}}>+</div>
-          <span style={{fontSize:11,fontWeight:600,color:"#94a3b8"}}>Ajouter</span>
-        </button>
-      </div>
-      {!gererAcces&&accesRapide.length>0&&
-        <button onClick={()=>setGererAcces(true)} style={{border:"none",background:"none",color:"#0C447C",fontWeight:600,fontSize:12,cursor:"pointer",marginTop:8,padding:0}}>Gérer les numéros</button>}
+      </div>}
+      {!gererAcces&&
+        <button onClick={()=>setGererAcces(true)} style={{border:"none",background:"none",color:"#0C447C",fontWeight:600,fontSize:12,cursor:"pointer",marginTop:8,padding:0}}>Gérer les numéros d'accès rapide</button>}
       {gererAcces&&<div style={{marginTop:10,padding:12,borderRadius:12,border:"1.5px solid #e2e8f0",background:"#f8fafc"}}>
+        <button onClick={()=>setNouvelAcces(true)} style={{display:"flex",alignItems:"center",gap:5,border:"none",background:"none",color:"#0C447C",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:8,padding:0}}>+ Ajouter un numéro</button>
         {nouvelAcces&&<AccesRapideForm onCancel={()=>setNouvelAcces(false)} onSaved={()=>{setNouvelAcces(false);recharger();}}/>}
+        {accesRapide.length===0&&!nouvelAcces&&<div style={{fontSize:13,color:"#64748b",marginBottom:4}}>Aucun numéro pour l'instant.</div>}
         {accesRapide.map(a=>editAccesId===a.id
           ? <AccesRapideForm key={a.id} initial={a} onCancel={()=>setEditAccesId(null)} onSaved={()=>{setEditAccesId(null);recharger();}} onDelete={()=>{api.annuaire.deleteAccesRapide(a.id).then(recharger);}}/>
           : <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:"1px solid #e2e8f0"}}>
@@ -7829,7 +7827,7 @@ export default function App(){
     {k:"global",  l:"📋 CPS Officiel"},
     {k:"previsionnel", l:"\u{1F4C5} Planning Prévisionnel"},
     {k:"echanges",l:"🔄 Échanges"},
-    {k:"annuaire",l:"📞 Annuaire"},
+    {k:"annuaire",l:(<><svg width="15" height="15" viewBox="0 0 24 24" fill="#D22B2B" style={{verticalAlign:"-2px",marginRight:2}}><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.36 11.36 0 0 0 3.57.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.57 1 1 0 0 1-.24 1.01l-2.21 2.21z"/></svg> Annuaire</>)},
     {k:"profil",  l:"👤 Mon profil"},
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
