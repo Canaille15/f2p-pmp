@@ -56,15 +56,15 @@ async function getUo(req, res) {
 }
 
 async function createUo(req, res) {
-  const { fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email } = req.body;
+  const { fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note } = req.body;
   if (!fonction) return res.status(400).json({ error: 'Le poste/fonction est obligatoire' });
   try {
     const [result] = await pool.query(
       `INSERT INTO annuaire_uo
-         (fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email)
-       VALUES (?,?,?,?,?,?,?)`,
+         (fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note)
+       VALUES (?,?,?,?,?,?,?,?)`,
       [fonction, titulaire_nom || null, titulaire_prenom || null,
-       mobile_perso || null, mobile_pro || null, fixe || null, email || null]
+       mobile_perso || null, mobile_pro || null, fixe || null, email || null, note || null]
     );
     res.status(201).json({ id: result.insertId });
   } catch (e) {
@@ -75,7 +75,7 @@ async function createUo(req, res) {
 
 async function updateUo(req, res) {
   const { id } = req.params;
-  const { fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email } = req.body;
+  const { fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note } = req.body;
   const fields = [], values = [];
   if (fonction !== undefined)         { fields.push('fonction = ?');         values.push(fonction); }
   if (titulaire_nom !== undefined)    { fields.push('titulaire_nom = ?');    values.push(titulaire_nom || null); }
@@ -84,6 +84,7 @@ async function updateUo(req, res) {
   if (mobile_pro !== undefined)       { fields.push('mobile_pro = ?');       values.push(mobile_pro || null); }
   if (fixe !== undefined)             { fields.push('fixe = ?');             values.push(fixe || null); }
   if (email !== undefined)            { fields.push('email = ?');            values.push(email || null); }
+  if (note !== undefined)             { fields.push('note = ?');             values.push(note || null); }
   if (!fields.length) return res.status(400).json({ error: 'Rien à modifier' });
   values.push(id);
   try {

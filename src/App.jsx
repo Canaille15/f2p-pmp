@@ -6292,7 +6292,7 @@ function AnnuaireView({currentAgent,isAdmin}){
   const [uo,setUo]=useState([]);
   const [agentsAnnuaire,setAgentsAnnuaire]=useState([]);
   const [loading,setLoading]=useState(true);
-  const [activeTab,setActiveTab]=useState("agents");
+  const [activeTab,setActiveTab]=useState(()=>localStorage.getItem("f2ppmp_annuaire_tab")||"agents");
   const [gererAcces,setGererAcces]=useState(false);
   const [editAccesId,setEditAccesId]=useState(null);
   const [nouvelAcces,setNouvelAcces]=useState(false);
@@ -6378,11 +6378,11 @@ function AnnuaireView({currentAgent,isAdmin}){
       style={{padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:12,fontSize:14}}/>
 
     <div style={{display:"flex",gap:6}}>
-      <button onClick={()=>setActiveTab("agents")} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"9px 0",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer",
+      <button onClick={()=>{setActiveTab("agents");localStorage.setItem("f2ppmp_annuaire_tab","agents");}} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"9px 0",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer",
         border:activeTab==="agents"?"1.5px solid #0C447C":"1.5px solid #e2e8f0",background:activeTab==="agents"?"#eff6ff":"#fff",color:"#1e293b"}}>
         <span style={{width:7,height:7,borderRadius:"50%",background:"#378ADD"}}/>Agents
       </button>
-      <button onClick={()=>setActiveTab("uo")} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"9px 0",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer",
+      <button onClick={()=>{setActiveTab("uo");localStorage.setItem("f2ppmp_annuaire_tab","uo");}} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"9px 0",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer",
         border:activeTab==="uo"?"1.5px solid #0C447C":"1.5px solid #e2e8f0",background:activeTab==="uo"?"#eff6ff":"#fff",color:"#1e293b"}}>
         <span style={{width:7,height:7,borderRadius:"50%",background:"#1D9E75"}}/>UO
       </button>
@@ -6391,15 +6391,24 @@ function AnnuaireView({currentAgent,isAdmin}){
     {activeTab==="agents"&&<div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
       <div style={{display:"flex",flexDirection:"column",gap:2}}>
         {filtreAgents.map(a=>(
-          <div key={a.cp} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{a.nom?.toUpperCase()} <span style={{fontWeight:500}}>{a.prenom}</span></div>
-              <div style={{fontSize:11,color:"#94a3b8"}}>{a.fonction||a.grade||""}</div>
+          <div key={a.cp} style={{display:"flex",flexDirection:"column",gap:8,padding:"12px 4px",borderBottom:"1px solid #f1f5f9"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:16,color:"#1e293b"}}>{a.nom?.toUpperCase()} <span style={{fontWeight:500}}>{a.prenom}</span></div>
+                <div style={{fontSize:13,color:"#64748b",fontWeight:500}}>{a.fonction||a.grade||""}</div>
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {a.telephone&&<a href={`tel:${a.telephone}`} style={{display:"flex",alignItems:"center",gap:7,textDecoration:"none",padding:"7px 12px",borderRadius:8,background:"#fef2f2",border:"1px solid #fecaca"}}>
+                  <IconTel size={15}/>
+                  <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{a.telephone}</span>
+                </a>}
+                {a.email&&<a href={`mailto:${a.email}`} style={{display:"flex",alignItems:"center",gap:7,textDecoration:"none",padding:"7px 12px",borderRadius:8,background:"#eff6ff",border:"1px solid #bfdbfe"}}>
+                  <span style={{fontSize:15}}>✉️</span>
+                  <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{a.email}</span>
+                </a>}
+                {!a.telephone&&!a.email&&<span style={{fontSize:13,color:"#64748b",fontWeight:600}}>Non communiqué</span>}
+              </div>
             </div>
-            {a.telephone&&<a href={`tel:${a.telephone}`} style={{textDecoration:"none",fontSize:14,color:"#fff",background:"#D22B2B",width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} title="Appeler">📞</a>}
-            {a.telephone&&<a href={`sms:${a.telephone}`} style={{textDecoration:"none",fontSize:17}} title="SMS">💬</a>}
-            {a.email&&<a href={`mailto:${a.email}`} style={{textDecoration:"none",fontSize:17}} title="Envoyer un email">✉️</a>}
-            {!a.telephone&&!a.email&&<span style={{fontSize:12,color:"#64748b",fontWeight:500}}>Non communiqué</span>}
           </div>
         ))}
         {filtreAgents.length===0&&<div style={{fontSize:13,color:"#94a3b8"}}>Aucun agent trouvé.</div>}
@@ -6421,17 +6430,32 @@ function AnnuaireView({currentAgent,isAdmin}){
                   <div style={{fontWeight:700,fontSize:13,color:"#1e293b"}}>{u.fonction}</div>
                   <div style={{fontSize:12,color:"#64748b"}}>{(u.titulaire_prenom||u.titulaire_nom)?`${u.titulaire_prenom||""} ${u.titulaire_nom||""}`.trim():<span style={{color:"#64748b",fontWeight:500}}>Titulaire non communiqué</span>}</div>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontSize:12,color:"#94a3b8",transform:expandedUo.includes(u.id)?"rotate(180deg)":"none",transition:"transform .15s"}}>▾</span>
-                  <button onClick={(e)=>{e.stopPropagation();setEditUoId(u.id);}} style={{border:"none",background:"none",cursor:"pointer",fontSize:14,color:"#94a3b8"}}>✎</button>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:700,color:"#0C447C",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:20,padding:"5px 10px",whiteSpace:"nowrap"}}>
+                    {expandedUo.includes(u.id)?"Masquer":"Voir les contacts"}
+                    <span style={{transform:expandedUo.includes(u.id)?"rotate(180deg)":"none",transition:"transform .15s",display:"inline-block"}}>▾</span>
+                  </span>
+                  <button onClick={(e)=>{e.stopPropagation();setEditUoId(u.id);}} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#64748b"}}>✎</button>
                 </div>
               </div>
-              {expandedUo.includes(u.id)&&<div style={{display:"flex",flexWrap:"wrap",gap:12,marginTop:8}}>
-                <ContactLigne label="Mobile pro" valeur={u.mobile_pro}/>
-                <ContactLigne label="Mobile perso" valeur={u.mobile_perso}/>
-                <ContactLigne label="Fixe" valeur={u.fixe}/>
-                {u.email&&<a href={`mailto:${u.email}`} style={{fontSize:12,color:"#0C447C",textDecoration:"none"}}>✉️ {u.email}</a>}
+              {expandedUo.includes(u.id)&&<div style={{marginTop:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:8}}>
+                  <ContactLigne label="Mobile pro" valeur={u.mobile_pro}/>
+                  <ContactLigne label="Mobile perso" valeur={u.mobile_perso}/>
+                  <ContactLigne label="Fixe" valeur={u.fixe}/>
+                  {u.email&&<a href={`mailto:${u.email}`} style={{display:"flex",alignItems:"center",gap:8,textDecoration:"none",padding:"7px 10px",borderRadius:8,background:"#eff6ff",border:"1px solid #bfdbfe"}}>
+                    <span style={{fontSize:15}}>✉️</span>
+                    <div>
+                      <div style={{fontSize:10,fontWeight:700,color:"#0C447C",textTransform:"uppercase",letterSpacing:"0.03em"}}>Email</div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#1e293b",wordBreak:"break-all"}}>{u.email}</div>
+                    </div>
+                  </a>}
+                </div>
                 {!u.mobile_pro&&!u.mobile_perso&&!u.fixe&&!u.email&&<span style={{fontSize:12,color:"#64748b",fontWeight:500}}>Aucun contact renseigné</span>}
+                {u.note&&<div style={{marginTop:10,padding:"8px 10px",borderRadius:8,background:"#fffbeb",borderLeft:"4px solid #f59e0b"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.03em",marginBottom:2}}>📝 Note</div>
+                  <div style={{fontSize:13,color:"#1e293b",fontWeight:500}}>{u.note}</div>
+                </div>}
               </div>}
             </div>
         )}
@@ -6440,9 +6464,20 @@ function AnnuaireView({currentAgent,isAdmin}){
   </div>);
 }
 
+function IconTel({size}){
+  const s=size||16;
+  return(<svg width={s} height={s} viewBox="0 0 24 24" fill="#D22B2B" style={{flexShrink:0}}><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.36 11.36 0 0 0 3.57.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.57 1 1 0 0 1-.24 1.01l-2.21 2.21z"/></svg>);
+}
+
 function ContactLigne({label,valeur}){
   if(!valeur)return null;
-  return(<a href={`tel:${valeur}`} style={{fontSize:12,color:"#D22B2B",fontWeight:600,textDecoration:"none"}}>{label==="Fixe"?"☎️":"📱"} {valeur}</a>);
+  return(<a href={`tel:${valeur}`} style={{display:"flex",alignItems:"center",gap:8,textDecoration:"none",padding:"7px 10px",borderRadius:8,background:"#fef2f2",border:"1px solid #fecaca"}}>
+    <IconTel size={15}/>
+    <div>
+      <div style={{fontSize:10,fontWeight:700,color:"#991b1b",textTransform:"uppercase",letterSpacing:"0.03em"}}>{label}</div>
+      <div style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>{valeur}</div>
+    </div>
+  </a>);
 }
 
 function AccesRapideForm({initial,onCancel,onSaved,onDelete}){
@@ -6482,12 +6517,13 @@ function UoForm({initial,onCancel,onSaved,onDelete}){
   const [mobilePerso,setMobilePerso]=useState(initial?.mobile_perso||"");
   const [fixe,setFixe]=useState(initial?.fixe||"");
   const [email,setEmail]=useState(initial?.email||"");
+  const [note,setNote]=useState(initial?.note||"");
   const [busy,setBusy]=useState(false);
   const [err,setErr]=useState(null);
   const valider=async()=>{
     if(!fonction.trim()){setErr("Le poste/fonction est obligatoire");return;}
     setBusy(true);setErr(null);
-    const data={fonction,titulaire_nom:titulaireNom,titulaire_prenom:titulairePrenom,mobile_pro:mobilePro,mobile_perso:mobilePerso,fixe,email};
+    const data={fonction,titulaire_nom:titulaireNom,titulaire_prenom:titulairePrenom,mobile_pro:mobilePro,mobile_perso:mobilePerso,fixe,email,note};
     try{
       if(initial) await api.annuaire.updateUo(initial.id,data);
       else await api.annuaire.createUo(data);
@@ -6527,6 +6563,10 @@ function UoForm({initial,onCancel,onSaved,onDelete}){
     <div>
       <label style={labelStyle}>Email</label>
       <input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={champStyle}/>
+    </div>
+    <div>
+      <label style={labelStyle}>Note libre (optionnel)</label>
+      <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} style={{...champStyle,resize:"vertical",fontFamily:"inherit"}}/>
     </div>
     {err&&<div style={{fontSize:13,fontWeight:600,color:"#991b1b"}}>{err}</div>}
     <div style={{display:"flex",gap:8}}>
