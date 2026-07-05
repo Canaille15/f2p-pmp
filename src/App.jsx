@@ -518,24 +518,8 @@ function parseBulletinCommande(text) {
   return { editionDate, jours, echecs };
 }
 // ─── PARSER DÉROULÉ PRÉVISIONNEL ──────────────────────────────────────────────
-async function extraireItemsPdfAvecPositions(base64Pdf) {
-  const pdfjsLib = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
-  const raw = atob(base64Pdf);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
-  const allItems = [];
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const page = await pdf.getPage(n);
-    const tc = await page.getTextContent();
-    tc.items.forEach(it => {
-      const s = it.str.trim();
-      if (s) allItems.push({ x: it.transform[4], y: it.transform[5], text: s });
-    });
-  }
-  return allItems;
-}
+// (extraction par coordonnées x/y tentée puis abandonnée le 04/07/2026 au
+// profit de l'extraction texte native — voir FEATURES_ajout_04072026)
 
 function parseDeroulePrevisionnel(text) {
   const editionMatch = text.match(/Le\s*(\d{2})[/1](\d{2})[/1](\d{4})/i);
@@ -6286,7 +6270,60 @@ function ProfilPersoView({currentAgent,onPartageChange}){
     </div>
   </div>);
 }
-function AnnuaireView({currentAgent,isAdmin}){
+// Postes CPS pouvant être liés à une fiche UO (3x8 = tourne M/AM/N, journee = poste unique J)
+const OPTIONS_POSTES_CPS = [
+  ...POSTES_PRCI_3x8.map(p=>({value:`3x8:${p.code}:PRCI`,label:`${p.label} (PRCI, tourne M/AM/N)`})),
+  ...POSTES_PAR_3x8.map(p=>({value:`3x8:${p.code}:PAR`,label:`${p.label} (PAR, tourne M/AM/N)`})),
+  ...POSTES_JOURNEE.map(p=>({value:`journee:${p.jsCode}:${p.famille}`,label:`${p.label} (${p.famille}, journée)`})),
+];
+
+// Lecture seule — ne modifie jamais cpsSchedule ni cpsAleas. Résout qui occupe
+// actuellement un poste CPS lié à une fiche UO : correction manuelle (cpsAleas)
+// en priorité, sinon détection automatique (cpsSchedule), sinon rien.
+function resoudreTitulaireCps(uoRow,agents,cpsSchedule,cpsAleas){
+  if(!uoRow.cps_type||!uoRow.cps_code||!uoRow.cps_famille) return null;
+  const now=new Date();
+  const dateKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  let jsCode=null, posteLabel=null;
+  if(uoRow.cps_type==="journee"){
+    const def=POSTES_JOURNEE.find(p=>p.jsCode===uoRow.cps_code);
+    jsCode=uoRow.cps_code; posteLabel=def?.label||null;
+  }else{
+    const heure=now.getHours()*60+now.getMinutes();
+    const shiftKey=(heure>=1335||heure<370)?"N":(heure<845)?"M":"AM";
+    const liste=uoRow.cps_famille==="PAR"?POSTES_PAR_3x8:POSTES_PRCI_3x8;
+    const def=liste.find(p=>p.code===uoRow.cps_code);
+    if(!def) return null;
+    jsCode=def[shiftKey]; posteLabel=def.label;
+    if(!jsCode) return null;
+  }
+  const alea=(cpsAleas||[]).find(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===uoRow.cps_famille);
+  if(alea){
+    if(alea.type==="non_tenu") return {statut:"non_tenu",noms:[]};
+    const trouves=(alea.agents_concernes||[]).map(id=>(agents||[]).find(a=>a.id===id)).filter(Boolean);
+    return {statut:"trouve",noms:trouves.map(a=>`${a.prenom} ${a.nom}`)};
+  }
+  const trouve=(agents||[]).find(a=>{
+    const en=(cpsSchedule||{})[`${a.id}-${dateKey}`];
+    return en&&(en.jsCode===jsCode||(posteLabel&&en.poste===posteLabel))&&!EQ[en.equipe]?.prive;
+  });
+  if(trouve) return {statut:"trouve",noms:[`${trouve.prenom} ${trouve.nom}`]};
+  return {statut:"aucun",noms:[]};
+}
+
+function TitulaireUo({uo,agents,cpsSchedule,cpsAleas}){
+  if(uo.cps_type){
+    const live=resoudreTitulaireCps(uo,agents,cpsSchedule,cpsAleas);
+    if(live&&live.statut==="trouve"&&live.noms.length){
+      return(<>{live.noms.join(" / ")} <span style={{fontSize:10,color:"#16a34a",fontWeight:700}}>● En direct CPS</span></>);
+    }
+    return(<span style={{color:"#64748b",fontWeight:500}}>Titulaire non communiqué</span>);
+  }
+  return (uo.titulaire_prenom||uo.titulaire_nom)
+    ? <>{uo.titulaire_prenom||""} {uo.titulaire_nom||""}</>
+    : <span style={{color:"#64748b",fontWeight:500}}>Titulaire non communiqué</span>;
+}
+function AnnuaireView({currentAgent,isAdmin,agents,cpsSchedule,cpsAleas}){
   const [recherche,setRecherche]=useState("");
   const [accesRapide,setAccesRapide]=useState([]);
   const [uo,setUo]=useState([]);
@@ -6429,7 +6466,7 @@ function AnnuaireView({currentAgent,isAdmin}){
               <div onClick={()=>toggleExpandUo(u.id)} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}}>
                 <div>
                   <div style={{fontWeight:700,fontSize:13,color:"#1e293b"}}>{u.fonction}</div>
-                  <div style={{fontSize:12,color:"#64748b"}}>{(u.titulaire_prenom||u.titulaire_nom)?`${u.titulaire_prenom||""} ${u.titulaire_nom||""}`.trim():<span style={{color:"#64748b",fontWeight:500}}>Titulaire non communiqué</span>}</div>
+                  <div style={{fontSize:12,color:"#64748b"}}><TitulaireUo uo={u} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/></div>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:700,color:"#0C447C",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:20,padding:"5px 10px",whiteSpace:"nowrap"}}>
@@ -6519,12 +6556,14 @@ function UoForm({initial,onCancel,onSaved,onDelete}){
   const [fixe,setFixe]=useState(initial?.fixe||"");
   const [email,setEmail]=useState(initial?.email||"");
   const [note,setNote]=useState(initial?.note||"");
+  const [cpsLink,setCpsLink]=useState(initial&&initial.cps_type?`${initial.cps_type}:${initial.cps_code}:${initial.cps_famille}`:"");
   const [busy,setBusy]=useState(false);
   const [err,setErr]=useState(null);
   const valider=async()=>{
     if(!fonction.trim()){setErr("Le poste/fonction est obligatoire");return;}
     setBusy(true);setErr(null);
-    const data={fonction,titulaire_nom:titulaireNom,titulaire_prenom:titulairePrenom,mobile_pro:mobilePro,mobile_perso:mobilePerso,fixe,email,note};
+    const [cType,cCode,cFamille]=cpsLink?cpsLink.split(":"):[null,null,null];
+    const data={fonction,titulaire_nom:titulaireNom,titulaire_prenom:titulairePrenom,mobile_pro:mobilePro,mobile_perso:mobilePerso,fixe,email,note,cps_type:cType,cps_code:cCode,cps_famille:cFamille};
     try{
       if(initial) await api.annuaire.updateUo(initial.id,data);
       else await api.annuaire.createUo(data);
@@ -6538,6 +6577,14 @@ function UoForm({initial,onCancel,onSaved,onDelete}){
     <div>
       <label style={labelStyle}>Poste / fonction</label>
       <input placeholder="ex: Assistant RH" value={fonction} onChange={e=>setFonction(e.target.value)} style={champStyle}/>
+    </div>
+    <div>
+      <label style={labelStyle}>Lier à un poste CPS (optionnel)</label>
+      <select value={cpsLink} onChange={e=>setCpsLink(e.target.value)} style={champStyle}>
+        <option value="">Aucun (titulaire saisi manuellement)</option>
+        {OPTIONS_POSTES_CPS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      {cpsLink&&<div style={{fontSize:11,color:"#64748b",marginTop:4}}>Si lié, le titulaire affiché sera automatiquement celui de CPS Officiel (mis à jour en temps réel) — les champs Prénom/Nom titulaire ci-dessous ne seront plus utilisés pour l'affichage.</div>}
     </div>
     <div style={{display:"flex",gap:10}}>
       <div style={{flex:1}}>
@@ -8063,7 +8110,7 @@ export default function App(){
         echangesCount={echangesOuvertesCount}
         onOpenEchanges={()=>setView("echanges")}/>}
       {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
-  {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin}/>}
+  {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}

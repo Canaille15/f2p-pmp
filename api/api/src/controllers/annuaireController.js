@@ -56,15 +56,16 @@ async function getUo(req, res) {
 }
 
 async function createUo(req, res) {
-  const { fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note } = req.body;
+  const { fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note, cps_type, cps_code, cps_famille } = req.body;
   if (!fonction) return res.status(400).json({ error: 'Le poste/fonction est obligatoire' });
   try {
     const [result] = await pool.query(
       `INSERT INTO annuaire_uo
-         (fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note)
-       VALUES (?,?,?,?,?,?,?,?)`,
+         (fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note, cps_type, cps_code, cps_famille)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [fonction, titulaire_nom || null, titulaire_prenom || null,
-       mobile_perso || null, mobile_pro || null, fixe || null, email || null, note || null]
+       mobile_perso || null, mobile_pro || null, fixe || null, email || null, note || null,
+       cps_type || null, cps_code || null, cps_famille || null]
     );
     res.status(201).json({ id: result.insertId });
   } catch (e) {
@@ -75,7 +76,7 @@ async function createUo(req, res) {
 
 async function updateUo(req, res) {
   const { id } = req.params;
-  const { fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note } = req.body;
+  const { fonction, titulaire_nom, titulaire_prenom, mobile_perso, mobile_pro, fixe, email, note, cps_type, cps_code, cps_famille } = req.body;
   const fields = [], values = [];
   if (fonction !== undefined)         { fields.push('fonction = ?');         values.push(fonction); }
   if (titulaire_nom !== undefined)    { fields.push('titulaire_nom = ?');    values.push(titulaire_nom || null); }
@@ -85,6 +86,9 @@ async function updateUo(req, res) {
   if (fixe !== undefined)             { fields.push('fixe = ?');             values.push(fixe || null); }
   if (email !== undefined)            { fields.push('email = ?');            values.push(email || null); }
   if (note !== undefined)             { fields.push('note = ?');             values.push(note || null); }
+  if (cps_type !== undefined)         { fields.push('cps_type = ?');         values.push(cps_type || null); }
+  if (cps_code !== undefined)         { fields.push('cps_code = ?');         values.push(cps_code || null); }
+  if (cps_famille !== undefined)      { fields.push('cps_famille = ?');      values.push(cps_famille || null); }
   if (!fields.length) return res.status(400).json({ error: 'Rien à modifier' });
   values.push(id);
   try {
