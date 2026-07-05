@@ -341,9 +341,16 @@ function ModalCreer({ onConfirm, onClose }) {
 // ─── MODAL SUPPRIMER ─────────────────────────────────────────────────────────
 
 function ModalModifier({ agent, onConfirm, onClose }) {
-  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI" });
+  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", telephone: "", email: "" });
   const [nouveauCp, setNouveauCp] = useState(agent.cp || "");
   const [err, setErr] = useState("");
+  const [coordLoading, setCoordLoading] = useState(true);
+  useEffect(() => {
+    api.agents.getById(agent.cp).then(full => {
+      setForm(p => ({ ...p, telephone: full?.telephone || "", email: full?.email || "" }));
+      setCoordLoading(false);
+    }).catch(() => setCoordLoading(false));
+  }, [agent.cp]);
 
   function submit() {
     if (!form.nom.trim()) return setErr("Le nom est obligatoire");
@@ -352,7 +359,7 @@ function ModalModifier({ agent, onConfirm, onClose }) {
     const cpChange = nouveauCp.trim().toUpperCase() !== agent.cp;
     if (cpChange && !window.confirm(`Changer le CP de ${agent.cp} vers ${nouveauCp.trim().toUpperCase()} ? Cette action met a jour toutes les donnees liees a cet agent.`)) return;
     setErr("");
-    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
+    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
   }
 
   return (
@@ -376,6 +383,21 @@ function ModalModifier({ agent, onConfirm, onClose }) {
             />
           </div>
         ))}
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Téléphone {coordLoading&&"(chargement…)"}</div>
+          <input value={form.telephone} onChange={e => setForm(p => ({ ...p, telephone: e.target.value }))}
+            placeholder="ex: 06 12 34 56 78"
+            style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Email {coordLoading&&"(chargement…)"}</div>
+          <input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+            placeholder="ex: prenom.nom@sncf.fr"
+            style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}
+          />
+        </div>
+        <div style={{ fontSize: 11, color: "#94a3b8" }}>L'agent peut toujours modifier ces informations lui-même depuis "Mon profil", et choisir d'apparaître ou non dans l'Annuaire.</div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Grade</div>
           <select value={form.grade} onChange={e => setForm(p => ({ ...p, grade: e.target.value }))}

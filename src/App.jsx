@@ -6402,6 +6402,7 @@ function AnnuaireView({currentAgent,isAdmin}){
                   <IconTel size={15}/>
                   <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{a.telephone}</span>
                 </a>}
+                {a.telephone&&<a href={`sms:${a.telephone}`} title="SMS" style={{display:"flex",alignItems:"center",justifyContent:"center",width:36,height:36,textDecoration:"none",borderRadius:8,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:16}}>💬</a>}
                 {a.email&&<a href={`mailto:${a.email}`} style={{display:"flex",alignItems:"center",gap:7,textDecoration:"none",padding:"7px 12px",borderRadius:8,background:"#eff6ff",border:"1px solid #bfdbfe"}}>
                   <span style={{fontSize:15}}>✉️</span>
                   <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{a.email}</span>
@@ -6452,7 +6453,7 @@ function AnnuaireView({currentAgent,isAdmin}){
                   </a>}
                 </div>
                 {!u.mobile_pro&&!u.mobile_perso&&!u.fixe&&!u.email&&<span style={{fontSize:12,color:"#64748b",fontWeight:500}}>Aucun contact renseigné</span>}
-                {u.note&&<div style={{marginTop:10,padding:"8px 10px",borderRadius:8,background:"#fffbeb",borderLeft:"4px solid #f59e0b"}}>
+                {u.note&&u.note.trim()&&<div style={{marginTop:10,padding:"8px 10px",borderRadius:8,background:"#fffbeb",borderLeft:"4px solid #f59e0b"}}>
                   <div style={{fontSize:10,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.03em",marginBottom:2}}>📝 Note</div>
                   <div style={{fontSize:13,color:"#1e293b",fontWeight:500}}>{u.note}</div>
                 </div>}
@@ -6565,7 +6566,10 @@ function UoForm({initial,onCancel,onSaved,onDelete}){
       <input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={champStyle}/>
     </div>
     <div>
-      <label style={labelStyle}>Note libre (optionnel)</label>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <label style={{...labelStyle,marginBottom:0}}>Note libre (optionnel)</label>
+        {note&&<button type="button" onClick={()=>setNote("")} style={{border:"none",background:"none",color:"#991b1b",fontSize:11,fontWeight:700,cursor:"pointer",padding:0}}>Effacer la note</button>}
+      </div>
       <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} style={{...champStyle,resize:"vertical",fontFamily:"inherit"}}/>
     </div>
     {err&&<div style={{fontSize:13,fontWeight:600,color:"#991b1b"}}>{err}</div>}
