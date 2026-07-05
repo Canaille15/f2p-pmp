@@ -6,18 +6,32 @@ const { decrypt } = require('../utils/crypto');
 // agentController.getOne qui est restreint à soi-même/admin). Choix produit
 // assumé le 04/07/2026 : un agent peut désactiver sa visibilité via le toggle
 // "Visible dans l'annuaire" (annuaire_visible=0).
+// Déchiffre en toute sécurité : une donnée illisible (ex: chiffrée avec une
+// clé de chiffrement antérieure à une rotation) ne doit jamais faire planter
+// tout l'annuaire — elle est traitée comme "non communiquée" pour cette seule
+// ligne, sans bloquer les autres agents.
+function decryptSafe(value) {
+  if (!value) return null;
+  try {
+    return decrypt(value);
+  } catch (e) {
+    console.error('Déchiffrement impossible pour une valeur (donnée conservée illisible, probablement une clé de chiffrement antérieure) :', e.message);
+    return null;
+  }
+}
+
 async function getAgentsVisibles(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT cp, nom, prenom, grade, email, telephone
+      `SELECT cp, nom, prenom, grade, fonction, email, telephone
        FROM agent
        WHERE annuaire_visible = 1
        ORDER BY nom, prenom`
     );
     const agentsList = rows.map(a => ({
       ...a,
-      email: a.email ? decrypt(a.email) : null,
-      telephone: a.telephone ? decrypt(a.telephone) : null,
+      email: decryptSafe(a.email),
+      telephone: decryptSafe(a.telephone),
     }));
     res.json(agentsList);
   } catch (e) {

@@ -6135,17 +6135,22 @@ function ProfilPersoView({currentAgent,onPartageChange}){
   const [partageMsg,setPartageMsg]=useState(null);
   const [email,setEmail]=useState("");
   const [telephone,setTelephone]=useState("");
+  const [fonction,setFonction]=useState("");
   const [visibleAnnuaire,setVisibleAnnuaire]=useState(true);
   const [coordBusy,setCoordBusy]=useState(false);
   const [coordMsg,setCoordMsg]=useState(null);
-  useEffect(()=>{
+  const [coordLoadError,setCoordLoadError]=useState(false);
+  const chargerCoordonnees=()=>{
     if(!currentAgent?.id)return;
+    setCoordLoadError(false);
     api.agents.getById(currentAgent.id).then(full=>{
       setEmail(full?.email||"");
       setTelephone(full?.telephone||"");
+      setFonction(full?.fonction||"");
       setVisibleAnnuaire(full?.annuaire_visible===undefined||full?.annuaire_visible===null?true:!!full.annuaire_visible);
-    }).catch(()=>{});
-  },[currentAgent?.id]);
+    }).catch(()=>{setCoordLoadError(true);});
+  };
+  useEffect(()=>{ chargerCoordonnees(); },[currentAgent?.id]);
   if(!currentAgent)return(<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:12}}>🔄</div><div style={{fontSize:15,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div></div>);
   const soumettre=async()=>{
     setMsg(null);
@@ -6164,7 +6169,7 @@ function ProfilPersoView({currentAgent,onPartageChange}){
   const soumettreCoordonnees=async()=>{
     setCoordMsg(null);setCoordBusy(true);
     try{
-      await api.annuaire.updateMesCoordonnees(currentAgent.id,{email,telephone});
+      await api.annuaire.updateMesCoordonnees(currentAgent.id,{email,telephone,fonction});
       setCoordMsg({type:"success",text:"Coordonnées mises à jour"});
     }catch(err){
       setCoordMsg({type:"error",text:err.message||"Erreur lors de la mise à jour"});
@@ -6210,7 +6215,13 @@ function ProfilPersoView({currentAgent,onPartageChange}){
     <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
       <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>📇 Mes coordonnées (Annuaire)</div>
       <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>Visibles par tes collègues dans l'Annuaire, sauf si tu désactives ta visibilité ci-dessous.</div>
+      {coordLoadError&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"9px 12px",borderRadius:9,background:"#fee2e2",border:"1.5px solid #fca5a5",marginBottom:10}}>
+        <span style={{fontSize:12,fontWeight:600,color:"#991b1b"}}>Chargement impossible, réessaie.</span>
+        <button onClick={chargerCoordonnees} style={{border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>Réessayer</button>
+      </div>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <input type="text" placeholder="Fonction (ex: Agent circulation)" value={fonction} onChange={e=>setFonction(e.target.value)}
+          style={{padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:14}}/>
         <input type="tel" placeholder="Téléphone" value={telephone} onChange={e=>setTelephone(e.target.value)}
           style={{padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:10,fontSize:14}}/>
         <input type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}
@@ -6287,29 +6298,49 @@ function AnnuaireView({currentAgent,isAdmin}){
   const [nouvelAcces,setNouvelAcces]=useState(false);
   const [editUoId,setEditUoId]=useState(null);
   const [nouvelUo,setNouvelUo]=useState(false);
+  const [expandedUo,setExpandedUo]=useState([]);
+  const toggleExpandUo=(id)=>{
+    setExpandedUo(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]);
+  };
 
+  const [loadError,setLoadError]=useState(null);
   const recharger=()=>{
-    setLoading(true);
+    setLoadError(null);
     Promise.all([
-      api.annuaire.getAccesRapide().catch(()=>[]),
-      api.annuaire.getUo().catch(()=>[]),
-      api.annuaire.getAgents().catch(()=>[]),
+      api.annuaire.getAccesRapide(),
+      api.annuaire.getUo(),
+      api.annuaire.getAgents(),
     ]).then(([acces,uoRows,agts])=>{
       setAccesRapide(acces||[]);
       setUo(uoRows||[]);
       setAgentsAnnuaire(agts||[]);
+      setLoading(false);
+    }).catch(()=>{
+      // Volontairement : on ne touche PAS aux listes déjà chargées ici,
+      // pour ne jamais donner l'impression que les données ont été effacées
+      // suite à un simple raté réseau ou un redémarrage serveur passager.
+      setLoadError("Impossible de charger l'annuaire. Vérifie ta connexion et réessaie.");
       setLoading(false);
     });
   };
   useEffect(()=>{ recharger(); },[]);
 
   const q=recherche.trim().toLowerCase();
-  const filtreAgents=agentsAnnuaire.filter(a=>!q||`${a.nom} ${a.prenom}`.toLowerCase().includes(q));
-  const filtreUo=uo.filter(u=>!q||`${u.fonction} ${u.titulaire_nom||""} ${u.titulaire_prenom||""}`.toLowerCase().includes(q));
+  const filtreAgents=agentsAnnuaire
+    .filter(a=>!q||`${a.nom} ${a.prenom}`.toLowerCase().includes(q))
+    .sort((a,b)=>`${a.nom}${a.prenom}`.localeCompare(`${b.nom}${b.prenom}`));
+  const filtreUo=uo
+    .filter(u=>!q||`${u.fonction} ${u.titulaire_nom||""} ${u.titulaire_prenom||""}`.toLowerCase().includes(q))
+    .sort((a,b)=>a.fonction.localeCompare(b.fonction));
 
   if(loading)return(<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}>Chargement de l'annuaire…</div>);
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:640,margin:"0 auto"}}>
+
+    {loadError&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 14px",borderRadius:10,background:"#fee2e2",border:"1.5px solid #fca5a5"}}>
+      <span style={{fontSize:13,fontWeight:600,color:"#991b1b"}}>{loadError}</span>
+      <button onClick={recharger} style={{border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>Réessayer</button>
+    </div>}
 
     <div>
       <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"#94a3b8",marginBottom:8,paddingLeft:2}}>Accès rapide</div>
@@ -6362,17 +6393,15 @@ function AnnuaireView({currentAgent,isAdmin}){
     {activeTab==="agents"&&<div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
       <div style={{display:"flex",flexDirection:"column",gap:2}}>
         {filtreAgents.map(a=>(
-          <div key={a.cp} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
+          <div key={a.cp} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{a.prenom} {a.nom}</div>
-              <div style={{fontSize:11,color:"#94a3b8"}}>{a.grade||""}</div>
+              <div style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{a.nom?.toUpperCase()} <span style={{fontWeight:500}}>{a.prenom}</span></div>
+              <div style={{fontSize:11,color:"#94a3b8"}}>{a.fonction||a.grade||""}</div>
             </div>
-            {a.telephone
-              ? <>
-                  <a href={`tel:${a.telephone}`} style={{textDecoration:"none",fontSize:18}} title="Appeler">📞</a>
-                  <a href={`sms:${a.telephone}`} style={{textDecoration:"none",fontSize:18}} title="SMS">💬</a>
-                </>
-              : <span style={{fontSize:12,color:"#cbd5e1"}}>Non communiqué</span>}
+            {a.telephone&&<a href={`tel:${a.telephone}`} style={{textDecoration:"none",fontSize:14,color:"#fff",background:"#D22B2B",width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} title="Appeler">📞</a>}
+            {a.telephone&&<a href={`sms:${a.telephone}`} style={{textDecoration:"none",fontSize:17}} title="SMS">💬</a>}
+            {a.email&&<a href={`mailto:${a.email}`} style={{textDecoration:"none",fontSize:17}} title="Envoyer un email">✉️</a>}
+            {!a.telephone&&!a.email&&<span style={{fontSize:12,color:"#64748b",fontWeight:500}}>Non communiqué</span>}
           </div>
         ))}
         {filtreAgents.length===0&&<div style={{fontSize:13,color:"#94a3b8"}}>Aucun agent trouvé.</div>}
@@ -6389,19 +6418,23 @@ function AnnuaireView({currentAgent,isAdmin}){
         {filtreUo.map(u=>editUoId===u.id
           ? <UoForm key={u.id} initial={u} onCancel={()=>setEditUoId(null)} onSaved={()=>{setEditUoId(null);recharger();}} onDelete={()=>{api.annuaire.deleteUo(u.id).then(recharger);}}/>
           : <div key={u.id} style={{padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div onClick={()=>toggleExpandUo(u.id)} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}}>
                 <div>
                   <div style={{fontWeight:700,fontSize:13,color:"#1e293b"}}>{u.fonction}</div>
-                  <div style={{fontSize:12,color:"#64748b"}}>{(u.titulaire_prenom||u.titulaire_nom)?`${u.titulaire_prenom||""} ${u.titulaire_nom||""}`.trim():<span style={{color:"#cbd5e1"}}>Titulaire non communiqué</span>}</div>
+                  <div style={{fontSize:12,color:"#64748b"}}>{(u.titulaire_prenom||u.titulaire_nom)?`${u.titulaire_prenom||""} ${u.titulaire_nom||""}`.trim():<span style={{color:"#64748b",fontWeight:500}}>Titulaire non communiqué</span>}</div>
                 </div>
-                <button onClick={()=>setEditUoId(u.id)} style={{border:"none",background:"none",cursor:"pointer",fontSize:14,color:"#94a3b8"}}>✎</button>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:12,color:"#94a3b8",transform:expandedUo.includes(u.id)?"rotate(180deg)":"none",transition:"transform .15s"}}>▾</span>
+                  <button onClick={(e)=>{e.stopPropagation();setEditUoId(u.id);}} style={{border:"none",background:"none",cursor:"pointer",fontSize:14,color:"#94a3b8"}}>✎</button>
+                </div>
               </div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:12,marginTop:6}}>
+              {expandedUo.includes(u.id)&&<div style={{display:"flex",flexWrap:"wrap",gap:12,marginTop:8}}>
                 <ContactLigne label="Mobile pro" valeur={u.mobile_pro}/>
                 <ContactLigne label="Mobile perso" valeur={u.mobile_perso}/>
                 <ContactLigne label="Fixe" valeur={u.fixe}/>
                 {u.email&&<a href={`mailto:${u.email}`} style={{fontSize:12,color:"#0C447C",textDecoration:"none"}}>✉️ {u.email}</a>}
-              </div>
+                {!u.mobile_pro&&!u.mobile_perso&&!u.fixe&&!u.email&&<span style={{fontSize:12,color:"#64748b",fontWeight:500}}>Aucun contact renseigné</span>}
+              </div>}
             </div>
         )}
       </div>
@@ -6411,7 +6444,7 @@ function AnnuaireView({currentAgent,isAdmin}){
 
 function ContactLigne({label,valeur}){
   if(!valeur)return null;
-  return(<a href={`tel:${valeur}`} style={{fontSize:12,color:"#0C447C",textDecoration:"none"}}>{label==="Fixe"?"☎️":"📱"} {valeur}</a>);
+  return(<a href={`tel:${valeur}`} style={{fontSize:12,color:"#D22B2B",fontWeight:600,textDecoration:"none"}}>{label==="Fixe"?"☎️":"📱"} {valeur}</a>);
 }
 
 function AccesRapideForm({initial,onCancel,onSaved,onDelete}){
@@ -6464,28 +6497,44 @@ function UoForm({initial,onCancel,onSaved,onDelete}){
     }catch(e){setErr(e.message||"Erreur");}
     setBusy(false);
   };
-  return(<div style={{display:"flex",flexDirection:"column",gap:8,padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
-    <input placeholder="Poste / fonction (ex: Assistant RH)" value={fonction} onChange={e=>setFonction(e.target.value)}
-      style={{padding:"9px 11px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13}}/>
-    <div style={{display:"flex",gap:8}}>
-      <input placeholder="Prénom titulaire" value={titulairePrenom} onChange={e=>setTitulairePrenom(e.target.value)}
-        style={{flex:1,padding:"9px 11px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13}}/>
-      <input placeholder="Nom titulaire" value={titulaireNom} onChange={e=>setTitulaireNom(e.target.value)}
-        style={{flex:1,padding:"9px 11px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13}}/>
+  const champStyle={width:"100%",padding:"11px 13px",border:"1.5px solid #94a3b8",borderRadius:9,fontSize:15,color:"#1e293b",background:"#fff"};
+  const labelStyle={fontSize:12,fontWeight:700,color:"#334155",marginBottom:4,display:"block"};
+  return(<div style={{display:"flex",flexDirection:"column",gap:12,padding:"14px",borderRadius:12,border:"1.5px solid #cbd5e1",background:"#f8fafc",marginBottom:6}}>
+    <div>
+      <label style={labelStyle}>Poste / fonction</label>
+      <input placeholder="ex: Assistant RH" value={fonction} onChange={e=>setFonction(e.target.value)} style={champStyle}/>
     </div>
-    <input placeholder="Mobile pro" value={mobilePro} onChange={e=>setMobilePro(e.target.value)}
-      style={{padding:"9px 11px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13}}/>
-    <input placeholder="Mobile perso" value={mobilePerso} onChange={e=>setMobilePerso(e.target.value)}
-      style={{padding:"9px 11px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13}}/>
-    <input placeholder="Fixe" value={fixe} onChange={e=>setFixe(e.target.value)}
-      style={{padding:"9px 11px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13}}/>
-    <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}
-      style={{padding:"9px 11px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:13}}/>
-    {err&&<div style={{fontSize:12,color:"#991b1b"}}>{err}</div>}
+    <div style={{display:"flex",gap:10}}>
+      <div style={{flex:1}}>
+        <label style={labelStyle}>Prénom titulaire</label>
+        <input value={titulairePrenom} onChange={e=>setTitulairePrenom(e.target.value)} style={champStyle}/>
+      </div>
+      <div style={{flex:1}}>
+        <label style={labelStyle}>Nom titulaire</label>
+        <input value={titulaireNom} onChange={e=>setTitulaireNom(e.target.value)} style={champStyle}/>
+      </div>
+    </div>
+    <div>
+      <label style={labelStyle}>Mobile pro</label>
+      <input value={mobilePro} onChange={e=>setMobilePro(e.target.value)} style={champStyle}/>
+    </div>
+    <div>
+      <label style={labelStyle}>Mobile perso</label>
+      <input value={mobilePerso} onChange={e=>setMobilePerso(e.target.value)} style={champStyle}/>
+    </div>
+    <div>
+      <label style={labelStyle}>Fixe</label>
+      <input value={fixe} onChange={e=>setFixe(e.target.value)} style={champStyle}/>
+    </div>
+    <div>
+      <label style={labelStyle}>Email</label>
+      <input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={champStyle}/>
+    </div>
+    {err&&<div style={{fontSize:13,fontWeight:600,color:"#991b1b"}}>{err}</div>}
     <div style={{display:"flex",gap:8}}>
-      <button onClick={valider} disabled={busy} style={{flex:1,padding:"9px 0",border:"none",borderRadius:9,fontWeight:700,fontSize:13,cursor:"pointer",background:"#0C447C",color:"#fff"}}>{busy?"…":"Enregistrer"}</button>
-      <button onClick={onCancel} style={{padding:"9px 14px",border:"1.5px solid #e2e8f0",borderRadius:9,fontWeight:600,fontSize:13,cursor:"pointer",background:"#fff",color:"#64748b"}}>Annuler</button>
-      {initial&&onDelete&&<button onClick={onDelete} style={{padding:"9px 14px",border:"none",borderRadius:9,fontWeight:600,fontSize:13,cursor:"pointer",background:"#fee2e2",color:"#991b1b"}}>Suppr.</button>}
+      <button onClick={valider} disabled={busy} style={{flex:1,padding:"11px 0",border:"none",borderRadius:9,fontWeight:700,fontSize:14,cursor:"pointer",background:"#0C447C",color:"#fff"}}>{busy?"…":"Enregistrer"}</button>
+      <button onClick={onCancel} style={{padding:"11px 16px",border:"1.5px solid #94a3b8",borderRadius:9,fontWeight:600,fontSize:14,cursor:"pointer",background:"#fff",color:"#334155"}}>Annuler</button>
+      {initial&&onDelete&&<button onClick={onDelete} style={{padding:"11px 16px",border:"none",borderRadius:9,fontWeight:600,fontSize:14,cursor:"pointer",background:"#fee2e2",color:"#991b1b"}}>Suppr.</button>}
     </div>
   </div>);
 }
