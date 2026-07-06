@@ -3239,52 +3239,88 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
   const [showCal, setShowCal] = useState(false);
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
-  // fiaMois : {dk: "2026-07"} — mois de prise en compte FIA par journée
-  // fiaDone : {dk: true} — journée marquée "prise en compte FIA"
-  const fiaMois = agentProfiles[agent?.id]?.pauseFigeeFiaMois || {};
-  const fiaDone = agentProfiles[agent?.id]?.pauseFigeeFiaDone || {};
 
-  const allDates = agentProfiles[agent?.id]?.pauseFigee || {};
+  // Données réelles issues du backend (table pause_figee) — plus aucune
+  // dépendance à agentProfiles pour la lecture/écriture, ce qui évite le bug
+  // où une resynchronisation de profil (au focus, au refresh) écrasait les
+  // pauses figées saisies localement puisqu'elles n'étaient jamais réellement
+  // envoyées au serveur.
+  const [pausesData, setPausesData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const agentId = agent?.cp || agent?.immatriculation || agent?.id;
+
+  const recharger = () => {
+    if(!agentId) return;
+    setLoadError(null);
+    api.pauses.getAll(agentId).then(rows=>{
+      setPausesData(Array.isArray(rows)?rows:[]);
+      setLoading(false);
+    }).catch(()=>{
+      setLoadError("Impossible de charger les pauses figées. Vérifie ta connexion et réessaie.");
+      setLoading(false);
+    });
+  };
+  useEffect(()=>{ setLoading(true); recharger(); },[agentId]); // eslint-disable-line
+
+  const allDates = useMemo(()=>{
+    const obj = {};
+    pausesData.forEach(p=>{ obj[String(p.date_jour).slice(0,10)] = true; });
+    return obj;
+  },[pausesData]);
+  const fiaMois = useMemo(()=>{
+    const obj = {};
+    pausesData.forEach(p=>{ if(p.mois_fia) obj[String(p.date_jour).slice(0,10)] = p.mois_fia; });
+    return obj;
+  },[pausesData]);
+  const fiaDone = useMemo(()=>{
+    const obj = {};
+    pausesData.forEach(p=>{ if(p.fia_done) obj[String(p.date_jour).slice(0,10)] = true; });
+    return obj;
+  },[pausesData]);
+
   const allDatesSorted = Object.keys(allDates).sort();
 
   const totalMinutesAll = allDatesSorted.length * 90;
   const totalHAll = Math.floor(totalMinutesAll/60);
   const totalMAll = totalMinutesAll%60;
 
-  // Mettre à jour une propriété du profil agent
-  const setAgentProp = (prop, val) => {
-    setAgentProfiles(prev=>({
-      ...prev,
-      [agent.id]:{...(prev[agent.id]||{}), [prop]: val}
-    }));
-  };
-
   const toggleDate = (dk) => {
-    const current = {...allDates};
-    if(current[dk]){ delete current[dk]; } 
-    else { current[dk] = new Date().toISOString(); }
-    setAgentProp("pauseFigee", current);
+    if(allDates[dk]){
+      api.pauses.delete(agentId, dk).then(recharger).catch(()=>setLoadError("Erreur lors de la suppression de cette journée. Réessaie."));
+    } else {
+      api.pauses.add(agentId, dk).then(recharger).catch(()=>setLoadError("Erreur lors de l'ajout de cette journée. Réessaie."));
+    }
   };
 
   const setFiaMois = (dk, moisKey) => {
-    setAgentProp("pauseFigeeFiaMois", {...fiaMois, [dk]: moisKey||null});
+    api.pauses.setFiaMois(agentId, dk, moisKey||null).then(recharger).catch(()=>setLoadError("Erreur lors de la mise à jour du mois FIA. Réessaie."));
   };
   const toggleFiaDone = (dk) => {
-    setAgentProp("pauseFigeeFiaDone", {...fiaDone, [dk]: !fiaDone[dk]});
+    const nouveauDone = !fiaDone[dk];
+    if(!nouveauDone){
+      // On décoche une FIA : on efface aussi le mois renseigné, pour repartir
+      // vraiment de zéro (sinon la fiche restait affichée alors que ce n'est
+      // plus confirmé).
+      Promise.all([
+        api.pauses.setFiaDone(agentId, dk, false),
+        api.pauses.setFiaMois(agentId, dk, null),
+      ]).then(recharger).catch(()=>setLoadError("Erreur lors de la mise à jour. Réessaie."));
+    } else {
+      api.pauses.setFiaDone(agentId, dk, true).then(recharger).catch(()=>setLoadError("Erreur lors de la mise à jour. Réessaie."));
+    }
   };
 
   // Tri des journées :
   // - En haut : journées SANS mois FIA (orange) — triées par date croissante (les plus urgentes en premier)
   // - En bas  : journées AVEC mois FIA (vert)   — triées par mois FIA décroissant (les plus récentes en premier)
   const {datesOrange, datesVertes} = useMemo(()=>{
-    const orange = allDatesSorted.filter(dk => !fiaMois[dk]);
-    const verte  = allDatesSorted.filter(dk =>  fiaMois[dk]);
-    // Vertes triées par mois FIA décroissant (ex: 2026-07 avant 2026-03)
+    const orange = allDatesSorted.filter(dk => !fiaDone[dk]);
+    const verte  = allDatesSorted.filter(dk =>  fiaDone[dk]);
     verte.sort((a,b)=>(fiaMois[b]||"").localeCompare(fiaMois[a]||""));
     return {datesOrange: orange, datesVertes: verte};
-  },[allDatesSorted.join(","), JSON.stringify(fiaMois)]);
+  },[allDatesSorted.join(","), JSON.stringify(fiaMois), JSON.stringify(fiaDone)]);
 
-  // Regrouper par mois de pause (date de la journée) — utilisé pour les en-têtes
   const parMoisOrange = useMemo(()=>{
     const groupes = {};
     datesOrange.forEach(dk=>{
@@ -3302,7 +3338,6 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
       if(!groupes[moisKey]) groupes[moisKey] = [];
       groupes[moisKey].push(dk);
     });
-    // Trier les groupes par mois FIA décroissant (on prend le moisFia de la première date du groupe)
     return Object.entries(groupes).sort(([,datesA],[,datesB])=>{
       const fiaA = fiaMois[datesA[0]]||"";
       const fiaB = fiaMois[datesB[0]]||"";
@@ -3321,18 +3356,14 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
 
   const JOURS = ["Di","Lu","Ma","Me","Je","Ve","Sa"];
 
-  // Options mois pour sélecteur FIA
-  // Depuis janvier 2026 jusqu'à aujourd'hui + 12 mois, sur 3 dernières années max
   const moisOptions = useMemo(()=>{
     const opts = [];
     const now = new Date();
     const limite3ans = new Date(now.getFullYear()-3, now.getMonth(), 1);
-    // Début fixe : janvier 2026 ou il y a 3 ans, le plus récent des deux
     const debut = new Date(Math.max(
       new Date(2026, 0, 1).getTime(),
       limite3ans.getTime()
     ));
-    // Fin : aujourd'hui + 12 mois
     const fin = new Date(now.getFullYear(), now.getMonth()+12, 1);
     let cur = new Date(debut.getFullYear(), debut.getMonth(), 1);
     while(cur <= fin){
@@ -3344,169 +3375,191 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
     return opts;
   },[]);
 
-  // Compteurs FIA
   const nbFiaDone = allDatesSorted.filter(dk=>fiaDone[dk]).length;
   const nbFiaRestant = allDatesSorted.length - nbFiaDone;
 
+  if(loading){
+    return(
+      <div style={{margin:"20px 0 8px",background:"#fff",borderRadius:14,border:"1.5px solid #e2e8f0",
+        overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.05)",padding:"20px",textAlign:"center",
+        color:"#94a3b8",fontSize:13}}>
+        Chargement des pauses figées…
+      </div>
+    );
+  }
+
   return(
-    <div style={{marginTop:16,background:"#fff",borderRadius:14,border:"1.5px solid #e2e8f0",
-      overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
+    <div style={{margin:"20px 0 8px",background:"#fff",borderRadius:14,border:"1.5px solid #e2e8f0",
+      overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+
+      {loadError&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
+        padding:"10px 14px",background:"#fee2e2",borderBottom:"1.5px solid #fca5a5"}}>
+        <span style={{fontSize:12,fontWeight:600,color:"#991b1b"}}>{loadError}</span>
+        <button onClick={recharger} style={{border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,
+          fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>Réessayer</button>
+      </div>}
 
       {/* ── Header cliquable ── */}
       <div onClick={()=>setOuvert(o=>!o)}
-        style={{background:"linear-gradient(135deg,#0369a1,#0284c7)",padding:"12px 16px",
-          display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none"}}>
-        <span style={{fontSize:15}}>⏸️</span>
-        <div style={{flex:1}}>
-          <div style={{color:"#fff",fontSize:13,fontWeight:800}}>Mémo pauses figées</div>
-          <div style={{color:"rgba(255,255,255,.7)",fontSize:10,marginTop:1}}>
+        style={{background:"#0C447C",padding:"14px 18px",
+          display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",flexWrap:"wrap"}}>
+        <span style={{fontSize:17}}>⏸️</span>
+        <div style={{flex:1,minWidth:160}}>
+          <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Mémo pauses figées</div>
+          <div style={{color:"#B5D4F4",fontSize:12,marginTop:2,fontWeight:600}}>
             {allDatesSorted.length} jour{allDatesSorted.length>1?"s":""} · {totalHAll}h{String(totalMAll).padStart(2,'0')} TC
-            {nbFiaDone>0&&<span style={{marginLeft:8,background:"rgba(255,255,255,.2)",
-              borderRadius:10,padding:"0px 6px"}}>✅ {nbFiaDone} FIA</span>}
-            {nbFiaRestant>0&&<span style={{marginLeft:4,background:"rgba(255,255,255,.15)",
-              borderRadius:10,padding:"0px 6px"}}>⏳ {nbFiaRestant} en attente</span>}
+            {nbFiaDone>0&&<span style={{marginLeft:8,background:"rgba(255,255,255,.25)",
+              borderRadius:10,padding:"2px 8px"}}>✅ {nbFiaDone} FIA</span>}
+            {nbFiaRestant>0&&<span style={{marginLeft:4,background:"rgba(255,255,255,.2)",
+              borderRadius:10,padding:"2px 8px"}}>⏳ {nbFiaRestant} en attente</span>}
           </div>
         </div>
-        <button onClick={e=>{e.stopPropagation();setShowCal(v=>!v);}}
-          style={{background:"rgba(255,255,255,.25)",border:"1px solid rgba(255,255,255,.4)",
-            color:"#fff",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:700,
-            flexShrink:0}}>
-          {showCal?"✕":"📅 Ajouter"}
-        </button>
-        <span style={{color:"#fff",fontSize:14,fontWeight:700,
-          display:"inline-block",transform:ouvert?"rotate(0deg)":"rotate(-90deg)",
-          transition:"transform .2s",flexShrink:0}}>▼</span>
+        <span style={{color:"#fff",fontSize:18,fontWeight:700,
+          display:"inline-flex",alignItems:"center",justifyContent:"center",width:36,height:36,
+          transform:ouvert?"rotate(0deg)":"rotate(-90deg)",
+          transition:"transform .2s",flexShrink:0}} title={ouvert?"Réduire":"Déplier"}>▼</span>
       </div>
 
       {ouvert&&<>
+        {/* ── Bouton pour afficher/masquer le calendrier d'ajout ── */}
+        <div style={{padding:"12px 14px",borderBottom:"1px solid #e2e8f0",background:"#f8fafc"}}>
+          <button onClick={()=>setShowCal(v=>!v)}
+            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+              background:showCal?"#f1f5f9":"#E6F1FB",
+              border:`1px solid ${showCal?"#cbd5e1":"#B5D4F4"}`,color:showCal?"#334155":"#0C447C",
+              borderRadius:10,padding:"12px 16px",
+              cursor:"pointer",fontSize:14,fontWeight:600,minHeight:44}}>
+            {showCal?"✕ Fermer le calendrier":"📅 Ajouter une journée"}
+          </button>
+        </div>
+
         {/* ── Calendrier ajout ── */}
-        {showCal&&<div style={{padding:"12px 14px",borderBottom:"1px solid #e2e8f0",background:"#f0f9ff"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        {showCal&&<div style={{padding:"14px",borderBottom:"1px solid #e2e8f0",background:"#f0f9ff"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
             <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}
-              style={{border:"1px solid #bbf7d0",borderRadius:6,padding:"3px 9px",cursor:"pointer",background:"#fff",fontSize:13}}>‹</button>
-            <div style={{flex:1,textAlign:"center",fontWeight:700,fontSize:13,color:"#0369a1"}}>
+              style={{border:"1.5px solid #7dd3fc",borderRadius:8,padding:"7px 14px",cursor:"pointer",
+                background:"#fff",fontSize:15,fontWeight:700,color:"#0369a1",minHeight:38}}>‹</button>
+            <div style={{flex:1,textAlign:"center",fontWeight:800,fontSize:14,color:"#0369a1"}}>
               {MOIS_L[calMonth]} {calYear}
             </div>
             <button onClick={()=>{if(calMonth===11){setCalMonth(0);setCalYear(y=>y+1);}else setCalMonth(m=>m+1);}}
-              style={{border:"1px solid #bbf7d0",borderRadius:6,padding:"3px 9px",cursor:"pointer",background:"#fff",fontSize:13}}>›</button>
+              style={{border:"1.5px solid #7dd3fc",borderRadius:8,padding:"7px 14px",cursor:"pointer",
+                background:"#fff",fontSize:15,fontWeight:700,color:"#0369a1",minHeight:38}}>›</button>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:4}}>
-            {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:9,fontWeight:700,color:"#94a3b8"}}>{j}</div>)}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:5}}>
+            {JOURS.map(j=><div key={j} style={{textAlign:"center",fontSize:11,fontWeight:800,color:"#475569"}}>{j}</div>)}
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
             {Array.from({length:firstDow}).map((_,i)=><div key={`e${i}`}/>)}
             {daysList.map(({dk,d,dow})=>{
               const isWE=dow===0||dow===6;
               const isSel=!!allDates[dk];
               return(
                 <button key={dk} onClick={()=>toggleDate(dk)}
-                  style={{borderRadius:7,
-                    border:isSel?"2px solid #0284c7":"1.5px solid #e2e8f0",
-                    background:isSel?"#0284c7":isWE?"#f1f5f9":"#fff",
-                    color:isSel?"#fff":isWE?"#94a3b8":"#1e293b",
-                    cursor:"pointer",padding:"6px 0",fontSize:11,
-                    fontWeight:isSel?700:400,textAlign:"center"}}>
+                  style={{borderRadius:9,minHeight:48,
+                    border:isSel?"2.5px solid #0C447C":"1.5px solid #cbd5e1",
+                    background:isSel?"#0C447C":isWE?"#e2e8f0":"#fff",
+                    color:isSel?"#fff":isWE?"#475569":"#1e293b",
+                    cursor:"pointer",padding:"10px 0",fontSize:15,
+                    fontWeight:isSel?800:600,textAlign:"center"}}>
                   {d}
                 </button>
               );
             })}
           </div>
-          <div style={{fontSize:9,color:"#94a3b8",marginTop:7,textAlign:"center"}}>
-            Appuyez sur un jour pour ajouter/retirer · 1h30 TC par jour
+          <div style={{fontSize:11,color:"#475569",fontWeight:600,marginTop:9,textAlign:"center"}}>
+            Appuie sur un jour pour ajouter/retirer · 1h30 TC par jour
           </div>
         </div>}
 
         {/* ── Jours triés : orange (sans FIA) en haut, vert (avec FIA) en bas ── */}
         {(()=>{
-          // Rendu d'un groupe de mois avec ses journées
           const renderGroupe = (moisKey, dates, isVert) => {
             const [annee, mois] = moisKey.split("-").map(Number);
             const nbMin = dates.length * 90;
             const h = Math.floor(nbMin/60);
             const m2 = nbMin%60;
-            // Pour les groupes verts, le sous-titre indique le mois FIA de référence
             const fiaRef = isVert ? fiaMois[dates[0]] : null;
             const fiaLabel = fiaRef
               ? `FIA ${MOIS_L[parseInt(fiaRef.slice(5,7))-1]} ${fiaRef.slice(0,4)}`
               : null;
             return(
               <div key={`${isVert?"v":"o"}-${moisKey}`} style={{borderBottom:"1px solid #f1f5f9"}}>
-                {/* En-tête mois */}
                 <div style={{
-                  padding:"6px 14px",
-                  background:isVert?"#f0fdf4":"#fff7ed",
+                  padding:"7px 14px",
+                  background:isVert?"#E1F5EE":"#FAECE7",
                   display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,
                 }}>
-                  <span style={{fontSize:11,fontWeight:800,color:isVert?"#15803d":"#c2410c"}}>
+                  <span style={{fontSize:12,fontWeight:700,color:isVert?"#04342C":"#712B13"}}>
                     {MOIS_L[mois-1]} {annee}
                   </span>
                   <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    {fiaLabel&&<span style={{fontSize:9,background:"#dcfce7",color:"#15803d",
-                      borderRadius:6,padding:"1px 6px",fontWeight:700}}>✅ {fiaLabel}</span>}
-                    <span style={{fontSize:10,color:isVert?"#16a34a":"#f97316",fontWeight:600}}>
+                    {fiaLabel&&<span style={{fontSize:10,background:"#9FE1CB",color:"#04342C",
+                      borderRadius:6,padding:"2px 7px",fontWeight:600}}>✅ {fiaLabel}</span>}
+                    <span style={{fontSize:11,color:isVert?"#0F6E56":"#993C1D",fontWeight:700}}>
                       {dates.length} j · {h}h{String(m2).padStart(2,'0')}
                     </span>
                   </div>
                 </div>
-                {/* Cartes journées */}
                 <div style={{display:"flex",flexDirection:"column",gap:0}}>
                   {dates.map(dk=>{
-                    const dow = new Date(dk).getDay();
                     const jourLabel = new Date(dk).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});
                     const moisFia = fiaMois[dk]||"";
                     const done = !!fiaDone[dk];
                     return(
                       <div key={dk} style={{
                         display:"flex",alignItems:"center",gap:8,
-                        padding:"7px 14px 7px 12px",
+                        padding:"9px 14px 9px 12px",
                         borderBottom:"1px solid #f8fafc",
-                        borderLeft:`3px solid ${moisFia?"#16a34a":"#f97316"}`,
-                        background:moisFia?"#f0fdf4":"#fff7ed",
+                        borderLeft:`4px solid ${done?"#1D9E75":"#D85A30"}`,
+                        background:done?"#E1F5EE":"#FAECE7",
                       }}>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:11,fontWeight:600,
-                            color:moisFia?"#15803d":"#c2410c",
+                          <div style={{fontSize:14,fontWeight:600,
+                            color:done?"#04342C":"#712B13",
                             overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                             {done&&<span style={{marginRight:4}}>✅</span>}
                             {jourLabel}
                           </div>
-                          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4,flexWrap:"wrap"}}>
-                            <span style={{fontSize:9,color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:7,marginTop:7,flexWrap:"wrap"}}>
+                            <span style={{fontSize:12,color:done?"#04342C":"#712B13",fontWeight:600,whiteSpace:"nowrap"}}>
                               Prise FIA :
                             </span>
-                            <select value={moisFia}
+                            <select value={moisFia} disabled={!done}
+                              title={!done?"Confirme d'abord avec le bouton FIA pour pouvoir choisir un mois":""}
                               onChange={e=>setFiaMois(dk,e.target.value)}
-                              style={{fontSize:9,
-                                border:`1px solid ${moisFia?"#86efac":"#fed7aa"}`,
-                                borderRadius:6,padding:"2px 5px",
-                                background:moisFia?"#f0fdf4":"#fff",
-                                color:moisFia?"#15803d":"#94a3b8",
-                                cursor:"pointer",outline:"none",maxWidth:130}}>
+                              style={{fontSize:13,
+                                border:`1px solid ${done?"#5DCAA5":"#e2e8f0"}`,
+                                borderRadius:8,padding:"6px 9px",minHeight:36,
+                                background:done?"#fff":"#f1f5f9",
+                                color:done?"#04342C":"#94a3b8",fontWeight:500,
+                                cursor:done?"pointer":"not-allowed",outline:"none",maxWidth:180}}>
                               <option value="">— Sélectionner le mois —</option>
                               {moisOptions.map(o=>(
                                 <option key={o.key} value={o.key}>{o.label}</option>
                               ))}
                             </select>
-                            {moisFia&&<span style={{fontSize:9,background:"#dcfce7",
-                              color:"#15803d",borderRadius:6,padding:"1px 6px",fontWeight:700}}>
+                            {moisFia&&<span style={{fontSize:12,
+                              background:done?"#9FE1CB":"#F0997B",
+                              color:done?"#04342C":"#712B13",borderRadius:7,padding:"3px 8px",fontWeight:600}}>
                               Fiche {moisFia.slice(5,7)}/{moisFia.slice(0,4)}
                             </span>}
                           </div>
                         </div>
-                        <div style={{display:"flex",gap:4,flexShrink:0,alignItems:"center"}}>
+                        <div style={{display:"flex",gap:7,flexShrink:0,alignItems:"center"}}>
                           <button onClick={()=>toggleFiaDone(dk)}
                             title={done?"Retirer FIA":"Marquer pris en compte FIA"}
-                            style={{background:done?"#16a34a":"#f1f5f9",
-                              border:`1px solid ${done?"#15803d":"#e2e8f0"}`,
-                              color:done?"#fff":"#64748b",
-                              borderRadius:7,padding:"4px 8px",cursor:"pointer",
-                              fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
-                            {done?"✅ FIA":"FIA ?"}
+                            style={{background:done?"#1D9E75":"#fff",
+                              border:`1px solid ${done?"#0F6E56":"#F0997B"}`,
+                              color:done?"#fff":"#712B13",
+                              borderRadius:9,padding:"10px 13px",cursor:"pointer",
+                              fontSize:13,fontWeight:600,whiteSpace:"nowrap",minHeight:42}}>
+                            {done?"✓ FIA":"FIA ?"}
                           </button>
-                          <button onClick={()=>toggleDate(dk)}
-                            style={{background:"#fef2f2",border:"1px solid #fecaca",
-                              color:"#dc2626",borderRadius:7,padding:"4px 7px",
-                              cursor:"pointer",fontSize:11,fontWeight:700}}>×</button>
+                          <button onClick={()=>toggleDate(dk)} title="Retirer cette journée"
+                            style={{background:"#fff",border:`1px solid ${done?"#9FE1CB":"#F0997B"}`,
+                              color:done?"#04342C":"#993C1D",borderRadius:9,padding:"10px 14px",
+                              cursor:"pointer",fontSize:16,fontWeight:600,minHeight:42,minWidth:42}}>×</button>
                         </div>
                       </div>
                     );
@@ -3518,47 +3571,44 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
 
           const hasData = allDatesSorted.length > 0;
           if(!hasData) return !showCal&&(
-            <div style={{padding:"16px",textAlign:"center",fontSize:11,color:"#94a3b8"}}>
+            <div style={{padding:"18px",textAlign:"center",fontSize:12,color:"#64748b",fontWeight:500}}>
               Aucune pause figée enregistrée
             </div>
           );
 
           return(
             <div style={{display:"flex",flexDirection:"column",gap:0}}>
-              {/* ── ORANGE : sans FIA ── */}
               {parMoisOrange.length>0&&<>
-                <div style={{padding:"4px 14px",background:"#fff7ed",
-                  borderBottom:"1px solid #fed7aa"}}>
-                  <span style={{fontSize:9,fontWeight:800,color:"#c2410c",letterSpacing:.5}}>
+                <div style={{padding:"5px 14px",background:"#FAECE7",
+                  borderBottom:"1px solid #F0997B"}}>
+                  <span style={{fontSize:10,fontWeight:700,color:"#712B13",letterSpacing:.5}}>
                     ⏳ EN ATTENTE DE PRISE EN COMPTE FIA ({datesOrange.length})
                   </span>
                 </div>
                 {parMoisOrange.map(([moisKey,dates])=>renderGroupe(moisKey,dates,false))}
               </>}
 
-              {/* ── VERT : avec FIA ── */}
               {parMoisVert.length>0&&<>
-                <div style={{padding:"4px 14px",background:"#f0fdf4",
-                  borderBottom:"1px solid #bbf7d0",
+                <div style={{padding:"5px 14px",background:"#E1F5EE",
+                  borderBottom:"1px solid #5DCAA5",
                   borderTop:parMoisOrange.length>0?"2px solid #e2e8f0":"none"}}>
-                  <span style={{fontSize:9,fontWeight:800,color:"#15803d",letterSpacing:.5}}>
+                  <span style={{fontSize:10,fontWeight:700,color:"#04342C",letterSpacing:.5}}>
                     ✅ PRISES EN COMPTE SUR FIA ({datesVertes.length})
                   </span>
                 </div>
                 {parMoisVert.map(([moisKey,dates])=>renderGroupe(moisKey,dates,true))}
               </>}
 
-              {/* Total */}
-              <div style={{padding:"9px 14px",background:"#f0f9ff",
+              <div style={{padding:"10px 14px",background:"#E6F1FB",
                 display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
-                <span style={{fontSize:11,fontWeight:700,color:"#0369a1"}}>Total TC généré</span>
-                <span style={{fontSize:12,fontWeight:800,color:"#0284c7"}}>
+                <span style={{fontSize:12,fontWeight:600,color:"#0C447C"}}>Total TC généré</span>
+                <span style={{fontSize:13,fontWeight:700,color:"#0C447C"}}>
                   {totalHAll}h{String(totalMAll).padStart(2,'0')}
-                  <span style={{fontSize:9,fontWeight:400,color:"#7dd3fc",marginLeft:5}}>
+                  <span style={{fontSize:10,fontWeight:500,color:"#185FA5",marginLeft:5}}>
                     ({allDatesSorted.length} × 1h30)
                   </span>
                 </span>
-                {nbFiaDone>0&&<span style={{fontSize:10,color:"#16a34a",fontWeight:600,width:"100%"}}>
+                {nbFiaDone>0&&<span style={{fontSize:11,color:"#0F6E56",fontWeight:600,width:"100%"}}>
                   ✅ {datesVertes.length} prise{datesVertes.length>1?"s":""} en compte FIA
                   {datesOrange.length>0&&` · ⏳ ${datesOrange.length} en attente`}
                 </span>}
@@ -3570,6 +3620,7 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
     </div>
   );
 }
+
 
 
 // ─── BARRE DE SAISIE RAPIDE ──────────────────────────────────────────────────

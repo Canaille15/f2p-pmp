@@ -582,11 +582,11 @@ export const pauses = {
   /** Pauses figées d'un agent */
   getAll: (agentId) => apiFetch(`/pauses/${agentId}`),
 
-  /** Ajouter une pause figée */
+  /** Ajouter une pause figée (crée la ligne en base, jour non pris en compte FIA par défaut) */
   add: (agentId, date) =>
-    apiFetch(`/pauses/${agentId}`, {
-      method: 'POST',
-      body: JSON.stringify({ date }),
+    apiFetch(`/pauses/${agentId}/${date}`, {
+      method: 'PUT',
+      body: JSON.stringify({}),
     }),
 
   /** Supprimer une pause figée */
@@ -595,9 +595,16 @@ export const pauses = {
 
   /** Mettre à jour le mois FIA d'une pause */
   setFiaMois: (agentId, date, moisKey) =>
-    apiFetch(`/pauses/${agentId}/${date}/fia`, {
+    apiFetch(`/pauses/${agentId}/${date}`, {
       method: 'PUT',
       body: JSON.stringify({ mois_fia: moisKey }),
+    }),
+
+  /** Marquer/démarquer une pause comme prise en compte FIA */
+  setFiaDone: (agentId, date, done) =>
+    apiFetch(`/pauses/${agentId}/${date}`, {
+      method: 'PUT',
+      body: JSON.stringify({ fia_done: !!done }),
     }),
 };
 
