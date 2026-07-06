@@ -4277,12 +4277,24 @@ function BarreSaisie({profile, habilitations, codeActif, setCodeActif, getColor,
       });
     });
 
-    // Journée
-    boutonsTravaill.push({
-      id:"J", label:"Journée", sublabel:"J",
-      equipe:"J", jsCode:"J", prive:false,
-      color:getColor("J"), tc:getTc("J"),
-    });
+    // Journée — poste précis si l'agent y est habilité (ex: ASMTE PAR),
+    // sinon bouton générique "Journée" comme avant
+    const postesJourneeHab = POSTES_JOURNEE.filter(p=>habilitations && habilitations[p.jsCode]);
+    if(postesJourneeHab.length>0){
+      postesJourneeHab.forEach(p=>{
+        boutonsTravaill.push({
+          id: p.jsCode, label: p.label, sublabel:"J",
+          equipe:"J", jsCode: p.jsCode, prive:false,
+          color:getColor("J"), tc:getTc("J"),
+        });
+      });
+    } else {
+      boutonsTravaill.push({
+        id:"J", label:"Journée", sublabel:"J",
+        equipe:"J", jsCode:"J", prive:false,
+        color:getColor("J"), tc:getTc("J"),
+      });
+    }
   }
 
   // ── Boutons repos / privés ─────────────────────────────────────────────────

@@ -70,6 +70,20 @@ const POSTES_PAR = [
 
 const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
 
+// Table de correspondance exacte : code court local (ce fichier) → code
+// réellement enregistré dans les habilitations (AgentHeader.jsx / backend).
+// PPRCI et PPAR sont volontairement absents : toujours proposés sans
+// condition d'habilitation (poste générique de famille).
+const CODE_VERS_HAB = {
+  // PRCI
+  "CCL":"PICCL", "ADJ":"PIADJ", "LNE":"PILNE", "LNO":"PILNO", "VGD":"PIVGD", "LC":"PILCL",
+  "PA1J":"PIPA1J", "PA2J":"PIPA2J", "PA3J":"PIPA3J", "DPXJ":"PIDPXJ", "ASSJ":"PIASSJ",
+  "AFOPR":"AFOPRCI",
+  // PAR
+  "AC1":"PAAC1-", "AC2":"PAAC2-", "ACXX":"PAACXX", "PARJ":"PAPAUJ", "DPXP":"PADPXJ",
+  "ASMP":"PAASMJ",
+};
+
 export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave, onDelete, onClose }) {
 
   const agKey = agent?.immatriculation || agent?.cp || agent?.id;
@@ -92,7 +106,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
     if (habCodes.length === 0) return postes;
     return postes.filter(p =>
       p.code === "PPRCI" || p.code === "PPAR" ||
-      habCodes.some(h => h.includes(p.code) || p.code.includes(h.slice(0,4)))
+      habCodes.includes(CODE_VERS_HAB[p.code] || p.code)
     );
   };
 
