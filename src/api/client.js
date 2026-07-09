@@ -490,7 +490,7 @@ export const cps = {
   },
 
   /**
-   * Importer en masse des entrées CPS (admin uniquement)
+   * Importer en masse des entrées CPS (n'importe quel agent connecté)
    * @param {Array<{cp_agent, date_jour, equipe, js_code, horaires, famille}>} entries
    */
   import: (entries) =>
@@ -498,6 +498,22 @@ export const cps = {
       method: 'POST',
       body: JSON.stringify({ entries }),
     }),
+
+  /**
+   * Date/heure + auteur du dernier import CPS (ou null si aucun import)
+   */
+  getLastImport: () => apiFetch('/cps/last-import'),
+
+  /**
+   * Historique des imports CPS des 90 derniers jours
+   */
+  getHistory: () => apiFetch('/cps/history'),
+
+  /**
+   * Annule le tout dernier import CPS (restaure l'état précédent)
+   */
+  undoLastImport: () =>
+    apiFetch('/cps/undo-last', { method: 'POST' }),
 };
 
 // ─── MODULE CONGÉS ────────────────────────────────────────────────────────────

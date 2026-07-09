@@ -1527,6 +1527,46 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
   const [search,setSearch]=useState("");
   const [uploading,setUploading]=useState(false);
   const [cpsResult,setCpsResult]=useState(null);
+  const [dernierImport,setDernierImport]=useState(null);
+  const chargerDernierImport=()=>{
+    if(isPrevisionnel) return;
+    api.cps.getLastImport().then(setDernierImport).catch(()=>{});
+  };
+  useEffect(()=>{
+    chargerDernierImport();
+    if(isPrevisionnel) return;
+    const interval=setInterval(chargerDernierImport,45000);
+    return ()=>clearInterval(interval);
+  },[isPrevisionnel]); // eslint-disable-line
+  // Import en attente de confirmation (extrait par l'OCR mais pas encore enregistré)
+  const [pendingImport,setPendingImport]=useState(null);
+  const [savingImport,setSavingImport]=useState(false);
+  // Historique des imports (90 derniers jours) — panneau replié par defaut
+  const [showHistory,setShowHistory]=useState(false);
+  const [history,setHistory]=useState([]);
+  const [undoing,setUndoing]=useState(false);
+  const chargerHistory=()=>{
+    if(isPrevisionnel) return;
+    api.cps.getHistory().then(setHistory).catch(()=>{});
+  };
+  useEffect(()=>{
+    if(!showHistory) return;
+    chargerHistory();
+  },[showHistory]); // eslint-disable-line
+  const annulerDernierImport=async()=>{
+    if(!window.confirm("Annuler le tout dernier import CPS ? Le planning officiel reviendra à son état précédent."))return;
+    setUndoing(true);
+    try{
+      await api.cps.undoLastImport();
+      chargerHistory();
+      chargerDernierImport();
+      const entries=await api.cps.getSchedule();
+      if(entries) setSchedule(prev=>({...prev,...entries}));
+    }catch(err){
+      alert("Erreur lors de l'annulation : "+err.message);
+    }
+    setUndoing(false);
+  };
   const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset]);
   const dateKey=weekDates[dayIdx];
   const sections=useMemo(()=>buildSections(schedule,dateKey,filterF,agents,isPrevisionnel),[schedule,dateKey,filterF,agents,isPrevisionnel]);
@@ -1710,32 +1750,49 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         });
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
 
-        // Sauvegarder en base via API (persistance Railway)
-        try{
-          await api.cps.import(updates.map(u=>({
-            cp_agent: u.cp_agent,
-            date_jour: u.date_jour,
-            equipe: u.equipe,
-            js_code: u.jsCode,
-            horaires: u.horaires,
-            famille: u.famille,
-          })));
-        }catch(apiErr){
-          console.error("Erreur sauvegarde CPS:", apiErr);
-        }
-
-        setSchedule(prev=>{
-          const next={...prev};
-          updates.forEach(u=>{next[u.key]={equipe:u.equipe,jsCode:u.jsCode,horaires:u.horaires,prive:false,impressionAt:new Date().toISOString()};});
-          return next;
-        });
-        setCpsResult({date:dateStr,nb,ecarts:ec});
+        // On ne sauvegarde pas tout de suite : on affiche un récap et on attend
+        // une confirmation explicite avant d'écraser le planning officiel partagé.
+        setPendingImport({date:dateStr,nb,ecarts:ec,updates});
       }catch(err){
         alert("Erreur import CPS : "+err.message);
       }
       setUploading(false);
     };
     reader.readAsDataURL(file);
+    e.target.value="";
+  };
+
+  const confirmerImport=async()=>{
+    if(!pendingImport) return;
+    const {date:dateStr,nb,ecarts:ec,updates}=pendingImport;
+    setSavingImport(true);
+    try{
+      // Sauvegarder en base via API (persistance Railway) — si ça échoue, on ne
+      // doit surtout pas afficher un faux succès ni mettre à jour l'affichage
+      // local : l'erreur remonte au catch, qui prévient l'utilisateur sans
+      // perdre l'import en attente (on peut réessayer sans refaire l'OCR).
+      await api.cps.import(updates.map(u=>({
+        cp_agent: u.cp_agent,
+        date_jour: u.date_jour,
+        equipe: u.equipe,
+        js_code: u.jsCode,
+        horaires: u.horaires,
+        famille: u.famille,
+      })));
+
+      setSchedule(prev=>{
+        const next={...prev};
+        updates.forEach(u=>{next[u.key]={equipe:u.equipe,jsCode:u.jsCode,horaires:u.horaires,prive:false,impressionAt:new Date().toISOString()};});
+        return next;
+      });
+      setCpsResult({date:dateStr,nb,ecarts:ec});
+      setPendingImport(null);
+      chargerDernierImport();
+      if(showHistory) chargerHistory();
+    }catch(err){
+      alert("Erreur import CPS : "+err.message+"\n\nL'import n'a pas été enregistré, tu peux réessayer.");
+    }
+    setSavingImport(false);
   };
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     {isPrevisionnel&&<div style={{display:"flex",alignItems:"center",gap:10,background:"#4338CA",borderRadius:12,padding:"12px 16px",flexWrap:"wrap"}}>
@@ -1749,25 +1806,58 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <span style={{fontSize:20}}>📋</span>
       <div style={{display:"flex",flexDirection:"column",gap:2,flex:1,minWidth:200}}>
         <span style={{fontSize:15,fontWeight:800,color:"#fff"}}>FEUILLE DE PRESENCE JOURNALIERE</span>
+        <span style={{fontSize:11,color:"#BFDBFE"}}>
+          {dernierImport
+            ? `Dernier import : ${new Date(dernierImport.importe_le).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}${dernierImport.prenom?` par ${dernierImport.prenom} ${dernierImport.nom}`:""}`
+            : "Aucun import pour l'instant"}
+        </span>
       </div>
     </div>}
+
+    {pendingImport&&<div style={{background:"#fffbeb",border:"1.5px solid #fbbf24",borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:13,fontWeight:700,color:"#92400e"}}>
+        ⚠️ Confirmer l'import : <strong>{pendingImport.nb} agent{pendingImport.nb>1?"s":""}</strong> détecté{pendingImport.nb>1?"s":""} pour le <strong>{new Date(pendingImport.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"})}</strong>
+        {pendingImport.ecarts>0&&<> · {pendingImport.ecarts} écart{pendingImport.ecarts>1?"s":""} avec le planning perso déclaré</>}
+      </div>
+      <div style={{fontSize:11,color:"#92400e",opacity:.85}}>Ça va remplacer le planning officiel partagé pour cette date. Vérifie que c'est le bon document avant de valider.</div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={()=>setPendingImport(null)} disabled={savingImport} style={{padding:"8px 16px",background:"#fff",color:"#92400e",border:"1.5px solid #fbbf24",borderRadius:8,cursor:savingImport?"default":"pointer",fontSize:12,fontWeight:700}}>Annuler</button>
+        <button onClick={confirmerImport} disabled={savingImport} style={{padding:"8px 16px",background:savingImport?"#94a3b8":"#d97706",color:"#fff",border:"none",borderRadius:8,cursor:savingImport?"default":"pointer",fontSize:12,fontWeight:700}}>{savingImport?"⏳ Enregistrement...":"✓ Confirmer l'import"}</button>
+      </div>
+    </div>}
+
     <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
       <input placeholder="🔍 Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}
         style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:13,flex:1,minWidth:140,outline:"none"}}/>
-      {!isPrevisionnel&&<label style={{cursor:"pointer",flexShrink:0}}>
+      {!isPrevisionnel&&<label style={{cursor:uploading?"default":"pointer",flexShrink:0}}>
         <div style={{background:uploading?"#94a3b8":"#0f4c81",color:"#fff",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
           {uploading?"⏳...":"📥 Importer feuille de présence"}
         </div>
         <input type="file" accept=".pdf,image/*" onChange={handleCpsImport} style={{display:"none"}} disabled={uploading}/>
       </label>}
+      {!isPrevisionnel&&<button onClick={()=>setShowHistory(s=>!s)} style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,color:"#475569",background:showHistory?"#f1f5f9":"#fff",cursor:"pointer",flexShrink:0}}>🕓 Historique</button>}
       {cpsResult&&<span style={{fontSize:10,background:"#f0fdf4",color:"#16a34a",borderRadius:8,padding:"4px 10px",fontWeight:700}}>✅ {cpsResult.nb} agents · {cpsResult.date}</span>}
       <div style={{display:"flex",gap:3,background:"#f1f5f9",borderRadius:10,padding:3}}>
         {[["ALL","Tous"],["PRCI","PRCI"],["PAR","PAR"]].map(([k,l])=>(
           <button key={k} onClick={()=>setFilterF(k)} style={{border:"none",borderRadius:8,padding:"6px 13px",cursor:"pointer",background:filterF===k?"#0C447C":"transparent",color:filterF===k?"#fff":"#475569",fontSize:12,fontWeight:filterF===k?700:600}}>{l}</button>
         ))}
       </div>
-      
+
     </div>
+
+    {!isPrevisionnel&&showHistory&&<div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"12px 16px",display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{fontSize:12,fontWeight:700,color:"#64748b"}}>HISTORIQUE DES IMPORTS (90 derniers jours)</div>
+      {history.length===0&&<div style={{fontSize:12,color:"#94a3b8"}}>Aucun import dans les 90 derniers jours.</div>}
+      {history.map((h,i)=>(
+        <div key={h.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:i>0?"1px solid #f1f5f9":"none",fontSize:12,flexWrap:"wrap"}}>
+          <span style={{color:"#1e293b",fontWeight:600}}>{new Date(h.importe_le).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+          <span style={{color:"#64748b"}}>par {h.prenom} {h.nom} · {h.nb_entrees} entrée{h.nb_entrees>1?"s":""}</span>
+          {h.annule_le
+            ? <span style={{color:"#dc2626",fontSize:11}}>↩️ Annulé le {new Date(h.annule_le).toLocaleDateString("fr-FR")} par {h.annule_par_prenom} {h.annule_par_nom}</span>
+            : (i===0&&<button onClick={annulerDernierImport} disabled={undoing} style={{marginLeft:"auto",padding:"4px 10px",background:"#fef2f2",color:"#b91c1c",border:"1px solid #fecaca",borderRadius:6,cursor:undoing?"default":"pointer",fontSize:11,fontWeight:700}}>{undoing?"⏳...":"↩️ Annuler"}</button>)}
+        </div>
+      ))}
+    </div>}
 
     {/* Nav semaine */}
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
@@ -7577,8 +7667,15 @@ export default function App(){
         poste: r.poste||"",
         fam: r.famille||"PRCI",
         famille: r.famille||"PRCI",
+        is_admin: !!r.is_admin,
       }));
       setAgents(mapped);
+      // Synchroniser le statut admin de l'utilisateur connecte : une promotion/
+      // retrait fait par un autre admin ne doit pas attendre une reconnexion
+      // pour faire apparaitre/disparaitre l'onglet Admin du panneau lateral.
+      const myId = currentUser?.agent?.immatriculation||currentUser?.agent?.cp||currentUser?.agent?.id;
+      const me = mapped.find(a=>a.id===myId);
+      if(me) setCurrentUser(prev=>(prev&&prev.isAdmin!==me.is_admin)?{...prev,isAdmin:me.is_admin}:prev);
     }).catch(e=>console.error("Erreur chargement agents:",e));
   };
   useEffect(()=>{
@@ -7762,13 +7859,20 @@ export default function App(){
       setSchedule(prev=>({...prev,...entries}));
     });
   },[currentUser?.agent?.id]); // eslint-disable-line
-  // Charger le planning CPS officiel (partage entre tous les agents)
+  // Charger le planning CPS officiel (partage entre tous les agents), et le
+  // rafraichir toutes les 45s pour que les imports faits sur un autre appareil
+  // se propagent automatiquement, sans attendre une reconnexion.
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
-    api.cps.getSchedule().then(entries=>{
-      if(!entries||Object.keys(entries).length===0) return;
-      setCpsSchedule(prev=>({...prev,...entries}));
-    }).catch(e=>console.error("Erreur chargement CPS:",e));
+    const chargerCps=()=>{
+      api.cps.getSchedule().then(entries=>{
+        if(!entries) return;
+        setCpsSchedule(prev=>({...prev,...entries}));
+      }).catch(e=>console.error("Erreur chargement CPS:",e));
+    };
+    chargerCps();
+    const interval=setInterval(chargerCps,45000);
+    return ()=>clearInterval(interval);
   },[currentUser?.agent?.id]); // eslint-disable-line
   // Charger les aleas CPS (echanges, erreurs, postes non tenus)
   useEffect(()=>{

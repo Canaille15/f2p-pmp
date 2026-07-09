@@ -10,12 +10,17 @@ async function authMiddleware(req, res, next) {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    // is_admin est relu en base a chaque requete (pas depuis le JWT) : sinon
+    // une promotion/retrait admin ne prend effet qu'a la prochaine reconnexion
+    // de l'agent concerne, jusqu'a expiration de son token (30j).
     const [rows] = await pool.query(
-      'SELECT id FROM session WHERE cp_agent = ? AND token_hash = ? AND expires_at > NOW()',
+      `SELECT s.id, au.is_admin
+       FROM session s JOIN auth au ON au.cp_agent = s.cp_agent
+       WHERE s.cp_agent = ? AND s.token_hash = ? AND s.expires_at > NOW()`,
       [payload.cp, tokenHash]
     );
     if (!rows.length) return res.status(401).json({ error: 'Session expirée' });
-    req.agent = payload;
+    req.agent = { cp: payload.cp, is_admin: !!rows[0].is_admin };
     next();
   } catch (e) {
     return res.status(401).json({ error: 'Token invalide' });
