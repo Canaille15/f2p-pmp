@@ -157,7 +157,7 @@ export const agents = {
 
 // ─── MODULE PLANNING ─────────────────────────────────────────────────────────
 
-function convertirCodePosteVersJsCode(codePoste, equipe) {
+export function convertirCodePosteVersJsCode(codePoste, equipe) {
   if (!codePoste) return null;
   const mapping3x8 = {
     CCL:  { M: "PICCL-", AM: "PICCLO", N: "PICCLX" },
@@ -222,8 +222,8 @@ export const planning = {
       result[`${agentId}-${date}`] = {
         equipe:   isPlaceholder ? null : (p1.code_equipe || null),
         equipe2:  p2 ? 'N' : null,
-        jsCode:   isPlaceholder ? null : (p1.code_poste || null),
-        jsCode2:  p2 ? (p2.code_poste || null) : null,
+        jsCode:   isPlaceholder ? null : (convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe) || p1.code_poste || null),
+        jsCode2:  p2 ? (convertirCodePosteVersJsCode(p2.code_poste, 'N') || p2.code_poste || null) : null,
         horaires: isPlaceholder ? null : horaires,
         prive:    !!p1.prive,
         finNuit:  isFinNuit,

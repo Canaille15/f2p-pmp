@@ -1,6 +1,6 @@
 import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import api from "./api/client";
+import api, { convertirCodePosteVersJsCode } from "./api/client";
 import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
 import DayEditPopup from "./components/DayEditPopup";
@@ -5112,10 +5112,13 @@ justifyContent: "flex-start",
         const dk=dayPopup.dk;
         const prevEntry = schedule[agCp+'-'+dk] || {};
         // Garder finNuit existant si pas modifie
+        const equipeFinale = newEntry.equipe !== undefined ? (newEntry.equipe||null) : (prevEntry.equipe||null);
         const fullEntry={
-          equipe:   newEntry.equipe !== undefined ? (newEntry.equipe||null) : (prevEntry.equipe||null),
+          equipe:   equipeFinale,
           // Preserver la nuit existante si le popup ne la modifie pas
           equipe2:  newEntry.equipe2 !== undefined ? (newEntry.equipe2||null) : (prevEntry.equipe2||null),
+          // Code court local (ex: "ASMP") : c'est ce format que le backend attend
+          // pour code_poste (voir api.planning.saveEntry / convertirCodePosteVersJsCode).
           jsCode:   newEntry.jsCode !== undefined ? (newEntry.jsCode||null) : (prevEntry.jsCode||null),
           jsCode2:  newEntry.jsCodeNuit !== undefined ? (newEntry.jsCodeNuit||null) : (prevEntry.jsCode2||null),
           horaires: newEntry.horaires !== undefined ? (newEntry.horaires||null) : (prevEntry.horaires||null),
@@ -5133,7 +5136,15 @@ justifyContent: "flex-start",
           try { await api.planning.deleteEntry(agCp, dk); } catch(e){}
           return;
         }
-        setSchedule(prev=>({...prev,[agCp+'-'+dk]:fullEntry}));
+        // Affichage optimiste : traduire le code court (ex: "ASMP") vers le jsCode
+        // canonique (ex: "PAASMJ", celui que renverra le backend au rechargement)
+        // pour eviter le flash d'un libelle tronque avant la resynchronisation.
+        // Le code court brut, lui, reste dans fullEntry pour la sauvegarde backend.
+        setSchedule(prev=>({...prev,[agCp+'-'+dk]:{
+          ...fullEntry,
+          jsCode:  fullEntry.jsCode  ? (convertirCodePosteVersJsCode(fullEntry.jsCode, equipeFinale) || fullEntry.jsCode)   : null,
+          jsCode2: fullEntry.jsCode2 ? (convertirCodePosteVersJsCode(fullEntry.jsCode2, 'N')          || fullEntry.jsCode2) : null,
+        }}));
         // Sauvegarder en base, PUIS seulement recharger depuis Railway pour
         // synchroniser (jamais avant confirmation, sinon on risque de
         // recuperer l'ancienne version et d'ecraser silencieusement l'affichage
