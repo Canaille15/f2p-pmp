@@ -221,7 +221,7 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               width: "100%",
             }}>
               {/* Identité */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                 <div style={{
                   width: 46, height: 46, borderRadius: "50%", flexShrink: 0,
                   background: a.famille === "PRCI" ? "#1d4ed8" : "#065f46",
@@ -231,18 +231,8 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                   {(a.prenom?.[0] || "") + (a.nom?.[0] || "")}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{a.prenom} {a.nom}</span>
-                    {a.is_admin && (
-                      <span style={{ fontSize: 11, background: "#ede9fe", color: "#6d28d9", borderRadius: 6, padding: "2px 8px", fontWeight: 700, flexShrink: 0 }}>
-                        👑 Admin
-                      </span>
-                    )}
-                    {a.is_reserve && (
-                      <span style={{ fontSize: 11, background: "#f5f3ff", color: "#7c3aed", borderRadius: 6, padding: "2px 8px", fontWeight: 700, flexShrink: 0 }}>
-                        🔁 Réserve
-                      </span>
-                    )}
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.prenom} {a.nom}
                   </div>
                   <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: "#334155", background: "#f1f5f9", borderRadius: 5, padding: "1px 7px" }}>{a.cp}</span>
@@ -252,41 +242,44 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                       background: a.famille === "PRCI" ? "#dbeafe" : "#d1fae5",
                       color: a.famille === "PRCI" ? "#1e40af" : "#065f46",
                     }}>{a.famille}</span>
-                  </div>
-                  <div style={{ marginTop: 5 }}>
                     <span style={{
-                      fontSize: 12, fontWeight: 700, borderRadius: 6, padding: "2px 9px",
+                      fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "2px 8px",
                       color: a.has_pin ? "#15803d" : "#b91c1c",
                       background: a.has_pin ? "#dcfce7" : "#fee2e2",
                     }}>
-                      {a.has_pin ? "✅ PIN défini" : "⚠️ Sans PIN"}
+                      {a.has_pin ? "✅ PIN" : "⚠️ Sans PIN"}
                     </span>
                   </div>
                 </div>
               </div>
+
+              {/* Statuts — pastilles cliquables (badge + bouton fusionnés, l'état actif se voit et se change au même endroit) */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                <button onClick={() => handleToggleAdmin(a)}
+                  style={{
+                    background: a.is_admin ? "#ede9fe" : "#f8fafc",
+                    color: a.is_admin ? "#6d28d9" : "#94a3b8",
+                    border: `1px solid ${a.is_admin ? "#c4b5fd" : "#e2e8f0"}`,
+                    borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                  }}>
+                  👑 Admin{a.is_admin ? " ✓" : ""}
+                </button>
+                <button onClick={() => handleToggleReserve(a)}
+                  style={{
+                    background: a.is_reserve ? "#f5f3ff" : "#f8fafc",
+                    color: a.is_reserve ? "#7c3aed" : "#94a3b8",
+                    border: `1px solid ${a.is_reserve ? "#ddd6fe" : "#e2e8f0"}`,
+                    borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                  }}>
+                  🔁 Réserve régionale{a.is_reserve ? " ✓" : ""}
+                </button>
+              </div>
+
               {/* Actions */}
               <div style={{ display: "flex", gap: 7, flexWrap: "wrap", borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
                 <button onClick={() => setModal({ type: "edit", agent: a })}
                   style={{ background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
                   ✏️ Modifier
-                </button>
-                <button onClick={() => handleToggleAdmin(a)}
-                  style={{
-                    background: a.is_admin ? "#ede9fe" : "#f8fafc",
-                    color: a.is_admin ? "#6d28d9" : "#475569",
-                    border: `1px solid ${a.is_admin ? "#c4b5fd" : "#e2e8f0"}`,
-                    borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700,
-                  }}>
-                  {a.is_admin ? "👑 Retirer admin" : "Rendre admin"}
-                </button>
-                <button onClick={() => handleToggleReserve(a)}
-                  style={{
-                    background: a.is_reserve ? "#f5f3ff" : "#f8fafc",
-                    color: a.is_reserve ? "#7c3aed" : "#475569",
-                    border: `1px solid ${a.is_reserve ? "#ddd6fe" : "#e2e8f0"}`,
-                    borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700,
-                  }}>
-                  {a.is_reserve ? "🔁 Retirer réserve" : "🔁 Rés. régionale"}
                 </button>
                 <button onClick={() => setModal({ type: "reset", agent: a })}
                   style={{ background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
@@ -387,7 +380,7 @@ function ModalCreer({ onConfirm, onClose }) {
 // ─── MODAL SUPPRIMER ─────────────────────────────────────────────────────────
 
 function ModalModifier({ agent, onConfirm, onClose }) {
-  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", telephone: "", email: "" });
+  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, telephone: "", email: "" });
   const [nouveauCp, setNouveauCp] = useState(agent.cp || "");
   const [err, setErr] = useState("");
   const [coordLoading, setCoordLoading] = useState(true);
@@ -405,7 +398,7 @@ function ModalModifier({ agent, onConfirm, onClose }) {
     const cpChange = nouveauCp.trim().toUpperCase() !== agent.cp;
     if (cpChange && !window.confirm(`Changer le CP de ${agent.cp} vers ${nouveauCp.trim().toUpperCase()} ? Cette action met a jour toutes les donnees liees a cet agent.`)) return;
     setErr("");
-    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
+    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
   }
 
   return (
@@ -464,6 +457,18 @@ function ModalModifier({ agent, onConfirm, onClose }) {
                 }}>{f}</button>
             ))}
           </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Réserve régionale</div>
+          <button onClick={() => setForm(p => ({ ...p, is_reserve: !p.is_reserve }))}
+            style={{
+              width: "100%", padding: "8px", border: "none", borderRadius: 8, cursor: "pointer",
+              fontWeight: 700, fontSize: 13,
+              background: form.is_reserve ? "#7c3aed" : "#f1f5f9",
+              color: form.is_reserve ? "#fff" : "#64748b"
+            }}>
+            🔁 {form.is_reserve ? "Réserviste régional" : "Pas réserviste"}
+          </button>
         </div>
         {err && <div style={{ color: "#dc2626", fontSize: 12, fontWeight: 600 }}>! {err}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
