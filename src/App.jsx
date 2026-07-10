@@ -7260,6 +7260,48 @@ function findAgentByCP(CP) {
 }
 
 // Page de connexion
+// Saisie PIN à 4 chiffres : UN SEUL champ invisible superposé sur 4 cases
+// visuelles (au lieu de 4 <input> séparés qui se repassent le focus).
+// C'est l'approche déjà utilisée pour "Changer mon PIN" (PinModal) : elle
+// évite que le clavier virtuel mobile se ferme/rouvre à chaque chiffre
+// (plus de changement de focus entre champs), et Entrée / l'auto-validation
+// au 4e chiffre fonctionnent nativement puisqu'il n'y a qu'un seul input.
+// IMPORTANT : ce composant doit rester defini au niveau racine du module
+// (pas a l'interieur de LoginPage) — sinon React le recree a chaque frappe
+// (nouvelle reference de fonction = nouveau "type" de composant pour la
+// reconciliation), ce qui detruit et recree le vrai <input> DOM a chaque
+// caractere : perte de focus, et sur mobile fermeture du clavier virtuel.
+function PinInput({arr, setArr, label, inputRef, onComplete, error, setError}) {
+  return (
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+      <div style={{fontSize:11,color:"#64748b",fontWeight:600}}>{label}</div>
+      <div style={{display:"flex",gap:10,position:"relative"}} onClick={()=>inputRef.current?.focus()}>
+        <input ref={inputRef} type="tel" inputMode="numeric" maxLength={4}
+          value={arr.join("")}
+          onChange={e=>{
+            const digits=e.target.value.replace(/\D/g,"").slice(0,4);
+            const next=["","","",""];
+            digits.split("").forEach((d,i)=>{next[i]=d;});
+            setArr(next);
+            setError?.("");
+            if(digits.length===4&&onComplete) setTimeout(()=>onComplete(digits),100);
+          }}
+          onKeyDown={e=>{if(e.key==="Enter"&&arr.every(d=>d)&&onComplete)onComplete(arr.join(""));}}
+          style={{position:"absolute",opacity:0,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16}}
+          autoComplete="off"/>
+        {[0,1,2,3].map(i=>(
+          <div key={i} style={{width:48,height:56,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,
+            border:`2px solid ${error?"#ef4444":arr[i]?"#0891b2":"#e2e8f0"}`,
+            borderRadius:10,background:arr[i]?"#f0fdff":"#fff",
+            transition:"border-color .15s",cursor:"pointer"}}>
+            {arr[i]?"●":""}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LoginPage({ onLogin, authData, setAuthData }) {
   const [step, setStep] = useState("login"); // "login" | "first_time" | "forgot"
   const [CP, setCP] = useState("");
@@ -7314,41 +7356,6 @@ const handleLogin = async (pinOverride) => {
     }
   };
 
-  // Saisie PIN à 4 chiffres : UN SEUL champ invisible superposé sur 4 cases
-  // visuelles (au lieu de 4 <input> séparés qui se repassent le focus).
-  // C'est l'approche déjà utilisée pour "Changer mon PIN" (PinModal) : elle
-  // évite que le clavier virtuel mobile se ferme/rouvre à chaque chiffre
-  // (plus de changement de focus entre champs), et Entrée / l'auto-validation
-  // au 4e chiffre fonctionnent nativement puisqu'il n'y a qu'un seul input.
-  const PinInput = ({arr, setArr, label, inputRef, onComplete}) => (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
-      <div style={{fontSize:11,color:"#64748b",fontWeight:600}}>{label}</div>
-      <div style={{display:"flex",gap:10,position:"relative"}} onClick={()=>inputRef.current?.focus()}>
-        <input ref={inputRef} type="tel" inputMode="numeric" maxLength={4}
-          value={arr.join("")}
-          onChange={e=>{
-            const digits=e.target.value.replace(/\D/g,"").slice(0,4);
-            const next=["","","",""];
-            digits.split("").forEach((d,i)=>{next[i]=d;});
-            setArr(next);
-            setError("");
-            if(digits.length===4&&onComplete) setTimeout(()=>onComplete(digits),100);
-          }}
-          onKeyDown={e=>{if(e.key==="Enter"&&arr.every(d=>d)&&onComplete)onComplete(arr.join(""));}}
-          style={{position:"absolute",opacity:0,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16}}
-          autoComplete="off"/>
-        {[0,1,2,3].map(i=>(
-          <div key={i} style={{width:48,height:56,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,
-            border:`2px solid ${error?"#ef4444":arr[i]?"#0891b2":"#e2e8f0"}`,
-            borderRadius:10,background:arr[i]?"#f0fdff":"#fff",
-            transition:"border-color .15s",cursor:"pointer"}}>
-            {arr[i]?"●":""}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f4c81 0%,#1e3a8a 50%,#064e3b 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box}`}</style>
@@ -7377,7 +7384,7 @@ const handleLogin = async (pinOverride) => {
                 style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:14,fontFamily:"'DM Mono',monospace",fontWeight:700,outline:"none",letterSpacing:2,textAlign:"center",boxSizing:"border-box"}}/>
             </div>
 
-            <PinInput arr={pin} setArr={setPin} inputRef={pinFieldRef} label="CODE PIN (4 chiffres)" onComplete={(p)=>handleLogin(p)}/>
+            <PinInput arr={pin} setArr={setPin} inputRef={pinFieldRef} label="CODE PIN (4 chiffres)" onComplete={(p)=>handleLogin(p)} error={error} setError={setError}/>
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
@@ -7407,8 +7414,8 @@ const handleLogin = async (pinOverride) => {
               🔐 Choisis un code PIN à <strong>4 chiffres</strong>. Il protégera ton planning personnel (RP, congés…). Note-le quelque part.
             </div>
 
-            <PinInput arr={pin} setArr={setPin} inputRef={newPinFieldRef} label="NOUVEAU CODE PIN" onComplete={()=>confirmPinFieldRef.current?.focus()}/>
-            <PinInput arr={pinConfirm} setArr={setPinConfirm} inputRef={confirmPinFieldRef} label="CONFIRME TON CODE PIN" onComplete={(c)=>handleFirstTime(c)}/>
+            <PinInput arr={pin} setArr={setPin} inputRef={newPinFieldRef} label="NOUVEAU CODE PIN" onComplete={()=>confirmPinFieldRef.current?.focus()} error={error} setError={setError}/>
+            <PinInput arr={pinConfirm} setArr={setPinConfirm} inputRef={confirmPinFieldRef} label="CONFIRME TON CODE PIN" onComplete={(c)=>handleFirstTime(c)} error={error} setError={setError}/>
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
