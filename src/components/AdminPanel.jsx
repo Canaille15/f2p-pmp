@@ -19,6 +19,9 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
   const [familleFilter, setFamilleFilter] = useState("TOUS");
+  // Filtre "Réserve régionale" : orthogonal à famille (un réserviste garde sa
+  // famille PRCI ou PAR de base, ce filtre s'ajoute plutôt qu'il ne remplace).
+  const [reserveOnly, setReserveOnly] = useState(false);
   const [modal, setModal]             = useState(null); // "create" | { type:"delete"|"reset", agent }
   const [msg, setMsg]                 = useState(null); // { type:"ok"|"err", text }
 
@@ -47,8 +50,10 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       a.prenom?.toLowerCase().includes(q) ||
       a.cp?.toLowerCase().includes(q);
     const matchFamille = familleFilter === "TOUS" || a.famille === familleFilter;
-    return matchSearch && matchFamille;
+    const matchReserve = !reserveOnly || a.is_reserve;
+    return matchSearch && matchFamille && matchReserve;
   });
+  const nbReserve = agents.filter(a => a.is_reserve).length;
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
   async function handleCreate(data) {
@@ -96,6 +101,16 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       afficherMsg("err", e.message || "Erreur modification droits admin");
     }
   }
+  async function handleToggleReserve(agent) {
+    try {
+      await api.agents.update(agent.cp, { is_reserve: !agent.is_reserve });
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} ${agent.is_reserve ? "n'est plus" : "est maintenant"} en réserve régionale`);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur modification réserve régionale");
+    }
+  }
   async function handleResetPin(agent, newPin) {
     try {
       await api.agents.resetPin(agent.cp, newPin);
@@ -131,40 +146,57 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
         </div>
       )}
 
-      {/* Barre d'outils */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+      {/* Barre d'outils — recherche sur sa propre ligne (elle seule prend
+          toute la largeur, donc elle ne pousse plus les filtres à la ligne
+          suivante), puis une ligne dédiée aux filtres + compteur + création. */}
+      <div style={{ marginBottom: 16 }}>
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="🔍 Rechercher un agent..."
           style={{
-            flex: 1, minWidth: 200, padding: "8px 12px",
+            width: "100%", boxSizing: "border-box", padding: "8px 12px",
             border: "1.5px solid #e2e8f0", borderRadius: 8,
-            fontSize: 13, outline: "none"
+            fontSize: 13, outline: "none", marginBottom: 10
           }}
         />
-        {FAMILLES.map(f => (
-          <button key={f} onClick={() => setFamilleFilter(familleFilter === f ? "TOUS" : f)}
-            style={{
-              padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-              fontSize: 12, fontWeight: 700,
-              background: familleFilter === f ? (f === "PRCI" ? "#1d4ed8" : "#065f46") : "#f1f5f9",
-              color: familleFilter === f ? "#fff" : "#64748b"
-            }}>
-            {f} ({agents.filter(a => a.famille === f).length})
-          </button>
-        ))}
-        <div style={{ marginLeft: "auto", color: "#64748b", fontSize: 12 }}>
-          {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {FAMILLES.map(f => (
+              <button key={f} onClick={() => setFamilleFilter(familleFilter === f ? "TOUS" : f)}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                  fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                  background: familleFilter === f ? (f === "PRCI" ? "#1d4ed8" : "#065f46") : "#f1f5f9",
+                  color: familleFilter === f ? "#fff" : "#64748b"
+                }}>
+                {f} ({agents.filter(a => a.famille === f).length})
+              </button>
+            ))}
+            <button onClick={() => setReserveOnly(v => !v)}
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: reserveOnly ? "#7c3aed" : "#f1f5f9",
+                color: reserveOnly ? "#fff" : "#64748b"
+              }}>
+              🔁 Réserve régionale ({nbReserve})
+            </button>
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+            <span style={{ color: "#64748b", fontSize: 12, whiteSpace: "nowrap" }}>
+              {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
+            </span>
+            <button onClick={() => setModal("create")}
+              style={{
+                background: "#1e293b", color: "#fff", border: "none",
+                borderRadius: 8, padding: "8px 16px", cursor: "pointer",
+                fontSize: 13, fontWeight: 700, whiteSpace: "nowrap"
+              }}>
+              ➕ Nouvel agent
+            </button>
+          </div>
         </div>
-        <button onClick={() => setModal("create")}
-          style={{
-            background: "#1e293b", color: "#fff", border: "none",
-            borderRadius: 8, padding: "8px 16px", cursor: "pointer",
-            fontSize: 13, fontWeight: 700
-          }}>
-          ➕ Nouvel agent
-        </button>
       </div>
 
       {/* Liste agents — cartes responsive */}
@@ -206,6 +238,11 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                         👑 Admin
                       </span>
                     )}
+                    {a.is_reserve && (
+                      <span style={{ fontSize: 11, background: "#f5f3ff", color: "#7c3aed", borderRadius: 6, padding: "2px 8px", fontWeight: 700, flexShrink: 0 }}>
+                        🔁 Réserve
+                      </span>
+                    )}
                   </div>
                   <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: "#334155", background: "#f1f5f9", borderRadius: 5, padding: "1px 7px" }}>{a.cp}</span>
@@ -241,6 +278,15 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                     borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700,
                   }}>
                   {a.is_admin ? "👑 Retirer admin" : "Rendre admin"}
+                </button>
+                <button onClick={() => handleToggleReserve(a)}
+                  style={{
+                    background: a.is_reserve ? "#f5f3ff" : "#f8fafc",
+                    color: a.is_reserve ? "#7c3aed" : "#475569",
+                    border: `1px solid ${a.is_reserve ? "#ddd6fe" : "#e2e8f0"}`,
+                    borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700,
+                  }}>
+                  {a.is_reserve ? "🔁 Retirer réserve" : "🔁 Rés. régionale"}
                 </button>
                 <button onClick={() => setModal({ type: "reset", agent: a })}
                   style={{ background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>

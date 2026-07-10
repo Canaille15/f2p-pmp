@@ -8,6 +8,7 @@ async function getAll(req, res) {
     const [rows] = await pool.query(
       `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel,
               pa.familles_hab AS famille,
+              pa.is_reserve,
               au.is_admin,
               au.pin_hash IS NOT NULL AS has_pin
        FROM agent a
@@ -49,7 +50,7 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, fonction, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, famille, nouveau_cp, is_admin } = req.body;
+  const { email, telephone, fonction, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, famille, nouveau_cp, is_admin, is_reserve } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
@@ -62,7 +63,7 @@ async function update(req, res) {
     if (prenom !== undefined) { fields.push('prenom = ?'); values.push(prenom); }
     if (poste  !== undefined) { fields.push('poste = ?');  values.push(poste); }
   }
-  if (!fields.length && famille === undefined && is_admin === undefined) return res.status(400).json({ error: 'Rien à modifier' });
+  if (!fields.length && famille === undefined && is_admin === undefined && is_reserve === undefined) return res.status(400).json({ error: 'Rien à modifier' });
   values.push(cp);
   try {
     if (fields.length) {
@@ -70,6 +71,9 @@ async function update(req, res) {
     }
     if (req.agent.is_admin && famille !== undefined) {
       await pool.query('UPDATE profil_agent SET familles_hab = ? WHERE cp_agent = ?', [famille, cp]);
+    }
+    if (req.agent.is_admin && is_reserve !== undefined) {
+      await pool.query('UPDATE profil_agent SET is_reserve = ? WHERE cp_agent = ?', [is_reserve ? 1 : 0, cp]);
     }
     if (req.agent.is_admin && is_admin !== undefined) {
       await pool.query('UPDATE auth SET is_admin = ? WHERE cp_agent = ?', [is_admin ? 1 : 0, cp]);
@@ -91,7 +95,7 @@ async function update(req, res) {
 
 // ─── CREATE (admin) ───────────────────────────────────────────────────────────
 async function create(req, res) {
-  const { cp, nom, prenom, grade, poste, famille } = req.body;
+  const { cp, nom, prenom, grade, poste, famille, is_reserve } = req.body;
   if (!cp || !nom || !prenom)
     return res.status(400).json({ error: 'CP, nom et prénom sont obligatoires' });
 
@@ -110,8 +114,8 @@ async function create(req, res) {
 
     // Créer le profil
     await conn.query(
-      `INSERT INTO profil_agent (cp_agent, is_reserve, familles_hab) VALUES (?, 0, ?)`,
-      [cp.toUpperCase(), famille || 'PRCI']
+      `INSERT INTO profil_agent (cp_agent, is_reserve, familles_hab) VALUES (?, ?, ?)`,
+      [cp.toUpperCase(), is_reserve ? 1 : 0, famille || 'PRCI']
     );
 
     // Créer l'entrée auth (sans PIN — l'agent le créera à la première connexion)
