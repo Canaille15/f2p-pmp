@@ -5906,210 +5906,6 @@ Règles :
   );
 }
 
-
-function CpsView({agents, schedule, setSchedule, notifications, setNotifications, currentAgentId, setAgentProfiles}){
-  const [loading,setLoading]=useState(false);
-  const [results,setResults]=useState([]);
-  const [uploading,setUploading]=useState(false);
-
-  const handleCpsPdf=async(e)=>{
-    const file=e.target.files[0];if(!file)return;
-    setUploading(true);setLoading(true);
-    const reader=new FileReader();
-    reader.onload=async()=>{
-      const b64=reader.result.split(",")[1];const mt=file.type==="application/pdf"?"application/pdf":file.type;
-      try{
-        const res=await fetch("/api/claude",{method:"POST",headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:4000,messages:[{role:"user",content:[
-            {type:"document",source:{type:"base64",media_type:mt,data:b64}},
-            {type:"text",text:`Tu analyses une feuille de présence officielle SNCF (CPS).
-Extrais toutes les affectations de tous les agents présents dans ce document.
-Retourne UNIQUEMENT un JSON valide sans markdown :
-{
-  "date": "YYYY-MM-DD",
-  "uop": "PRCI ou PAR",
-  "affectations": [
-    {
-      "nom": "NOM",
-      "prenom": "PRENOM",
-      "jsCode": "PICCL-",
-      "poste": "CCL",
-      "equipe": "M|AM|N|J|CA|RP|RU|MA (CA=Congés)",
-      "horaires": "06h15–14h17",
-      "impressionAt": "YYYY-MM-DD HH:MM"
-    }
-  ]
-}`}
-          ]}]})});
-        const data=await res.json();
-        const raw=data.content?.map(c=>c.text||"").join("")||"";
-        const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
-
-        // Comparer avec schedule existant et détecter écarts
-        const ecarts=[];
-        const updates=[];
-        (parsed.affectations||[]).forEach(aff=>{
-          const ag=agents.find(a=>a.nom.toUpperCase()===aff.nom.toUpperCase()||a.prenom.toUpperCase()===aff.prenom.toUpperCase());
-          if(!ag)return;
-          const key=`${ag.id}-${parsed.date}`;
-          const existing=schedule[key];
-          updates.push({agentId:ag.id,date:parsed.date,key,cpsEntry:{equipe:aff.equipe,jsCode:aff.jsCode,poste:aff.poste,horaires:aff.horaires,impressionAt:aff.impressionAt},existingEntry:existing});
-          if(existing&&(existing.equipe!==aff.equipe||existing.jsCode!==aff.jsCode)){
-            ecarts.push({agent:ag,date:parsed.date,cps:aff,existant:existing,acquitte:false});
-          }
-        });
-        setResults(updates);
-
-        // Appliquer les mises à jour CPS (version la plus récente gagne)
-        setSchedule(prev=>{
-          const next={...prev};
-          updates.forEach(u=>{
-            const existing=next[u.key];
-            // Garder la plus récente selon impressionAt
-            if(!existing||!existing.impressionAt||(u.cpsEntry.impressionAt&&u.cpsEntry.impressionAt>existing.impressionAt)){
-              next[u.key]={...u.cpsEntry};
-            }
-          });
-          return next;
-        });
-
-        // Créer notifications pour les écarts
-        if(ecarts.length>0){
-          setNotifications(prev=>[...prev,...ecarts.map(e=>({
-            id:Date.now()+Math.random(),
-            agentId:e.agent.id,
-            agentNom:`${e.agent.prenom} ${e.agent.nom}`,
-            date:e.date,
-            message:`Écart CPS détecté le ${e.date} : CPS indique ${e.cps.jsCode} (${e.cps.equipe}) mais ton planning indique ${e.existant?.jsCode||"non renseigné"} (${e.existant?.equipe||"—"})`,
-            cps:e.cps,
-            existant:e.existant,
-            acquitte:false,
-          }))]);
-        }
-
-        setResults(updates);
-      }catch(err){
-        alert("Erreur lecture CPS : "+err.message);
-}
-      setUploading(false);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const acquitter=(id)=>{
-    setNotifications(prev=>prev.map(n=>n.id===id?{...n,acquitte:true}:n));
-    // Persister l'acquittement dans le profil pour sync multi-appareils
-    if(currentAgentId){
-      setAgentProfiles(prev=>{
-        const profile = prev[currentAgentId]||{};
-        const already = profile.notificationsAcquittees||[];
-        if(already.includes(id)) return prev;
-        return {...prev,[currentAgentId]:{
-          ...profile,
-          notificationsAcquittees:[...already,id],
-        }};
-      });
-    }
-  };
-  const activeNotifs=notifications.filter(n=>!n.acquitte&&n.type!=="protocole"&&n.type!=="reliquats");
-  const notifsProtocole=notifications.filter(n=>!n.acquitte&&n.type==="protocole");
-  const notifsReliquats=notifications.filter(n=>!n.acquitte&&n.type==="reliquats");
-
-  return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div style={{background:"linear-gradient(135deg,#1e293b,#334155)",borderRadius:14,padding:"16px 20px",color:"#fff"}}>
-      <div style={{fontSize:16,fontWeight:800,marginBottom:4}}>📋 Onglet CPS</div>
-      <div style={{fontSize:12,opacity:.7}}>Import des feuilles de présence officielles. L'IA compare avec les plannings des agents et signale les écarts.</div>
-    </div>
-
-    {/* Upload */}
-    <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px"}}>
-      <div style={{fontSize:12,fontWeight:700,color:"#64748b",marginBottom:12}}>IMPORTER UNE FEUILLE CPS</div>
-      <label style={{display:"flex",alignItems:"center",gap:12,border:"2px dashed #cbd5e1",borderRadius:12,padding:"16px 20px",cursor:"pointer",background:"#f8fafc"}}>
-        <span style={{fontSize:28}}>{loading?"⏳":"📄"}</span>
-        <div>
-          <div style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>{loading?"Analyse en cours…":"Importer PDF ou photo feuille de présence"}</div>
-          <div style={{fontSize:11,color:"#94a3b8"}}>Même format que les feuilles journalières · Comparaison automatique</div>
-        </div>
-        <input type="file" accept=".pdf,image/*" style={{display:"none"}} onChange={handleCpsPdf} disabled={loading}/>
-      </label>
-      {results.length>0&&(<div style={{marginTop:12,background:"#f0fdf4",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#065f46"}}>
-        ✅ {results.length} affectation(s) importée(s) · {notifications.filter(n=>!n.acquitte).length} écart(s) détecté(s)
-      </div>)}
-    </div>
-
-    {/* Rappels congés protocolaires */}
-    {notifsProtocole.map(n=>(
-      <div key={n.id} style={{background:n.bgCouleur,border:`1.5px solid ${n.borderCouleur}`,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12}}>
-        <div style={{fontSize:26,flexShrink:0}}>📅</div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:13,fontWeight:800,color:n.textCouleur,marginBottom:4}}>{n.titre}</div>
-          <div style={{fontSize:12,color:n.textCouleur,opacity:.85}}>{n.message}</div>
-        </div>
-        <button onClick={()=>acquitter(n.id)}
-          style={{background:"rgba(0,0,0,.08)",border:"none",borderRadius:8,padding:"4px 10px",
-            cursor:"pointer",fontSize:11,fontWeight:700,color:n.textCouleur,flexShrink:0,whiteSpace:"nowrap"}}>
-          ✓ Fermer
-        </button>
-      </div>
-    ))}
-
-    {/* Rappels reliquats congés annuels */}
-    {notifsReliquats.map(n=>(
-      <div key={n.id} style={{background:n.bgCouleur,border:`1.5px solid ${n.borderCouleur}`,borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"flex-start",gap:12}}>
-        <div style={{fontSize:26,flexShrink:0}}>🏖️</div>
-        <div style={{flex:1}}>
-          <div style={{fontSize:13,fontWeight:800,color:n.textCouleur,marginBottom:4}}>{n.titre}</div>
-          <div style={{fontSize:12,color:n.textCouleur,opacity:.9,marginBottom:6}}>{n.message}</div>
-          <div style={{fontSize:10,color:n.textCouleur,opacity:.7,fontStyle:"italic"}}>
-            Réf. : PROGRAMMATION DE L'ATTRIBUTION DES RELIQUATS DE CONGÉS RÉGLEMENTAIRES — IN01458
-          </div>
-        </div>
-        <button onClick={()=>acquitter(n.id)}
-          style={{background:"rgba(0,0,0,.08)",border:"none",borderRadius:8,padding:"4px 10px",
-            cursor:"pointer",fontSize:11,fontWeight:700,color:n.textCouleur,flexShrink:0,whiteSpace:"nowrap"}}>
-          ✓ Fermer
-        </button>
-      </div>
-    ))}
-
-    {/* Notifications écarts */}
-    {activeNotifs.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
-      <div style={{fontSize:12,fontWeight:800,color:"#991b1b",letterSpacing:.5}}>⚠️ ÉCARTS DÉTECTÉS ({activeNotifs.length})</div>
-      {activeNotifs.map(n=>(
-        <div key={n.id} style={{background:"#fff",border:"1.5px solid #fca5a5",borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
-          <div style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
-            <div style={{flex:1}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>🔔 {n.agentNom}</div>
-              <div style={{fontSize:12,color:"#475569",marginTop:3}}>{n.message}</div>
-            </div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            <div style={{background:"#eff6ff",borderRadius:8,padding:"8px 10px"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#1e40af",marginBottom:3}}>CPS OFFICIEL</div>
-              <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{n.cps?.jsCode}</div>
-              <div style={{fontSize:11,color:"#64748b"}}>{n.cps?.poste} · {n.cps?.equipe}</div>
-              <div style={{fontSize:10,color:"#94a3b8"}}>{n.cps?.horaires}</div>
-            </div>
-            <div style={{background:"#fef9c3",borderRadius:8,padding:"8px 10px"}}>
-              <div style={{fontSize:10,fontWeight:700,color:"#713f12",marginBottom:3}}>PLANNING AGENT</div>
-              <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{n.existant?.jsCode||"—"}</div>
-              <div style={{fontSize:11,color:"#64748b"}}>{n.existant?.poste||"Non renseigné"} · {n.existant?.equipe||"—"}</div>
-              <div style={{fontSize:10,color:"#94a3b8"}}>{n.existant?.horaires||""}</div>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>acquitter(n.id)} style={{flex:1,background:"#1e293b",color:"#fff",border:"none",borderRadius:8,padding:"8px 0",cursor:"pointer",fontSize:12,fontWeight:700}}>✓ Acquitter</button>
-          </div>
-        </div>
-      ))}
-    </div>)}
-
-    {notifications.filter(n=>n.acquitte).length>0&&(
-      <div style={{fontSize:11,color:"#94a3b8",textAlign:"center"}}>{notifications.filter(n=>n.acquitte).length} écart(s) acquitté(s)</div>
-    )}
-  </div>);
-}
-
 // ─── ÉCHANGES ─────────────────────────────────────────────────────────────────
 
 function EchangesView({agents,currentAgent}){
@@ -7472,35 +7268,26 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const cpRef=useRef();
-  const r0=useRef(),r1=useRef(),r2=useRef(),r3=useRef();
-  const c0=useRef(),c1=useRef(),c2=useRef(),c3=useRef();
-  const pinRefs=[r0,r1,r2,r3];
-  const confRefs=[c0,c1,c2,c3];
+  const pinFieldRef=useRef();
+  const newPinFieldRef=useRef();
+  const confirmPinFieldRef=useRef();
 
   const pinStr = pin.join("");
   const confStr = pinConfirm.join("");
-  
-  // Focus automatique sur le premier champ PIN au montage
+
+  // Focus automatique sur le premier champ au montage, et sur le nouveau PIN
+  // quand on bascule vers la creation de compte.
   useEffect(()=>{ cpRef.current?.focus(); },[]);
+  useEffect(()=>{ if(step==="first_time") newPinFieldRef.current?.focus(); },[step]);
 
-  const handlePinDigit = (i, v, arr, setArr, refs) => {
-    // Prendre seulement le dernier chiffre saisi (cas collage)
-    const digit = v.replace(/\D/g, '').slice(-1);
-    const next = [...arr]; next[i] = digit; setArr(next);
-    if (digit && i < 3) {
-      setTimeout(() => refs[i+1].current?.focus(), 10);
-    }
-    if (!digit && i > 0) {
-      setTimeout(() => refs[i-1].current?.focus(), 10);
-    }
-  };
-
-const handleLogin = async () => {
+const handleLogin = async (pinOverride) => {
+    const usedPin = pinOverride ?? pinStr;
+    if (!CP || usedPin.length !== 4) return;
     setError("");
     setLoading(true);
     try {
       const mat = CP.trim().toUpperCase();
-      const { token, agent } = await api.auth.login(mat, pinStr);
+      const { token, agent } = await api.auth.login(mat, usedPin);
       onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
     } catch(e) {
       if(e.message?.includes("429") || e.message?.includes("Trop")) {
@@ -7513,35 +7300,50 @@ const handleLogin = async () => {
     }
     setLoading(false);
   };
- 
-  const handleFirstTime = async () => {
+
+  const handleFirstTime = async (confirmOverride) => {
+    const usedConf = confirmOverride ?? confStr;
     if (pinStr.length < 4) { setError("4 chiffres requis"); return; }
-    if (pinStr !== confStr) { setError("Les codes ne correspondent pas"); return; }
+    if (pinStr !== usedConf) { setError("Les codes ne correspondent pas"); return; }
     const mat = CP.trim().toUpperCase();
     try {
-      const { token, agent } = await api.auth.login(mat, pinStr);
+      const { token, agent } = await api.auth.register(mat, pinStr);
       onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
     } catch(e) {
       setError(e.message || "Erreur connexion");
     }
   };
 
-  const PinInput = ({arr, setArr, refs, label}) => (
+  // Saisie PIN à 4 chiffres : UN SEUL champ invisible superposé sur 4 cases
+  // visuelles (au lieu de 4 <input> séparés qui se repassent le focus).
+  // C'est l'approche déjà utilisée pour "Changer mon PIN" (PinModal) : elle
+  // évite que le clavier virtuel mobile se ferme/rouvre à chaque chiffre
+  // (plus de changement de focus entre champs), et Entrée / l'auto-validation
+  // au 4e chiffre fonctionnent nativement puisqu'il n'y a qu'un seul input.
+  const PinInput = ({arr, setArr, label, inputRef, onComplete}) => (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
       <div style={{fontSize:11,color:"#64748b",fontWeight:600}}>{label}</div>
-      <div style={{display:"flex",gap:10}}>
+      <div style={{display:"flex",gap:10,position:"relative"}} onClick={()=>inputRef.current?.focus()}>
+        <input ref={inputRef} type="tel" inputMode="numeric" maxLength={4}
+          value={arr.join("")}
+          onChange={e=>{
+            const digits=e.target.value.replace(/\D/g,"").slice(0,4);
+            const next=["","","",""];
+            digits.split("").forEach((d,i)=>{next[i]=d;});
+            setArr(next);
+            setError("");
+            if(digits.length===4&&onComplete) setTimeout(()=>onComplete(digits),100);
+          }}
+          onKeyDown={e=>{if(e.key==="Enter"&&arr.every(d=>d)&&onComplete)onComplete(arr.join(""));}}
+          style={{position:"absolute",opacity:0,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16}}
+          autoComplete="off"/>
         {[0,1,2,3].map(i=>(
-          <input key={i} ref={refs[i]} type="password" inputMode="numeric" maxLength={1}
-            value={arr[i]}
-            onChange={e=>handlePinDigit(i,e.target.value,arr,setArr,refs)}
-            onKeyDown={e=>{
-              if(e.key==="Enter"&&arr.every(d=>d)) step==="login"?handleLogin():step==="first_time"&&confStr.length===4?handleFirstTime():setStep("confirm");
-              if(e.key==="Backspace"&&!arr[i]&&i>0)refs[i-1].current?.focus();
-            }}
-            style={{width:48,height:56,textAlign:"center",fontSize:24,fontWeight:800,
-              border:`2px solid ${error?"#ef4444":arr[i]?"#0891b2":"#e2e8f0"}`,
-              borderRadius:10,outline:"none",background:arr[i]?"#f0fdff":"#fff",
-              transition:"border-color .15s"}}/>
+          <div key={i} style={{width:48,height:56,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:800,
+            border:`2px solid ${error?"#ef4444":arr[i]?"#0891b2":"#e2e8f0"}`,
+            borderRadius:10,background:arr[i]?"#f0fdff":"#fff",
+            transition:"border-color .15s",cursor:"pointer"}}>
+            {arr[i]?"●":""}
+          </div>
         ))}
       </div>
     </div>
@@ -7571,15 +7373,15 @@ const handleLogin = async () => {
             <div>
               <input ref={cpRef} value={CP} onChange={e=>{setCP(e.target.value.toUpperCase());setError("");}}
                 placeholder="CP SNCF"
-                onKeyDown={e=>e.key==="Enter"&&pinRefs[0].current?.focus()}
+                onKeyDown={e=>e.key==="Enter"&&pinFieldRef.current?.focus()}
                 style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:14,fontFamily:"'DM Mono',monospace",fontWeight:700,outline:"none",letterSpacing:2,textAlign:"center",boxSizing:"border-box"}}/>
             </div>
 
-            <PinInput arr={pin} setArr={setPin} refs={pinRefs} label="CODE PIN (4 chiffres)"/>
+            <PinInput arr={pin} setArr={setPin} inputRef={pinFieldRef} label="CODE PIN (4 chiffres)" onComplete={(p)=>handleLogin(p)}/>
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={handleLogin} disabled={!CP||pinStr.length!==4||loading}
+            <button onClick={()=>handleLogin()} disabled={!CP||pinStr.length!==4||loading}
               style={{background:CP&&pinStr.length===4?"#0f4c81":"#e2e8f0",color:CP&&pinStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:CP&&pinStr.length===4?"pointer":"not-allowed",fontSize:14,fontWeight:800,transition:"all .15s"}}>
               {loading?"Connexion…":"Se connecter →"}
             </button>
@@ -7605,17 +7407,17 @@ const handleLogin = async () => {
               🔐 Choisis un code PIN à <strong>4 chiffres</strong>. Il protégera ton planning personnel (RP, congés…). Note-le quelque part.
             </div>
 
-            <PinInput arr={pin} setArr={setPin} refs={pinRefs} label="NOUVEAU CODE PIN"/>
-            <PinInput arr={pinConfirm} setArr={setPinConfirm} refs={confRefs} label="CONFIRME TON CODE PIN"/>
+            <PinInput arr={pin} setArr={setPin} inputRef={newPinFieldRef} label="NOUVEAU CODE PIN" onComplete={()=>confirmPinFieldRef.current?.focus()}/>
+            <PinInput arr={pinConfirm} setArr={setPinConfirm} inputRef={confirmPinFieldRef} label="CONFIRME TON CODE PIN" onComplete={(c)=>handleFirstTime(c)}/>
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={handleFirstTime} disabled={pinStr.length<4||confStr.length<4}
+            <button onClick={()=>handleFirstTime()} disabled={pinStr.length<4||confStr.length<4}
               style={{background:pinStr.length===4&&confStr.length===4?"#065f46":"#e2e8f0",color:pinStr.length===4&&confStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
               ✓ Créer mon compte
             </button>
 
-            <button onClick={()=>{setStep("login");setPin(["","","","",""]);setPinConfirm(["","","","",""]);setError("");}}
+            <button onClick={()=>{setStep("login");setPin(["","","",""]);setPinConfirm(["","","",""]);setError("");}}
               style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,textAlign:"center"}}>
               ← Retour
             </button>
@@ -8090,7 +7892,6 @@ export default function App(){
 
   const isOwnProfile=currentAgent?unlockedAgents[currentAgent.id]||false:false;
   const profils=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(profileSearch.toLowerCase()));
-  const activeNotifCount=notifications.filter(n=>!n.acquitte&&(currentAgent?n.agentId===currentAgent.id:true)).length;
 
   const VIEWS=[
     {k:"personal",l:"📊 Mon planning"},
@@ -8233,10 +8034,6 @@ export default function App(){
                   transition:"color .15s",
                 }}>
                 {l}
-                {k==="cps"&&activeNotifCount>0&&
-                  <span style={{position:"absolute",top:6,right:4,
-                    width:7,height:7,borderRadius:"50%",
-                    background:"#ef4444"}}/>}
               </button>
             );
           })}
@@ -8294,7 +8091,7 @@ export default function App(){
   {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
-      {view==="cps"&&<CpsView agents={agents} schedule={schedule} setSchedule={setSchedule} notifications={notifications} setNotifications={setNotifications} currentAgentId={currentAgent?.id} setAgentProfiles={setAgentProfiles}/>}{view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
+      {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
     </div>
 
     {/* MODALS */}

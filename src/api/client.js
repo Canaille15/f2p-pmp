@@ -41,8 +41,12 @@ async function apiFetch(path, opts = {}) {
     headers,
   });
 
-  // 401 → token expiré → on nettoie
-  if (res.status === 401) {
+  // 401 sur une requete authentifiee (token deja present) → session expiree,
+  // on nettoie et on redirige vers login. Un 401 SANS token deja envoye (ex:
+  // tentative de connexion avec un mauvais PIN) n'est pas une session expiree
+  // mais une erreur de connexion normale — geree par l'appelant (LoginPage),
+  // pas de deconnexion forcee ni d'alerte bloquante dans ce cas.
+  if (res.status === 401 && token) {
     tokenStore.clear();
     // Déclencher un event custom pour que l'app redirige vers login
     window.dispatchEvent(new CustomEvent('f2ppmp:unauthorized'));
@@ -71,6 +75,21 @@ export const auth = {
    */
   async login(cp, pin) {
     const data = await apiFetch('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ cp, pin }),
+    });
+    if (data.token) tokenStore.set(data.token);
+    return data;
+  },
+
+  /**
+   * Première connexion — crée le PIN d'un compte qui n'en a pas encore
+   * @param {string} cp
+   * @param {string} pin — PIN choisi et confirmé côté frontend
+   * @returns {{ token: string, agent: object }}
+   */
+  async register(cp, pin) {
+    const data = await apiFetch('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ cp, pin }),
     });
