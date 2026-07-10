@@ -2793,7 +2793,6 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
 
     // Profil agent
     const profil = agentProfiles[agent.id] || {};
-    const estReserviste = profil.isReserve || false;
     const roulement = profil.roulement || null; // ex: "Roulement A", "Roulement B"…
 
     // Roulement prévisionnel : si pas de planning saisi, on regarde le roulement
@@ -2801,45 +2800,36 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     // On utilise le roulement enregistré dans le profil comme indicateur d'équipe habituelle
     // Pour un dimanche : en roulement 3x8, le dimanche peut être M, AM, N ou RP selon la semaine
     // Sans table de roulement complète, on se base sur le planning saisi
-    // Si planning non saisi ET fête dans le futur : on marque "indéterminé"
     const estFutur = dateFete > today;
     const planningRenseigneCeJour = !!equipeJour;
-
-    // Travail prévisionnel (planning OU réserviste)
-    // Pour F3 dimanche : réserviste = potentiellement utilisé → RC possible
-    const estUtiliseOuReserviste = estTravaillePlanning || (estF3Dimanche && estReserviste);
 
     // ── RÈGLES PAR CAS ────────────────────────────────────────────────────────
 
     // Toutes fêtes dimanche (hors F2/F5 jamais dimanche, hors F3 cas particulier) :
     // → RC accordé si agent travaillait OU était en RP ce jour (règlement al.2 et al.3)
-    // → Si planning non saisi + fête future → statut "indéterminé" (on anticipe PERDUE par défaut
-    //   mais on laisse l'agent corriger)
+    // → Si planning non saisi + fête future → PERDUE par anticipation (on laisse l'agent corriger)
     // → Si planning non saisi + fête passée → PERDUE (on ne sait pas → défavorable)
 
-    // F3 dimanche : PERDUE sauf si service imposé (planning M/AM/N/J) OU réserviste
-    // → réserviste = "en attente de confirmation" (peut être appelé)
-    // → on affiche "PERDUE probable" si réserviste sans planning saisi
-    // → on affiche "PERDUE" si ni travail ni réserviste
+    // F3 dimanche (confirmé par Olivier le 10/07) : PERDUE dans tous les cas,
+    // SAUF si l'agent travaille ce jour-là — seule exception, contrairement aux
+    // autres fêtes du dimanche où le RP compte aussi. Le RP ne sauve pas le F3.
+    // Règle identique pour tous les agents, réservistes compris (pas de statut
+    // "en attente" spécifique pour eux — ils ne sont de toute façon pas suivis
+    // dans l'appli pour l'instant).
 
     let estPerdue = false;
     let estPerdueProbable = false; // fête dimanche future sans planning saisi
     let estRCAccorde = false;      // fête dimanche avec RC confirmé (RP ou travail)
-    let estIndetermine = false;    // fête future dimanche, planning non saisi
 
     if(estDimanche){
       if(estF3Dimanche){
         // F3 = 1er mai dimanche
         if(estTravaillePlanning){
-          estRCAccorde = true; // Service imposé confirmé → RC
-        } else if(estReserviste && !planningRenseigneCeJour){
-          estIndetermine = true; // Réserviste sans planning → peut être appelé → indéterminé
-        } else if(estRPCeJour){
-          estRCAccorde = true; // RP ce jour → RC accordé (al.3)
+          estRCAccorde = true; // Service imposé confirmé → RC accordé jusqu'à la fin du trimestre suivant
         } else if(!planningRenseigneCeJour && estFutur){
           estPerdueProbable = true; // Futur non renseigné → probable perdue
         } else {
-          estPerdue = true; // Ni travail, ni RP, ni réserviste → PERDUE
+          estPerdue = true; // Pas de travail ce jour → PERDUE
         }
       } else {
         // Toutes les autres fêtes dimanche (hors F2/F5)
@@ -2863,11 +2853,9 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     // Motif réglementaire
     let motifReglementaire = null;
     if(estPerdue && estF3Dimanche){
-      motifReglementaire = "Lorsque le 1er mai tombe un dimanche, seuls les agents dont l'utilisation est imposée par les nécessités du service bénéficient d'un RC. Aucun service imposé ni RP détecté. (Réf. GRH00143)";
+      motifReglementaire = "Lorsque le 1er mai tombe un dimanche, seuls les agents qui travaillent ce jour-là bénéficient d'un RC (le repos périodique ne compte pas, contrairement aux autres fêtes du dimanche). Aucun service imposé détecté. (Réf. GRH00143)";
     } else if(estPerdueProbable && estF3Dimanche){
-      motifReglementaire = "1er mai dimanche — Agent réserviste : RC possible si appelé en service. En attente de confirmation du planning. (Réf. GRH00143)";
-    } else if(estIndetermine && estF3Dimanche){
-      motifReglementaire = "1er mai dimanche — Agent réserviste : RC possible si service imposé. Programmez votre planning pour confirmer. (Réf. GRH00143)";
+      motifReglementaire = "1er mai dimanche — Planning non encore saisi ce jour-là. Ce sera PERDUE sauf si vous travaillez ce jour (le RP ne compte pas pour cette fête). (Réf. GRH00143)";
     } else if(estPerdue && !estF3Dimanche && estFutur){
       motifReglementaire = "Fête tombant un dimanche — aucun planning saisi. PERDUE par anticipation si ni service imposé ni RP ce jour. Corrigeable si planning mis à jour. (Réf. GRH00143)";
     } else if(estPerdue && !estF3Dimanche && !estFutur){
@@ -2876,8 +2864,6 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
       motifReglementaire = estRPCeJour
         ? "Agent en repos périodique ce jour : RC accordé dans le trimestre civil suivant. (Réf. GRH00143)"
         : "Agent utilisé ce jour : RC accordé dans le trimestre civil suivant. (Réf. GRH00143)";
-    } else if(estIndetermine){
-      motifReglementaire = "Planning non saisi — statut indéterminé. (Réf. GRH00143)";
     } else if(code === "VN"){
       motifReglementaire = "Les agents chôment le samedi veille de Noël lorsque cette fête tombe un dimanche. Ceux utilisés ou en RP bénéficient d'un RC dans le trimestre suivant. (Réf. GRH00143)";
     }
@@ -2886,29 +2872,28 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     const override = fetesData[code] || {};
     const priseLeFinal = override.priseLe !== undefined ? override.priseLe : priseLe;
     const priseTypeFinal = override.priseType || priseType;
-    const estPayee = override.estPayee || (!priseLeFinal && !estPerdue && !estIndetermine && today > limiteDate);
+    const estPayee = override.estPayee || (!priseLeFinal && !estPerdue && today > limiteDate);
     const snoozeJusquau = override.snoozeJusquau || null;
 
     // Statut final
     let statut = "attente";
     if(estPerdue)         statut = "perdue";
     else if(estPerdueProbable) statut = "perdue_probable";
-    else if(estIndetermine)    statut = "indetermine";
     else if(dateFete > today)  statut = "futur";
     else if(priseLeFinal)      statut = "prise";
     else if(estPayee)          statut = "payee";
     else if(today > limiteDate)statut = "payee_auto";
     else                       statut = "attente";
 
-    // Notif active ? (pas pour perdues/indéterminées)
-    const notifActive = !estPerdue && !estIndetermine && !priseLeFinal && !estPayee
+    // Notif active ? (pas pour perdues)
+    const notifActive = !estPerdue && !priseLeFinal && !estPayee
       && today >= notifDate && today <= limiteDate
       && (!snoozeJusquau || today >= snoozeJusquau);
 
     return {
       code, label, dateFete, estDimanche, estF3Dimanche,
-      estPerdue, estPerdueProbable, estIndetermine, estRCAccorde,
-      estRPCeJour, estTravaillePlanning, estReserviste, motifReglementaire,
+      estPerdue, estPerdueProbable, estRCAccorde,
+      estRPCeJour, estTravaillePlanning, motifReglementaire,
       limiteDate, notifDate, moisPaye, anneePaye,
       priseLe: priseLeFinal, priseType: priseTypeFinal,
       estPayee, statut, notifActive, override,
@@ -3024,7 +3009,6 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     payee_auto:     {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée auto"},
     perdue:         {bg:"#fef2f2", border:"#fecaca", badge:"#dc2626", badgeTc:"#fff",     icon:"❌", label:"PERDUE"},
     perdue_probable:{bg:"#fff7ed", border:"#fed7aa", badge:"#ea580c", badgeTc:"#fff",     icon:"⚠️", label:"Prob. perdue"},
-    indetermine:    {bg:"#faf5ff", border:"#e9d5ff", badge:"#7c3aed", badgeTc:"#fff",     icon:"❓", label:"Indéterminé"},
   };
 
   const canEdit = isOwnProfile || isAdmin;
