@@ -7286,7 +7286,6 @@ function PinInput({arr, setArr, label, inputRef, onComplete, error, setError}) {
             setError?.("");
             if(digits.length===4&&onComplete) setTimeout(()=>onComplete(digits),100);
           }}
-          onKeyDown={e=>{if(e.key==="Enter"&&arr.every(d=>d)&&onComplete)onComplete(arr.join(""));}}
           style={{position:"absolute",opacity:0,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16}}
           autoComplete="off"/>
         {[0,1,2,3].map(i=>(
@@ -7371,7 +7370,12 @@ const handleLogin = async (pinOverride) => {
         <div style={{padding:"28px 24px",display:"flex",flexDirection:"column",gap:20}}>
 
           {/* CONNEXION NORMALE */}
-          {step === "login" && <>
+          {step === "login" && (
+          <form onSubmit={e=>{
+            e.preventDefault();
+            if(CP && pinStr.length===4 && !loading) handleLogin();
+            else if(CP) pinFieldRef.current?.focus();
+          }} style={{display:"flex",flexDirection:"column",gap:20}}>
             <div style={{textAlign:"center"}}>
               <div style={{fontSize:16,fontWeight:800,color:"#1e293b"}}>Connexion</div>
               <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>Entre ton CP et ton code PIN</div>
@@ -7380,7 +7384,6 @@ const handleLogin = async (pinOverride) => {
             <div>
               <input ref={cpRef} value={CP} onChange={e=>{setCP(e.target.value.toUpperCase());setError("");}}
                 placeholder="CP SNCF"
-                onKeyDown={e=>e.key==="Enter"&&pinFieldRef.current?.focus()}
                 style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:14,fontFamily:"'DM Mono',monospace",fontWeight:700,outline:"none",letterSpacing:2,textAlign:"center",boxSizing:"border-box"}}/>
             </div>
 
@@ -7388,7 +7391,7 @@ const handleLogin = async (pinOverride) => {
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={()=>handleLogin()} disabled={!CP||pinStr.length!==4||loading}
+            <button type="submit" disabled={!CP||pinStr.length!==4||loading}
               style={{background:CP&&pinStr.length===4?"#0f4c81":"#e2e8f0",color:CP&&pinStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:CP&&pinStr.length===4?"pointer":"not-allowed",fontSize:14,fontWeight:800,transition:"all .15s"}}>
               {loading?"Connexion…":"Se connecter →"}
             </button>
@@ -7396,10 +7399,17 @@ const handleLogin = async (pinOverride) => {
             <div style={{textAlign:"center",fontSize:11,color:"#94a3b8"}}>
               Première connexion ? Entre ton CP et ton PIN sera créé.
             </div>
-          </>}
+          </form>
+          )}
 
           {/* PREMIÈRE CONNEXION */}
-          {step === "first_time" && <>
+          {step === "first_time" && (
+          <form onSubmit={e=>{
+            e.preventDefault();
+            if(pinStr.length!==4){ newPinFieldRef.current?.focus(); return; }
+            if(confStr.length!==4){ confirmPinFieldRef.current?.focus(); return; }
+            handleFirstTime();
+          }} style={{display:"flex",flexDirection:"column",gap:20}}>
             <div style={{textAlign:"center"}}>
               <div style={{fontSize:16,fontWeight:800,color:"#1e293b"}}>Première connexion</div>
               <div style={{fontSize:12,color:"#94a3b8",marginTop:4}}>CP : <strong style={{color:"#0f4c81",fontFamily:"monospace"}}>{CP}</strong></div>
@@ -7419,16 +7429,17 @@ const handleLogin = async (pinOverride) => {
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
-            <button onClick={()=>handleFirstTime()} disabled={pinStr.length<4||confStr.length<4}
+            <button type="submit" disabled={pinStr.length<4||confStr.length<4}
               style={{background:pinStr.length===4&&confStr.length===4?"#065f46":"#e2e8f0",color:pinStr.length===4&&confStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
               ✓ Créer mon compte
             </button>
 
-            <button onClick={()=>{setStep("login");setPin(["","","",""]);setPinConfirm(["","","",""]);setError("");}}
+            <button type="button" onClick={()=>{setStep("login");setPin(["","","",""]);setPinConfirm(["","","",""]);setError("");}}
               style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,textAlign:"center"}}>
               ← Retour
             </button>
-          </>}
+          </form>
+          )}
 
         </div>
       </div>
