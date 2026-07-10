@@ -2360,11 +2360,11 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const computed = useMemo(()=>{
     if(!agent) return {};
     const c = {travail:0,RP:0,RU:0,RQ:0,RN:0,TC:0,TY:0,CA:0,CP:0,MA:0,VT:0,ABS:0,FOR:0,NU:0,FETE:0};
-    Object.entries(schedule).forEach(([key,val])=>{
-      if(!key.startsWith(agent.id+"-")) return;
-      const dk = key.slice(agent.id.length+1);
-      if(dk < start || dk > end) return;
-      const eq = val?.equipe;
+    // Comptabilise un code equipe (M/AM/N/J/RP/CA/...) dans le bon compteur.
+    // Appelee separement pour equipe ET equipe2 : une case peut combiner un
+    // repos/absence (equipe) avec une nuit accolee (equipe2="N") qui reste
+    // une vraie journee travaillee a comptabiliser, pas juste le repos.
+    const tally = (eq) => {
       if(!eq) return;
       // Fêtes légales (F1,F2…) et JF → compteur FETE, pas travail
       if(CODES_FETES[eq] || eq==="JF"){
@@ -2375,6 +2375,23 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
       // RPP alimente le même compteur que RP (palette dissociée, même comptabilisation)
       const eqCompteur = eq==="RPP" ? "RP" : eq;
       if(c[eqCompteur]!==undefined) c[eqCompteur]++;
+    };
+    Object.entries(schedule).forEach(([key,val])=>{
+      if(!key.startsWith(agent.id+"-")) return;
+      const dk = key.slice(agent.id.length+1);
+      if(dk < start || dk > end) return;
+      // "Nuit seule" est encodee avec equipe=equipe2="N" (marqueur technique
+      // redondant, voir isNuitSeule dans DayEditPopup) : une seule vraie nuit,
+      // ne pas la compter deux fois. Dans tous les autres cas (repos/absence
+      // + nuit accolee, ex RP+N), equipe et equipe2 sont deux journees
+      // distinctes a comptabiliser chacune.
+      const isNuitSeule = val?.equipe==="N" && val?.equipe2==="N";
+      if(isNuitSeule){
+        tally("N");
+      } else {
+        tally(val?.equipe);
+        tally(val?.equipe2);
+      }
     });
     return c;
   },[agent,schedule,year]);
