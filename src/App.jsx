@@ -3105,14 +3105,21 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
 
           {/* Prise le */}
           {isEditing?(
-            <div style={{display:"flex",gap:6,alignItems:"center",flex:1}}>
-              <input type="date" defaultValue={l.priseLe||""} 
+            <div style={{display:"flex",gap:6,alignItems:"center",flex:1,flexWrap:"wrap"}}>
+              <input type="date" defaultValue={l.priseLe||""}
                 onChange={e=>setEditVal(e.target.value)}
                 style={{border:"1px solid #cbd5e1",borderRadius:7,padding:"6px 9px",
-                  fontSize:13,outline:"none",flex:1,minHeight:34}}/>
+                  fontSize:13,outline:"none",flex:1,minHeight:34,minWidth:120}}/>
               <button onClick={()=>setManualDate(l.code,editVal,targetYear)}
                 style={{background:"#16a34a",color:"#fff",border:"none",
                   borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✓</button>
+              {/* Bouton Effacer explicite : le picker natif iOS (roue) n'a pas
+                  de bouton "Effacer" contrairement a desktop/Android — sans
+                  ca, impossible de revenir a une date vide une fois choisie. */}
+              {l.priseLe&&<button onClick={()=>setManualDate(l.code,"",targetYear)}
+                title="Effacer la date"
+                style={{background:"#fef2f2",color:"#b91c1c",border:"1px solid #fecaca",
+                  borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>🗑 Effacer</button>}
               <button onClick={()=>setEditingCode(null)}
                 style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",
                   borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕</button>
@@ -5592,13 +5599,22 @@ ${agent?.prenom} ${agent?.nom}`
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                 <div>
                   <label style={{fontSize:10,color:"#64748b",display:"block",marginBottom:3}}>Du (inclus)</label>
-                  <input type="date" value={form.debut1} onChange={e=>setForm(p=>({...p,debut1:e.target.value}))}
-                    style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}/>
+                  <div style={{display:"flex",gap:4}}>
+                    <input type="date" value={form.debut1} onChange={e=>setForm(p=>({...p,debut1:e.target.value}))}
+                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}/>
+                    {/* Effacer explicite : le picker natif iOS n'a pas de bouton pour revenir a vide */}
+                    {form.debut1&&<button type="button" onClick={()=>setForm(p=>({...p,debut1:""}))} title="Effacer"
+                      style={{border:"1.5px solid #e2e8f0",borderRadius:8,background:"#f8fafc",color:"#64748b",cursor:"pointer",padding:"0 8px",fontSize:13,flexShrink:0}}>×</button>}
+                  </div>
                 </div>
                 <div>
                   <label style={{fontSize:10,color:"#64748b",display:"block",marginBottom:3}}>Au (inclus)</label>
-                  <input type="date" value={form.fin1} onChange={e=>setForm(p=>({...p,fin1:e.target.value}))}
-                    style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}/>
+                  <div style={{display:"flex",gap:4}}>
+                    <input type="date" value={form.fin1} onChange={e=>setForm(p=>({...p,fin1:e.target.value}))}
+                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}/>
+                    {form.fin1&&<button type="button" onClick={()=>setForm(p=>({...p,fin1:""}))} title="Effacer"
+                      style={{border:"1.5px solid #e2e8f0",borderRadius:8,background:"#f8fafc",color:"#64748b",cursor:"pointer",padding:"0 8px",fontSize:13,flexShrink:0}}>×</button>}
+                  </div>
                 </div>
               </div>
               {form.debut1&&form.fin1&&<div style={{marginTop:8,fontSize:12,color:"#c2410c",fontWeight:700,textAlign:"center"}}>
@@ -5615,13 +5631,21 @@ ${agent?.prenom} ${agent?.nom}`
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                   <div>
                     <label style={{fontSize:10,color:"#64748b",display:"block",marginBottom:3}}>Du (inclus)</label>
-                    <input type="date" value={form.debut2} onChange={e=>setForm(p=>({...p,debut2:e.target.value}))}
-                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}/>
+                    <div style={{display:"flex",gap:4}}>
+                      <input type="date" value={form.debut2} onChange={e=>setForm(p=>({...p,debut2:e.target.value}))}
+                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}/>
+                      {form.debut2&&<button type="button" onClick={()=>setForm(p=>({...p,debut2:""}))} title="Effacer"
+                        style={{border:"1.5px solid #e2e8f0",borderRadius:8,background:"#fff",color:"#64748b",cursor:"pointer",padding:"0 8px",fontSize:13,flexShrink:0}}>×</button>}
+                    </div>
                   </div>
                   <div>
                     <label style={{fontSize:10,color:"#64748b",display:"block",marginBottom:3}}>Au (inclus)</label>
-                    <input type="date" value={form.fin2} onChange={e=>setForm(p=>({...p,fin2:e.target.value}))}
-                      style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}/>
+                    <div style={{display:"flex",gap:4}}>
+                      <input type="date" value={form.fin2} onChange={e=>setForm(p=>({...p,fin2:e.target.value}))}
+                        style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:13,outline:"none"}}/>
+                      {form.fin2&&<button type="button" onClick={()=>setForm(p=>({...p,fin2:""}))} title="Effacer"
+                        style={{border:"1.5px solid #e2e8f0",borderRadius:8,background:"#fff",color:"#64748b",cursor:"pointer",padding:"0 8px",fontSize:13,flexShrink:0}}>×</button>}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -6010,7 +6034,11 @@ function EchangesView({agents,currentAgent}){
 
       <div>
         <div style={{fontSize:13,color:"#64748b",marginBottom:4}}>Journée à échanger</div>
-        <input type="date" value={form.date} onChange={ev=>setForm(p=>({...p,date:ev.target.value}))} style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"10px 12px",fontSize:15,outline:"none"}}/>
+        <div style={{display:"flex",gap:6}}>
+          <input type="date" value={form.date} onChange={ev=>setForm(p=>({...p,date:ev.target.value}))} style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"10px 12px",fontSize:15,outline:"none"}}/>
+          {form.date&&<button type="button" onClick={()=>setForm(p=>({...p,date:""}))} title="Effacer"
+            style={{border:"1.5px solid #e2e8f0",borderRadius:8,background:"#f8fafc",color:"#64748b",cursor:"pointer",padding:"0 12px",fontSize:14}}>×</button>}
+        </div>
       </div>
 
       <div>
