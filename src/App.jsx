@@ -7286,6 +7286,16 @@ function PinInput({arr, setArr, label, inputRef, onComplete, error, setError}) {
             setError?.("");
             if(digits.length===4&&onComplete) setTimeout(()=>onComplete(digits),100);
           }}
+          onKeyDown={e=>{
+            // Ne pas compter sur la soumission implicite native du <form> au
+            // clavier (peu fiable selon navigateur/OS) : on gere Entree nous-
+            // memes et on bloque le comportement natif pour eviter un double
+            // declenchement.
+            if(e.key==="Enter"){
+              e.preventDefault();
+              if(arr.every(d=>d)&&onComplete) onComplete(arr.join(""));
+            }
+          }}
           style={{position:"absolute",opacity:0,width:"100%",height:"100%",top:0,left:0,zIndex:1,fontSize:16}}
           autoComplete="off"/>
         {[0,1,2,3].map(i=>(
@@ -7384,6 +7394,13 @@ const handleLogin = async (pinOverride) => {
             <div>
               <input ref={cpRef} value={CP} onChange={e=>{setCP(e.target.value.toUpperCase());setError("");}}
                 placeholder="CP SNCF"
+                onKeyDown={e=>{
+                  if(e.key==="Enter"){
+                    e.preventDefault();
+                    if(CP&&pinStr.length===4&&!loading) handleLogin();
+                    else pinFieldRef.current?.focus();
+                  }
+                }}
                 style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:14,fontFamily:"'DM Mono',monospace",fontWeight:700,outline:"none",letterSpacing:2,textAlign:"center",boxSizing:"border-box"}}/>
             </div>
 
