@@ -37,7 +37,6 @@ const HAB_PAR = [
 export default function AgentHeader({
   agent,
   profile,
-  counts,
   compteurYear,
   setCompteurYear,
   onImportDP,
