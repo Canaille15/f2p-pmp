@@ -6838,6 +6838,8 @@ function PinInput({arr, setArr, label, inputRef, onComplete, error, setError, au
   );
 }
 
+const REMEMBER_CP_KEY = "f2ppmp_remembered_cp";
+
 function LoginPage({ onLogin, authData, setAuthData }) {
   const [step, setStep] = useState("login"); // "login" | "first_time" | "forgot"
   const [CP, setCP] = useState("");
@@ -6845,6 +6847,7 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   const [pinConfirm, setPinConfirm] = useState(["","","",""]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const cpRef=useRef();
   const pinFieldRef=useRef();
   const newPinFieldRef=useRef();
@@ -6854,8 +6857,19 @@ function LoginPage({ onLogin, authData, setAuthData }) {
   const confStr = pinConfirm.join("");
 
   // Focus automatique sur le premier champ au montage, et sur le nouveau PIN
-  // quand on bascule vers la creation de compte.
-  useEffect(()=>{ cpRef.current?.focus(); },[]);
+  // quand on bascule vers la creation de compte. Si un CP a ete memorise
+  // (case "se souvenir de moi"), on le pre-remplit et on va direct au PIN.
+  useEffect(()=>{
+    let remembered;
+    try { remembered = localStorage.getItem(REMEMBER_CP_KEY); } catch { remembered = null; }
+    if(remembered){
+      setCP(remembered);
+      setRememberMe(true);
+      pinFieldRef.current?.focus();
+    } else {
+      cpRef.current?.focus();
+    }
+  },[]);
   useEffect(()=>{ if(step==="first_time") newPinFieldRef.current?.focus(); },[step]);
 
 const handleLogin = async (pinOverride) => {
@@ -6866,6 +6880,10 @@ const handleLogin = async (pinOverride) => {
     try {
       const mat = CP.trim().toUpperCase();
       const { token, agent } = await api.auth.login(mat, usedPin);
+      try {
+        if(rememberMe) localStorage.setItem(REMEMBER_CP_KEY, mat);
+        else localStorage.removeItem(REMEMBER_CP_KEY);
+      } catch {}
       onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
     } catch(e) {
       if(e.message?.includes("429") || e.message?.includes("Trop")) {
@@ -6886,6 +6904,10 @@ const handleLogin = async (pinOverride) => {
     const mat = CP.trim().toUpperCase();
     try {
       const { token, agent } = await api.auth.register(mat, pinStr);
+      try {
+        if(rememberMe) localStorage.setItem(REMEMBER_CP_KEY, mat);
+        else localStorage.removeItem(REMEMBER_CP_KEY);
+      } catch {}
       onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
     } catch(e) {
       setError(e.message || "Erreur connexion");
@@ -6932,6 +6954,11 @@ const handleLogin = async (pinOverride) => {
             </div>
 
             <PinInput arr={pin} setArr={setPin} inputRef={pinFieldRef} label="CODE PIN (4 chiffres)" onComplete={(p)=>handleLogin(p)} error={error} setError={setError}/>
+
+            <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#64748b",cursor:"pointer",userSelect:"none"}}>
+              <input type="checkbox" checked={rememberMe} onChange={e=>setRememberMe(e.target.checked)} style={{width:15,height:15,cursor:"pointer"}}/>
+              Se souvenir de mon CP sur cet appareil
+            </label>
 
             {error && <div style={{background:"#fee2e2",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
 
