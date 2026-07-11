@@ -2348,19 +2348,19 @@ function TravailDashboardModal({ agent, schedule, year, onClose }) {
             {[
               {k:"PRCI", label:"PRCI", color:"#1d4ed8"},
               {k:"PAR",  label:"PAR",  color:"#065f46"},
-              {k:"sansPoste", label:"Non affecté", color:"#64748b"},
+              {k:"sansPoste", label:"Non affecté", color:"#475569"},
             ].map(({k,label,color})=>(
               <div key={k} style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
                 <div style={{fontSize:11,fontWeight:700,color}}>{label}</div>
                 <div style={{fontSize:20,fontWeight:900,color}}>{data.repartition[k].jours}</div>
-                <div style={{fontSize:10,color:"#94a3b8"}}>{data.repartition[k].pct}%</div>
+                <div style={{fontSize:11,fontWeight:600,color:"#475569"}}>{data.repartition[k].pct}%</div>
               </div>
             ))}
           </div>
 
           {/* Détail par poste */}
           {data.postes.length===0 ? (
-            <div style={{fontSize:12,color:"#94a3b8",textAlign:"center",padding:12}}>Aucun poste précisé cette année.</div>
+            <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucun poste précisé cette année.</div>
           ) : (
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {data.postes.map(p=>(
@@ -2372,14 +2372,14 @@ function TravailDashboardModal({ agent, schedule, year, onClose }) {
                     </div>
                     <div style={{textAlign:"right"}}>
                       <div style={{fontSize:15,fontWeight:900,color:"#1e293b"}}>{p.total}j</div>
-                      <div style={{fontSize:9,color:"#94a3b8"}}>dernier : {fmtDate(p.lastDate)}</div>
+                      <div style={{fontSize:10,fontWeight:600,color:"#475569"}}>dernier : {fmtDate(p.lastDate)}</div>
                     </div>
                   </div>
                   <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                     {Object.entries(p.parShift).map(([shift,s])=>(
-                      <div key={shift} style={{background:"#f8fafc",borderRadius:7,padding:"4px 8px",fontSize:10}}>
-                        <span style={{fontWeight:700,color:"#475569"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
-                        <span style={{color:"#94a3b8",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
+                      <div key={shift} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10}}>
+                        <span style={{fontWeight:700,color:"#334155"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
+                        <span style={{fontWeight:600,color:"#475569",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
                       </div>
                     ))}
                   </div>
@@ -2389,7 +2389,7 @@ function TravailDashboardModal({ agent, schedule, year, onClose }) {
           )}
 
           {data.sansPoste.total>0 && (
-            <div style={{fontSize:11,color:"#94a3b8",background:"#f8fafc",borderRadius:8,padding:"8px 10px"}}>
+            <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
               ⚠️ {data.sansPoste.total} jour{data.sansPoste.total>1?"s":""} travaillé{data.sansPoste.total>1?"s":""} sans poste précisé (dernier : {fmtDate(data.sansPoste.lastDate)}) — le poste n'a pas été renseigné dans le planning ce jour-là.
             </div>
           )}
