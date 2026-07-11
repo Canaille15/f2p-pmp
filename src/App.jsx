@@ -2483,20 +2483,19 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const computedStr = JSON.stringify(computed);
   useEffect(()=>{
     if(!agent||Object.keys(computed).length===0) return;
-    setCorrections(prev=>{
-      const updated = {...prev, _updatedAt: new Date().toISOString()};
-      setAgentProfiles(pp=>({
-        ...pp,
-        [agent.id]:{
-          ...(pp[agent.id]||{}),
-          compteurCorrections:{
-            ...(pp[agent.id]?.compteurCorrections||{}),
-            [year]: updated,
-          }
+    const updated = {...corrections, _updatedAt: new Date().toISOString()};
+    setCorrections(updated);
+    setAgentProfiles(pp=>({
+      ...pp,
+      [agent.id]:{
+        ...(pp[agent.id]||{}),
+        compteurCorrections:{
+          ...(pp[agent.id]?.compteurCorrections||{}),
+          [year]: updated,
         }
-      }));
-      return updated;
-    });
+      }
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   },[computedStr]);
 
   const CONGES_ANNUELS = 28;
