@@ -6740,21 +6740,6 @@ function AddAgentModal({onClose,onAdd}){
 // ─── AUTHENTIFICATION ────────────────────────────────────────────────────────
 // CPs admin par défaut (à personnaliser)
 
-const ADMIN_MATRICULES_DEFAULT = ["6810186B"]; // BEFFARAL Olivierlivier — premier admin
-
-// Hash simple pour PIN (en prod utiliser bcrypt via Supabase Edge Function)
-function hashPin(CP, pin) {
-  // Combine CP + pin pour un hash unique par agent
-  const str = `${CP}-${pin}-f2ppmp2026`;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36).padStart(8, '0');
-}
-
 // Trouver un agent par CP dans AGENTS_INIT
 function findAgentByCP(CP) {
   return AGENTS_INIT.find(a =>
@@ -6824,7 +6809,7 @@ function PinInput({arr, setArr, label, inputRef, onComplete, error, setError, au
 
 const REMEMBER_CP_KEY = "f2ppmp_remembered_cp";
 
-function LoginPage({ onLogin, authData, setAuthData }) {
+function LoginPage({ onLogin }) {
   const [step, setStep] = useState("login"); // "login" | "first_time" | "forgot"
   const [CP, setCP] = useState("");
   const [pin, setPin] = useState(["","","",""]);
@@ -7002,6 +6987,72 @@ const handleLogin = async (pinOverride) => {
   );
 }
 
+// Modale "Connexion requise" — accès au profil d'un autre agent depuis le
+// sélecteur de profil. Vérifie le CP+PIN via le vrai flux api.auth.login
+// (comme LoginPage), pas via un mécanisme de hash local.
+function LoginTargetModal({ target, onSuccess, onClose }) {
+  const [mat, setMat] = useState("");
+  const [pin, setPin] = useState(["","","",""]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const matRef = useRef();
+  const pinRef = useRef();
+  const pinStr = pin.join("");
+  const fam = FAMILLES[target.famille];
+
+  useEffect(()=>{ matRef.current?.focus(); },[]);
+
+  const tryLogin = async (pinOverride) => {
+    const usedPin = pinOverride ?? pinStr;
+    const m = mat.trim().toUpperCase();
+    if(!m || usedPin.length !== 4) return;
+    if(m !== (target.immatriculation||"").toUpperCase()){ setError("CP incorrect"); return; }
+    setError("");
+    setLoading(true);
+    try {
+      const { agent } = await api.auth.login(m, usedPin);
+      onSuccess({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
+    } catch(e) {
+      setError(e.message || "CP ou PIN incorrect");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(6px)"}}>
+      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:380,boxShadow:"0 24px 60px rgba(0,0,0,.35)",overflow:"hidden"}}>
+        <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,padding:"20px 22px",textAlign:"center"}}>
+          <div style={{fontSize:28,marginBottom:6}}>🔐</div>
+          <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Connexion requise</div>
+          <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginTop:3}}>{target.prenom} {target.nom}</div>
+        </div>
+        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{background:"#eff6ff",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#1e40af"}}>
+            Seul(e) <strong>{target.prenom} {target.nom}</strong> peut accéder à son planning.
+          </div>
+          <input ref={matRef} value={mat} onChange={e=>{setMat(e.target.value.toUpperCase());setError("");}}
+            placeholder="CP SNCF"
+            onKeyDown={e=>{
+              if(e.key==="Enter"){
+                e.preventDefault();
+                if(mat&&pinStr.length===4&&!loading) tryLogin();
+                else pinRef.current?.focus();
+              }
+            }}
+            style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:"monospace",fontWeight:700,letterSpacing:2,textAlign:"center",outline:"none",boxSizing:"border-box"}}/>
+          <PinInput arr={pin} setArr={setPin} inputRef={pinRef} label="CODE PIN (4 chiffres)" onComplete={(p)=>tryLogin(p)} error={error} setError={setError}/>
+          {error&&<div style={{background:"#fee2e2",borderRadius:9,padding:"8px 12px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
+          <button onClick={()=>tryLogin()} disabled={!mat||pinStr.length<4||loading}
+            style={{background:mat&&pinStr.length===4?(fam?.color||"#1e293b"):"#e2e8f0",color:mat&&pinStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:10,padding:"12px 0",cursor:loading?"wait":"pointer",fontSize:14,fontWeight:800}}>
+            {loading?"Connexion…":"Se connecter →"}
+          </button>
+          <button onClick={onClose} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:12,textAlign:"center"}}>Annuler</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Panneau de gestion des comptes (admin)
 // DEAD_CODE_REMOVED_MARKER (ancien AdminAuthPanel, remplace par toggle admin reel dans AdminPanel.jsx)
 export default function App(){
@@ -7027,7 +7078,6 @@ export default function App(){
   const [notifications,setNotifications]=usePersist("notifications",[]);
   const [departDates,setDepartDates]=usePersist("departDates",{});
   // ── AUTH ──────────────────────────────────────────────────────────────────
-  const [authData,setAuthData]=usePersist("authData",{});
   const [currentUser,setCurrentUser]=usePersist("currentUser",null);
   // Charger les agents depuis l'API (source de verite = Railway) - seulement si connecte
     const rechargerAgents = () => {
@@ -7443,7 +7493,7 @@ export default function App(){
   },[departDates]);
 
   // Redirection si non connecté
-  if(!currentUser) return <LoginPage onLogin={handleLogin} authData={authData} setAuthData={setAuthData}/>;
+  if(!currentUser) return <LoginPage onLogin={handleLogin}/>;
 
   // Charger les données Supabase si pas encore fait (au premier rendu après login)
   if(currentUser?.agent?.id && !loadedRef.current[currentUser.agent.id]){
@@ -7674,62 +7724,12 @@ export default function App(){
     
 
     {/* Modale login pour accéder au profil d'un autre agent */}
-    {loginTarget&&(()=>{
-      const fam=FAMILLES[loginTarget.famille];
-      const [mat,setMat]=React.useState("");
-      const [pin,setPin]=React.useState(["","","","",""]);
-      const [err,setErr]=React.useState("");
-      const lt0=React.useRef(),lt1=React.useRef(),lt2=React.useRef(),lt3=React.useRef();
-      const pinRefs=[lt0,lt1,lt2,lt3];
-      const pinStr=pin.join("");
-      const tryLogin=()=>{
-        const m=mat.trim().toUpperCase();
-        if(m!==(loginTarget.immatriculation||"").toUpperCase()){setErr("CP incorrect");return;}
-        const stored=authData[m];
-        if(!stored?.pinHash){setErr("Aucun compte créé pour cet agent");return;}
-        if(hashPin(m,pinStr)!==stored.pinHash){setErr("Code PIN incorrect");return;}
-        const user={agent:loginTarget,isAdmin:stored.isAdmin||ADMIN_MATRICULES_DEFAULT.includes(m)};
-        setCurrentUser(user);setCurrentAgent(loginTarget);
-        setLoginTarget(null);setView("personal");
-      };
-      return <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(6px)"}}>
-        <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:380,boxShadow:"0 24px 60px rgba(0,0,0,.35)",overflow:"hidden"}}>
-          <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,padding:"20px 22px",textAlign:"center"}}>
-            <div style={{fontSize:28,marginBottom:6}}>🔐</div>
-            <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Connexion requise</div>
-            <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginTop:3}}>{loginTarget.prenom} {loginTarget.nom}</div>
-          </div>
-          <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{background:"#eff6ff",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#1e40af"}}>
-              Seul(e) <strong>{loginTarget.prenom} {loginTarget.nom}</strong> peut accéder à son planning.
-            </div>
-            <input value={mat} onChange={e=>{setMat(e.target.value.toUpperCase());setErr("");}}
-              placeholder="CP SNCF"
-              style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:"monospace",fontWeight:700,letterSpacing:2,textAlign:"center",outline:"none",boxSizing:"border-box"}}/>
-            <div style={{display:"flex",justifyContent:"center",gap:8}}>
-              {[0,1,2,3].map(i=>(
-                <input key={i} ref={pinRefs[i]} type="password" inputMode="numeric" maxLength={1}
-                  value={pin[i]}
-                  onChange={e=>{
-                    const digit=e.target.value.replace(/[^0-9]/g,'').slice(-1);
-                    const next=[...pin];next[i]=digit;setPin(next);
-                    if(digit&&i<3) setTimeout(()=>pinRefs[i+1].current?.focus(),10);
-                    if(!digit&&i>0) setTimeout(()=>pinRefs[i-1].current?.focus(),10);
-                    setErr("");
-                  }}
-                  onKeyDown={e=>{if(e.key==="Enter"&&pin.every(d=>d))tryLogin();if(e.key==="Backspace"&&!pin[i]&&i>0)pinRefs[i-1].current?.focus();}}
-                  style={{width:46,height:54,textAlign:"center",fontSize:22,fontWeight:800,border:`2px solid ${err?"#ef4444":"#e2e8f0"}`,borderRadius:9,outline:"none"}}/>
-              ))}
-            </div>
-            {err&&<div style={{background:"#fee2e2",borderRadius:9,padding:"8px 12px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{err}</div>}
-            <button onClick={tryLogin} disabled={!mat||pinStr.length<4}
-              style={{background:mat&&pinStr.length===4?(fam?.color||"#1e293b"):"#e2e8f0",color:mat&&pinStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:10,padding:"12px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
-              Se connecter →
-            </button>
-            <button onClick={()=>setLoginTarget(null)} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:12,textAlign:"center"}}>Annuler</button>
-          </div>
-        </div>
-      </div>;
-    })()}
+    {loginTarget&&(
+      <LoginTargetModal
+        target={loginTarget}
+        onClose={()=>setLoginTarget(null)}
+        onSuccess={(user)=>{ handleLogin(user); setLoginTarget(null); }}
+      />
+    )}
   </div>);
 }
