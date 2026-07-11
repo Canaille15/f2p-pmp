@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 
 // ─── Coordonnées validées sur le formulaire officiel SNCF "GA_demande_autorisation_absence.pdf" ───
@@ -154,6 +154,8 @@ export default function DemandeCongesView({ currentAgent }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [messageCopie, setMessageCopie] = useState(false);
+  const [messageSurligne, setMessageSurligne] = useState(false);
+  const emailCardRef = useRef(null);
 
   const majPeriode = (i, champ, val) => {
     setPeriodes(prev => prev.map((p, idx) => idx === i ? { ...p, [champ]: val } : p));
@@ -210,6 +212,9 @@ export default function DemandeCongesView({ currentAgent }) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      emailCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setMessageSurligne(true);
+      setTimeout(() => setMessageSurligne(false), 2500);
     } catch (e) {
       console.error(e);
       setErr("Erreur lors de la génération du PDF. Réessaie.");
@@ -305,13 +310,23 @@ export default function DemandeCongesView({ currentAgent }) {
 
           {err && <div style={{ fontSize: 13, fontWeight: 600, color: "#991b1b" }}>{err}</div>}
 
+          <div style={{ fontSize: 12, color: "#0C447C", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 10px", fontWeight: 600 }}>
+            💡 Un message email prêt à copier t'attend juste en dessous — pense à l'envoyer avec ton PDF.
+          </div>
+
           <button onClick={generer} disabled={busy} style={{ padding: "13px 0", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: busy ? "wait" : "pointer", background: "#0C447C", color: "#fff", marginTop: 8 }}>
             {busy ? "Génération…" : "📄 Générer le PDF"}
           </button>
         </div>
       </div>
 
-      <div style={{ background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 14, padding: 20 }}>
+      <div ref={emailCardRef} style={{
+        background: "#fff",
+        border: messageSurligne ? "1.5px solid #0C447C" : "1.5px solid #e2e8f0",
+        borderRadius: 14, padding: 20,
+        boxShadow: messageSurligne ? "0 0 0 4px #bfdbfe" : "none",
+        transition: "box-shadow .3s, border-color .3s",
+      }}>
         <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>✉️ Message pour ton email</div>
         <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>
           À coller toi-même dans ton email au moment d'envoyer le PDF généré ci-dessus.

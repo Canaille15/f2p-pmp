@@ -4125,22 +4125,6 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   return result;
 }
 
-// Détecte automatiquement la famille habilitée d'un réserviste
-// en analysant les codes jsCode de son planning (PICCL-, PIADJ-, PAAC-, etc.)
-function detectFamillesReserviste(agentId, schedule){
-  let hasPRCI = false, hasPAR = false;
-  Object.entries(schedule).forEach(([k,v])=>{
-    if(!k.startsWith(agentId+"-")) return;
-    const js = v?.jsCode||"";
-    if(js.startsWith("PI") || js.startsWith("PI")) hasPRCI = true;
-    if(js.startsWith("PA")) hasPAR = true;
-  });
-  if(hasPRCI && hasPAR) return "BOTH";
-  if(hasPRCI) return "PRCI";
-  if(hasPAR) return "PAR";
-  return null;
-}
-
 function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,agentCouleurs,setAgentCouleurs,echangesCount,onOpenEchanges}){
   const [echangesDismissedCount,setEchangesDismissedCount]=usePersist("echangesDismissedCount",0);
   const [showHab,setShowHab]=useState(false);
