@@ -2240,6 +2240,165 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
 }
 
 
+// ─── REGISTRE jsCode → poste (pour le tableau de bord journées travaillées) ──
+// Construit une fois : associe chaque jsCode connu (3x8 et journée) à son
+// poste, sa famille (PRCI/PAR) et sa vacation (M/AM/N pour le 3x8, J pour
+// les postes journée — une seule vacation, pas de sous-détail).
+const POSTE_REGISTRY = (() => {
+  const reg = {};
+  [
+    ...POSTES_PRCI_3x8.map(p=>({...p,famille:"PRCI"})),
+    ...POSTES_PAR_3x8.map(p=>({...p,famille:"PAR"})),
+  ].forEach(p=>{
+    if(p.M)  reg[p.M]  = {code:p.code, label:p.label, famille:p.famille, shift:"M"};
+    if(p.AM) reg[p.AM] = {code:p.code, label:p.label, famille:p.famille, shift:"AM"};
+    if(p.N)  reg[p.N]  = {code:p.code, label:p.label, famille:p.famille, shift:"N"};
+  });
+  POSTES_JOURNEE.forEach(p=>{
+    reg[p.jsCode] = {code:p.jsCode, label:p.label, famille:p.famille, shift:"J"};
+  });
+  return reg;
+})();
+
+// Calcule le détail des journées travaillées par poste/vacation pour une
+// année donnée, à partir du planning perso réel — jamais recalculé si les
+// habilitations changent ensuite : uniquement basé sur ce qui a été saisi
+// jour par jour dans le passé (même principe que les compteurs existants).
+// Même définition de "jour travaillé" que DashboardCompteurs.computed (M/AM/N/J,
+// pas JF qui est une fête) et même garde "nuit seule" (equipe=equipe2="N").
+function computeDashboardTravail(agent, schedule, year){
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const postes = {};
+  const sansPoste = { total:0, lastDate:null };
+  let totalTravail = 0;
+
+  const traiter = (eq, jsCode, dk) => {
+    if(!eq) return;
+    if(CODES_FETES[eq] || eq==="JF") return; // fête, pas travail
+    if(!["M","AM","N","J"].includes(eq)) return; // pas une journée de travail
+    totalTravail++;
+    const info = jsCode ? POSTE_REGISTRY[jsCode] : null;
+    if(!info){
+      sansPoste.total++;
+      if(!sansPoste.lastDate || dk > sansPoste.lastDate) sansPoste.lastDate = dk;
+      return;
+    }
+    if(!postes[info.code]){
+      postes[info.code] = { code:info.code, label:info.label, famille:info.famille, total:0, lastDate:null, parShift:{} };
+    }
+    const p = postes[info.code];
+    p.total++;
+    if(!p.lastDate || dk > p.lastDate) p.lastDate = dk;
+    if(!p.parShift[info.shift]) p.parShift[info.shift] = { count:0, lastDate:null };
+    p.parShift[info.shift].count++;
+    if(!p.parShift[info.shift].lastDate || dk > p.parShift[info.shift].lastDate) p.parShift[info.shift].lastDate = dk;
+  };
+
+  Object.entries(schedule).forEach(([key,val])=>{
+    if(!agent || !key.startsWith(agent.id+"-")) return;
+    const dk = key.slice(agent.id.length+1);
+    if(dk < start || dk > end) return;
+    const isNuitSeule = val?.equipe==="N" && val?.equipe2==="N";
+    if(isNuitSeule){
+      traiter("N", val?.jsCode, dk);
+    } else {
+      traiter(val?.equipe, val?.jsCode, dk);
+      traiter(val?.equipe2, val?.jsCode2, dk);
+    }
+  });
+
+  const totalPRCI = Object.values(postes).filter(p=>p.famille==="PRCI").reduce((s,p)=>s+p.total,0);
+  const totalPAR  = Object.values(postes).filter(p=>p.famille==="PAR").reduce((s,p)=>s+p.total,0);
+  const total = totalPRCI + totalPAR + sansPoste.total; // === totalTravail
+  const pct = (n) => total>0 ? Math.round(n/total*1000)/10 : 0;
+
+  return {
+    totalTravail,
+    postes: Object.values(postes).sort((a,b)=> b.total-a.total),
+    sansPoste,
+    repartition: {
+      PRCI: { jours: totalPRCI, pct: pct(totalPRCI) },
+      PAR:  { jours: totalPAR,  pct: pct(totalPAR) },
+      sansPoste: { jours: sansPoste.total, pct: pct(sansPoste.total) },
+    },
+  };
+}
+
+// ─── MODALE TABLEAU DE BORD JOURNÉES TRAVAILLÉES ─────────────────────────────
+function TravailDashboardModal({ agent, schedule, year, onClose }) {
+  const data = useMemo(()=>computeDashboardTravail(agent, schedule, year), [agent, schedule, year]);
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+  const SHIFT_LABELS = { M:"Matin", AM:"Soir", N:"Nuit", J:"Journée" };
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#8B0000,#6b0000)",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div>
+            <div style={{color:"#fff",fontSize:16,fontWeight:800}}>💼 Journées travaillées {year}</div>
+            <div style={{color:"rgba(255,255,255,.7)",fontSize:12,marginTop:2}}>{data.totalTravail} jour{data.totalTravail>1?"s":""} au total</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8}}>✕</button>
+        </div>
+
+        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* Répartition PRCI / PAR / Non affecté (= 100%) */}
+          <div style={{display:"flex",gap:8}}>
+            {[
+              {k:"PRCI", label:"PRCI", color:"#1d4ed8"},
+              {k:"PAR",  label:"PAR",  color:"#065f46"},
+              {k:"sansPoste", label:"Non affecté", color:"#64748b"},
+            ].map(({k,label,color})=>(
+              <div key={k} style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+                <div style={{fontSize:11,fontWeight:700,color}}>{label}</div>
+                <div style={{fontSize:20,fontWeight:900,color}}>{data.repartition[k].jours}</div>
+                <div style={{fontSize:10,color:"#94a3b8"}}>{data.repartition[k].pct}%</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Détail par poste */}
+          {data.postes.length===0 ? (
+            <div style={{fontSize:12,color:"#94a3b8",textAlign:"center",padding:12}}>Aucun poste précisé cette année.</div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {data.postes.map(p=>(
+                <div key={p.code} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:6,background:p.famille==="PRCI"?"#dbeafe":"#d1fae5",color:p.famille==="PRCI"?"#1e40af":"#065f46"}}>{p.famille}</span>
+                      <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{p.label}</span>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:15,fontWeight:900,color:"#1e293b"}}>{p.total}j</div>
+                      <div style={{fontSize:9,color:"#94a3b8"}}>dernier : {fmtDate(p.lastDate)}</div>
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {Object.entries(p.parShift).map(([shift,s])=>(
+                      <div key={shift} style={{background:"#f8fafc",borderRadius:7,padding:"4px 8px",fontSize:10}}>
+                        <span style={{fontWeight:700,color:"#475569"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
+                        <span style={{color:"#94a3b8",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {data.sansPoste.total>0 && (
+            <div style={{fontSize:11,color:"#94a3b8",background:"#f8fafc",borderRadius:8,padding:"8px 10px"}}>
+              ⚠️ {data.sansPoste.total} jour{data.sansPoste.total>1?"s":""} travaillé{data.sansPoste.total>1?"s":""} sans poste précisé (dernier : {fmtDate(data.sansPoste.lastDate)}) — le poste n'a pas été renseigné dans le planning ce jour-là.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
 function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
@@ -2360,6 +2519,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   ];
 
   const [ouvert, setOuvert] = useState(false);
+  const [showTravailDash, setShowTravailDash] = useState(false);
 
   return(
     <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid #e2e8f0",
@@ -2438,12 +2598,16 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
         {CARDS.map(card=>{
           const v = card.key==="conges" ? congesPris : val(card.key);
           const corr = corrections[card.key]||0;
+          const isTravailCard = card.key==="travail" && !editMode;
           return(
-            <div key={card.key} style={{
+            <div key={card.key}
+              onClick={isTravailCard ? ()=>setShowTravailDash(true) : undefined}
+              style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
               padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",
               position:"relative",overflow:"hidden",
+              cursor:isTravailCard?"pointer":"default",
             }}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:4,
                 background:card.color,borderRadius:"10px 10px 0 0"}}/>
@@ -2513,6 +2677,10 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
         year={selectedYear}
         agentProfiles={agentProfiles}
         setAgentProfiles={setAgentProfiles}/>
+
+      {showTravailDash&&(
+        <TravailDashboardModal agent={agent} schedule={schedule} year={selectedYear} onClose={()=>setShowTravailDash(false)}/>
+      )}
     </div>
   );
 }
