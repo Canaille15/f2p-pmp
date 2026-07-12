@@ -2624,6 +2624,51 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
   );
 }
 
+// ─── OUTIL "REPOS PRIS JUSQU'À UNE DATE" ─────────────────────────────────────
+// Volontairement minimal (demande d'Olivier) : juste le nombre de RP/RPP pris
+// jusqu'à une date choisie (aujourd'hui par défaut), pas de détail mensuel ni
+// de droit — contrairement au tableau de bord Congés.
+function ReposDashboardModal({ agent, schedule, year, onClose }){
+  const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
+
+  const count = useMemo(()=>{
+    const start = `${year}-01-01`, end = `${year}-12-31`;
+    let n = 0;
+    Object.entries(schedule).forEach(([k,v])=>{
+      if(!agent || !k.startsWith(agent.id+"-")) return;
+      const dk = k.slice(agent.id.length+1);
+      if(dk < start || dk > end || dk > dateSnapshot) return;
+      if(v?.equipe==="RP"||v?.equipe==="RPP") n++;
+      if(v?.equipe2==="RP"||v?.equipe2==="RPP") n++;
+    });
+    return n;
+  }, [agent, schedule, year, dateSnapshot]);
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:420,boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#16a34a,#15803d)",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800}}>🟢 Repos {year}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8}}>✕</button>
+        </div>
+        <div style={{padding:"18px 20px"}}>
+          <div style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:150}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#166534"}}>RP/RPP pris jusqu'au</div>
+              <input type="date" value={dateSnapshot} onChange={e=>setDateSnapshot(e.target.value)}
+                style={{marginTop:4,padding:"6px 9px",border:"1.5px solid #bbf7d0",borderRadius:7,fontSize:12,fontWeight:600,color:"#166534",background:"#fff"}}/>
+            </div>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:28,fontWeight:900,color:"#15803d",lineHeight:1}}>{count}</div>
+              <div style={{fontSize:10,fontWeight:600,color:"#166534",marginTop:2}}>jour{count>1?"s":""}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
 function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
@@ -2746,6 +2791,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const [ouvert, setOuvert] = useState(false);
   const [showTravailDash, setShowTravailDash] = useState(false);
   const [showCongesDash, setShowCongesDash] = useState(false);
+  const [showReposDash, setShowReposDash] = useState(false);
 
   return(
     <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid #e2e8f0",
@@ -2826,10 +2872,11 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
           const corr = corrections[card.key]||0;
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
-          const isClickable = isTravailCard || isCongesCard;
+          const isReposCard = card.key==="RP" && !editMode;
+          const isClickable = isTravailCard || isCongesCard || isReposCard;
           return(
             <div key={card.key}
-              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : undefined}
+              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isReposCard ? ()=>setShowReposDash(true) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
@@ -2909,6 +2956,9 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
       )}
       {showCongesDash&&(
         <CongesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} onClose={()=>setShowCongesDash(false)}/>
+      )}
+      {showReposDash&&(
+        <ReposDashboardModal agent={agent} schedule={schedule} year={selectedYear} onClose={()=>setShowReposDash(false)}/>
       )}
     </div>
   );
