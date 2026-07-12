@@ -2399,6 +2399,214 @@ function TravailDashboardModal({ agent, schedule, year, onClose }) {
   );
 }
 
+// ─── TABLEAU DE BORD CONGÉS ───────────────────────────────────────────────────
+const CONGES_ANNUELS_DEFAUT = 28;
+
+// Jours CA/CP bruts du planning perso pour une année donnée (avant ajustement de report)
+function getCongesBrutsAnnee(agent, schedule, year){
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const jours = [];
+  Object.entries(schedule).forEach(([k,v])=>{
+    if(!agent || !k.startsWith(agent.id+"-")) return;
+    const dk = k.slice(agent.id.length+1);
+    if(dk < start || dk > end) return;
+    if(v?.equipe==="CA"||v?.equipe==="CP") jours.push(dk);
+    else if(v?.equipe2==="CA"||v?.equipe2==="CP") jours.push(dk);
+  });
+  return jours;
+}
+
+// Calcule le détail des congés d'une année : droit, jours pris par mois (avec
+// cumul), et gestion des "reports" — des jours de congé physiquement pris sur
+// l'année suivante mais décomptés du solde de cette année-ci (tolérance de
+// report). Historique et immuable comme le reste du planning perso : basé
+// uniquement sur les jours CA/CP réellement saisis, jamais recalculé si le
+// droit à congés change ensuite pour une année passée.
+function computeDashboardConges(agent, schedule, agentProfiles, year){
+  const profil = agentProfiles?.[agent?.id] || {};
+  const entitlement = profil.congesEntitlement?.[year] ?? CONGES_ANNUELS_DEFAUT;
+  const reportsCetteAnnee = profil.congesReports?.[year] || [];       // dates hors annee, comptees sur "year"
+  const reportsAnneePrecedente = profil.congesReports?.[year-1] || []; // dates de "year" deja revendiquees par year-1
+
+  const brut = getCongesBrutsAnnee(agent, schedule, year);
+  const donnesAnneePrecedente = brut.filter(d=>reportsAnneePrecedente.includes(d));
+  const propresAnnee = brut.filter(d=>!reportsAnneePrecedente.includes(d));
+  const reportsValides = reportsCetteAnnee.filter(d=>{
+    const v = schedule[`${agent.id}-${d}`];
+    return v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
+  });
+  const tousJours = [...propresAnnee, ...reportsValides].sort();
+
+  const parMois = {};
+  let cumul = 0;
+  tousJours.forEach(d=>{
+    const mois = d.slice(0,7);
+    if(!parMois[mois]) parMois[mois] = {dates:[], debut:cumul+1, fin:cumul, horsAnnee:false};
+    parMois[mois].dates.push(d);
+    if(!d.startsWith(String(year))) parMois[mois].horsAnnee = true;
+    cumul++;
+    parMois[mois].fin = cumul;
+  });
+
+  const pris = tousJours.length;
+  return {
+    entitlement, pris, solde: entitlement-pris,
+    parMois,
+    reports: reportsValides,
+    donnesAnneePrecedente,
+  };
+}
+
+function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles, year, onClose }){
+  const data = useMemo(()=>computeDashboardConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
+  const [entitlementInput, setEntitlementInput] = useState(String(data.entitlement));
+  const [reportDate, setReportDate] = useState("");
+  const [reportErr, setReportErr] = useState("");
+  useEffect(()=>{ setEntitlementInput(String(data.entitlement)); },[data.entitlement]);
+
+  const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+
+  const saveEntitlement = () => {
+    const n = parseInt(entitlementInput,10);
+    if(isNaN(n) || n<0) { setEntitlementInput(String(data.entitlement)); return; }
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{
+        ...(prev[agent.id]||{}),
+        congesEntitlement:{ ...(prev[agent.id]?.congesEntitlement||{}), [year]: n },
+      }
+    }));
+  };
+
+  const ajouterReport = () => {
+    setReportErr("");
+    if(!reportDate) return;
+    const v = schedule[`${agent.id}-${reportDate}`];
+    const estConge = v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
+    if(!estConge){ setReportErr("Ce jour n'est pas saisi comme congé (CA/CP) dans le planning perso — saisis-le d'abord, puis reviens ici."); return; }
+    if(data.reports.includes(reportDate)){ setReportErr("Ce jour est déjà comptabilisé en report."); return; }
+    setAgentProfiles(prev=>{
+      const existants = prev[agent.id]?.congesReports?.[year] || [];
+      return {
+        ...prev,
+        [agent.id]:{
+          ...(prev[agent.id]||{}),
+          congesReports:{ ...(prev[agent.id]?.congesReports||{}), [year]: [...existants, reportDate] },
+        }
+      };
+    });
+    setReportDate("");
+  };
+
+  const retirerReport = (d) => {
+    setAgentProfiles(prev=>{
+      const existants = prev[agent.id]?.congesReports?.[year] || [];
+      return {
+        ...prev,
+        [agent.id]:{
+          ...(prev[agent.id]||{}),
+          congesReports:{ ...(prev[agent.id]?.congesReports||{}), [year]: existants.filter(x=>x!==d) },
+        }
+      };
+    });
+  };
+
+  const moisTries = Object.keys(data.parMois).sort();
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#eab308,#ca8a04)",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800}}>🏖️ Congés {year}</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8}}>✕</button>
+        </div>
+
+        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* Droit à congés + solde */}
+          <div style={{display:"flex",gap:8}}>
+            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Droit</div>
+              <input type="number" min="0" value={entitlementInput}
+                onChange={e=>setEntitlementInput(e.target.value)}
+                onBlur={saveEntitlement}
+                onKeyDown={e=>{ if(e.key==="Enter") e.currentTarget.blur(); }}
+                style={{width:"100%",textAlign:"center",fontSize:20,fontWeight:900,color:"#a16207",border:"1.5px solid #fde68a",borderRadius:8,padding:"2px 0",background:"#fff",marginTop:2}}/>
+              <div style={{fontSize:9,color:"#475569",marginTop:2}}>modifiable</div>
+            </div>
+            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris</div>
+              <div style={{fontSize:20,fontWeight:900,color:"#a16207"}}>{data.pris}</div>
+            </div>
+            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${data.solde<5?"#fca5a5":"#e2e8f0"}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:data.solde<5?"#dc2626":"#334155"}}>Restant</div>
+              <div style={{fontSize:20,fontWeight:900,color:data.solde<5?"#dc2626":"#16a34a"}}>{data.solde}</div>
+            </div>
+          </div>
+
+          {data.donnesAnneePrecedente.length>0 && (
+            <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
+              ℹ️ {data.donnesAnneePrecedente.length} jour{data.donnesAnneePrecedente.length>1?"s":""} de {year} compté{data.donnesAnneePrecedente.length>1?"s":""} sur le solde {year-1} (report) — non inclus ci-dessus. Voir le tableau de bord {year-1}.
+            </div>
+          )}
+
+          {/* Détail mensuel */}
+          {moisTries.length===0 ? (
+            <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucun congé saisi cette année.</div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {moisTries.map(mois=>{
+                const m = data.parMois[mois];
+                const moisNum = parseInt(mois.slice(5,7),10)-1;
+                const anneeMois = mois.slice(0,4);
+                return(
+                  <div key={mois} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>
+                        {MOIS_L[moisNum]}{m.horsAnnee?` ${anneeMois}`:""}
+                      </span>
+                      <span style={{fontSize:12,fontWeight:700,color:"#a16207"}}>
+                        {m.dates.length}j — n°{m.debut}{m.fin>m.debut?`–${m.fin}`:""}
+                      </span>
+                    </div>
+                    <div style={{fontSize:10,fontWeight:600,color:"#475569",marginTop:4}}>
+                      {m.dates.map(d=>fmtDate(d)).join(" · ")}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Reports vers l'année suivante */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>↪️ Report sur {year+1}</div>
+            <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
+              Un jour de congé pris sur {year+1} mais décompté du solde {year} (tolérance de report).
+            </div>
+            {data.reports.length>0 && (
+              <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:8}}>
+                {data.reports.map(d=>(
+                  <div key={d} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f8fafc",borderRadius:7,padding:"5px 9px"}}>
+                    <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>{fmtDate(d)}</span>
+                    <button onClick={()=>retirerReport(d)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}}>✕ Retirer</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:"flex",gap:6}}>
+              <input type="date" value={reportDate} onChange={e=>{setReportDate(e.target.value);setReportErr("");}}
+                style={{flex:1,padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              <button onClick={ajouterReport} style={{background:"#a16207",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+            </div>
+            {reportErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{reportErr}</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
 function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
@@ -2519,6 +2727,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
 
   const [ouvert, setOuvert] = useState(false);
   const [showTravailDash, setShowTravailDash] = useState(false);
+  const [showCongesDash, setShowCongesDash] = useState(false);
 
   return(
     <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid #e2e8f0",
@@ -2598,15 +2807,17 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
           const v = card.key==="conges" ? congesPris : val(card.key);
           const corr = corrections[card.key]||0;
           const isTravailCard = card.key==="travail" && !editMode;
+          const isCongesCard = card.key==="conges" && !editMode;
+          const isClickable = isTravailCard || isCongesCard;
           return(
             <div key={card.key}
-              onClick={isTravailCard ? ()=>setShowTravailDash(true) : undefined}
+              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
               padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",
               position:"relative",overflow:"hidden",
-              cursor:isTravailCard?"pointer":"default",
+              cursor:isClickable?"pointer":"default",
             }}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:4,
                 background:card.color,borderRadius:"10px 10px 0 0"}}/>
@@ -2679,6 +2890,9 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
 
       {showTravailDash&&(
         <TravailDashboardModal agent={agent} schedule={schedule} year={selectedYear} onClose={()=>setShowTravailDash(false)}/>
+      )}
+      {showCongesDash&&(
+        <CongesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} onClose={()=>setShowCongesDash(false)}/>
       )}
     </div>
   );
