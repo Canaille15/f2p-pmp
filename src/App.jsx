@@ -3329,8 +3329,19 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
     const override = fetesData[code] || {};
     const priseLeFinal = override.priseLe !== undefined ? override.priseLe : priseLe;
     const priseTypeFinal = override.priseType || priseType;
-    const estPayee = override.estPayee || (!priseLeFinal && !estPerdue && today > limiteDate);
     const snoozeJusquau = override.snoozeJusquau || null;
+
+    // Paiement anticipé (facultatif — n'affecte le calcul que si l'agent a
+    // confirmé "vu sur ma feuille de paie" ; une simple demande sans
+    // confirmation n'a aucun effet sur le statut, juste un rappel visuel).
+    // Annulable à tout moment, redonne alors le calcul normal.
+    const paiementAnticipe = override.paiementAnticipe || null;
+    const estPayee = override.estPayee || !!paiementAnticipe?.moisVu || (!priseLeFinal && !estPerdue && today > limiteDate);
+    let moisPayeFinal = moisPaye, anneePayeFinal = anneePaye;
+    if(paiementAnticipe?.moisVu){
+      const [ay, am] = paiementAnticipe.moisVu.split("-").map(Number);
+      anneePayeFinal = ay; moisPayeFinal = am;
+    }
 
     // Statut final
     let statut = "attente";
@@ -3351,9 +3362,9 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
       code, label, dateFete, estDimanche, estF3Dimanche,
       estPerdue, estPerdueProbable, estRCAccorde,
       estRPCeJour, estTravaillePlanning, motifReglementaire,
-      limiteDate, notifDate, moisPaye, anneePaye,
+      limiteDate, notifDate, moisPaye: moisPayeFinal, anneePaye: anneePayeFinal,
       priseLe: priseLeFinal, priseType: priseTypeFinal,
-      estPayee, statut, notifActive, override,
+      estPayee, statut, notifActive, override, paiementAnticipe,
     };
   }).filter(Boolean);
 
@@ -3448,6 +3459,8 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
   const [editingCode, setEditingCode] = useState(null);
   const [editVal, setEditVal] = useState("");
   const [motifOuvert, setMotifOuvert] = useState(null);
+  const [paiementOuvert, setPaiementOuvert] = useState(null);
+  const [paiementMoisVal, setPaiementMoisVal] = useState("");
   const [ouvertN1, setOuvertN1] = useState(true);
 
   const prendreEnCompte = (code, targetYear=year) => {
@@ -3473,6 +3486,26 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
     setEditingCode(null);
   };
 
+  // Paiement anticipé : demander un mois, puis confirmer "vu sur la feuille de
+  // paie" (ce qui, seulement à ce moment-là, marque la fête payée). Annulable
+  // à tout moment — tant que "vu" n'est pas confirmé, le calcul normal reste
+  // inchangé (simple rappel visuel de la demande).
+  const demanderPaiementAnticipe = (code, mois, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),
+      paiementAnticipe:{...(prev[code]?.paiementAnticipe||{}), moisDemande:mois, moisVu:null}}}));
+  };
+  const confirmerVuFeuillePaie = (code, mois, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),
+      paiementAnticipe:{...(prev[code]?.paiementAnticipe||{}), moisVu:mois}}}));
+  };
+  const annulerPaiementAnticipe = (code, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>{
+      const curr = {...(prev[code]||{})};
+      delete curr.paiementAnticipe;
+      return {...prev, [code]:curr};
+    });
+  };
+
   // Regroupement par priorité — plus intuitif qu'une liste chronologique :
   // ce qui nécessite une action d'abord, ce qui est réglé en dernier.
   const groupeATraiter = lignes.filter(l=>l.statut==="attente"||l.statut==="perdue_probable");
@@ -3484,7 +3517,7 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
   const statutStyle = {
     futur:          {bg:"#f8fafc", border:"#e2e8f0", badge:"#64748b", badgeTc:"#fff",     icon:"🔜", label:"À venir"},
     prise:          {bg:"#f0fdf4", border:"#86efac", badge:"#16a34a", badgeTc:"#fff",     icon:"✅", label:"Prise"},
-    attente:        {bg:"#fffbeb", border:"#fde68a", badge:"#f59e0b", badgeTc:"#fff",     icon:"⏳", label:"En attente"},
+    attente:        {bg:"#fef3c7", border:"#f59e0b", badge:"#d97706", badgeTc:"#fff",     icon:"⏳", label:"En attente"},
     payee:          {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée"},
     payee_auto:     {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée auto"},
     perdue:         {bg:"#fef2f2", border:"#fecaca", badge:"#dc2626", badgeTc:"#fff",     icon:"❌", label:"PERDUE"},
@@ -3531,6 +3564,8 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
               {l.label}
               {l.estDimanche&&<span style={{fontSize:11,color:"#dc2626",marginLeft:6,fontWeight:800}}>⚠️Dim.</span>}
+              {l.paiementAnticipe?.moisDemande&&!l.paiementAnticipe?.moisVu&&
+                <span style={{fontSize:11,color:"#059669",marginLeft:6,fontWeight:800}}>⏩ Anticipé demandé</span>}
             </div>
             <div style={{fontSize:11,color:"#475569",marginTop:2,display:"flex",gap:7,flexWrap:"wrap"}}>
               <span style={{fontFamily:"monospace"}}>
@@ -3638,6 +3673,17 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
                 borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,
                 minWidth:38,minHeight:38,
                 color:motifVisible?"#9d174d":"#64748b"}}>📋</button>}
+            {/* Paiement anticipé — annulable, sans effet sur le calcul tant que "vu sur la feuille" n'est pas confirmé */}
+            <button onClick={()=>{
+                const paiementVisible = paiementOuvert===editKey;
+                setPaiementOuvert(paiementVisible?null:editKey);
+                setPaiementMoisVal(l.paiementAnticipe?.moisDemande||l.paiementAnticipe?.moisVu||"");
+              }}
+              title="Paiement anticipé"
+              style={{background:paiementOuvert===editKey?"#ecfdf5":l.paiementAnticipe?.moisVu?"#ecfdf5":l.paiementAnticipe?.moisDemande?"#fffbeb":"#f1f5f9",
+                border:`1.5px solid ${paiementOuvert===editKey||l.paiementAnticipe?"#6ee7b7":"#cbd5e1"}`,
+                borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38,
+                color:l.paiementAnticipe?.moisVu?"#047857":l.paiementAnticipe?.moisDemande?"#b45309":"#64748b"}}>⏩</button>
           </div>}
         </div>
 
@@ -3652,6 +3698,55 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
         }}>
           {l.estPerdue&&<div style={{fontWeight:800,fontSize:13,marginBottom:4}}>❌ PERDUE</div>}
           {l.motifReglementaire}
+        </div>}
+
+        {/* Paiement anticipé déroulant */}
+        {paiementOuvert===editKey&&<div style={{
+          margin:"0 14px 12px",background:"#ecfdf5",border:"1.5px solid #6ee7b7",
+          borderRadius:8,padding:"10px 13px",
+        }}>
+          <div style={{fontSize:12,fontWeight:800,color:"#047857",marginBottom:8}}>⏩ Paiement anticipé</div>
+          {!l.paiementAnticipe?.moisDemande ? (
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontSize:12,color:"#334155"}}>Mois où le paiement doit avoir lieu :</span>
+              <input type="month" value={paiementMoisVal} onChange={e=>setPaiementMoisVal(e.target.value)}
+                style={{border:"1px solid #6ee7b7",borderRadius:7,padding:"6px 9px",fontSize:13,minHeight:34}}/>
+              <button onClick={()=>demanderPaiementAnticipe(l.code,paiementMoisVal,targetYear)}
+                disabled={!paiementMoisVal}
+                style={{background:"#059669",color:"#fff",border:"none",borderRadius:7,
+                  padding:"6px 12px",cursor:paiementMoisVal?"pointer":"default",fontSize:13,minHeight:34,
+                  opacity:paiementMoisVal?1:.5}}>Demander</button>
+            </div>
+          ) : !l.paiementAnticipe?.moisVu ? (
+            <div>
+              <div style={{fontSize:12,color:"#334155",marginBottom:8}}>
+                Demandé pour <b>{MOIS_NOMS[parseInt(l.paiementAnticipe.moisDemande.slice(5,7),10)-1]} {l.paiementAnticipe.moisDemande.slice(0,4)}</b>.
+                Le calcul de la fête reste inchangé tant que ce n'est pas confirmé.
+              </div>
+              <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontSize:12,color:"#334155"}}>Vu sur feuille de paie de :</span>
+                <input type="month" value={paiementMoisVal} onChange={e=>setPaiementMoisVal(e.target.value)}
+                  style={{border:"1px solid #6ee7b7",borderRadius:7,padding:"6px 9px",fontSize:13,minHeight:34}}/>
+                <button onClick={()=>confirmerVuFeuillePaie(l.code,paiementMoisVal,targetYear)}
+                  disabled={!paiementMoisVal}
+                  style={{background:"#059669",color:"#fff",border:"none",borderRadius:7,
+                    padding:"6px 12px",cursor:paiementMoisVal?"pointer":"default",fontSize:13,minHeight:34,
+                    opacity:paiementMoisVal?1:.5}}>✓ Confirmer</button>
+                <button onClick={()=>{annulerPaiementAnticipe(l.code,targetYear);setPaiementOuvert(null);}}
+                  style={{background:"#fef2f2",color:"#b91c1c",border:"1px solid #fecaca",borderRadius:7,
+                    padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕ Annuler</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              <span style={{fontSize:12,color:"#047857",fontWeight:700}}>
+                ✅ Vu sur feuille de paie de {MOIS_NOMS[parseInt(l.paiementAnticipe.moisVu.slice(5,7),10)-1]} {l.paiementAnticipe.moisVu.slice(0,4)}
+              </span>
+              <button onClick={()=>{annulerPaiementAnticipe(l.code,targetYear);setPaiementOuvert(null);}}
+                style={{background:"#fef2f2",color:"#b91c1c",border:"1px solid #fecaca",borderRadius:7,
+                  padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕ Annuler</button>
+            </div>
+          )}
         </div>}
       </div>
     );
