@@ -2624,55 +2624,13 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
   );
 }
 
-// ─── OUTIL "REPOS PRIS JUSQU'À UNE DATE" ─────────────────────────────────────
-// Volontairement minimal (demande d'Olivier) : juste le nombre de RP/RPP pris
-// jusqu'à une date choisie (aujourd'hui par défaut), pas de détail mensuel ni
-// de droit — contrairement au tableau de bord Congés.
-function ReposDashboardModal({ agent, schedule, year, onClose }){
-  const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
-
-  const count = useMemo(()=>{
-    const start = `${year}-01-01`, end = `${year}-12-31`;
-    let n = 0;
-    Object.entries(schedule).forEach(([k,v])=>{
-      if(!agent || !k.startsWith(agent.id+"-")) return;
-      const dk = k.slice(agent.id.length+1);
-      if(dk < start || dk > end || dk > dateSnapshot) return;
-      if(v?.equipe==="RP"||v?.equipe==="RPP") n++;
-      if(v?.equipe2==="RP"||v?.equipe2==="RPP") n++;
-    });
-    return n;
-  }, [agent, schedule, year, dateSnapshot]);
-
-  return (
-    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:420,boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
-        <div style={{background:"linear-gradient(135deg,#16a34a,#15803d)",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{color:"#fff",fontSize:16,fontWeight:800}}>🟢 Repos {year}</div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8}}>✕</button>
-        </div>
-        <div style={{padding:"18px 20px"}}>
-          <div style={{background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-            <div style={{flex:1,minWidth:150}}>
-              <div style={{fontSize:12,fontWeight:700,color:"#166534"}}>RP/RPP pris jusqu'au</div>
-              <input type="date" value={dateSnapshot} onChange={e=>setDateSnapshot(e.target.value)}
-                style={{marginTop:4,padding:"6px 9px",border:"1.5px solid #bbf7d0",borderRadius:7,fontSize:12,fontWeight:600,color:"#166534",background:"#fff"}}/>
-            </div>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:28,fontWeight:900,color:"#15803d",lineHeight:1}}>{count}</div>
-              <div style={{fontSize:10,fontWeight:600,color:"#166534",marginTop:2}}>jour{count>1?"s":""}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── OUTIL GÉNÉRIQUE "DÉTAIL + JUSQU'À UNE DATE" (RU/RQ/RN/TC/TY/Maladie) ────
-// Même principe que Repos, mais avec en plus les dates (regroupées par mois,
+// ─── OUTIL GÉNÉRIQUE "DÉTAIL + JUSQU'À UNE DATE" (RP/RU/RQ/RN/TC/TY/Maladie) ─
+// RP a d'abord eu un outil minimal séparé (juste "pris jusqu'à une date"),
+// remplacé le 12/07 par ce composant générique pour recevoir le même
+// mécanisme de report que RU/Congés (RP a aussi une tolérance de report).
 // comme Congés) et, pour RU uniquement, le même mécanisme de report A→A+1.
 const DETAIL_CONFIG = {
+  RP: { codes:["RP","RPP"], reportKey:"rpReports", label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
   RU: { codes:["RU"], reportKey:"ruReports", label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
   RQ: { codes:["RQ"], reportKey:null, label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
   RN: { codes:["RN"], reportKey:null, label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
@@ -2940,8 +2898,9 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const congesPris = congesData.pris;
   const solde = congesData.solde;
 
-  // RU a un mecanisme de report (comme les conges) : la carte doit refleter
-  // le meme total que le tableau de bord dedie, pas le calcul brut generique.
+  // RP et RU ont un mecanisme de report (comme les conges) : la carte doit
+  // refleter le meme total que le tableau de bord dedie, pas le calcul brut.
+  const rpData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RP","RPP"], "rpReports"), [agent, schedule, agentProfiles, year]);
   const ruData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RU"], "ruReports"), [agent, schedule, agentProfiles, year]);
 
   const CARDS = [
@@ -2962,8 +2921,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const [ouvert, setOuvert] = useState(false);
   const [showTravailDash, setShowTravailDash] = useState(false);
   const [showCongesDash, setShowCongesDash] = useState(false);
-  const [showReposDash, setShowReposDash] = useState(false);
-  const [openDetailKey, setOpenDetailKey] = useState(null); // RU/RQ/RN/TC/TY/MA
+  const [openDetailKey, setOpenDetailKey] = useState(null); // RP/RU/RQ/RN/TC/TY/MA
 
   return(
     <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid #e2e8f0",
@@ -2990,7 +2948,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
             {k:"FETE",    icon:"🩷"},
             {k:"conges",  icon:"🏖️"},
           ].map(({k,icon})=>{
-            const v = k==="conges" ? congesPris : val(k);
+            const v = k==="conges" ? congesPris : k==="RP" ? rpData.total : val(k);
             if(!v) return null;
             return <span key={k} style={{
               fontSize:10,fontWeight:700,color:"#fff",
@@ -3040,16 +2998,15 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
       {/* Grille compteurs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
         {CARDS.map(card=>{
-          const v = card.key==="conges" ? congesPris : card.key==="RU" ? ruData.total : val(card.key);
+          const v = card.key==="conges" ? congesPris : card.key==="RP" ? rpData.total : card.key==="RU" ? ruData.total : val(card.key);
           const corr = corrections[card.key]||0;
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
-          const isReposCard = card.key==="RP" && !editMode;
           const isDetailCard = !!DETAIL_CONFIG[card.key] && !editMode;
-          const isClickable = isTravailCard || isCongesCard || isReposCard || isDetailCard;
+          const isClickable = isTravailCard || isCongesCard || isDetailCard;
           return(
             <div key={card.key}
-              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isReposCard ? ()=>setShowReposDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
+              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
@@ -3077,8 +3034,8 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
                   {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}
                 </span>
               </div>}
-              {/* Contrôles de correction — "conges" et "RU" ont leur propre outil dédié (report inter-années), pas de +/- générique ici */}
-              {editMode&&card.key!=="conges"&&card.key!=="RU"&&<div style={{
+              {/* Contrôles de correction — "conges", "RP" et "RU" ont leur propre outil dédié (report inter-années), pas de +/- générique ici */}
+              {editMode&&card.key!=="conges"&&card.key!=="RP"&&card.key!=="RU"&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
                 <button onClick={()=>{
@@ -3129,9 +3086,6 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
       )}
       {showCongesDash&&(
         <CongesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} onClose={()=>setShowCongesDash(false)}/>
-      )}
-      {showReposDash&&(
-        <ReposDashboardModal agent={agent} schedule={schedule} year={selectedYear} onClose={()=>setShowReposDash(false)}/>
       )}
       {openDetailKey&&DETAIL_CONFIG[openDetailKey]&&(
         <CompteurDetailModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}/>
