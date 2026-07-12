@@ -2566,7 +2566,7 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
                         {MOIS_L[moisNum]}{m.horsAnnee?` ${anneeMois}`:""}
                       </span>
                       <span style={{fontSize:12,fontWeight:700,color:"#a16207"}}>
-                        {m.dates.length}j — n°{m.debut}{m.fin>m.debut?`–${m.fin}`:""}
+                        {m.dates.length}j
                       </span>
                     </div>
                     <div style={{fontSize:10,fontWeight:600,color:"#475569",marginTop:4}}>
