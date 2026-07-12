@@ -2452,6 +2452,7 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   return {
     entitlement, pris, solde: entitlement-pris,
     parMois,
+    tousJours,
     reports: reportsValides,
     donnesAnneePrecedente,
   };
@@ -2462,7 +2463,10 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
   const [entitlementInput, setEntitlementInput] = useState(String(data.entitlement));
   const [reportDate, setReportDate] = useState("");
   const [reportErr, setReportErr] = useState("");
+  const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
   useEffect(()=>{ setEntitlementInput(String(data.entitlement)); },[data.entitlement]);
+
+  const prisJusquA = useMemo(()=>data.tousJours.filter(d=>d<=dateSnapshot).length, [data.tousJours, dateSnapshot]);
 
   const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
 
@@ -2541,6 +2545,19 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
             <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${data.solde<5?"#fca5a5":"#e2e8f0"}`}}>
               <div style={{fontSize:11,fontWeight:700,color:data.solde<5?"#dc2626":"#334155"}}>Restant</div>
               <div style={{fontSize:20,fontWeight:900,color:data.solde<5?"#dc2626":"#16a34a"}}>{data.solde}</div>
+            </div>
+          </div>
+
+          {/* Jours pris jusqu'à une date choisie (aujourd'hui par défaut) */}
+          <div style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:140}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris jusqu'au</div>
+              <input type="date" value={dateSnapshot} onChange={e=>setDateSnapshot(e.target.value)}
+                style={{marginTop:3,padding:"5px 8px",border:"1.5px solid #fde68a",borderRadius:7,fontSize:12,fontWeight:600,color:"#334155",background:"#fff"}}/>
+            </div>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:24,fontWeight:900,color:"#a16207",lineHeight:1}}>{prisJusquA}</div>
+              <div style={{fontSize:9,fontWeight:600,color:"#334155",marginTop:2}}>jour{prisJusquA>1?"s":""}</div>
             </div>
           </div>
 
@@ -2706,9 +2723,10 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[computedStr]);
 
-  const CONGES_ANNUELS = 28;
-  const congesPris = val("CA") + val("CP");
-  const solde = CONGES_ANNUELS - congesPris;
+  const congesData = useMemo(()=>computeDashboardConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
+  const CONGES_ANNUELS = congesData.entitlement;
+  const congesPris = congesData.pris;
+  const solde = congesData.solde;
 
   const CARDS = [
     {key:"conges",  label:"Congés",          color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
@@ -2839,20 +2857,18 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
                   {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}
                 </span>
               </div>}
-              {/* Contrôles de correction */}
-              {editMode&&<div style={{
+              {/* Contrôles de correction — "conges" a son propre outil dédié (droit + report dans le tableau de bord), pas de +/- générique ici */}
+              {editMode&&card.key!=="conges"&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
                 <button onClick={()=>{
-                  const k=card.key==="conges"?"CA":card.key;
-                  saveCorrections({...corrections,[k]:(corrections[k]||0)-1});
+                  saveCorrections({...corrections,[card.key]:(corrections[card.key]||0)-1});
                 }}
                   style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
                     background:"#fee2e2",color:"#dc2626",cursor:"pointer",fontSize:16,fontWeight:800,
                     display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
                 <button onClick={()=>{
-                  const k=card.key==="conges"?"CA":card.key;
-                  saveCorrections({...corrections,[k]:(corrections[k]||0)+1});
+                  saveCorrections({...corrections,[card.key]:(corrections[card.key]||0)+1});
                 }}
                   style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
                     background:"#dcfce7",color:"#16a34a",cursor:"pointer",fontSize:16,fontWeight:800,
