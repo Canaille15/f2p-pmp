@@ -2903,13 +2903,19 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const rpData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RP","RPP"], "rpReports"), [agent, schedule, agentProfiles, year]);
   const ruData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RU"], "ruReports"), [agent, schedule, agentProfiles, year]);
 
+  // Fêtes légales : nombre de fêtes "à traiter" (attente ou probable perdue)
+  // pour la cloche sur la carte — évite d'ouvrir la fenêtre juste pour savoir
+  // si quelque chose demande une action.
+  const fetesInfo = useMemo(()=>computeFetesLignes(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
+  const nbFetesATraiter = fetesInfo.lignes.filter(l=>l.statut==="attente"||l.statut==="perdue_probable").length;
+
   const CARDS = [
     {key:"conges",  label:"Congés",          color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", icon:"💼", subtitle:`Année ${year}`},
     {key:"RP",      label:"RP",              color:"#16a34a", icon:"🟢", subtitle:"Repos périodiques"},
     {key:"RU",      label:"RU",              color:"#d97706", icon:"🟡", subtitle:"Repos utilisation"},
     {key:"RQ",      label:"RQ",              color:"#d97706", icon:"🟡", subtitle:"Repos qualif."},
-    {key:"FETE",    label:"Fêtes",           color:"#ec4899", icon:"🩷", subtitle:"Jours fête"},
+    {key:"FETE",    label:"Fêtes",           color:"#ec4899", icon:"🩷", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
     {key:"RN",      label:"RN",              color:"#4338ca", icon:"🔵", subtitle:"Repos nuit"},
     {key:"TC",      label:"TC",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
     {key:"TY",      label:"TY",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
@@ -2921,6 +2927,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const [ouvert, setOuvert] = useState(false);
   const [showTravailDash, setShowTravailDash] = useState(false);
   const [showCongesDash, setShowCongesDash] = useState(false);
+  const [showFetesDash, setShowFetesDash] = useState(false);
   const [openDetailKey, setOpenDetailKey] = useState(null); // RP/RU/RQ/RN/TC/TY/MA
 
   return(
@@ -3002,11 +3009,12 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
           const corr = corrections[card.key]||0;
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
+          const isFetesCard = card.key==="FETE" && !editMode;
           const isDetailCard = !!DETAIL_CONFIG[card.key] && !editMode;
-          const isClickable = isTravailCard || isCongesCard || isDetailCard;
+          const isClickable = isTravailCard || isCongesCard || isFetesCard || isDetailCard;
           return(
             <div key={card.key}
-              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
+              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
@@ -3064,16 +3072,6 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
 
       </div>}
 
-      {/* ── FÊTES LÉGALES ─────────────────────────────────────── */}
-      {(isOwnProfile||isAdmin)&&<FetesSection
-        agent={agent}
-        schedule={schedule}
-        agentProfiles={agentProfiles}
-        setAgentProfiles={setAgentProfiles}
-        isAdmin={isAdmin}
-        isOwnProfile={isOwnProfile}
-        year={selectedYear}/>}
-
       {/* ── PAUSE FIGÉE ─────────────────────────────────────── */}
       <PauseFigeeSection
         agent={agent}
@@ -3089,6 +3087,9 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
       )}
       {openDetailKey&&DETAIL_CONFIG[openDetailKey]&&(
         <CompteurDetailModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}/>
+      )}
+      {showFetesDash&&(
+        <FetesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isAdmin={isAdmin} isOwnProfile={isOwnProfile} year={selectedYear} onClose={()=>setShowFetesDash(false)}/>
       )}
     </div>
   );
@@ -3150,7 +3151,7 @@ function getDatesFetesAnnee(annee){
   const vnDate = noelDow===0 ? `${annee}-12-24` : null;
 
   // F3 = 1er mai : cas particulier si dimanche → seuls agents de service bénéficient d'un RC
-  // On garde la date réelle, la règle est gérée dans FetesSection via estDimanche
+  // On garde la date réelle, la règle est gérée dans computeFetesLignes via estDimanche
   const f3Date = `${annee}-05-01`;
   const f3Dow = new Date(annee,4,1).getDay();
 
@@ -3179,31 +3180,15 @@ function isF3Dimanche(annee){ return new Date(annee,4,1).getDay()===0; }
 
 const MOIS_NOMS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
-// ─── SECTION TABLEAU FÊTES ───────────────────────────────────────────────────
-function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin, isOwnProfile, year}){
+// ─── CALCUL FÊTES LÉGALES (pur — réutilisé par la carte compteurs ET la modale) ─
+// Mêmes règles exactes que l'ancienne FetesSection, juste extraites en fonction
+// pure pour que la carte "Fêtes" du panneau compteurs puisse calculer le nombre
+// de fêtes à traiter (pour la cloche) sans ouvrir la fenêtre.
+function computeFetesLignes(agent, schedule, agentProfiles, year){
   const today = new Date().toISOString().slice(0,10);
-  const todayDate = new Date();
-
-  // Corrections manuelles fêtes (stockées dans agentProfiles)
   const fetesData = agentProfiles[agent?.id]?.fetesTracking?.[year] || {};
-  
-  const setFetesDataYear = (targetYear, updater) => {
-    setAgentProfiles(prev=>{
-      const curr = prev[agent.id]?.fetesTracking?.[targetYear] || {};
-      const next = typeof updater === 'function' ? updater(curr) : updater;
-      return {...prev, [agent.id]:{
-        ...(prev[agent.id]||{}),
-        fetesTracking:{
-          ...(prev[agent.id]?.fetesTracking||{}),
-          [targetYear]: next,
-        }
-      }};
-    });
-  };
-  const setFetesData = (updater) => setFetesDataYear(year, updater);
-
   const datesFetes = getDatesFetesAnnee(year);
-  
+
   // Pour chaque fête, calculer son statut
   const lignes = Object.entries(CODES_FETES).map(([code, label])=>{
     // VN n'existe que si Noël tombe un dimanche pour cette année
@@ -3372,36 +3357,6 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     };
   }).filter(Boolean);
 
-  const [editingCode, setEditingCode] = useState(null);
-  const [editVal, setEditVal] = useState("");
-
-  const prendreEnCompte = (code, targetYear=year) => {
-    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:null,priseLe:today,priseType:"manuel"}}));
-  };
-  const snooze10j = (code, targetYear=year) => {
-    const d = new Date(); d.setDate(d.getDate()+10);
-    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:d.toISOString().slice(0,10)}}));
-  };
-  const setManualDate = (code, val, targetYear=year) => {
-    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),priseLe:val||null,priseType:val?"manuel":null}}));
-    setEditingCode(null);
-  };
-  const setManualPayee = (code, val, targetYear=year) => {
-    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
-  };
-  const resetManuel = (code, targetYear=year) => {
-    setFetesDataYear(targetYear, prev=>{
-      const next = {...prev};
-      delete next[code];
-      return next;
-    });
-    setEditingCode(null);
-  };
-
-  const notifCount   = lignes.filter(l=>l.notifActive).length;
-  const nbPrises     = lignes.filter(l=>l.statut==="prise").length;
-  const nbPayees     = lignes.filter(l=>l.statut==="payee"||l.statut==="payee_auto").length;
-
   // Fêtes de N-1 qui débordent sur l'année N (T4 : limite 31 mars N)
   // Toussaint (F8=1er nov), 11nov (F9), Noël (F0), VN éventuel
   const yearMoins1 = year - 1;
@@ -3460,21 +3415,74 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     };
   }).filter(Boolean);
 
-  // Grouper par statut pour affichage bandeau
-  const fetesN1Prises   = fetesReportN1.filter(l=>l.statut==="prise");
-  const fetesN1Payees   = fetesReportN1.filter(l=>l.statut==="payee"||l.statut==="payee_auto");
-  const fetesN1Attente  = fetesReportN1.filter(l=>l.statut==="attente");
-  const nbPrisesN1  = fetesN1Prises.length;
-  const nbPayeesN1  = fetesN1Payees.length;
-  const nbAttenteN1 = fetesN1Attente.length;
+  return { lignes, fetesReportN1, yearMoins1 };
+}
 
-  const [ouvert, setOuvert] = useState(false);
-  const [ouvertN1, setOuvertN1] = useState(false);
+// ─── MODALE FÊTES LÉGALES ─────────────────────────────────────────────────────
+// Remplace l'ancien panneau toujours visible sous les compteurs (12/07,
+// demandé par Olivier) : la carte "Fêtes" du panneau compteurs ouvre
+// désormais cette fenêtre. Mêmes règles exactes, réorganisées par priorité
+// (à traiter / perdues / réglées / à venir) plutôt qu'en liste chronologique,
+// pour rester lisible même avec beaucoup d'agents peu familiers de l'appli.
+function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, isAdmin, isOwnProfile, year, onClose}){
+  const today = new Date().toISOString().slice(0,10);
+  const { lignes, fetesReportN1, yearMoins1 } = useMemo(
+    ()=>computeFetesLignes(agent, schedule, agentProfiles, year),
+    [agent, schedule, agentProfiles, year]
+  );
+
+  const setFetesDataYear = (targetYear, updater) => {
+    setAgentProfiles(prev=>{
+      const curr = prev[agent.id]?.fetesTracking?.[targetYear] || {};
+      const next = typeof updater === 'function' ? updater(curr) : updater;
+      return {...prev, [agent.id]:{
+        ...(prev[agent.id]||{}),
+        fetesTracking:{
+          ...(prev[agent.id]?.fetesTracking||{}),
+          [targetYear]: next,
+        }
+      }};
+    });
+  };
+
+  const [editingCode, setEditingCode] = useState(null);
+  const [editVal, setEditVal] = useState("");
   const [motifOuvert, setMotifOuvert] = useState(null);
+  const [ouvertN1, setOuvertN1] = useState(true);
 
-  // Couleurs par statut
+  const prendreEnCompte = (code, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:null,priseLe:today,priseType:"manuel"}}));
+  };
+  const snooze10j = (code, targetYear=year) => {
+    const d = new Date(); d.setDate(d.getDate()+10);
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:d.toISOString().slice(0,10)}}));
+  };
+  const setManualDate = (code, val, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),priseLe:val||null,priseType:val?"manuel":null}}));
+    setEditingCode(null);
+  };
+  const setManualPayee = (code, val, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
+  };
+  const resetManuel = (code, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>{
+      const next = {...prev};
+      delete next[code];
+      return next;
+    });
+    setEditingCode(null);
+  };
+
+  // Regroupement par priorité — plus intuitif qu'une liste chronologique :
+  // ce qui nécessite une action d'abord, ce qui est réglé en dernier.
+  const groupeATraiter = lignes.filter(l=>l.statut==="attente"||l.statut==="perdue_probable");
+  const groupePerdues  = lignes.filter(l=>l.statut==="perdue");
+  const groupeReglees  = lignes.filter(l=>l.statut==="prise"||l.statut==="payee"||l.statut==="payee_auto");
+  const groupeAVenir   = lignes.filter(l=>l.statut==="futur");
+
+  // Couleurs par statut — contraste fort partout (pas de gris clair sur clair)
   const statutStyle = {
-    futur:          {bg:"#f8fafc", border:"#e2e8f0", badge:"#94a3b8", badgeTc:"#fff",     icon:"🔜", label:"À venir"},
+    futur:          {bg:"#f8fafc", border:"#e2e8f0", badge:"#64748b", badgeTc:"#fff",     icon:"🔜", label:"À venir"},
     prise:          {bg:"#f0fdf4", border:"#86efac", badge:"#16a34a", badgeTc:"#fff",     icon:"✅", label:"Prise"},
     attente:        {bg:"#fffbeb", border:"#fde68a", badge:"#f59e0b", badgeTc:"#fff",     icon:"⏳", label:"En attente"},
     payee:          {bg:"#eff6ff", border:"#bfdbfe", badge:"#3b82f6", badgeTc:"#fff",     icon:"💶", label:"Payée"},
@@ -3530,7 +3538,7 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                   weekday:"short",day:"2-digit",month:"2-digit"
                 })}
               </span>
-              <span style={{color:"#94a3b8"}}>→</span>
+              <span style={{color:"#64748b"}}>→</span>
               <span style={{
                 fontWeight:700,
                 color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#475569"
@@ -3598,7 +3606,7 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
                         ⚠️ À vérifier sur votre fiche de paie de {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
                       </div>
                     </div>
-                  : <span style={{color:"#64748b",fontStyle:"italic"}}>Non renseigné</span>
+                  : <span style={{color:"#475569",fontStyle:"italic"}}>Non renseigné</span>
               }
             </div>
           )}
@@ -3649,156 +3657,83 @@ function FetesSection({agent, schedule, agentProfiles, setAgentProfiles, isAdmin
     );
   };
 
-  return(
-    <div style={{marginTop:14,border:"2px solid #e2e8f0",borderRadius:14,overflow:"hidden",background:"#fff",boxShadow:"0 1px 3px rgba(0,0,0,.06)"}}>
-
-      {/* ── HEADER cliquable ── */}
-      <div onClick={()=>setOuvert(o=>!o)}
-        style={{background:"linear-gradient(135deg,#831843,#9d174d)",padding:"16px 20px",
-          display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",flexWrap:"wrap"}}>
-
-        {/* Titre */}
-        <span style={{fontSize:20,flexShrink:0}}>🩷</span>
-        <span style={{fontSize:17,fontWeight:800,color:"#fff",flex:1,minWidth:140}}>
-          Suivi des fêtes légales {year}
-        </span>
-
-        {/* Compteurs inline */}
-        <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-
-          {/* Année en cours — prises */}
-          {nbPrises>0&&<span style={{
-            background:"rgba(22,163,74,.95)",color:"#fff",
-            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}>
-            ✅ {nbPrises} prise{nbPrises>1?"s":""} {year}
-          </span>}
-
-          {/* Année en cours — payées */}
-          {nbPayees>0&&<span style={{
-            background:"rgba(59,130,246,.95)",color:"#fff",
-            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}>
-            💶 {nbPayees} payée{nbPayees>1?"s":""} {year}
-          </span>}
-
-          {/* Fêtes T4 de N-1 encore en cours — prises */}
-          {nbPrisesN1>0&&<span style={{
-            background:"rgba(22,163,74,.82)",color:"#fff",
-            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}
-            title={fetesN1Prises.map(l=>`${l.code} – ${l.label}`).join(", ")}>
-            ✅ {nbPrisesN1} prise{nbPrisesN1>1?"s":""} ({yearMoins1})
-          </span>}
-
-          {/* Fêtes T4 de N-1 — en attente (délai pas encore dépassé) */}
-          {nbAttenteN1>0&&<span style={{
-            background:"rgba(245,158,11,.92)",color:"#fff",
-            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}
-            title={`À prendre avant le 31 mars ${year} : ${fetesN1Attente.map(l=>l.code).join(", ")}`}>
-            ⏳ {nbAttenteN1} à prendre ({yearMoins1})
-          </span>}
-
-          {/* Fêtes T4 de N-1 — payées */}
-          {nbPayeesN1>0&&<span style={{
-            background:"rgba(59,130,246,.82)",color:"#fff",
-            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,
-            display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}
-            title={fetesN1Payees.map(l=>`${l.code} – ${l.label}`).join(", ")}>
-            💶 {nbPayeesN1} payée{nbPayeesN1>1?"s":""} ({yearMoins1})
-          </span>}
-
-          {/* Rappels */}
-          {notifCount>0&&<span style={{
-            background:"#ef4444",color:"#fff",
-            borderRadius:20,padding:"4px 11px",fontSize:12,fontWeight:700,flexShrink:0}}>
-            ⚠️ {notifCount} rappel{notifCount>1?"s":""}
-          </span>}
-        </div>
-
-        <span style={{fontSize:11,color:"rgba(255,255,255,.55)",fontStyle:"italic",flexShrink:0}}>GRH00143</span>
-        <span style={{color:"#fff",fontSize:18,fontWeight:700,transition:"transform .2s",
-          display:"inline-block",transform:ouvert?"rotate(0deg)":"rotate(-90deg)",flexShrink:0}}>
-          ▼
-        </span>
+  const groupeStyle = {
+    aTraiter: {bg:"#fff7ed", border:"#fed7aa", text:"#9a3412"},
+    perdues:  {bg:"#fef2f2", border:"#fecaca", text:"#991b1b"},
+    reglees:  {bg:"#f0fdf4", border:"#bbf7d0", text:"#166534"},
+    aVenir:   {bg:"#f8fafc", border:"#e2e8f0", text:"#334155"},
+  };
+  const renderGroupe = (titre, icone, items, style) => items.length>0 && (
+    <div>
+      <div style={{fontSize:13,fontWeight:800,color:style.text,background:style.bg,
+        border:`1px solid ${style.border}`,borderRadius:8,padding:"7px 11px",marginBottom:8}}>
+        {icone} {titre} ({items.length})
       </div>
+      <div style={{display:"flex",flexDirection:"column",gap:0,border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+        {items.map(l=>renderFeteCard(l, year))}
+      </div>
+    </div>
+  );
 
-      {ouvert&&<>
-        {/* ── Alertes actives ── */}
-        {lignes.filter(l=>l.notifActive).map(l=>(
-          <div key={"alert-"+l.code} style={{background:"#fff7ed",borderBottom:"1px solid #fed7aa",
-            padding:"12px 16px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <span style={{fontSize:19,flexShrink:0}}>⚠️</span>
-            <div style={{flex:1,minWidth:160}}>
-              <div style={{fontSize:14,fontWeight:800,color:"#c2410c"}}>
-                🩷 {l.code} — {l.label}
-              </div>
-              <div style={{fontSize:12,color:"#92400e",marginTop:2}}>
-                À prendre avant le <strong>
-                  {new Date(l.limiteDate).toLocaleDateString("fr-FR",{
-                    day:"2-digit",month:"long",
-                    year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined
-                  })}
-                </strong>
-              </div>
+  return(
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#831843,#9d174d)",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div>
+            <div style={{color:"#fff",fontSize:16,fontWeight:800}}>🩷 Fêtes légales {year}</div>
+            <div style={{color:"rgba(255,255,255,.9)",fontSize:11,marginTop:2,fontWeight:600}}>Réf. GRH00143</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.9}}>✕</button>
+        </div>
+
+        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {lignes.length===0 && fetesReportN1.length===0 && (
+            <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucune fête à afficher.</div>
+          )}
+
+          {renderGroupe("À traiter", "⚠️", groupeATraiter, groupeStyle.aTraiter)}
+          {renderGroupe("Perdues", "❌", groupePerdues, groupeStyle.perdues)}
+          {renderGroupe("Réglées", "✅", groupeReglees, groupeStyle.reglees)}
+          {renderGroupe("À venir", "🔜", groupeAVenir, groupeStyle.aVenir)}
+
+          {/* ── Report N-1 (fêtes de fin d'année précédente encore en délai) ── */}
+          {fetesReportN1.length>0&&<div style={{borderTop:"2px solid #e2e8f0",paddingTop:14}}>
+            <div onClick={()=>setOuvertN1(o=>!o)}
+              style={{background:"#fdf2f8",border:"1px solid #fbcfe8",borderRadius:8,padding:"9px 12px",
+                display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none"}}>
+              <span style={{fontSize:13,fontWeight:800,color:"#9d174d",flex:1}}>
+                📋 Report {yearMoins1} ({fetesReportN1.length})
+              </span>
+              <span style={{fontSize:11,fontWeight:600,color:"#9d174d"}}>
+                {ouvertN1?"Masquer":"Afficher"}
+              </span>
+              <span style={{color:"#9d174d",fontSize:13,fontWeight:700,transition:"transform .2s",
+                display:"inline-block",transform:ouvertN1?"rotate(0deg)":"rotate(-90deg)"}}>▼</span>
             </div>
-            {canEdit&&<div style={{display:"flex",gap:7,flexShrink:0}}>
-              <button onClick={e=>{e.stopPropagation();prendreEnCompte(l.code);}}
-                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:8,
-                  padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:700,minHeight:36}}>✓ Pris</button>
-              <button onClick={e=>{e.stopPropagation();snooze10j(l.code);}}
-                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",
-                  borderRadius:8,padding:"8px 14px",cursor:"pointer",fontSize:13,fontWeight:600,minHeight:36}}>⏰ +10j</button>
+            {ouvertN1&&<div style={{display:"flex",flexDirection:"column",gap:0,border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",marginTop:8}}>
+              {fetesReportN1.map(l=>renderFeteCard(l, yearMoins1))}
             </div>}
-          </div>
-        ))}
-
-        {/* ── Cartes portrait (1 par fête) ── */}
-        <div style={{display:"flex",flexDirection:"column",gap:0}}>
-          {lignes.map(l=>renderFeteCard(l, year))}
-        </div>
-
-        {/* ── Report N-1 (fêtes de fin d'année précédente encore en délai) ── */}
-        {fetesReportN1.length>0&&<div style={{borderTop:"2px solid #e2e8f0"}}>
-          <div onClick={()=>setOuvertN1(o=>!o)}
-            style={{background:"#fdf2f8",padding:"10px 14px",display:"flex",alignItems:"center",
-              gap:8,cursor:"pointer",userSelect:"none"}}>
-            <span style={{fontSize:13,fontWeight:700,color:"#9d174d",flex:1}}>
-              📋 Report {yearMoins1} ({fetesReportN1.length})
-            </span>
-            <span style={{fontSize:11,color:"#be185d"}}>
-              {ouvertN1?"Masquer":"Afficher"}
-            </span>
-            <span style={{color:"#9d174d",fontSize:13,fontWeight:700,transition:"transform .2s",
-              display:"inline-block",transform:ouvertN1?"rotate(0deg)":"rotate(-90deg)"}}>▼</span>
-          </div>
-          {ouvertN1&&<div style={{display:"flex",flexDirection:"column",gap:0}}>
-            {fetesReportN1.map(l=>renderFeteCard(l, yearMoins1))}
           </div>}
-        </div>}
 
-        {/* ── Légende compacte ── */}
-        <div style={{padding:"11px 14px",borderTop:"1px solid #e2e8f0",
-          display:"flex",gap:11,flexWrap:"wrap",alignItems:"center",background:"#f8fafc"}}>
-          {[
-            {bg:"#16a34a",l:"Prise"},
-            {bg:"#f59e0b",l:"Attente"},
-            {bg:"#3b82f6",l:"Payée"},
-            {bg:"#dc2626",l:"Perdue"},
-            {bg:"#ea580c",l:"Prob."},
-            {bg:"#7c3aed",l:"Indét."},
-            {bg:"#94a3b8",l:"À venir"},
-          ].map(({bg,l})=>(
-            <span key={l} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11}}>
-              <span style={{width:10,height:10,borderRadius:"50%",background:bg,flexShrink:0}}/>
-              <span style={{color:"#475569",fontWeight:600}}>{l}</span>
-            </span>
-          ))}
-          <span style={{flex:1}}/>
-          <span style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>GRH00143</span>
+          {/* ── Légende ── */}
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",borderTop:"1px solid #e2e8f0",paddingTop:12}}>
+            {[
+              {bg:"#16a34a",l:"Prise"},
+              {bg:"#f59e0b",l:"Attente"},
+              {bg:"#3b82f6",l:"Payée"},
+              {bg:"#dc2626",l:"Perdue"},
+              {bg:"#ea580c",l:"Prob. perdue"},
+              {bg:"#64748b",l:"À venir"},
+            ].map(({bg,l})=>(
+              <span key={l} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11}}>
+                <span style={{width:10,height:10,borderRadius:"50%",background:bg,flexShrink:0}}/>
+                <span style={{color:"#334155",fontWeight:600}}>{l}</span>
+              </span>
+            ))}
+          </div>
         </div>
-      </>}
+      </div>
     </div>
   );
 }
