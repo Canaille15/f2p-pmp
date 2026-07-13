@@ -176,31 +176,49 @@ export const agents = {
 
 // ─── MODULE PLANNING ─────────────────────────────────────────────────────────
 
+const MAPPING_3X8 = {
+  CCL:  { M: "PICCL-", AM: "PICCLO", N: "PICCLX" },
+  ADJ:  { M: "PIADJ-", AM: "PIADJO", N: "PIADJX" },
+  LNE:  { M: "PILNE-", AM: "PILNEO", N: "PILNEX" },
+  LNO:  { M: "PILNO-", AM: "PILNOO", N: "PILNOX" },
+  VGD:  { M: "PIVGD-", AM: "PIVGDO", N: null },
+  LC:   { M: "PILCL-", AM: "PILCLO", N: "PILCLX" },
+  AC1:  { M: "PAAC1-", AM: "PAAC1O", N: "PAAC1X" },
+  AC2:  { M: "PAAC2-", AM: "PAAC2O", N: "PAAC2X" },
+  ACXX: { M: null, AM: null, N: "PAACXX" },
+};
+const MAPPING_JOURNEE = {
+  PA1J: "PIPA1J", PA2J: "PIPA2J", PA3J: "PIPA3J",
+  DPXJ: "PIDPXJ", ASSJ: "PIASSJ", AFOPR: "AFOPRCI",
+  PARJ: "PAPAUJ", DPXP: "PADPXJ", ASMP: "PAASMJ",
+  PPRCI: "PPRCI",
+  PPAR: "PPAR",
+};
+
+// Codes jsCode déjà canoniques (ceux que renvoie convertirCodePosteVersJsCode
+// ci-dessous) — sert à distinguer un code court local (ex: "PA1J", à traduire)
+// d'un code déjà traduit (ex: "PIPA1J", à ne pas re-sauvegarder tel quel).
+// Un simple prefixe "PI"/"PA" ne suffit PAS : plusieurs codes courts locaux
+// commencent aussi par "PA" par coïncidence (PA1J/PA2J/PA3J/PARJ, les
+// "Pauseur") et se faisaient à tort filtrer comme "déjà canoniques",
+// écrasant silencieusement le poste choisi à la sauvegarde (signalé par
+// Olivier le 13/07 : le poste Pauseur s'affichait puis disparaissait après
+// quelques secondes, la journée retombant en "non affecté").
+// PPRCI/PPAR sont exclus : ils sont leur propre code canonique (court ===
+// traduit), les exclure ici évite de les nuller à tort quand ils arrivent
+// comme code court en entrée.
+const CANONICAL_JSCODES = new Set([
+  ...Object.values(MAPPING_3X8).flatMap(v => Object.values(v)).filter(Boolean),
+  ...Object.entries(MAPPING_JOURNEE).filter(([k,v]) => k !== v).map(([,v]) => v),
+]);
+
 export function convertirCodePosteVersJsCode(codePoste, equipe) {
   if (!codePoste) return null;
-  const mapping3x8 = {
-    CCL:  { M: "PICCL-", AM: "PICCLO", N: "PICCLX" },
-    ADJ:  { M: "PIADJ-", AM: "PIADJO", N: "PIADJX" },
-    LNE:  { M: "PILNE-", AM: "PILNEO", N: "PILNEX" },
-    LNO:  { M: "PILNO-", AM: "PILNOO", N: "PILNOX" },
-    VGD:  { M: "PIVGD-", AM: "PIVGDO", N: null },
-    LC:   { M: "PILCL-", AM: "PILCLO", N: "PILCLX" },
-    AC1:  { M: "PAAC1-", AM: "PAAC1O", N: "PAAC1X" },
-    AC2:  { M: "PAAC2-", AM: "PAAC2O", N: "PAAC2X" },
-    ACXX: { M: null, AM: null, N: "PAACXX" },
-  };
-  const mappingJournee = {
-    PA1J: "PIPA1J", PA2J: "PIPA2J", PA3J: "PIPA3J",
-    DPXJ: "PIDPXJ", ASSJ: "PIASSJ", AFOPR: "AFOPRCI",
-    PARJ: "PAPAUJ", DPXP: "PADPXJ", ASMP: "PAASMJ",
-    PPRCI: "PPRCI",
-    PPAR: "PPAR",
-  };
   if (equipe === "J" || equipe === "JF") {
-    return mappingJournee[codePoste] || null;
+    return MAPPING_JOURNEE[codePoste] || null;
   }
-  if (mapping3x8[codePoste]) {
-    return mapping3x8[codePoste][equipe] || null;
+  if (MAPPING_3X8[codePoste]) {
+    return MAPPING_3X8[codePoste][equipe] || null;
   }
   return null;
 }
@@ -285,7 +303,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
       periodes.push({
         ordre: 1,
         code_equipe: entry.equipe,
-        code_poste: (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|DISPO|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !/^(PI|PA)/.test(entry.jsCode)) ? entry.jsCode : null,
+        code_poste: (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|DISPO|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !CANONICAL_JSCODES.has(entry.jsCode)) ? entry.jsCode : null,
         heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
         heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
         prive: entry.prive || false,
@@ -299,7 +317,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
       periodes.push({
         ordre: periodes.length + 1,
         code_equipe: 'N',
-        code_poste: (entry.jsCode2 && !/^(PI|PA)/.test(entry.jsCode2)) ? entry.jsCode2 : null,
+        code_poste: (entry.jsCode2 && !CANONICAL_JSCODES.has(entry.jsCode2)) ? entry.jsCode2 : null,
         heure_debut: '22:15',
         heure_fin: '06:17',
         prive: false,
