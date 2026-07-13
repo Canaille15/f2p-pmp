@@ -3445,6 +3445,7 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
   const [editingCode, setEditingCode] = useState(null);
   const [editVal, setEditVal] = useState("");
   const [motifOuvert, setMotifOuvert] = useState(null);
+  const [resetConfirmOuvert, setResetConfirmOuvert] = useState(null);
   const [paiementOuvert, setPaiementOuvert] = useState(null);
   const [paiementMoisVal, setPaiementMoisVal] = useState("");
   const [ouvertN1, setOuvertN1] = useState(true);
@@ -3556,7 +3557,8 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
             <div style={{fontSize:11,color:"#475569",marginTop:2,display:"flex",gap:7,flexWrap:"wrap"}}>
               <span style={{fontFamily:"monospace"}}>
                 {new Date(l.dateFete).toLocaleDateString("fr-FR",{
-                  weekday:"short",day:"2-digit",month:"2-digit"
+                  weekday:"short",day:"2-digit",month:"2-digit",
+                  year:targetYear!==year?"2-digit":undefined
                 })}
               </span>
               <span style={{color:"#64748b"}}>→</span>
@@ -3612,7 +3614,14 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
           ):(
             <div style={{flex:1,fontSize:12}}>
               {priseLe
-                ? <span style={{color:"#16a34a",fontWeight:700}}>{priseLe}</span>
+                ? <span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <span style={{color:"#16a34a",fontWeight:700}}>{priseLe}</span>
+                    {canEdit&&<button onClick={()=>setManualDate(l.code,"",targetYear)}
+                      title="Annuler cette prise et revenir au calcul automatique (paiement)"
+                      style={{background:"none",border:"none",color:"#b91c1c",
+                        fontSize:11,fontWeight:700,cursor:"pointer",padding:0,
+                        textDecoration:"underline"}}>✕ Annuler la prise</button>}
+                  </span>
                 : l.statut==="payee"
                   ? <span style={{color:"#2563eb",fontWeight:700}}>
                       💶 Fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
@@ -3645,9 +3654,10 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
                 borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>💶</button>
             {/* Bouton réinitialiser — visible seulement si une correction manuelle a été posée sur cette fête */}
             {(l.override?.priseLe!==undefined||l.override?.estPayee!==undefined)&&<button
-              onClick={()=>resetManuel(l.code,targetYear)}
+              onClick={()=>setResetConfirmOuvert(resetConfirmOuvert===editKey?null:editKey)}
               title="Annuler la correction manuelle et revenir au calcul automatique"
-              style={{background:"#fff7ed",border:"1.5px solid #fdba74",borderRadius:8,
+              style={{background:resetConfirmOuvert===editKey?"#ffedd5":"#fff7ed",
+                border:`1.5px solid ${resetConfirmOuvert===editKey?"#f97316":"#fdba74"}`,borderRadius:8,
                 padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38,
                 color:"#c2410c"}}>↺</button>}
             {/* Bouton motif réglementaire */}
@@ -3684,6 +3694,25 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
         }}>
           {l.estPerdue&&<div style={{fontWeight:800,fontSize:13,marginBottom:4}}>❌ PERDUE</div>}
           {l.motifReglementaire}
+        </div>}
+
+        {/* Confirmation avant réinitialisation complète — annulable, pour éviter
+            une perte accidentelle (ex: paiement anticipé confirmé effacé sans le vouloir) */}
+        {resetConfirmOuvert===editKey&&<div style={{
+          margin:"0 14px 12px",background:"#fff7ed",border:"1.5px solid #fdba74",
+          borderRadius:8,padding:"10px 13px",
+        }}>
+          <div style={{fontSize:12,color:"#7c2d12",fontWeight:700,marginBottom:8}}>
+            ↺ Annuler TOUTES les corrections manuelles de "{l.label}" (date de prise, paiement, paiement anticipé) et revenir au calcul 100% automatique ?
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>{resetManuel(l.code,targetYear);setResetConfirmOuvert(null);}}
+              style={{background:"#c2410c",color:"#fff",border:"none",borderRadius:7,
+                padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>Oui, annuler tout</button>
+            <button onClick={()=>setResetConfirmOuvert(null)}
+              style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,
+                padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>Non, garder</button>
+          </div>
         </div>}
 
         {/* Paiement anticipé déroulant */}
@@ -3774,9 +3803,9 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
           )}
 
           {renderGroupe("À traiter", "⚠️", groupeATraiter, groupeStyle.aTraiter)}
-          {renderGroupe("Perdues", "❌", groupePerdues, groupeStyle.perdues)}
           {renderGroupe("Réglées", "✅", groupeReglees, groupeStyle.reglees)}
           {renderGroupe("À venir", "🔜", groupeAVenir, groupeStyle.aVenir)}
+          {renderGroupe("Perdues", "❌", groupePerdues, groupeStyle.perdues)}
 
           {/* ── Report N-1 (fêtes de fin d'année précédente encore en délai) ── */}
           {fetesReportN1.length>0&&<div style={{borderTop:"2px solid #e2e8f0",paddingTop:14}}>
