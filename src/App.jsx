@@ -3225,20 +3225,12 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
       if(dk < debutRecherche || dk > finRecherche) return;
       if(v?.equipe === code){ priseLe = dk; priseType = "code"; }
     });
-    // 2. RP dans le trimestre suivant (si pas déjà trouvé par code)
-    if(!priseLe){
-      const trimestreSuiv = getTrimestre(parseInt(dateFete.slice(5,7)))+1;
-      const anneeSuiv = trimestreSuiv > 4 ? year+1 : year;
-      const tReal = trimestreSuiv > 4 ? 1 : trimestreSuiv;
-      const debutT = {1:`${anneeSuiv}-01-01`,2:`${anneeSuiv}-04-01`,3:`${anneeSuiv}-07-01`,4:`${anneeSuiv}-10-01`};
-      const debutTrimSuiv = debutT[tReal];
-      Object.entries(schedule).forEach(([k,v])=>{
-        if(!k.startsWith(agent.id+"-")) return;
-        const dk = k.slice(agent.id.length+1);
-        if(dk < debutTrimSuiv || dk > finRecherche) return;
-        if(v?.equipe === "RP"){ priseLe = dk; priseType = "RP"; }
-      });
-    }
+    // Détection "RP quelconque dans le trimestre suivant" volontairement
+    // retirée (13/07, signalé par Olivier) : plusieurs fêtes du printemps
+    // (F3/F4/FV/F5) partagent le même trimestre suivant (juillet-septembre),
+    // donc un seul RP posé dans cette fenêtre était injustement compté comme
+    // preuve de RC pris pour LES QUATRE fêtes à la fois. Seul le code de la
+    // fête saisi explicitement dans le planning (ex: "F2") fait foi désormais.
 
     // ── DÉTECTION PLANNING + ROULEMENT ──────────────────────────────────────────
     const entryJour = schedule[`${agent.id}-${dateFete}`];
@@ -3399,15 +3391,9 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
       if(dk < dateFete || dk > limiteDate) return;
       if(v?.equipe===code){ priseLe = dk; priseType = "code"; }
     });
-    // RP dans le trimestre suivant (janv-mars N)
-    if(!priseLe){
-      Object.entries(schedule).forEach(([k,v])=>{
-        if(!k.startsWith(agent.id+"-")) return;
-        const dk = k.slice(agent.id.length+1);
-        if(dk < `${year}-01-01` || dk > limiteDate) return;
-        if(v?.equipe==="RP"){ priseLe = dk; priseType = "RP"; }
-      });
-    }
+    // Détection "RP quelconque dans le trimestre suivant" retirée (13/07,
+    // même raison que ci-dessus) : F8/F9/F0 partagent tous la même fenêtre
+    // janv-mars N, un seul RP y aurait réglé les trois fêtes à la fois.
     if(override.priseLe!==undefined){ priseLe = override.priseLe; priseType = override.priseType||"manuel"; }
     const estPayee = override.estPayee || (!priseLe && today2 > limiteDate);
 
