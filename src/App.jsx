@@ -2633,25 +2633,34 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
 // comme Congés) et, pour RU uniquement, le même mécanisme de report A→A+1.
 // acquisKey : compteur "banque" de jours accumulés au fil du temps (comme le
 // Droit à congés) — l'agent déclare son solde déjà acquis, combiné au calcul
-// pour donner Acquis/Pris/Restant. RP (entitlement fixe périodique) et
-// Maladie (jamais accumulée) n'en ont pas — juste consultation.
+// pour donner Acquis/Pris/Restant. Deux façons de reporter d'une année sur
+// l'autre (précisé par Olivier le 13/07, ne pas confondre les deux) :
+//   - reportKey (RP, RU) : comme les congés — l'agent choisit des dates
+//     précises physiquement posées sur A+1 mais décomptées du solde de A.
+//   - rollingAcquis (RQ, RN, TC, TY) : pas de report par date — le solde
+//     restant en fin d'année A devient automatiquement l'acquis de départ de
+//     l'année A+1, sauf si l'agent le corrige manuellement pour cette année.
+// Maladie n'a ni l'un ni l'autre (jamais accumulée) — juste consultation.
 const DETAIL_CONFIG = {
-  RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:null, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
-  RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
-  RQ: { codes:["RQ"], reportKey:"rqReports", acquisKey:"rqAcquis", label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
-  RN: { codes:["RN"], reportKey:"rnReports", acquisKey:"rnAcquis", label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
-  TC: { codes:["TC"], reportKey:"tcReports", acquisKey:"tcAcquis", label:"TC", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
-  TY: { codes:["TY"], reportKey:"tyReports", acquisKey:"tyAcquis", label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
-  MA: { codes:["MA"], reportKey:null, acquisKey:null, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
+  RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:"rpAcquis", rollingAcquis:false, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
+  RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
+  RQ: { codes:["RQ"], reportKey:null, acquisKey:"rqAcquis", rollingAcquis:true, label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
+  RN: { codes:["RN"], reportKey:null, acquisKey:"rnAcquis", rollingAcquis:true, label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
+  TC: { codes:["TC"], reportKey:null, acquisKey:"tcAcquis", rollingAcquis:true, label:"TC", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
+  TY: { codes:["TY"], reportKey:null, acquisKey:"tyAcquis", rollingAcquis:true, label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
+  MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
 };
 
 // Jours correspondant à un ou plusieurs codes équipe pour une année, avec
-// gestion optionnelle du report A→A+1 (identique au principe des congés) si
-// reportKey est fourni, et d'un solde "acquis" modifiable (comme le Droit à
-// congés) si acquisKey est fourni. Sans reportKey : simple regroupement par mois.
-function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey){
-  const profilAcquis = agentProfiles?.[agent?.id] || {};
-  const acquis = acquisKey ? (profilAcquis[acquisKey]?.[year] ?? 0) : null;
+// gestion optionnelle du report A→A+1 par date (reportKey, identique au
+// principe des congés), et d'un solde "acquis" modifiable (comme le Droit à
+// congés) si acquisKey est fourni — automatiquement reporté d'une année sur
+// l'autre sans remise à zéro si rollingAcquis est vrai (RQ/RN/TC/TY : pas de
+// report par date, juste un solde continu). _depth limite la remontée
+// récursive du solde roulant (protection anti-boucle, aucun agent n'aura de
+// données sur des dizaines d'années).
+function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis, _depth){
+  const depth = _depth || 0;
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const brut = [];
   Object.entries(schedule).forEach(([k,v])=>{
@@ -2672,12 +2681,27 @@ function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, 
     return parMois;
   };
 
+  const profil = agentProfiles?.[agent?.id] || {};
+
+  const computeAcquis = (total) => {
+    if(!acquisKey) return null;
+    const manuel = profil[acquisKey]?.[year];
+    if(manuel !== undefined) return manuel;
+    if(rollingAcquis && depth < 20){
+      // Pas de saisie manuelle pour cette année : hérite du solde restant de
+      // l'année précédente (remonte récursivement jusqu'à trouver une base).
+      const prev = computeCompteurAvecDetail(agent, schedule, agentProfiles, year-1, codes, reportKey, acquisKey, rollingAcquis, depth+1);
+      return prev.solde ?? 0;
+    }
+    return 0;
+  };
+
   if(!reportKey){
     const total = brut.length;
+    const acquis = computeAcquis(total);
     return { total, parMois: grouper(brut), tousJours: brut.sort(), reports: [], donnesAnneePrecedente: [], acquis, solde: acquis!==null ? acquis-total : null };
   }
 
-  const profil = agentProfiles?.[agent?.id] || {};
   const reportsCetteAnnee = profil[reportKey]?.[year] || [];
   const reportsAnneePrecedente = profil[reportKey]?.[year-1] || [];
   const donnesAnneePrecedente = brut.filter(d=>reportsAnneePrecedente.includes(d));
@@ -2688,6 +2712,7 @@ function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, 
   });
   const tousJours = [...propresAnnee, ...reportsValides].sort();
   const total = tousJours.length;
+  const acquis = computeAcquis(total);
   return { total, parMois: grouper(tousJours), tousJours, reports: reportsValides, donnesAnneePrecedente, acquis, solde: acquis!==null ? acquis-total : null };
 }
 
@@ -2713,8 +2738,8 @@ function YearSwitcher({ year, availableYears, onChange }){
   );
 }
 
-function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose }){
-  const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey]);
+function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose }){
+  const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
   const [reportDate, setReportDate] = useState("");
   const [reportErr, setReportErr] = useState("");
@@ -2783,7 +2808,9 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
                   onBlur={saveAcquis}
                   onKeyDown={e=>{ if(e.key==="Enter") e.currentTarget.blur(); }}
                   style={{width:"100%",textAlign:"center",fontSize:20,fontWeight:900,color:accentColor,border:`1.5px solid ${borderLight}`,borderRadius:8,padding:"2px 0",background:"#fff",marginTop:2}}/>
-                <div style={{fontSize:9,color:"#475569",marginTop:2}}>modifiable</div>
+                <div style={{fontSize:9,color:"#475569",marginTop:2}}>
+                  {rollingAcquis?"modifiable · reporté auto":"modifiable"}
+                </div>
               </div>
               <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
                 <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris</div>
@@ -2975,14 +3002,15 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const congesPris = congesData.pris;
   const solde = congesData.solde;
 
-  // RP, RU, RQ, RN, TC, TY ont un mecanisme de report (comme les conges) : la
-  // carte doit refleter le meme total que le tableau de bord dedie, pas le calcul brut.
-  const rpData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RP","RPP"], "rpReports"), [agent, schedule, agentProfiles, year]);
-  const ruData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RU"], "ruReports", "ruAcquis"), [agent, schedule, agentProfiles, year]);
-  const rqData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RQ"], "rqReports", "rqAcquis"), [agent, schedule, agentProfiles, year]);
-  const rnData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RN"], "rnReports", "rnAcquis"), [agent, schedule, agentProfiles, year]);
-  const tcData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["TC"], "tcReports", "tcAcquis"), [agent, schedule, agentProfiles, year]);
-  const tyData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["TY"], "tyReports", "tyAcquis"), [agent, schedule, agentProfiles, year]);
+  // RP, RU, RQ, RN, TC, TY ont chacun leur propre outil dédié (report par
+  // date pour RP/RU, solde roulant pour RQ/RN/TC/TY) : la carte doit refléter
+  // le même total que le tableau de bord dédié, pas le calcul brut.
+  const rpData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RP.codes, DETAIL_CONFIG.RP.reportKey, DETAIL_CONFIG.RP.acquisKey, DETAIL_CONFIG.RP.rollingAcquis), [agent, schedule, agentProfiles, year]);
+  const ruData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RU.codes, DETAIL_CONFIG.RU.reportKey, DETAIL_CONFIG.RU.acquisKey, DETAIL_CONFIG.RU.rollingAcquis), [agent, schedule, agentProfiles, year]);
+  const rqData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RQ.codes, DETAIL_CONFIG.RQ.reportKey, DETAIL_CONFIG.RQ.acquisKey, DETAIL_CONFIG.RQ.rollingAcquis), [agent, schedule, agentProfiles, year]);
+  const rnData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RN.codes, DETAIL_CONFIG.RN.reportKey, DETAIL_CONFIG.RN.acquisKey, DETAIL_CONFIG.RN.rollingAcquis), [agent, schedule, agentProfiles, year]);
+  const tcData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.TC.codes, DETAIL_CONFIG.TC.reportKey, DETAIL_CONFIG.TC.acquisKey, DETAIL_CONFIG.TC.rollingAcquis), [agent, schedule, agentProfiles, year]);
+  const tyData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.TY.codes, DETAIL_CONFIG.TY.reportKey, DETAIL_CONFIG.TY.acquisKey, DETAIL_CONFIG.TY.rollingAcquis), [agent, schedule, agentProfiles, year]);
   const DETAIL_DATA_BY_KEY = {RP:rpData, RU:ruData, RQ:rqData, RN:rnData, TC:tcData, TY:tyData};
 
   // Fêtes légales : nombre de fêtes "à traiter" (attente ou probable perdue)
