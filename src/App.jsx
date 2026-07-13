@@ -2325,7 +2325,7 @@ function computeDashboardTravail(agent, schedule, year){
 }
 
 // ─── MODALE TABLEAU DE BORD JOURNÉES TRAVAILLÉES ─────────────────────────────
-function TravailDashboardModal({ agent, schedule, year, onClose }) {
+function TravailDashboardModal({ agent, schedule, year, availableYears, onYearChange, onClose }) {
   const data = useMemo(()=>computeDashboardTravail(agent, schedule, year), [agent, schedule, year]);
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}) : "—";
   const SHIFT_LABELS = { M:"Matin", AM:"Soir", N:"Nuit", J:"Journée" };
@@ -2333,12 +2333,13 @@ function TravailDashboardModal({ agent, schedule, year, onClose }) {
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
-        <div style={{background:"linear-gradient(135deg,#8B0000,#6b0000)",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
-          <div>
-            <div style={{color:"#fff",fontSize:16,fontWeight:800}}>💼 Journées travaillées {year}</div>
+        <div style={{background:"linear-gradient(135deg,#8B0000,#6b0000)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div style={{flex:"1 1 auto",minWidth:0}}>
+            <div style={{color:"#fff",fontSize:16,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>💼 Journées travaillées {year}</div>
             <div style={{color:"rgba(255,255,255,.7)",fontSize:12,marginTop:2}}>{data.totalTravail} jour{data.totalTravail>1?"s":""} au total</div>
           </div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8}}>✕</button>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8,flexShrink:0}}>✕</button>
         </div>
 
         <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
@@ -2458,7 +2459,7 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   };
 }
 
-function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles, year, onClose }){
+function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }){
   const data = useMemo(()=>computeDashboardConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const [entitlementInput, setEntitlementInput] = useState(String(data.entitlement));
   const [reportDate, setReportDate] = useState("");
@@ -2520,9 +2521,10 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
-        <div style={{background:"linear-gradient(135deg,#eab308,#ca8a04)",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
-          <div style={{color:"#fff",fontSize:16,fontWeight:800}}>🏖️ Congés {year}</div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8}}>✕</button>
+        <div style={{background:"linear-gradient(135deg,#eab308,#ca8a04)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800,flex:"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🏖️ Congés {year}</div>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8,flexShrink:0}}>✕</button>
         </div>
 
         <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
@@ -2680,7 +2682,29 @@ function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, 
   return { total: tousJours.length, parMois: grouper(tousJours), tousJours, reports: reportsValides, donnesAnneePrecedente };
 }
 
-function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, codes, reportKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose }){
+// Sélecteur d'année réutilisé dans l'en-tête de chaque fenêtre (Congés, RP,
+// RU, Fêtes...) — déplacé hors du bandeau "Compteurs" du haut (13/07, demandé
+// par Olivier) pour l'alléger. Un seul état partagé (selectedYear du panneau
+// compteurs) : changer l'année dans une fenêtre met aussi à jour les cartes.
+function YearSwitcher({ year, availableYears, onChange }){
+  return (
+    <div onClick={e=>e.stopPropagation()}
+      style={{display:"flex",gap:2,background:"rgba(255,255,255,.15)",borderRadius:8,padding:2,flexShrink:0}}>
+      {availableYears.map(y=>(
+        <button key={y} onClick={()=>onChange(y)}
+          style={{border:"none",borderRadius:6,padding:"3px 9px",cursor:"pointer",
+            fontSize:11,fontWeight:700,
+            background:y===year?"rgba(255,255,255,.9)":"transparent",
+            color:y===year?"#334155":"rgba(255,255,255,.75)",
+            boxShadow:y===year?"0 1px 3px rgba(0,0,0,.12)":"none"}}>
+          {y}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose }){
   const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey), [agent, schedule, agentProfiles, year, codes, reportKey]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
   const [reportDate, setReportDate] = useState("");
@@ -2715,9 +2739,10 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:480,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
-        <div style={{background:`linear-gradient(135deg,${gradientFrom},${gradientTo})`,padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
-          <div style={{color:"#fff",fontSize:16,fontWeight:800}}>{icon} {label} {year}</div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8}}>✕</button>
+        <div style={{background:`linear-gradient(135deg,${gradientFrom},${gradientTo})`,padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800,flex:"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{icon} {label} {year}</div>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8,flexShrink:0}}>✕</button>
         </div>
 
         <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
@@ -2797,13 +2822,16 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
 function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  // Année et état ouvert/fermé mémorisés (localStorage) : on reste sur ce qui
+  // était consulté après une actualisation, plutôt que de revenir par défaut
+  // à l'année en cours ou de refermer le panneau à chaque F5.
+  const [selectedYear, setSelectedYear] = usePersist("compteursSelectedYear", currentYear);
   const [editMode, setEditMode] = useState(false);
   const year = selectedYear;
   const start = `${year}-01-01`;
   const end   = `${year}-12-31`;
-  // 3 années disponibles : année en cours + 2 précédentes
-  const availableYears = [currentYear, currentYear-1, currentYear-2];
+  // Année A+1 incluse car les congés (et parfois d'autres compteurs) sont posés en avance
+  const availableYears = [currentYear+1, currentYear, currentYear-1, currentYear-2];
 
   // Compteurs calculés depuis le planning
   const computed = useMemo(()=>{
@@ -2910,21 +2938,21 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const nbFetesATraiter = fetesInfo.lignes.filter(l=>l.statut==="attente"||l.statut==="perdue_probable").length;
 
   const CARDS = [
-    {key:"conges",  label:"Congés",          color:"#eab308", icon:"🏖️", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
-    {key:"travail", label:"Jours travaillés", color:"#8B0000", icon:"💼", subtitle:`Année ${year}`},
-    {key:"RP",      label:"RP",              color:"#16a34a", icon:"🟢", subtitle:"Repos périodiques"},
-    {key:"RU",      label:"RU",              color:"#d97706", icon:"🟡", subtitle:"Repos utilisation"},
-    {key:"RQ",      label:"RQ",              color:"#d97706", icon:"🟡", subtitle:"Repos qualif."},
-    {key:"FETE",    label:"Fêtes",           color:"#ec4899", icon:"🩷", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
-    {key:"RN",      label:"RN",              color:"#4338ca", icon:"🔵", subtitle:"Repos nuit"},
-    {key:"TC",      label:"TC",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
-    {key:"TY",      label:"TY",              color:"#0284c7", icon:"🔵", subtitle:"Temps compensé"},
-    {key:"VT",      label:"VT",              color:"#eab308", icon:"⏱️", subtitle:"Temps partiel"},
-    {key:"FOR",     label:"Formation",       color:"#b45309", icon:"📚", subtitle:"Jours formation"},
-    {key:"MA",      label:"Maladie",         color:"#dc2626", icon:"🤒", subtitle:"Jours maladie"},
+    {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
+    {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
+    {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Repos périodiques"},
+    {key:"RU",      label:"RU",              color:"#d97706", subtitle:"Repos utilisation"},
+    {key:"RQ",      label:"RQ",              color:"#d97706", subtitle:"Repos qualif."},
+    {key:"FETE",    label:"Fêtes",           color:"#ec4899", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
+    {key:"RN",      label:"RN",              color:"#4338ca", subtitle:"Repos nuit"},
+    {key:"TC",      label:"TC",              color:"#0284c7", subtitle:"Temps compensé"},
+    {key:"TY",      label:"TY",              color:"#0284c7", subtitle:"Temps compensé"},
+    {key:"VT",      label:"VT",              color:"#eab308", subtitle:"Temps partiel"},
+    {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation"},
+    {key:"MA",      label:"Maladie",         color:"#dc2626", subtitle:"Jours maladie"},
   ];
 
-  const [ouvert, setOuvert] = useState(false);
+  const [ouvert, setOuvert] = usePersist("compteursOuvert", false);
   const [showTravailDash, setShowTravailDash] = useState(false);
   const [showCongesDash, setShowCongesDash] = useState(false);
   const [showFetesDash, setShowFetesDash] = useState(false);
@@ -2935,51 +2963,38 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
       overflow:"hidden",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
 
       {/* ── Header accordéon cliquable ── */}
+      {/* nowrap sur le conteneur externe : la flèche reste TOUJOURS à droite,
+          jamais renvoyée à la ligne — seul le contenu interne (titre + résumé)
+          peut s'enrouler si la largeur manque. */}
       <div onClick={()=>setOuvert(o=>!o)}
         style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px",
           cursor:"pointer",userSelect:"none",
           background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
           borderBottom:ouvert?"1.5px solid #818cf8":"none",
-          flexWrap:"wrap"}}>
+          flexWrap:"nowrap"}}>
 
-        <span style={{fontSize:15}}>📊</span>
-        <span style={{fontSize:13,fontWeight:800,color:"#fff",letterSpacing:-.2}}>
-          Compteurs {selectedYear}
-        </span>
+        <div style={{display:"flex",alignItems:"center",gap:8,flex:"1 1 auto",minWidth:0,flexWrap:"wrap"}}>
+          <span style={{fontSize:13,fontWeight:800,color:"#fff",letterSpacing:-.2}}>
+            Compteurs {selectedYear}
+          </span>
 
-        {/* Résumé rapide quand fermé */}
-        {!ouvert&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-          {[
-            {k:"travail", icon:"💼"},
-            {k:"RP",      icon:"🟢"},
-            {k:"FETE",    icon:"🩷"},
-            {k:"conges",  icon:"🏖️"},
-          ].map(({k,icon})=>{
-            const v = k==="conges" ? congesPris : k==="RP" ? rpData.total : val(k);
-            if(!v) return null;
-            return <span key={k} style={{
-              fontSize:10,fontWeight:700,color:"#fff",
-              background:"rgba(255,255,255,.18)",
-              borderRadius:6,padding:"1px 8px",
-            }}>{icon} {v}</span>;
-          })}
-        </div>}
-
-        <div style={{flex:1}}/>
-
-        {/* Sélecteur année — stop propagation */}
-        <div onClick={e=>e.stopPropagation()}
-          style={{display:"flex",gap:2,background:"rgba(255,255,255,.15)",borderRadius:8,padding:2}}>
-          {availableYears.map(y=>(
-            <button key={y} onClick={()=>{setSelectedYear(y);setEditMode(false);}}
-              style={{border:"none",borderRadius:6,padding:"3px 9px",cursor:"pointer",
-                fontSize:11,fontWeight:700,
-                background:y===selectedYear?"rgba(255,255,255,.9)":"transparent",
-                color:y===selectedYear?"#6366f1":"rgba(255,255,255,.7)",
-                boxShadow:y===selectedYear?"0 1px 3px rgba(0,0,0,.12)":"none"}}>
-              {y}
-            </button>
-          ))}
+          {/* Résumé rapide quand fermé */}
+          {!ouvert&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {[
+              {k:"travail", label:"Trav."},
+              {k:"RP",      label:"RP"},
+              {k:"FETE",    label:"Fête"},
+              {k:"conges",  label:"CA"},
+            ].map(({k,label})=>{
+              const v = k==="conges" ? congesPris : k==="RP" ? rpData.total : val(k);
+              if(!v) return null;
+              return <span key={k} style={{
+                fontSize:10,fontWeight:700,color:"#fff",
+                background:"rgba(255,255,255,.18)",
+                borderRadius:6,padding:"1px 8px",
+              }}>{label} {v}</span>;
+            })}
+          </div>}
         </div>
 
         <span style={{fontSize:13,color:"rgba(255,255,255,.8)",fontWeight:700,
@@ -3025,7 +3040,6 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
               <div style={{position:"absolute",top:0,left:0,right:0,height:4,
                 background:card.color,borderRadius:"10px 10px 0 0"}}/>
               <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4,marginTop:2}}>
-                <span style={{fontSize:12}}>{card.icon}</span>
                 <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>{card.label}</span>
               </div>
               <div style={{fontSize:26,fontWeight:900,color:card.color,lineHeight:1}}>{v}</div>
@@ -3080,16 +3094,16 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
         setAgentProfiles={setAgentProfiles}/>
 
       {showTravailDash&&(
-        <TravailDashboardModal agent={agent} schedule={schedule} year={selectedYear} onClose={()=>setShowTravailDash(false)}/>
+        <TravailDashboardModal agent={agent} schedule={schedule} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowTravailDash(false)}/>
       )}
       {showCongesDash&&(
-        <CongesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} onClose={()=>setShowCongesDash(false)}/>
+        <CongesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCongesDash(false)}/>
       )}
       {openDetailKey&&DETAIL_CONFIG[openDetailKey]&&(
-        <CompteurDetailModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}/>
+        <CompteurDetailModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}/>
       )}
       {showFetesDash&&(
-        <FetesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isAdmin={isAdmin} isOwnProfile={isOwnProfile} year={selectedYear} onClose={()=>setShowFetesDash(false)}/>
+        <FetesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isAdmin={isAdmin} isOwnProfile={isOwnProfile} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowFetesDash(false)}/>
       )}
     </div>
   );
@@ -3421,7 +3435,7 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
 // désormais cette fenêtre. Mêmes règles exactes, réorganisées par priorité
 // (à traiter / perdues / réglées / à venir) plutôt qu'en liste chronologique,
 // pour rester lisible même avec beaucoup d'agents peu familiers de l'appli.
-function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, isAdmin, isOwnProfile, year, onClose}){
+function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, isAdmin, isOwnProfile, year, availableYears, onYearChange, onClose}){
   const today = new Date().toISOString().slice(0,10);
   const { lignes, fetesReportN1, yearMoins1 } = useMemo(
     ()=>computeFetesLignes(agent, schedule, agentProfiles, year),
@@ -3623,8 +3637,12 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
                         textDecoration:"underline"}}>✕ Annuler la prise</button>}
                   </span>
                 : l.statut==="payee"
-                  ? <span style={{color:"#2563eb",fontWeight:700}}>
-                      💶 Fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                  ? <span>
+                      <span style={{color:"#2563eb",fontWeight:700}}>
+                        💶 Fiche de paie {MOIS_NOMS[l.moisPaye-1]}{l.anneePaye!==year?` ${l.anneePaye}`:""}
+                      </span>
+                      {l.paiementAnticipe?.moisVu&&
+                        <span style={{color:"#059669",fontWeight:700,fontSize:11,marginLeft:6}}>⏩ Anticipé confirmé</span>}
                     </span>
                 : l.statut==="payee_auto"
                   ? <div>
@@ -3788,12 +3806,13 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
   return(
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
-        <div style={{background:"linear-gradient(135deg,#831843,#9d174d)",padding:"18px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
-          <div>
-            <div style={{color:"#fff",fontSize:16,fontWeight:800}}>🩷 Fêtes légales {year}</div>
+        <div style={{background:"linear-gradient(135deg,#831843,#9d174d)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div style={{flex:"1 1 auto",minWidth:0}}>
+            <div style={{color:"#fff",fontSize:16,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🩷 Fêtes légales {year}</div>
             <div style={{color:"rgba(255,255,255,.9)",fontSize:11,marginTop:2,fontWeight:600}}>Réf. GRH00143</div>
           </div>
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.9}}>✕</button>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.9,flexShrink:0}}>✕</button>
         </div>
 
         <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
@@ -4017,22 +4036,24 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
       {/* ── Header cliquable ── */}
       <div onClick={()=>setOuvert(o=>!o)}
         style={{background:"#0C447C",padding:"14px 18px",
-          display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",flexWrap:"wrap"}}>
-        <span style={{fontSize:17}}>⏸️</span>
-        <div style={{flex:1,minWidth:160}}>
-          <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Mémo pauses figées</div>
-          <div style={{color:"#B5D4F4",fontSize:12,marginTop:2,fontWeight:600}}>
-            {allDatesSorted.length} jour{allDatesSorted.length>1?"s":""} · {totalHAll}h{String(totalMAll).padStart(2,'0')} TC
-            {nbFiaDone>0&&<span style={{marginLeft:8,background:"rgba(255,255,255,.25)",
-              borderRadius:10,padding:"2px 8px"}}>✅ {nbFiaDone} FIA</span>}
-            {nbFiaRestant>0&&<span style={{marginLeft:4,background:"rgba(255,255,255,.2)",
-              borderRadius:10,padding:"2px 8px"}}>⏳ {nbFiaRestant} en attente</span>}
+          display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",flexWrap:"nowrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flex:"1 1 auto",minWidth:0,flexWrap:"wrap"}}>
+          <span style={{fontSize:17}}>⏸️</span>
+          <div style={{minWidth:160}}>
+            <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Mémo pauses figées</div>
+            <div style={{color:"#B5D4F4",fontSize:12,marginTop:2,fontWeight:600}}>
+              {allDatesSorted.length} jour{allDatesSorted.length>1?"s":""} · {totalHAll}h{String(totalMAll).padStart(2,'0')} TC
+              {nbFiaDone>0&&<span style={{marginLeft:8,background:"rgba(255,255,255,.25)",
+                borderRadius:10,padding:"2px 8px"}}>✅ {nbFiaDone} FIA</span>}
+              {nbFiaRestant>0&&<span style={{marginLeft:4,background:"rgba(255,255,255,.2)",
+                borderRadius:10,padding:"2px 8px"}}>⏳ {nbFiaRestant} en attente</span>}
+            </div>
           </div>
         </div>
-        <span style={{color:"#fff",fontSize:18,fontWeight:700,
+        <span style={{color:"#fff",fontSize:18,fontWeight:700,flexShrink:0,
           display:"inline-flex",alignItems:"center",justifyContent:"center",width:36,height:36,
           transform:ouvert?"rotate(0deg)":"rotate(-90deg)",
-          transition:"transform .2s",flexShrink:0}} title={ouvert?"Réduire":"Déplier"}>▼</span>
+          transition:"transform .2s"}} title={ouvert?"Réduire":"Déplier"}>▼</span>
       </div>
 
       {ouvert&&<>
@@ -4923,7 +4944,7 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const fam=FAMILLES[agent.famille];
  const agKey=agent.immatriculation||agent.cp||agent.id;
 const profile=agentProfiles[agKey]||{};
-const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...profile,...u}}));
+const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}));
   const hasPin=!!profile.pinHash;
   const ROULEMENTS=["Roulement 3×8","Journée"];
   const nbHab=Object.keys(profile.habilitations||{}).length;
