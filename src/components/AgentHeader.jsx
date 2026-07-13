@@ -40,7 +40,6 @@ export default function AgentHeader({
   compteurYear,
   setCompteurYear,
   onImportDP,
-  onDemandeConges,
   onCouleurs,
   onHabilitations,
   onRoulementChange,
@@ -108,11 +107,6 @@ export default function AgentHeader({
         {isOwnProfile && (
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
 
-            {onDemandeConges && (
-              <button onClick={onDemandeConges} style={btnStyle("#f8fafc", "#475569")} title="Congés">
-                📝
-              </button>
-            )}
             {onCouleurs && (
               <button onClick={onCouleurs} style={btnStyle("#f8fafc", "#475569")} title="Couleurs">
                 🎨

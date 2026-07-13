@@ -1850,10 +1850,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     if(search&&ag&&!`${ag.prenom} ${ag.nom}`.toLowerCase().includes(search.toLowerCase()))return null;
                     const isForm=en?.equipe==="JF";const isMe=ag&&currentAgent?.id===ag.id;
                     const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
-                    if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
-                      <span style={{fontSize:16}}>⚠️</span>
-                      <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
-                      <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>
+                    if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:16}}>⚠️</span>
+                        <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
+                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>
+                      </div>
+                      {alea.motif&&<div style={{fontSize:10,color:"#9a3412",paddingLeft:22,fontStyle:"italic"}}>{alea.motif}</div>}
                     </div>);
                     if(ag&&alea&&(alea.type==="echange"||alea.type==="erreur_cps")){
                       const nomsRemplacants=(alea.agents_concernes||[]).map(cpId=>{
@@ -1866,6 +1869,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                           <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
                         </div>
                         <div style={{fontSize:11,fontWeight:700,color:"#854d0e",paddingLeft:24}}>{nomsRemplacants||"?"}</div>
+                        {alea.motif&&<div style={{fontSize:10,color:"#a16207",paddingLeft:24,fontStyle:"italic"}}>{alea.motif}</div>}
                         <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✕</button></div>
                       </div>);
                     }
@@ -1909,10 +1913,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     </div>);
                     if(row.maxSlots<99){
                       const aleaVacant=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
-                      if(aleaVacant&&aleaVacant.type==="non_tenu")return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
-                        <span style={{fontSize:16}}>⚠️</span>
-                        <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
-                        <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>
+                      if(aleaVacant&&aleaVacant.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:16}}>⚠️</span>
+                          <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
+                          <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>
+                        </div>
+                        {aleaVacant.motif&&<div style={{fontSize:10,color:"#9a3412",paddingLeft:22,fontStyle:"italic"}}>{aleaVacant.motif}</div>}
                       </div>);
                       if(aleaVacant&&(aleaVacant.type==="echange"||aleaVacant.type==="erreur_cps")){
                         const nomsRemplacants=(aleaVacant.agents_concernes||[]).map(cpId=>{
@@ -1925,6 +1932,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                             <div style={{fontSize:11,fontWeight:700,color:"#854d0e"}}>{nomsRemplacants||"?"}</div>
                             <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✕</button>
                           </div>
+                          {aleaVacant.motif&&<div style={{fontSize:10,color:"#a16207",fontStyle:"italic"}}>{aleaVacant.motif}</div>}
                         </div>);
                       }
                       if(estNonTenuWeekend(row.jsCode,dateKey))return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#f1f5f9",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
@@ -2408,32 +2416,6 @@ function TravailDashboardModal({ agent, schedule, year, availableYears, onYearCh
           <TravailDashboardContent data={data}/>
         </div>
       </div>
-    </div>
-  );
-}
-
-// Vue restreinte affichée à la place du planning complet quand un admin
-// consulte le profil d'un AUTRE agent via le sélecteur (13/07, demandé par
-// Olivier : "on ne doit voir que les journées travaillées" — pas le planning
-// perso complet ni les réglages d'un collègue). Réutilise TravailDashboardContent.
-function AgentJoursTravaillesView({ agent, schedule }) {
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
-  const availableYears = [currentYear+1, currentYear, currentYear-1, currentYear-2];
-  const data = useMemo(()=>computeDashboardTravail(agent, schedule, year), [agent, schedule, year]);
-
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:18}}>
-      <div style={{background:"linear-gradient(135deg,#8B0000,#6b0000)",borderRadius:14,padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{flex:"1 1 auto",minWidth:0}}>
-          <div style={{color:"#fff",fontSize:16,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>💼 {agent.prenom} {agent.nom} — Journées travaillées {year}</div>
-          <div style={{color:"rgba(255,255,255,.7)",fontSize:12,marginTop:2}}>
-            👑 Vue admin — seules les journées travaillées de cet agent sont visibles ici ({data.totalTravail} jour{data.totalTravail>1?"s":""} au total)
-          </div>
-        </div>
-        <YearSwitcher year={year} availableYears={availableYears} onChange={setYear}/>
-      </div>
-      <TravailDashboardContent data={data}/>
     </div>
   );
 }
@@ -5048,10 +5030,6 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     {c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"},
     {c:"FETES",l:"🩷 Fêtes"}, // bouton spécial ouvrant le menu fêtes
   ];
-  const [showDemandeConges,setShowDemandeConges]=useState(false);
-  const [showAccordConges,setShowAccordConges]=useState(false);
-  const [demandeCourante,setDemandeCourante]=useState(null);
-  const [accords,setAccords]=useState([]);
   const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset]);
   const currentYear=new Date().getFullYear();
   const [compteurYear,setCompteurYear]=useState(currentYear);
@@ -5060,11 +5038,6 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     <div style={{fontSize:40,marginBottom:12}}>👤</div>
     <div style={{fontSize:15,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div>
   </div>);
-
-  // Vue restreinte : consulter le profil d'un AUTRE agent (admin uniquement,
-  // déjà gardé en amont par le sélecteur) ne montre que ses journées
-  // travaillées — jamais le planning perso complet ni ses réglages.
-  if(!isOwnProfile) return <AgentJoursTravaillesView agent={agent} schedule={schedule}/>;
 
   const fam=FAMILLES[agent.famille];
  const agKey=agent.immatriculation||agent.cp||agent.id;
@@ -5081,7 +5054,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
 
     {/* ── BANDEAU PROFIL ÉTENDU ── */}
    
-<AgentHeader agent={agent} profile={profile} compteurYear={compteurYear} setCompteurYear={setCompteurYear} onImportDP={onImportDP} onDemandeConges={()=>setShowDemandeConges(true)} onCouleurs={()=>setShowColorPicker(true)} onHabilitations={()=>setShowHab(true)} onRoulementChange={r=>setProfile({roulement:r})} onReservisteChange={v=>setProfile({isReserve:v})} isOwnProfile={isOwnProfile}/>
+<AgentHeader agent={agent} profile={profile} compteurYear={compteurYear} setCompteurYear={setCompteurYear} onImportDP={onImportDP} onCouleurs={()=>setShowColorPicker(true)} onHabilitations={()=>setShowHab(true)} onRoulementChange={r=>setProfile({roulement:r})} onReservisteChange={v=>setProfile({isReserve:v})} isOwnProfile={isOwnProfile}/>
     {typeof onOpenEchanges==="function"&&(echangesCount||0)>echangesDismissedCount&&<div style={{display:"flex",alignItems:"stretch",gap:6,border:"1.5px solid "+(echangesCount>0?"#fdba74":"#e2e8f0"),background:echangesCount>0?"#fef3c7":"#f8fafc",borderRadius:12,padding:"4px 4px 4px 16px"}}>
       <button onClick={onOpenEchanges} style={{display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",background:"none",cursor:"pointer",fontSize:14,fontWeight:700,color:"#1e293b",flex:1,padding:"8px 0",textAlign:"left"}}>
         <span>🔄 Échanges</span>
@@ -5089,21 +5062,6 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
       </button>
       <button onClick={()=>setEchangesDismissedCount(echangesCount||0)} title="Masquer ce bandeau" style={{border:"none",background:"none",cursor:"pointer",fontSize:17,color:"#94a3b8",padding:"0 10px"}}>✕</button>
     </div>}
-    {demandeCourante&&(()=>{
-      const acc=accords.find(a=>a.demandeId===demandeCourante.id);
-      const isAccorde=acc&&acc.accorde; const isRefuse=acc&&!acc.accorde;
-      return <div style={{background:isAccorde?"#d1fae5":isRefuse?"#fee2e2":"#fff7ed",border:`1.5px solid ${isAccorde?"#6ee7b7":isRefuse?"#fca5a5":"#fed7aa"}`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"flex-start",gap:10}}>
-        <span style={{fontSize:18}}>{isAccorde?"✅":isRefuse?"❌":"⏳"}</span>
-        <div style={{flex:1}}>
-          <div style={{fontSize:12,fontWeight:800,color:isAccorde?"#065f46":isRefuse?"#991b1b":"#c2410c"}}>{isAccorde?"Congé ACCORDÉ":isRefuse?"Congé REFUSÉ":"Congé DEMANDÉ — en attente"}</div>
-          <div style={{fontSize:11,color:"#64748b",marginTop:2}}>{demandeCourante.nature} · Du {demandeCourante.debut1&&new Date(demandeCourante.debut1).toLocaleDateString("fr-FR")} au {demandeCourante.fin1&&new Date(demandeCourante.fin1).toLocaleDateString("fr-FR")} · <strong>{demandeCourante.nb_jours}j</strong></div>
-          <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>Demandé le {demandeCourante.datedemande&&new Date(demandeCourante.datedemande).toLocaleDateString("fr-FR")}{acc?.dateAccord&&` · ${isAccorde?"Accordé":"Refusé"} le ${new Date(acc.dateAccord).toLocaleDateString("fr-FR")}`}</div>
-          {isAccorde&&acc.decompte&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:5}}>{Object.entries(acc.decompte).filter(([,v])=>v>0).map(([k,v])=><span key={k} style={{fontSize:9,background:"rgba(255,255,255,.7)",border:"1px solid #6ee7b7",borderRadius:6,padding:"1px 7px",fontWeight:700,color:"#065f46"}}>{k}:{v}j</span>)}</div>}
-        </div>
-        {!isAccorde&&!isRefuse&&<button onClick={()=>setShowAccordConges(true)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>📥 Importer accord</button>}
-      </div>;
-    })()}
-
     {/* Toggle vue semaine / mois */}
     {/* Toggle vue semaine / mois */}
     {/* BULLETIN_IMPORT_REPOSITIONNE */}
@@ -7758,69 +7716,6 @@ const handleLogin = async (pinOverride) => {
 // Modale "Connexion requise" — accès au profil d'un autre agent depuis le
 // sélecteur de profil. Vérifie le CP+PIN via le vrai flux api.auth.login
 // (comme LoginPage), pas via un mécanisme de hash local.
-function LoginTargetModal({ target, onSuccess, onClose }) {
-  const [mat, setMat] = useState("");
-  const [pin, setPin] = useState(["","","",""]);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const matRef = useRef();
-  const pinRef = useRef();
-  const pinStr = pin.join("");
-  const fam = FAMILLES[target.famille];
-
-  useEffect(()=>{ matRef.current?.focus(); },[]);
-
-  const tryLogin = async (pinOverride) => {
-    const usedPin = pinOverride ?? pinStr;
-    const m = mat.trim().toUpperCase();
-    if(!m || usedPin.length !== 4) return;
-    if(m !== (target.immatriculation||"").toUpperCase()){ setError("CP incorrect"); return; }
-    setError("");
-    setLoading(true);
-    try {
-      const { agent } = await api.auth.login(m, usedPin);
-      onSuccess({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
-    } catch(e) {
-      setError(e.message || "CP ou PIN incorrect");
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(6px)"}}>
-      <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:380,boxShadow:"0 24px 60px rgba(0,0,0,.35)",overflow:"hidden"}}>
-        <div style={{background:`linear-gradient(135deg,${fam?.color||"#1e293b"},#334155)`,padding:"20px 22px",textAlign:"center"}}>
-          <div style={{fontSize:28,marginBottom:6}}>🔐</div>
-          <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Connexion requise</div>
-          <div style={{color:"rgba(255,255,255,.6)",fontSize:12,marginTop:3}}>{target.prenom} {target.nom}</div>
-        </div>
-        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{background:"#eff6ff",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#1e40af"}}>
-            Seul(e) <strong>{target.prenom} {target.nom}</strong> peut accéder à son planning.
-          </div>
-          <input ref={matRef} value={mat} onChange={e=>{setMat(e.target.value.toUpperCase());setError("");}}
-            placeholder="CP SNCF"
-            onKeyDown={e=>{
-              if(e.key==="Enter"){
-                e.preventDefault();
-                if(mat&&pinStr.length===4&&!loading) tryLogin();
-                else pinRef.current?.focus();
-              }
-            }}
-            style={{width:"100%",border:"2px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:"monospace",fontWeight:700,letterSpacing:2,textAlign:"center",outline:"none",boxSizing:"border-box"}}/>
-          <PinInput arr={pin} setArr={setPin} inputRef={pinRef} label="CODE PIN (4 chiffres)" onComplete={(p)=>tryLogin(p)} error={error} setError={setError}/>
-          {error&&<div style={{background:"#fee2e2",borderRadius:9,padding:"8px 12px",fontSize:12,color:"#991b1b",fontWeight:600,textAlign:"center"}}>{error}</div>}
-          <button onClick={()=>tryLogin()} disabled={!mat||pinStr.length<4||loading}
-            style={{background:mat&&pinStr.length===4?(fam?.color||"#1e293b"):"#e2e8f0",color:mat&&pinStr.length===4?"#fff":"#94a3b8",border:"none",borderRadius:10,padding:"12px 0",cursor:loading?"wait":"pointer",fontSize:14,fontWeight:800}}>
-            {loading?"Connexion…":"Se connecter →"}
-          </button>
-          <button onClick={onClose} style={{border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:12,textAlign:"center"}}>Annuler</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Panneau de gestion des comptes (admin)
 // DEAD_CODE_REMOVED_MARKER (ancien AdminAuthPanel, remplace par toggle admin reel dans AdminPanel.jsx)
 export default function App(){
@@ -7829,10 +7724,7 @@ export default function App(){
   const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
   const [currentAgent,setCurrentAgent]=useState(null);
   const [weekOffset,setWeekOffset]=useState(0);
-  const [profileOpen,setProfileOpen]=useState(false);
   const [menuOpen,setMenuOpen]=useState(false);
-  const [profileSearch,setProfileSearch]=useState("");
-  const [unlockedAgents,setUnlockedAgents]=usePersist("unlockedAgents",{});
   const [schedule,setSchedule]=usePersist("schedule",{});
   const [cpsSchedule,setCpsSchedule]=usePersist("cpsSchedule",{});
   const [cpsAleas,setCpsAleas]=usePersist("cpsAleas",[]);
@@ -7914,7 +7806,6 @@ export default function App(){
     return ()=>clearInterval(interval);
   },[currentAgent]); // eslint-disable-line
   
-  const [loginTarget,setLoginTarget]=useState(null);
   const isAdmin=currentUser?.isAdmin||false;
 
 
@@ -7943,7 +7834,6 @@ export default function App(){
   const handleLogout=()=>{
     setCurrentUser(null);
     setCurrentAgent(null);
-    setProfileOpen(false);
   };
   // Ecoute l'expiration de session (declenchee par client.js sur un 401) et deconnecte avec message clair
   useEffect(()=>{
@@ -8281,9 +8171,6 @@ export default function App(){
   };
 
 
-  const isOwnProfile=currentAgent?unlockedAgents[currentAgent.id]||false:false;
-  const profils=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(profileSearch.toLowerCase()));
-
   const VIEWS=[
     {k:"personal",l:"📊 Mon planning"},
     {k:"global",  l:"📋 CPS Officiel"},
@@ -8336,74 +8223,6 @@ export default function App(){
           
         </div>}
 
-        {/* Déco */}
-        
-
-        {/* Profil selector */}
-        <div style={{position:"relative",flexShrink:0}}>
-          <button onClick={()=>{if(isAdmin) setProfileOpen(p=>!p);}}
-            style={{border:"1.5px solid #e2e8f0",borderRadius:8,padding:"5px 8px",
-              background:"#fff",cursor:isAdmin?"pointer":"default",display:"flex",alignItems:"center",
-              gap:5,fontSize:11,color:"#1e293b",fontWeight:700,maxWidth:130}}>
-            {currentAgent&&<Av initials={currentAgent.initials} size={18} famille={currentAgent.famille}/>}
-            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
-              maxWidth:70}}>{currentAgent?.prenom||"Profil"}</span>
-            {isOwnProfile&&<span style={{fontSize:9,color:"#10b981",flexShrink:0}}>🔓</span>}
-            <span style={{fontSize:9,opacity:.4,flexShrink:0}}>▼</span>
-          </button>
-
-          {profileOpen&&(
-            <div style={{position:"absolute",top:"calc(100% + 5px)",right:0,
-              width:260,background:"#fff",border:"1.5px solid #e2e8f0",
-              borderRadius:13,boxShadow:"0 8px 30px rgba(0,0,0,.14)",
-              zIndex:100,overflow:"hidden"}}>
-              <div style={{padding:"8px 10px",borderBottom:"1px solid #f1f5f9"}}>
-                <input  placeholder="Rechercher…"
-                  value={profileSearch} onChange={e=>setProfileSearch(e.target.value)}
-                  style={{width:"100%",border:"1.5px solid #e2e8f0",borderRadius:7,
-                    padding:"5px 8px",fontSize:11,outline:"none"}}/>
-              </div>
-              {["PRCI","PAR"].map(fKey=>{
-                const rows=profils.filter(a=>a.famille===fKey);
-                if(!rows.length) return null;
-                const fam=FAMILLES[fKey];
-                return(<div key={fKey}>
-                  <div style={{padding:"4px 11px",fontSize:8,fontWeight:800,
-                    color:"#94a3b8",letterSpacing:.8,
-                    background:fam.color+"11",borderBottom:"1px solid #f1f5f9"}}>
-                    {fam.label.toUpperCase()}
-                  </div>
-                  <div style={{maxHeight:160,overflowY:"auto"}}>
-                    {rows.map(a=>(
-                      <button key={a.id} onClick={()=>{
-                        if(currentUser&&a.id===currentUser.agent?.id){
-                          setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
-                        } else if(isAdmin){
-                          setCurrentAgent(a);setProfileOpen(false);setProfileSearch("");
-                        } else {
-                          setLoginTarget(a);setProfileOpen(false);setProfileSearch("");
-                        }
-                      }} style={{width:"100%",border:"none",
-                        background:currentAgent?.id===a.id?"#eff6ff":"transparent",
-                        padding:"6px 11px",cursor:"pointer",
-                        display:"flex",alignItems:"center",gap:7,textAlign:"left"}}>
-                        <Av initials={a.initials} size={22} famille={a.famille}/>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:11,fontWeight:600,color:"#1e293b",
-                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {a.prenom} {a.nom}
-                          </div>
-                          <div style={{fontSize:9,color:"#94a3b8"}}>{a.poste}</div>
-                        </div>
-                        {currentAgent?.id===a.id&&<span style={{color:fam.accent,fontSize:11}}>✓</span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>);
-              })}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Ligne 2 : Onglets navigation — pleine largeur, scrollable */}
@@ -8488,16 +8307,5 @@ export default function App(){
     {/* MODALS */}
       {importDPTarget&&<ImportDeroulement agent={importDPTarget} onClose={()=>setImportDPTarget(null)} onImport={jours=>handleImportSchedule(importDPTarget.id,jours)}/>}
     {addAgentOpen&&<AddAgentModal onClose={()=>setAddAgentOpen(false)} onAdd={ag=>{setAgents(p=>[...p,ag]);}}/>}
-    {profileOpen&&<div onClick={()=>setProfileOpen(false)} style={{position:"fixed",inset:0,zIndex:49}}/>}
-    
-
-    {/* Modale login pour accéder au profil d'un autre agent */}
-    {loginTarget&&(
-      <LoginTargetModal
-        target={loginTarget}
-        onClose={()=>setLoginTarget(null)}
-        onSuccess={(user)=>{ handleLogin(user); setLoginTarget(null); }}
-      />
-    )}
   </div>);
 }
