@@ -2631,20 +2631,27 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
 // remplacé le 12/07 par ce composant générique pour recevoir le même
 // mécanisme de report que RU/Congés (RP a aussi une tolérance de report).
 // comme Congés) et, pour RU uniquement, le même mécanisme de report A→A+1.
+// acquisKey : compteur "banque" de jours accumulés au fil du temps (comme le
+// Droit à congés) — l'agent déclare son solde déjà acquis, combiné au calcul
+// pour donner Acquis/Pris/Restant. RP (entitlement fixe périodique) et
+// Maladie (jamais accumulée) n'en ont pas — juste consultation.
 const DETAIL_CONFIG = {
-  RP: { codes:["RP","RPP"], reportKey:"rpReports", label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
-  RU: { codes:["RU"], reportKey:"ruReports", label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
-  RQ: { codes:["RQ"], reportKey:null, label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
-  RN: { codes:["RN"], reportKey:null, label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
-  TC: { codes:["TC"], reportKey:null, label:"TC", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
-  TY: { codes:["TY"], reportKey:null, label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
-  MA: { codes:["MA"], reportKey:null, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
+  RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:null, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
+  RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
+  RQ: { codes:["RQ"], reportKey:"rqReports", acquisKey:"rqAcquis", label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
+  RN: { codes:["RN"], reportKey:"rnReports", acquisKey:"rnAcquis", label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
+  TC: { codes:["TC"], reportKey:"tcReports", acquisKey:"tcAcquis", label:"TC", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
+  TY: { codes:["TY"], reportKey:"tyReports", acquisKey:"tyAcquis", label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
+  MA: { codes:["MA"], reportKey:null, acquisKey:null, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
 };
 
 // Jours correspondant à un ou plusieurs codes équipe pour une année, avec
 // gestion optionnelle du report A→A+1 (identique au principe des congés) si
-// reportKey est fourni. Sans reportKey : simple regroupement par mois.
-function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey){
+// reportKey est fourni, et d'un solde "acquis" modifiable (comme le Droit à
+// congés) si acquisKey est fourni. Sans reportKey : simple regroupement par mois.
+function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey){
+  const profilAcquis = agentProfiles?.[agent?.id] || {};
+  const acquis = acquisKey ? (profilAcquis[acquisKey]?.[year] ?? 0) : null;
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const brut = [];
   Object.entries(schedule).forEach(([k,v])=>{
@@ -2666,7 +2673,8 @@ function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, 
   };
 
   if(!reportKey){
-    return { total: brut.length, parMois: grouper(brut), tousJours: brut.sort(), reports: [], donnesAnneePrecedente: [] };
+    const total = brut.length;
+    return { total, parMois: grouper(brut), tousJours: brut.sort(), reports: [], donnesAnneePrecedente: [], acquis, solde: acquis!==null ? acquis-total : null };
   }
 
   const profil = agentProfiles?.[agent?.id] || {};
@@ -2679,7 +2687,8 @@ function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, 
     return codes.includes(v?.equipe) || codes.includes(v?.equipe2);
   });
   const tousJours = [...propresAnnee, ...reportsValides].sort();
-  return { total: tousJours.length, parMois: grouper(tousJours), tousJours, reports: reportsValides, donnesAnneePrecedente };
+  const total = tousJours.length;
+  return { total, parMois: grouper(tousJours), tousJours, reports: reportsValides, donnesAnneePrecedente, acquis, solde: acquis!==null ? acquis-total : null };
 }
 
 // Sélecteur d'année réutilisé dans l'en-tête de chaque fenêtre (Congés, RP,
@@ -2704,14 +2713,28 @@ function YearSwitcher({ year, availableYears, onChange }){
   );
 }
 
-function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose }){
-  const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey), [agent, schedule, agentProfiles, year, codes, reportKey]);
+function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose }){
+  const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
   const [reportDate, setReportDate] = useState("");
   const [reportErr, setReportErr] = useState("");
+  const [acquisInput, setAcquisInput] = useState(String(data.acquis ?? 0));
+  useEffect(()=>{ setAcquisInput(String(data.acquis ?? 0)); },[data.acquis]);
 
   const prisJusquA = useMemo(()=>data.tousJours.filter(d=>d<=dateSnapshot).length, [data.tousJours, dateSnapshot]);
   const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+
+  const saveAcquis = () => {
+    const n = parseInt(acquisInput,10);
+    if(isNaN(n) || n<0){ setAcquisInput(String(data.acquis ?? 0)); return; }
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{
+        ...(prev[agent.id]||{}),
+        [acquisKey]:{ ...(prev[agent.id]?.[acquisKey]||{}), [year]: n },
+      }
+    }));
+  };
 
   const ajouterReport = () => {
     setReportErr("");
@@ -2747,6 +2770,32 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
 
         <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
 
+          {/* Acquis/Pris/Restant — pour les compteurs qui s'accumulent au fil
+              du temps (comme le Droit à congés) : l'agent déclare son solde
+              déjà acquis avant que l'appli ne le suive, combiné au calcul du
+              planning pour donner le vrai restant. */}
+          {acquisKey && (
+            <div style={{display:"flex",gap:8}}>
+              <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Acquis</div>
+                <input type="number" min="0" value={acquisInput}
+                  onChange={e=>setAcquisInput(e.target.value)}
+                  onBlur={saveAcquis}
+                  onKeyDown={e=>{ if(e.key==="Enter") e.currentTarget.blur(); }}
+                  style={{width:"100%",textAlign:"center",fontSize:20,fontWeight:900,color:accentColor,border:`1.5px solid ${borderLight}`,borderRadius:8,padding:"2px 0",background:"#fff",marginTop:2}}/>
+                <div style={{fontSize:9,color:"#475569",marginTop:2}}>modifiable</div>
+              </div>
+              <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris</div>
+                <div style={{fontSize:20,fontWeight:900,color:accentColor}}>{data.total}</div>
+              </div>
+              <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${data.solde<0?"#fca5a5":"#e2e8f0"}`}}>
+                <div style={{fontSize:11,fontWeight:700,color:data.solde<0?"#dc2626":"#334155"}}>Restant</div>
+                <div style={{fontSize:20,fontWeight:900,color:data.solde<0?"#dc2626":"#16a34a"}}>{data.solde}</div>
+              </div>
+            </div>
+          )}
+
           <div style={{background:bgLight,border:`1.5px solid ${borderLight}`,borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
             <div style={{flex:1,minWidth:150}}>
               <div style={{fontSize:12,fontWeight:700,color:accentDark}}>{label} pris jusqu'au</div>
@@ -2759,7 +2808,7 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
             </div>
           </div>
 
-          <div style={{fontSize:12,fontWeight:700,color:"#334155"}}>Total {year} : {data.total} jour{data.total>1?"s":""}</div>
+          {!acquisKey && <div style={{fontSize:12,fontWeight:700,color:"#334155"}}>Total {year} : {data.total} jour{data.total>1?"s":""}</div>}
 
           {data.donnesAnneePrecedente.length>0 && (
             <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
@@ -2926,10 +2975,15 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
   const congesPris = congesData.pris;
   const solde = congesData.solde;
 
-  // RP et RU ont un mecanisme de report (comme les conges) : la carte doit
-  // refleter le meme total que le tableau de bord dedie, pas le calcul brut.
+  // RP, RU, RQ, RN, TC, TY ont un mecanisme de report (comme les conges) : la
+  // carte doit refleter le meme total que le tableau de bord dedie, pas le calcul brut.
   const rpData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RP","RPP"], "rpReports"), [agent, schedule, agentProfiles, year]);
-  const ruData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RU"], "ruReports"), [agent, schedule, agentProfiles, year]);
+  const ruData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RU"], "ruReports", "ruAcquis"), [agent, schedule, agentProfiles, year]);
+  const rqData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RQ"], "rqReports", "rqAcquis"), [agent, schedule, agentProfiles, year]);
+  const rnData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["RN"], "rnReports", "rnAcquis"), [agent, schedule, agentProfiles, year]);
+  const tcData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["TC"], "tcReports", "tcAcquis"), [agent, schedule, agentProfiles, year]);
+  const tyData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, ["TY"], "tyReports", "tyAcquis"), [agent, schedule, agentProfiles, year]);
+  const DETAIL_DATA_BY_KEY = {RP:rpData, RU:ruData, RQ:rqData, RN:rnData, TC:tcData, TY:tyData};
 
   // Fêtes légales : nombre de fêtes "à traiter" (attente ou probable perdue)
   // pour la cloche sur la carte — évite d'ouvrir la fenêtre juste pour savoir
@@ -3020,7 +3074,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
       {/* Grille compteurs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
         {CARDS.map(card=>{
-          const v = card.key==="conges" ? congesPris : card.key==="RP" ? rpData.total : card.key==="RU" ? ruData.total : val(card.key);
+          const v = card.key==="conges" ? congesPris : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
           const corr = corrections[card.key]||0;
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
@@ -3056,8 +3110,8 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
                   {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}
                 </span>
               </div>}
-              {/* Contrôles de correction — "conges", "RP" et "RU" ont leur propre outil dédié (report inter-années), pas de +/- générique ici */}
-              {editMode&&card.key!=="conges"&&card.key!=="RP"&&card.key!=="RU"&&<div style={{
+              {/* Contrôles de correction — "conges", "RP" et tout compteur avec un "acquis" dédié (RU/RQ/RN/TC/TY) ont leur propre outil, pas de +/- générique ici */}
+              {editMode&&card.key!=="conges"&&card.key!=="RP"&&!DETAIL_CONFIG[card.key]?.acquisKey&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
                 <button onClick={()=>{
