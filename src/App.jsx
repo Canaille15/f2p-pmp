@@ -2325,10 +2325,72 @@ function computeDashboardTravail(agent, schedule, year){
 }
 
 // ─── MODALE TABLEAU DE BORD JOURNÉES TRAVAILLÉES ─────────────────────────────
-function TravailDashboardModal({ agent, schedule, year, availableYears, onYearChange, onClose }) {
-  const data = useMemo(()=>computeDashboardTravail(agent, schedule, year), [agent, schedule, year]);
+// Contenu du tableau de bord "Journées travaillées", extrait en composant
+// autonome pour être réutilisé à la fois dans la modale (clic sur la carte
+// compteur) et dans la vue restreinte admin (consultation du profil d'un
+// autre agent, voir PersonalView).
+function TravailDashboardContent({ data }) {
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}) : "—";
   const SHIFT_LABELS = { M:"Matin", AM:"Soir", N:"Nuit", J:"Journée" };
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+      {/* Répartition PRCI / PAR / Non affecté (= 100%) */}
+      <div style={{display:"flex",gap:8}}>
+        {[
+          {k:"PRCI", label:"PRCI", color:"#1d4ed8"},
+          {k:"PAR",  label:"PAR",  color:"#065f46"},
+          {k:"sansPoste", label:"Non affecté", color:"#475569"},
+        ].map(({k,label,color})=>(
+          <div key={k} style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+            <div style={{fontSize:11,fontWeight:700,color}}>{label}</div>
+            <div style={{fontSize:20,fontWeight:900,color}}>{data.repartition[k].jours}</div>
+            <div style={{fontSize:11,fontWeight:600,color:"#475569"}}>{data.repartition[k].pct}%</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Détail par poste */}
+      {data.postes.length===0 ? (
+        <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucun poste précisé cette année.</div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {data.postes.map(p=>(
+            <div key={p.code} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:6,background:p.famille==="PRCI"?"#dbeafe":"#d1fae5",color:p.famille==="PRCI"?"#1e40af":"#065f46"}}>{p.famille}</span>
+                  <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{p.label}</span>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:15,fontWeight:900,color:"#1e293b"}}>{p.total}j</div>
+                  <div style={{fontSize:10,fontWeight:600,color:"#475569"}}>dernier : {fmtDate(p.lastDate)}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {Object.entries(p.parShift).map(([shift,s])=>(
+                  <div key={shift} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10}}>
+                    <span style={{fontWeight:700,color:"#334155"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
+                    <span style={{fontWeight:600,color:"#475569",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {data.sansPoste.total>0 && (
+        <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
+          ⚠️ {data.sansPoste.total} jour{data.sansPoste.total>1?"s":""} travaillé{data.sansPoste.total>1?"s":""} sans poste précisé (dernier : {fmtDate(data.sansPoste.lastDate)}) — le poste n'a pas été renseigné dans le planning ce jour-là.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TravailDashboardModal({ agent, schedule, year, availableYears, onYearChange, onClose }) {
+  const data = useMemo(()=>computeDashboardTravail(agent, schedule, year), [agent, schedule, year]);
 
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
@@ -2342,60 +2404,36 @@ function TravailDashboardModal({ agent, schedule, year, availableYears, onYearCh
           <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8,flexShrink:0}}>✕</button>
         </div>
 
-        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
-
-          {/* Répartition PRCI / PAR / Non affecté (= 100%) */}
-          <div style={{display:"flex",gap:8}}>
-            {[
-              {k:"PRCI", label:"PRCI", color:"#1d4ed8"},
-              {k:"PAR",  label:"PAR",  color:"#065f46"},
-              {k:"sansPoste", label:"Non affecté", color:"#475569"},
-            ].map(({k,label,color})=>(
-              <div key={k} style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
-                <div style={{fontSize:11,fontWeight:700,color}}>{label}</div>
-                <div style={{fontSize:20,fontWeight:900,color}}>{data.repartition[k].jours}</div>
-                <div style={{fontSize:11,fontWeight:600,color:"#475569"}}>{data.repartition[k].pct}%</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Détail par poste */}
-          {data.postes.length===0 ? (
-            <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucun poste précisé cette année.</div>
-          ) : (
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {data.postes.map(p=>(
-                <div key={p.code} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                      <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:6,background:p.famille==="PRCI"?"#dbeafe":"#d1fae5",color:p.famille==="PRCI"?"#1e40af":"#065f46"}}>{p.famille}</span>
-                      <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{p.label}</span>
-                    </div>
-                    <div style={{textAlign:"right"}}>
-                      <div style={{fontSize:15,fontWeight:900,color:"#1e293b"}}>{p.total}j</div>
-                      <div style={{fontSize:10,fontWeight:600,color:"#475569"}}>dernier : {fmtDate(p.lastDate)}</div>
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {Object.entries(p.parShift).map(([shift,s])=>(
-                      <div key={shift} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10}}>
-                        <span style={{fontWeight:700,color:"#334155"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
-                        <span style={{fontWeight:600,color:"#475569",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {data.sansPoste.total>0 && (
-            <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
-              ⚠️ {data.sansPoste.total} jour{data.sansPoste.total>1?"s":""} travaillé{data.sansPoste.total>1?"s":""} sans poste précisé (dernier : {fmtDate(data.sansPoste.lastDate)}) — le poste n'a pas été renseigné dans le planning ce jour-là.
-            </div>
-          )}
+        <div style={{padding:"18px 20px"}}>
+          <TravailDashboardContent data={data}/>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Vue restreinte affichée à la place du planning complet quand un admin
+// consulte le profil d'un AUTRE agent via le sélecteur (13/07, demandé par
+// Olivier : "on ne doit voir que les journées travaillées" — pas le planning
+// perso complet ni les réglages d'un collègue). Réutilise TravailDashboardContent.
+function AgentJoursTravaillesView({ agent, schedule }) {
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+  const availableYears = [currentYear+1, currentYear, currentYear-1, currentYear-2];
+  const data = useMemo(()=>computeDashboardTravail(agent, schedule, year), [agent, schedule, year]);
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:18}}>
+      <div style={{background:"linear-gradient(135deg,#8B0000,#6b0000)",borderRadius:14,padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{flex:"1 1 auto",minWidth:0}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>💼 {agent.prenom} {agent.nom} — Journées travaillées {year}</div>
+          <div style={{color:"rgba(255,255,255,.7)",fontSize:12,marginTop:2}}>
+            👑 Vue admin — seules les journées travaillées de cet agent sont visibles ici ({data.totalTravail} jour{data.totalTravail>1?"s":""} au total)
+          </div>
+        </div>
+        <YearSwitcher year={year} availableYears={availableYears} onChange={setYear}/>
+      </div>
+      <TravailDashboardContent data={data}/>
     </div>
   );
 }
@@ -5022,6 +5060,11 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     <div style={{fontSize:40,marginBottom:12}}>👤</div>
     <div style={{fontSize:15,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div>
   </div>);
+
+  // Vue restreinte : consulter le profil d'un AUTRE agent (admin uniquement,
+  // déjà gardé en amont par le sélecteur) ne montre que ses journées
+  // travaillées — jamais le planning perso complet ni ses réglages.
+  if(!isOwnProfile) return <AgentJoursTravaillesView agent={agent} schedule={schedule}/>;
 
   const fam=FAMILLES[agent.famille];
  const agKey=agent.immatriculation||agent.cp||agent.id;
