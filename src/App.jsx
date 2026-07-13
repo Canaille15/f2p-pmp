@@ -2279,12 +2279,16 @@ function computeDashboardTravail(agent, schedule, year){
   const postes = {};
   const sansPoste = { total:0, lastDate:null };
   let totalTravail = 0;
+  // Comptage global M/AM/N/J, tous postes confondus (+ jours sans poste
+  // précisé) — distinct du détail par poste ci-dessous, jamais retiré.
+  const parShiftGlobal = { M:0, AM:0, N:0, J:0 };
 
   const traiter = (eq, jsCode, dk) => {
     if(!eq) return;
     if(CODES_FETES[eq] || eq==="JF") return; // fête, pas travail
     if(!["M","AM","N","J"].includes(eq)) return; // pas une journée de travail
     totalTravail++;
+    parShiftGlobal[eq]++;
     const info = jsCode ? POSTE_REGISTRY[jsCode] : null;
     if(!info){
       sansPoste.total++;
@@ -2329,6 +2333,7 @@ function computeDashboardTravail(agent, schedule, year){
       PAR:  { jours: totalPAR,  pct: pct(totalPAR) },
       sansPoste: { jours: sansPoste.total, pct: pct(sansPoste.total) },
     },
+    parShiftGlobal,
   };
 }
 
@@ -2356,6 +2361,19 @@ function TravailDashboardContent({ data }) {
             <div style={{fontSize:11,fontWeight:600,color:"#475569"}}>{data.repartition[k].pct}%</div>
           </div>
         ))}
+      </div>
+
+      {/* Comptage global M/AM/N/J — tous postes confondus, distinct du détail par poste ci-dessous */}
+      <div>
+        <div style={{fontSize:11,fontWeight:700,color:"#334155",marginBottom:6}}>Total par vacation (tous postes confondus)</div>
+        <div style={{display:"flex",gap:8}}>
+          {["M","AM","N","J"].map(shift=>(
+            <div key={shift} style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#475569"}}>{SHIFT_LABELS[shift]}</div>
+              <div style={{fontSize:20,fontWeight:900,color:"#1e293b"}}>{data.parShiftGlobal[shift]}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Détail par poste */}
