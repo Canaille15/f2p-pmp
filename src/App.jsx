@@ -2934,7 +2934,7 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
 }
 
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
-function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
+function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
   // Année et état ouvert/fermé mémorisés (localStorage) : on reste sur ce qui
   // était consulté après une actualisation, plutôt que de revenir par défaut
@@ -3223,7 +3223,7 @@ function DashboardCompteurs({agent, schedule, agentProfiles, setAgentProfiles, i
         <CompteurDetailModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}/>
       )}
       {showFetesDash&&(
-        <FetesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isAdmin={isAdmin} isOwnProfile={isOwnProfile} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowFetesDash(false)}/>
+        <FetesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isAdmin={isAdmin} isOwnProfile={isOwnProfile} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowFetesDash(false)}/>
       )}
     </div>
   );
@@ -3555,7 +3555,7 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
 // désormais cette fenêtre. Mêmes règles exactes, réorganisées par priorité
 // (à traiter / perdues / réglées / à venir) plutôt qu'en liste chronologique,
 // pour rester lisible même avec beaucoup d'agents peu familiers de l'appli.
-function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, isAdmin, isOwnProfile, year, availableYears, onYearChange, onClose}){
+function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAgentProfiles, isAdmin, isOwnProfile, year, availableYears, onYearChange, onClose}){
   const today = new Date().toISOString().slice(0,10);
   const { lignes, fetesReportN1, yearMoins1 } = useMemo(
     ()=>computeFetesLignes(agent, schedule, agentProfiles, year),
@@ -3584,17 +3584,73 @@ function FetesDashboardModal({agent, schedule, agentProfiles, setAgentProfiles, 
   const [paiementMoisVal, setPaiementMoisVal] = useState("");
   const [ouvertN1, setOuvertN1] = useState(true);
 
-  const prendreEnCompte = (code, targetYear=year) => {
-    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:null,priseLe:today,priseType:"manuel"}}));
+  // Écrit (ou retire) le code de la fête directement dans le planning perso, le jour
+  // de la prise manuelle choisie dans ce tableau de bord — pour que la fête saisie
+  // ici se retrouve avec son intitulé exact (ex: "F2") dans le planning, et pas
+  // seulement comme une correction locale invisible ailleurs. Deux garde-fous
+  // (choisis par Olivier le 14/07) : on ne touche jamais un jour du planning qui
+  // contient déjà autre chose, et on ne permet pas une deuxième date pour une même
+  // fête déjà prise ailleurs — dans les deux cas, on bloque avec un message plutôt
+  // que d'écraser ou dupliquer silencieusement.
+  const agCp = agent?.immatriculation || agent?.cp || agent?.id;
+  const ecrireCodeFeteDansPlanning = (code, date) => {
+    const key = `${agCp}-${date}`;
+    const entryExistante = schedule[key] || {};
+    const fullEntry = {...entryExistante, equipe: code, prive:false};
+    setSchedule(prev=>({...prev, [key]: fullEntry}));
+    api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur sauvegarde fête dans planning:", e));
   };
+  const retirerCodeFeteDuPlanning = (code, date) => {
+    const key = `${agCp}-${date}`;
+    const entryExistante = schedule[key];
+    if(!entryExistante || entryExistante.equipe !== code) return; // déjà changé entre temps, on ne touche pas
+    const {equipe, ...reste} = entryExistante;
+    const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
+    if(videTotal){
+      setSchedule(prev=>{const n={...prev}; delete n[key]; return n;});
+      api.planning.deleteEntry(agCp, date).catch(e=>console.error("Erreur suppression fête du planning:", e));
+    } else {
+      const fullEntry = {...reste, equipe:null};
+      setSchedule(prev=>({...prev, [key]: fullEntry}));
+      api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur suppression fête du planning:", e));
+    }
+  };
+  const appliquerPriseManuelle = (code, val, targetYear=year) => {
+    const relevantLignes = targetYear===yearMoins1 ? fetesReportN1 : lignes;
+    const ligneActuelle = relevantLignes.find(l=>l.code===code);
+    const ancienneDate = (agentProfiles[agent.id]?.fetesTracking?.[targetYear]||{})[code]?.priseLe || null;
+
+    if(!val){
+      // Annulation : si on avait écrit ce code dans le planning via ce mécanisme, le retirer
+      if(ancienneDate) retirerCodeFeteDuPlanning(code, ancienneDate);
+      setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),priseLe:null,priseType:null}}));
+      setEditingCode(null);
+      return;
+    }
+
+    // Garde-fou 1 : le jour cible du planning doit être libre (ou déjà ce même code)
+    const targetEntry = schedule[`${agCp}-${val}`];
+    if(targetEntry?.equipe && targetEntry.equipe!==code){
+      alert(`Le ${new Date(val).toLocaleDateString("fr-FR")} contient déjà "${targetEntry.equipe}" dans ton planning perso. Modifie ou efface ce jour d'abord avant de le lier à ${code}.`);
+      return;
+    }
+    // Garde-fou 2 : la fête ne doit pas déjà être prise à une autre date
+    if(ligneActuelle?.priseLe && ligneActuelle.priseLe!==val){
+      alert(`${code} est déjà marquée prise le ${new Date(ligneActuelle.priseLe).toLocaleDateString("fr-FR")}. Annule d'abord cette prise si tu veux la déplacer.`);
+      return;
+    }
+
+    if(ancienneDate && ancienneDate!==val) retirerCodeFeteDuPlanning(code, ancienneDate);
+    ecrireCodeFeteDansPlanning(code, val);
+    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:null,priseLe:val,priseType:"manuel"}}));
+    setEditingCode(null);
+  };
+  const prendreEnCompte = (code, targetYear=year) => appliquerPriseManuelle(code, today, targetYear);
   const snooze10j = (code, targetYear=year) => {
     const d = new Date(); d.setDate(d.getDate()+10);
     setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),snoozeJusquau:d.toISOString().slice(0,10)}}));
   };
-  const setManualDate = (code, val, targetYear=year) => {
-    setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),priseLe:val||null,priseType:val?"manuel":null}}));
-    setEditingCode(null);
-  };
+  const setManualDate = (code, val, targetYear=year) => appliquerPriseManuelle(code, val, targetYear);
   const setManualPayee = (code, val, targetYear=year) => {
     setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
   };
@@ -5535,7 +5591,7 @@ justifyContent: "flex-start",
     </div>}
 
     {/* Tableau de bord compteurs */}
-    {agent&&<DashboardCompteurs agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
+    {agent&&<DashboardCompteurs agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
         agentCouleurs={agentCouleurs} setAgentCouleurs={setAgentCouleurs} isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
   </div>);
 }
