@@ -3747,8 +3747,6 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
               {l.label}
               {l.estDimanche&&<span style={{fontSize:11,color:"#dc2626",marginLeft:6,fontWeight:800}}>⚠️Dim.</span>}
-              {l.paiementAnticipe?.moisDemande&&!l.paiementAnticipe?.moisVu&&
-                <span style={{fontSize:11,color:"#059669",marginLeft:6,fontWeight:800}}>⏩ Anticipé demandé</span>}
             </div>
             <div style={{fontSize:11,color:"#475569",marginTop:2,display:"flex",gap:7,flexWrap:"wrap"}}>
               <span style={{fontFamily:"monospace"}}>
@@ -3768,6 +3766,8 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
                 })}
               </span>
             </div>
+            {l.paiementAnticipe?.moisDemande&&!l.paiementAnticipe?.moisVu&&
+              <div style={{fontSize:11,color:"#059669",fontWeight:800,marginTop:3,whiteSpace:"normal"}}>⏩ Anticipé demandé</div>}
           </div>
 
           {/* Statut badge */}
@@ -5415,12 +5415,14 @@ justifyContent: "flex-start",
               {code&&showData&&code!=="N"&&code!=="RPP"&&<div style={{
                 background:getColor(code), color:getTc(code),
                 borderRadius:5, padding:CODES_FETES[code]?"4px 7px":"2px 5px",
-                fontSize:9, fontWeight:700, lineHeight:1.4,
+                fontSize:"clamp(7px,2.3vw,10px)", fontWeight:700, lineHeight:1.35,
                 display:"flex", flexDirection:"column",
                 minWidth:0,
               }}>
-                <span style={{...(CODES_FETES[code]?{fontSize:14,fontWeight:800}:null),display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)}</span>
-                {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{posteLabel}</span>}
+                <span style={CODES_FETES[code]
+                  ? {fontSize:"clamp(11px,3.2vw,14px)",fontWeight:800,display:"block",whiteSpace:"nowrap"}
+                  : {overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{CODES_FETES[code]?("🩷"+code):(EQ_COLORS[code]?.label||code)}</span>
+                {posteLabel&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
               </div>}
 
@@ -5444,12 +5446,12 @@ justifyContent: "flex-start",
               {(code==="N"||en?.equipe2==="N")&&showData&&<div style={{
                 background:getColor("N"), color:getTc("N"),
                 borderRadius:5, padding:"2px 5px",
-                fontSize:9, fontWeight:700, lineHeight:1.4,
+                fontSize:"clamp(7px,2.3vw,10px)", fontWeight:700, lineHeight:1.35,
                 display:"flex", flexDirection:"column",
                 minWidth:0,
               }}>
                 <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Nuit</span>
-                {(code==="N"?posteLabel:posteNuitLabel)&&<span style={{fontSize:8,opacity:.85,fontWeight:500,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
+                {(code==="N"?posteLabel:posteNuitLabel)&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
               </div>}
 
               {/* Pastilles RC fêtes */}
