@@ -27,7 +27,7 @@ const CODES_REPOS = [
 
 const CODES_TRAVAIL = [
   { code:"M",  label:"Matin",    heures:"06h10–14h17", color:"#8B0000" },
-  { code:"AM", label:"Soir",     heures:"14h05–22h17", color:"#8B0000" },
+  { code:"AM", label:"Soirée",   heures:"14h05–22h17", color:"#8B0000" },
   { code:"N",  label:"Nuit ↓",   heures:"22h15–06h17", color:"#1e293b" },
   { code:"J",  label:"Journée",  heures:"08h00–17h45", color:"#8B0000" },
 ];
