@@ -3618,10 +3618,15 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
   const appliquerPriseManuelle = (code, val, targetYear=year) => {
     const relevantLignes = targetYear===yearMoins1 ? fetesReportN1 : lignes;
     const ligneActuelle = relevantLignes.find(l=>l.code===code);
-    const ancienneDate = (agentProfiles[agent.id]?.fetesTracking?.[targetYear]||{})[code]?.priseLe || null;
+    // Date effectivement affichée comme "prise" avant cette action — qu'elle vienne d'une
+    // saisie manuelle dans ce tableau de bord OU d'un code tapé directement dans le planning
+    // perso (priseType "code"). Dans les deux cas, annuler doit retirer le code du planning,
+    // sinon le tableau de bord repasse "à traiter" alors que le jour reste marqué dans le
+    // planning perso — état incohérent signalé par Olivier le 14/07.
+    const ancienneDate = ligneActuelle?.priseLe || null;
 
     if(!val){
-      // Annulation : si on avait écrit ce code dans le planning via ce mécanisme, le retirer
+      // Annulation : retirer le code du planning perso là où il a été détecté/écrit
       if(ancienneDate) retirerCodeFeteDuPlanning(code, ancienneDate);
       setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),priseLe:null,priseType:null}}));
       setEditingCode(null);
@@ -3631,7 +3636,8 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
     // Garde-fou 1 : le jour cible du planning doit être libre (ou déjà ce même code)
     const targetEntry = schedule[`${agCp}-${val}`];
     if(targetEntry?.equipe && targetEntry.equipe!==code){
-      alert(`Le ${new Date(val).toLocaleDateString("fr-FR")} contient déjà "${targetEntry.equipe}" dans ton planning perso. Modifie ou efface ce jour d'abord avant de le lier à ${code}.`);
+      const labelExistant = EQ_COLORS[targetEntry.equipe]?.label || targetEntry.equipe;
+      alert(`Impossible : le ${new Date(val).toLocaleDateString("fr-FR")} est déjà rempli dans ton planning perso avec "${labelExistant}".\n\nPour lier ${code} à ce jour, ouvre d'abord ce jour dans le planning perso et vide-le (ou choisis une autre date pour ${code}).`);
       return;
     }
     // Garde-fou 2 : la fête ne doit pas déjà être prise à une autre date
@@ -4950,6 +4956,16 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const [showHabRoul,setShowHabRoul]=useState(false);
   const [calView,setCalView]=useState("mois");
   const [dayPopup,setDayPopup]=useState(null); // {dk, entry}
+  // Fêtes déjà "prises" cette année-là (code -> date), pour griser dans le popup les codes
+  // fête déjà utilisés ailleurs et éviter d'en saisir un doublon (signalé par Olivier le 14/07).
+  const fetesPrises = useMemo(()=>{
+    if(!dayPopup || !agent) return {};
+    const yr = parseInt(dayPopup.dk.slice(0,4));
+    const { lignes: lignesFete } = computeFetesLignes(agent, schedule, agentProfiles, yr);
+    const map = {};
+    lignesFete.forEach(l=>{ if(l.priseLe) map[l.code]=l.priseLe; });
+    return map;
+  }, [dayPopup, agent, schedule, agentProfiles]);
   const [monthOff,setMonthOff]=useState(0);
   const personalDateJumpRef=useRef();
   const jumpToWeekDate=(dateStr)=>{
@@ -5483,6 +5499,7 @@ justifyContent: "flex-start",
       entry={dayPopup.entry}
       agent={agent}
       agentProfiles={agentProfiles}
+      fetesPrises={fetesPrises}
       onSave={async (newEntry)=>{
         const agCp=agent.immatriculation||agent.cp||agent.id;
         const dk=dayPopup.dk;

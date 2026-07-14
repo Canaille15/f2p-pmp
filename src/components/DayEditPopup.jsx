@@ -103,7 +103,7 @@ const CODE_VERS_HAB = {
   "ASMP":"PAASMJ",
 };
 
-export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave, onDelete, onClose }) {
+export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesPrises, onSave, onDelete, onClose }) {
 
   const agKey = agent?.immatriculation || agent?.cp || agent?.id;
   const profile = agentProfiles?.[agKey] || {};
@@ -390,19 +390,28 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
             </div>
             {showFetes && (
               <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
-                {FETES.map(f => (
-                  <button key={f.code} onClick={() => {
-                    toggleType1(f.code); setShowFetes(false);
-                  }} style={{
-                    padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer",
-                    fontSize:11, fontWeight:700,
-                    background: type1 === f.code ? "#ec4899" : "#fdf2f8",
-                    color: type1 === f.code ? "#fff" : "#9d174d",
-                  }}>
-                    <span>{f.code}</span>
-                    <span style={{fontSize:9,opacity:.8,marginLeft:3}}>{f.label}</span>
-                  </button>
-                ))}
+                {FETES.map(f => {
+                  const dateAilleurs = fetesPrises?.[f.code];
+                  const priseAilleurs = dateAilleurs && dateAilleurs !== date;
+                  return (
+                    <button key={f.code} disabled={priseAilleurs} onClick={() => {
+                      if(priseAilleurs) return;
+                      toggleType1(f.code); setShowFetes(false);
+                    }}
+                      title={priseAilleurs ? `${f.code} déjà prise le ${new Date(dateAilleurs+"T12:00:00").toLocaleDateString("fr-FR")} — annule-la d'abord dans le tableau de bord Fêtes pour la déplacer.` : undefined}
+                      style={{
+                      padding:"4px 9px", borderRadius:7, border:"none",
+                      cursor: priseAilleurs ? "not-allowed" : "pointer",
+                      fontSize:11, fontWeight:700,
+                      opacity: priseAilleurs ? 0.4 : 1,
+                      background: type1 === f.code ? "#ec4899" : "#fdf2f8",
+                      color: type1 === f.code ? "#fff" : "#9d174d",
+                    }}>
+                      <span>{f.code}</span>
+                      <span style={{fontSize:9,opacity:.8,marginLeft:3}}>{f.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
