@@ -3766,7 +3766,7 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
                 })}
               </span>
             </div>
-            {l.paiementAnticipe?.moisDemande&&!l.paiementAnticipe?.moisVu&&
+            {l.paiementAnticipe?.moisDemande&&!l.paiementAnticipe?.moisVu&&!l.priseLe&&
               <div style={{fontSize:11,color:"#059669",fontWeight:800,marginTop:3,whiteSpace:"normal"}}>⏩ Anticipé demandé</div>}
           </div>
 
@@ -3882,6 +3882,34 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
                 color:l.paiementAnticipe?.moisVu?"#047857":l.paiementAnticipe?.moisDemande?"#b45309":"#64748b"}}>⏩</button>
           </div>}
         </div>
+
+        {/* Incohérence : fête marquée prise (planning) ET paiement anticipé encore en
+            attente — les deux ne peuvent pas coexister (soit RC pris, soit payée),
+            il faut choisir. Signalé par Olivier le 14/07 : ce cas pouvait se produire
+            silencieusement (ex: fête tapée directement dans le planning après avoir
+            demandé un paiement anticipé) sans qu'il soit jamais demandé de trancher. */}
+        {l.priseLe && l.paiementAnticipe?.moisDemande && !l.paiementAnticipe?.moisVu && (
+          <div style={{
+            margin:"0 14px 12px", background:"#fef3c7", border:"1.5px solid #f59e0b",
+            borderRadius:8, padding:"10px 13px",
+          }}>
+            <div style={{fontSize:12,color:"#78350f",fontWeight:700,marginBottom:8,lineHeight:1.5}}>
+              ⚠️ Vous avez demandé un paiement par anticipation pour la fête "{l.label}". Si vous confirmez que cette fête est prise, votre demande de paiement par anticipation sera annulée dans le tableau des fêtes.
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <button onClick={()=>annulerPaiementAnticipe(l.code,targetYear)}
+                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,
+                  padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34,fontWeight:700}}>
+                ✓ Confirmer la fête (annule le paiement anticipé)
+              </button>
+              <button onClick={()=>setManualDate(l.code,"",targetYear)}
+                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,
+                  padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>
+                ✕ Annuler la prise (garde le paiement anticipé)
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Motif réglementaire déroulant */}
         {motifVisible&&l.motifReglementaire&&<div style={{
