@@ -268,6 +268,17 @@ const EQUIPES = [
 ];
 const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
 
+// Césures manuelles (trait d'union invisible ­) pour les libellés qui débordent
+// dans les cases étroites de la vue Mois — hyphens:"auto" (CSS) ne se déclenche pas de
+// façon fiable dans tous les environnements (dictionnaire de coupure absent), donc on
+// choisit nous-mêmes un point de coupure correct plutôt que de laisser le navigateur
+// couper au milieu d'une syllabe (ex: "Matiné"+"e" tout seul en dessous).
+const CESURES_LABEL = {
+  "Matinée":"Mati­née", "Soirée":"Soi­rée", "Journée":"Jour­née",
+  "Congés":"Con­gés", "Maladie":"Mala­die", "Formation":"For­ma­tion",
+};
+const avecCesure = (s) => CESURES_LABEL[s] || s;
+
 // EQ_COLORS — alias de EQ avec mapping bg/tc/dot pour compatibilité
 const EQ_COLORS = Object.fromEntries(
   Object.entries(EQ).map(([k,v])=>[k,{
@@ -4984,14 +4995,23 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const [showHabRoul,setShowHabRoul]=useState(false);
   const [calView,setCalView]=useState("mois");
   const [dayPopup,setDayPopup]=useState(null); // {dk, entry}
-  // Fêtes déjà "prises" cette année-là (code -> date), pour griser dans le popup les codes
-  // fête déjà utilisés ailleurs et éviter d'en saisir un doublon (signalé par Olivier le 14/07).
+  // Fêtes déjà "prises" ou "payées" cette année-là (code -> message d'explication), pour
+  // griser dans le popup les codes fête déjà réglés et éviter d'en saisir un doublon ou de
+  // recréer une "prise" sur une fête déjà payée (signalé par Olivier le 14/07 : rien
+  // n'empêchait de re-sélectionner une fête déjà réglée, ce qui recréait l'incohérence
+  // prise+payée résolue plus tôt dans la journée).
   const fetesPrises = useMemo(()=>{
     if(!dayPopup || !agent) return {};
     const yr = parseInt(dayPopup.dk.slice(0,4));
     const { lignes: lignesFete } = computeFetesLignes(agent, schedule, agentProfiles, yr);
     const map = {};
-    lignesFete.forEach(l=>{ if(l.priseLe) map[l.code]=l.priseLe; });
+    lignesFete.forEach(l=>{
+      if(l.priseLe && l.priseLe !== dayPopup.dk){
+        map[l.code] = `${l.code} (${l.label}) est déjà prise le ${new Date(l.priseLe+"T12:00:00").toLocaleDateString("fr-FR")}. Va dans Compteurs → Fêtes pour l'annuler d'abord si tu veux la déplacer.`;
+      } else if(!l.priseLe && (l.statut==="payee"||l.statut==="payee_auto")){
+        map[l.code] = `${l.code} (${l.label}) a déjà été enregistrée comme payée (${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==yr?` ${l.anneePaye}`:""}). Va dans Compteurs → Fêtes pour la mettre à jour si ce n'est pas correct.`;
+      }
+    });
     return map;
   }, [dayPopup, agent, schedule, agentProfiles]);
   const [monthOff,setMonthOff]=useState(0);
@@ -5442,15 +5462,15 @@ justifyContent: "flex-start",
        {/* ZONE 2 — Utilisation journée (milieu) */}
               {code&&showData&&code!=="N"&&code!=="RPP"&&<div style={{
                 background:getColor(code), color:getTc(code),
-                borderRadius:5, padding:CODES_FETES[code]?"4px 5px":"2px 3px",
+                borderRadius:5, padding:CODES_FETES[code]?"4px 7px":"2px 3px",
                 fontSize:"clamp(7px,2.3vw,10px)", fontWeight:700, lineHeight:1.35,
                 display:"flex", flexDirection:"column",
                 minWidth:0,
               }}>
-                <span style={CODES_FETES[code]
-                  ? {fontSize:"clamp(11px,3.2vw,14px)",fontWeight:800,display:"block",whiteSpace:"nowrap"}
-                  : {display:"block",whiteSpace:"normal",wordBreak:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)}</span>
-                {posteLabel&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",wordBreak:"break-word"}}>{posteLabel}</span>}
+                <span lang="fr" style={CODES_FETES[code]
+                  ? {fontSize:14,fontWeight:800,display:"block",whiteSpace:"nowrap"}
+                  : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):avecCesure(EQ_COLORS[code]?.label||code)}</span>
+                {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
               </div>}
 
@@ -5479,7 +5499,7 @@ justifyContent: "flex-start",
                 minWidth:0,
               }}>
                 <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Nuit</span>
-                {(code==="N"?posteLabel:posteNuitLabel)&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",wordBreak:"break-word"}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
+                {(code==="N"?posteLabel:posteNuitLabel)&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
               </div>}
 
               {/* Pastilles RC fêtes */}

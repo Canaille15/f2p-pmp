@@ -152,6 +152,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const [finNuit,   setFinNuit]   = useState(!!entry?.finNuit);
   const [notePerso, setNotePerso] = useState(entry?.notePerso || "");
   const [showFetes, setShowFetes] = useState(false);
+  const [feteBloqueeMsg, setFeteBloqueeMsg] = useState(null);
 
   const dateObj = new Date(date + "T12:00:00");
   const dateLabel = dateObj.toLocaleDateString("fr-FR", {
@@ -391,19 +392,23 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
             {showFetes && (
               <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
                 {FETES.map(f => {
-                  const dateAilleurs = fetesPrises?.[f.code];
-                  const priseAilleurs = dateAilleurs && dateAilleurs !== date;
+                  // Message présent = déjà prise ailleurs OU déjà payée : dans les deux cas on
+                  // bloque la sélection plutôt que de recréer une incohérence, et on affiche le
+                  // message au TAP (pas seulement au survol — le title seul est invisible au
+                  // doigt sur mobile, où cette appli est surtout utilisée).
+                  const messageBlocage = fetesPrises?.[f.code];
                   return (
-                    <button key={f.code} disabled={priseAilleurs} onClick={() => {
-                      if(priseAilleurs) return;
+                    <button key={f.code} onClick={() => {
+                      if(messageBlocage){ setFeteBloqueeMsg(messageBlocage); return; }
+                      setFeteBloqueeMsg(null);
                       toggleType1(f.code); setShowFetes(false);
                     }}
-                      title={priseAilleurs ? `${f.code} déjà prise le ${new Date(dateAilleurs+"T12:00:00").toLocaleDateString("fr-FR")} — annule-la d'abord dans le tableau de bord Fêtes pour la déplacer.` : undefined}
+                      title={messageBlocage||undefined}
                       style={{
                       padding:"4px 9px", borderRadius:7, border:"none",
-                      cursor: priseAilleurs ? "not-allowed" : "pointer",
+                      cursor: messageBlocage ? "not-allowed" : "pointer",
                       fontSize:11, fontWeight:700,
-                      opacity: priseAilleurs ? 0.4 : 1,
+                      opacity: messageBlocage ? 0.4 : 1,
                       background: type1 === f.code ? "#ec4899" : "#fdf2f8",
                       color: type1 === f.code ? "#fff" : "#9d174d",
                     }}>
@@ -412,6 +417,20 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     </button>
                   );
                 })}
+              </div>
+            )}
+            {feteBloqueeMsg && (
+              <div style={{
+                marginTop:7, padding:"9px 11px", borderRadius:8,
+                background:"#fef3c7", border:"1.5px solid #f59e0b",
+                fontSize:11, color:"#78350f", lineHeight:1.5,
+                display:"flex", gap:7, alignItems:"flex-start",
+              }}>
+                <span style={{flex:1}}>⚠️ {feteBloqueeMsg}</span>
+                <button onClick={()=>setFeteBloqueeMsg(null)} style={{
+                  background:"none", border:"none", color:"#78350f", cursor:"pointer",
+                  fontWeight:800, fontSize:13, flexShrink:0, padding:0,
+                }}>✕</button>
               </div>
             )}
           </div>
