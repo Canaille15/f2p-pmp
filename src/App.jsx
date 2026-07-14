@@ -8021,7 +8021,7 @@ export default function App(){
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     const profile = agentProfiles[agentId];
-    if(profile && Object.keys(profile.agentColors||{}).length > 0) api.profil.save(agentId, profile);
+    if(profile) api.profil.save(agentId, profile);
   },[agentProfiles]);
 
   // ── RAPPEL CONGÉS PROTOCOLAIRES ─────────────────────────────────────────────

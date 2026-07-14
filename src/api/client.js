@@ -412,6 +412,7 @@ export const profil = {
     if (!raw) return null;
     const row = raw.profil || raw;
     const hab = raw.habilitations || [];
+    const extra = typeof row.donnees_json === 'string' ? JSON.parse(row.donnees_json) : (row.donnees_json || {});
     // Mapper snake_case → camelCase (structure attendue par App.jsx)
     return {
       pinHash:                  row.pin_hash               || null,
@@ -421,43 +422,31 @@ export const profil = {
       famillesHab:              row.familles_hab           || null,
       habilitations:            Array.isArray(hab) ? Object.fromEntries((hab||[]).map(h=>[h.code_poste,'HC'])) : (row.habilitations||{}),
       agentColors:              row.couleurs               || {},
-      pauseFigee:               row.pause_figee            || {},
-      compteurCorrections:      row.compteur_corrections   || {},
-      departDate:               row.depart_date            || null,
-      fetesTracking:            row.fetes_tracking         || {},
-      pauseFigeeFiaMois:        row.pause_figee_fia_mois   || {},
-      pauseFigeeFiaDone:        row.pause_figee_fia_done   || {},
-      demandesConges:           row.demandes_conges        || [],
-      notificationsAcquittees:  row.notifications_acquittees || [],
+      // Champs stockés dans donnees_json (colonne JSON unique, voir profilController.js)
+      pauseFigee:               extra.pauseFigee              || {},
+      compteurCorrections:      extra.compteurCorrections     || {},
+      departDate:               extra.departDate              || null,
+      fetesTracking:            extra.fetesTracking           || {},
+      pauseFigeeFiaMois:        extra.pauseFigeeFiaMois       || {},
+      pauseFigeeFiaDone:        extra.pauseFigeeFiaDone       || {},
+      demandesConges:           extra.demandesConges          || [],
+      notificationsAcquittees:  extra.notificationsAcquittees || [],
+      congesEntitlement:        extra.congesEntitlement       || {},
+      congesReports:            extra.congesReports           || {},
+      ruReports:                extra.ruReports               || {},
+      rpReports:                extra.rpReports               || {},
+      rqReports:                extra.rqReports               || {},
+      rnReports:                extra.rnReports               || {},
+      tcReports:                extra.tcReports               || {},
+      tyReports:                extra.tyReports               || {},
+      rpAcquis:                 extra.rpAcquis                || {},
+      ruAcquis:                 extra.ruAcquis                || {},
+      rqAcquis:                 extra.rqAcquis                || {},
+      rnAcquis:                 extra.rnAcquis                || {},
+      tcAcquis:                 extra.tcAcquis                || {},
+      tyAcquis:                 extra.tyAcquis                || {},
     };
   },
-
-  /**
-   * Sauvegarder le profil d'un agent
-   * @param {string} agentId
-   * @param {object} data — structure camelCase (comme ci-dessus)
-   */
-  save: (agentId, data) =>
-    apiFetch(`/profil/${agentId}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        pin_hash:                  data.pinHash               || null,
-        is_admin:                  data.isAdmin               || false,
-        roulement:                 data.roulement             || null,
-        is_reserve:                data.isReserve             || false,
-        familles_hab:              data.famillesHab           || null,
-        habilitations:             data.habilitations         || {},
-        agent_colors:              data.agentColors           || {},
-        pause_figee:               data.pauseFigee            || {},
-        compteur_corrections:      data.compteurCorrections   || {},
-        depart_date:               data.departDate            || null,
-        fetes_tracking:            data.fetesTracking         || {},
-        pause_figee_fia_mois:      data.pauseFigeeFiaMois     || {},
-        pause_figee_fia_done:      data.pauseFigeeFiaDone     || {},
-        demandes_conges:           data.demandesConges        || [],
-        notifications_acquittees:  data.notificationsAcquittees || [],
-      }),
-    }),
 
   /**
    * Changer le PIN d'un agent
@@ -475,26 +464,35 @@ export const profil = {
     }),
 
   /**
-   * Sauvegarder le profil d'un agent (couleurs, habilitations, etc.)
+   * Sauvegarder le profil d'un agent (couleurs, habilitations, compteurs, etc.)
+   * @param {string} agentId
+   * @param {object} data — structure camelCase, PARTIELLE OU COMPLÈTE : seules les
+   *   clés effectivement présentes (!== undefined) sont envoyées/écrasées, le reste
+   *   est préservé côté backend (COALESCE + JSON_MERGE_PATCH) — un appel qui ne
+   *   passe que {agentColors} ne touche donc plus au reste du profil.
    */
   async save(agentId, data) {
+    const EXTRA_KEYS = [
+      'pauseFigee','compteurCorrections','departDate','fetesTracking',
+      'pauseFigeeFiaMois','pauseFigeeFiaDone','demandesConges','notificationsAcquittees',
+      'congesEntitlement','congesReports','ruReports','rpReports','rqReports','rnReports',
+      'tcReports','tyReports','rpAcquis','ruAcquis','rqAcquis','rnAcquis','tcAcquis','tyAcquis',
+    ];
+    const donnees_json = {};
+    EXTRA_KEYS.forEach(k => { if (data[k] !== undefined) donnees_json[k] = data[k]; });
+
+    const body = {};
+    if (data.roulement      !== undefined) body.roulement      = data.roulement;
+    if (data.isReserve      !== undefined) body.is_reserve     = data.isReserve;
+    if (data.famillesHab    !== undefined) body.familles_hab   = data.famillesHab;
+    if (data.habilitations  !== undefined) body.habilitations  = data.habilitations;
+    if (data.agentColors    !== undefined) body.agent_colors   = data.agentColors;
+    if (Object.keys(donnees_json).length > 0) body.donnees_json = donnees_json;
+
     return apiFetch(`/profil/${agentId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        roulement:                data.roulement              || null,
-        is_reserve:               data.isReserve              || false,
-        familles_hab:             data.famillesHab            || null,
-        habilitations:            data.habilitations          || {},
-        agent_colors:             data.agentColors            || {},
-        pause_figee:              data.pauseFigee             || {},
-        compteur_corrections:     data.compteurCorrections    || {},
-        fetes_tracking:           data.fetesTracking          || {},
-        pause_figee_fia_mois:     data.pauseFigeeFiaMois      || {},
-        pause_figee_fia_done:     data.pauseFigeeFiaDone      || {},
-        demandes_conges:          data.demandesConges         || [],
-        notifications_acquittees: data.notificationsAcquittees|| [],
-      }),
+      body: JSON.stringify(body),
     });
   },
 };

@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS profil_agent (
   is_reserve    TINYINT(1)    NOT NULL DEFAULT 0,
   familles_hab  ENUM('PRCI','PAR','BOTH') DEFAULT NULL,
   couleurs      JSON          DEFAULT NULL,
+  donnees_json  JSON          DEFAULT NULL COMMENT 'Champs flexibles du profil (Acquis/Reports compteurs, pause figée, fêtes, etc.) — fusion via JSON_MERGE_PATCH côté backend',
   updated_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_profil_agent (cp_agent),

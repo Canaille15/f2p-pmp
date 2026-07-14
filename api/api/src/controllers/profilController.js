@@ -14,24 +14,30 @@ async function getProfil(req, res) {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
-// PUT /api/profil/:cp — mettre à jour profil (couleurs, réserviste, familles_hab)
+// PUT /api/profil/:cp — mettre à jour profil (couleurs, réserviste, familles_hab, donnees_json)
+// donnees_json regroupe tous les champs "flexibles" du profil (Acquis/Reports des
+// compteurs, pause figée, fêtes, congés, etc.) — fusionné via JSON_MERGE_PATCH plutôt
+// qu'écrasé, pour qu'un appel partiel (ex: juste les couleurs) ne supprime pas le reste.
 async function updateProfil(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { is_reserve, familles_hab, agent_colors } = req.body;
+  const { is_reserve, familles_hab, agent_colors, donnees_json } = req.body;
   try {
     await pool.query(
-      `INSERT INTO profil_agent (cp_agent, is_reserve, familles_hab, couleurs)
-       VALUES (?,?,?,?)
+      `INSERT INTO profil_agent (cp_agent, is_reserve, familles_hab, couleurs, donnees_json)
+       VALUES (?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
          is_reserve   = COALESCE(VALUES(is_reserve),   is_reserve),
          familles_hab = COALESCE(VALUES(familles_hab),  familles_hab),
-         couleurs     = VALUES(couleurs)`,
+         couleurs     = COALESCE(VALUES(couleurs),      couleurs),
+         donnees_json = CASE WHEN VALUES(donnees_json) IS NULL THEN donnees_json
+                              ELSE JSON_MERGE_PATCH(COALESCE(donnees_json,'{}'), VALUES(donnees_json)) END`,
       [cp,
        is_reserve !== undefined ? (is_reserve?1:0) : 0,
        familles_hab || null,
-       agent_colors ? JSON.stringify(agent_colors) : null]
+       agent_colors !== undefined ? JSON.stringify(agent_colors) : null,
+       donnees_json !== undefined ? JSON.stringify(donnees_json) : null]
     );
     res.json({ message: 'Profil mis à jour' });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
