@@ -2675,6 +2675,334 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
   );
 }
 
+// ─── COMPTEUR VT (temps partiel) ─────────────────────────────────────────────
+// Contrairement à Congés (juste "pris"), VT suit un cycle en 3 étapes par jour
+// posé : Demandé → Accordé → Pris (bascule automatique dès que la date passe,
+// tant que l'agent n'a pas annulé). Le suivi (accordé oui/non, date de la
+// demande, date de l'accord) vit dans agentProfiles[agentId].vtTracking, une
+// map PLATE indexée directement par date ISO (pas de niveau année : la date
+// suffit à identifier une entrée sans ambiguïté, y compris pour les jours
+// reportés sur A+1). Le planning perso (schedule, code "VT") reste la source
+// de vérité pour "ce jour compte-t-il dans le solde" — vtTracking ne fait
+// qu'ajouter le détail du workflow par-dessus.
+function computeDashboardVT(agent, schedule, agentProfiles, year){
+  const profil = agentProfiles?.[agent?.id] || {};
+  const entitlement = profil.vtEntitlement?.[year] ?? 0;
+  const tracking = profil.vtTracking || {};
+
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const brut = [];
+  Object.entries(schedule).forEach(([k,v])=>{
+    if(!agent || !k.startsWith(agent.id+"-")) return;
+    const dk = k.slice(agent.id.length+1);
+    if(dk < start || dk > end) return;
+    if(v?.equipe==="VT" || v?.equipe2==="VT") brut.push(dk);
+  });
+
+  // Report A→A+1 : même principe que Congés/RP/RU (l'agent choisit une date
+  // déjà posée en VT sur A+1, décomptée du solde de A plutôt que de A+1).
+  const reportsCetteAnnee = profil.vtReports?.[year] || [];
+  const reportsAnneePrecedente = profil.vtReports?.[year-1] || [];
+  const donnesAnneePrecedente = brut.filter(d=>reportsAnneePrecedente.includes(d));
+  const propresAnnee = brut.filter(d=>!reportsAnneePrecedente.includes(d));
+  const reportsValides = reportsCetteAnnee.filter(d=>{
+    const v = schedule[`${agent.id}-${d}`];
+    return v?.equipe==="VT" || v?.equipe2==="VT";
+  });
+  const tousJours = [...propresAnnee, ...reportsValides].sort();
+
+  const today = new Date().toISOString().slice(0,10);
+  const statutDe = (d) => {
+    if(!tracking[d]?.accorde) return "demande";
+    return d <= today ? "pris" : "accorde";
+  };
+
+  const entries = tousJours.map(d => ({
+    date: d,
+    statut: statutDe(d),
+    dateDemande: tracking[d]?.dateDemande || null,
+    dateAccord: tracking[d]?.dateAccord || null,
+  }));
+
+  const parMois = {};
+  tousJours.forEach(d=>{
+    const mois = d.slice(0,7);
+    if(!parMois[mois]) parMois[mois]=[];
+    parMois[mois].push(d);
+  });
+
+  const pris = tousJours.length;
+  return {
+    entitlement, pris, solde: entitlement-pris,
+    parMois, tousJours, entries,
+    demandes: entries.filter(e=>e.statut==="demande"),
+    accordeesAvenir: entries.filter(e=>e.statut==="accorde"),
+    prises: entries.filter(e=>e.statut==="pris"),
+    reports: reportsValides, donnesAnneePrecedente,
+  };
+}
+
+function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }){
+  const data = useMemo(()=>computeDashboardVT(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
+  const [entitlementInput, setEntitlementInput] = useState(String(data.entitlement));
+  const [reportDate, setReportDate] = useState("");
+  const [reportErr, setReportErr] = useState("");
+  const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
+  const [nouvelleDate, setNouvelleDate] = useState("");
+  const [ajoutErr, setAjoutErr] = useState("");
+  const [accordDateParEntree, setAccordDateParEntree] = useState({}); // date -> valeur du champ "date d'accord" en cours d'edition
+  useEffect(()=>{ setEntitlementInput(String(data.entitlement)); },[data.entitlement]);
+
+  const today = new Date().toISOString().slice(0,10);
+  const agCp = agent?.immatriculation || agent?.cp || agent?.id;
+  const fmtDate = (d)=> d ? new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+
+  const prisJusquA = useMemo(()=>data.tousJours.filter(d=>d<=dateSnapshot).length, [data.tousJours, dateSnapshot]);
+
+  const saveEntitlement = () => {
+    const n = parseInt(entitlementInput,10);
+    if(isNaN(n) || n<0) { setEntitlementInput(String(data.entitlement)); return; }
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{ ...(prev[agent.id]||{}), vtEntitlement:{ ...(prev[agent.id]?.vtEntitlement||{}), [year]: n } }
+    }));
+  };
+
+  const setVtTracking = (date, updater) => {
+    setAgentProfiles(prev=>{
+      const curr = prev[agent.id]?.vtTracking?.[date] || {};
+      const next = typeof updater === 'function' ? updater(curr) : updater;
+      return {...prev, [agent.id]:{
+        ...(prev[agent.id]||{}),
+        vtTracking:{ ...(prev[agent.id]?.vtTracking||{}), [date]: next },
+      }};
+    });
+  };
+
+  const ecrireVTDansPlanning = (date) => {
+    const key = `${agCp}-${date}`;
+    const entryExistante = schedule[key] || {};
+    const fullEntry = {...entryExistante, equipe:"VT", prive:true};
+    setSchedule(prev=>({...prev, [key]: fullEntry}));
+    api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur sauvegarde VT dans planning:", e));
+  };
+
+  const retirerVTDuPlanning = (date) => {
+    const key = `${agCp}-${date}`;
+    const entryExistante = schedule[key];
+    if(!entryExistante || entryExistante.equipe !== "VT") return; // deja change entre temps, on ne touche pas
+    const {equipe, ...reste} = entryExistante;
+    const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
+    if(videTotal){
+      setSchedule(prev=>{const n={...prev}; delete n[key]; return n;});
+      api.planning.deleteEntry(agCp, date).catch(e=>console.error("Erreur suppression VT du planning:", e));
+    } else {
+      const fullEntry = {...reste, equipe:null};
+      setSchedule(prev=>({...prev, [key]: fullEntry}));
+      api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur suppression VT du planning:", e));
+    }
+  };
+
+  // Nouvelle demande saisie directement depuis ce tableau de bord (écrit aussi
+  // "VT" dans le planning perso — même garde-fou que Fêtes : on ne touche
+  // jamais un jour qui contient déjà autre chose).
+  const ajouterDemande = () => {
+    setAjoutErr("");
+    if(!nouvelleDate) return;
+    if(data.tousJours.includes(nouvelleDate)){ setAjoutErr("Ce jour est déjà enregistré comme VT."); return; }
+    const targetEntry = schedule[`${agCp}-${nouvelleDate}`];
+    if(targetEntry?.equipe && targetEntry.equipe!=="VT"){
+      setAjoutErr(`Le ${fmtDate(nouvelleDate)} contient déjà "${EQ_COLORS[targetEntry.equipe]?.label||targetEntry.equipe}" dans ton planning perso. Modifie ou efface ce jour d'abord.`);
+      return;
+    }
+    ecrireVTDansPlanning(nouvelleDate);
+    setVtTracking(nouvelleDate, {accorde:false, dateDemande:today});
+    setNouvelleDate("");
+  };
+
+  const accorder = (date) => {
+    ecrireVTDansPlanning(date); // au cas ou ce jour ne serait pas deja dans le planning
+    const dateAccordVal = accordDateParEntree[date] || today;
+    setVtTracking(date, prev=>({...prev, accorde:true, dateAccord:dateAccordVal}));
+  };
+
+  const annulerAccord = (date) => {
+    setVtTracking(date, prev=>({...prev, accorde:false, dateAccord:null}));
+  };
+
+  const retirer = (date) => {
+    retirerVTDuPlanning(date);
+    setAgentProfiles(prev=>{
+      const curr = {...(prev[agent.id]?.vtTracking||{})};
+      delete curr[date];
+      return {...prev, [agent.id]:{...(prev[agent.id]||{}), vtTracking:curr}};
+    });
+  };
+
+  const ajouterReport = () => {
+    setReportErr("");
+    if(!reportDate) return;
+    const v = schedule[`${agent.id}-${reportDate}`];
+    const estVT = v?.equipe==="VT"||v?.equipe2==="VT";
+    if(!estVT){ setReportErr("Ce jour n'est pas saisi comme VT dans le planning perso — saisis-le d'abord, puis reviens ici."); return; }
+    if(data.reports.includes(reportDate)){ setReportErr("Ce jour est déjà comptabilisé en report."); return; }
+    setAgentProfiles(prev=>{
+      const existants = prev[agent.id]?.vtReports?.[year] || [];
+      return {...prev, [agent.id]:{ ...(prev[agent.id]||{}), vtReports:{ ...(prev[agent.id]?.vtReports||{}), [year]: [...existants, reportDate] } }};
+    });
+    setReportDate("");
+  };
+
+  const retirerReport = (d) => {
+    setAgentProfiles(prev=>{
+      const existants = prev[agent.id]?.vtReports?.[year] || [];
+      return {...prev, [agent.id]:{ ...(prev[agent.id]||{}), vtReports:{ ...(prev[agent.id]?.vtReports||{}), [year]: existants.filter(x=>x!==d) } }};
+    });
+  };
+
+  const moisTries = Object.keys(data.parMois).sort();
+
+  const renderEntree = (e) => (
+    <div key={e.date} style={{border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {e.statut==="demande" && (
+            <>
+              <input type="date" value={accordDateParEntree[e.date]||today}
+                onChange={ev=>setAccordDateParEntree(p=>({...p,[e.date]:ev.target.value}))}
+                style={{border:"1px solid #cbd5e1",borderRadius:6,padding:"4px 6px",fontSize:11,minHeight:30}}/>
+              <button onClick={()=>accorder(e.date)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✓ Accorder</button>
+            </>
+          )}
+          {(e.statut==="accorde") && (
+            <button onClick={()=>annulerAccord(e.date)} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>↩️ Repasser en demande</button>
+          )}
+          <button onClick={()=>retirer(e.date)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕ Retirer</button>
+        </div>
+      </div>
+      <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>
+        {e.dateDemande && <span>Demandé le {fmtDate(e.dateDemande)}</span>}
+        {e.dateAccord && <span>{e.dateDemande?" · ":""}Accordé le {fmtDate(e.dateAccord)}</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#eab308,#ca8a04)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800,flex:"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🎫 VT {year}</div>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8,flexShrink:0}}>✕</button>
+        </div>
+
+        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+
+          <div style={{fontSize:10,color:"#64748b",fontStyle:"italic"}}>Compteur pour les agents à temps partiel — le droit initial varie selon le pourcentage, à saisir manuellement.</div>
+
+          {/* Droit + Pris + Solde */}
+          <div style={{display:"flex",gap:8}}>
+            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Droit</div>
+              <input type="number" min="0" value={entitlementInput}
+                onChange={e=>setEntitlementInput(e.target.value)}
+                onBlur={saveEntitlement}
+                onKeyDown={e=>{ if(e.key==="Enter") e.currentTarget.blur(); }}
+                style={{width:"100%",textAlign:"center",fontSize:20,fontWeight:900,color:"#a16207",border:"1.5px solid #fde68a",borderRadius:8,padding:"2px 0",background:"#fff",marginTop:2}}/>
+              <div style={{fontSize:9,color:"#475569",marginTop:2}}>modifiable</div>
+            </div>
+            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Demandé+Accordé</div>
+              <div style={{fontSize:20,fontWeight:900,color:"#a16207"}}>{data.pris}</div>
+            </div>
+            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${data.solde<2?"#fca5a5":"#e2e8f0"}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:data.solde<2?"#dc2626":"#334155"}}>Restant</div>
+              <div style={{fontSize:20,fontWeight:900,color:data.solde<2?"#dc2626":"#16a34a"}}>{data.solde}</div>
+            </div>
+          </div>
+
+          {/* Pris jusqu'à une date choisie */}
+          <div style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:140}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris jusqu'au</div>
+              <input type="date" value={dateSnapshot} onChange={e=>setDateSnapshot(e.target.value)}
+                style={{marginTop:3,padding:"5px 8px",border:"1.5px solid #fde68a",borderRadius:7,fontSize:12,fontWeight:600,color:"#334155",background:"#fff"}}/>
+            </div>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:24,fontWeight:900,color:"#a16207",lineHeight:1}}>{prisJusquA}</div>
+              <div style={{fontSize:9,fontWeight:600,color:"#334155",marginTop:2}}>jour{prisJusquA>1?"s":""}</div>
+            </div>
+          </div>
+
+          {data.donnesAnneePrecedente.length>0 && (
+            <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
+              ℹ️ {data.donnesAnneePrecedente.length} jour{data.donnesAnneePrecedente.length>1?"s":""} de {year} compté{data.donnesAnneePrecedente.length>1?"s":""} sur le solde {year-1} (report) — non inclus ci-dessus.
+            </div>
+          )}
+
+          {/* Ajouter une nouvelle demande */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>+ Nouvelle demande</div>
+            <div style={{display:"flex",gap:6}}>
+              <input type="date" value={nouvelleDate} onChange={e=>{setNouvelleDate(e.target.value);setAjoutErr("");}}
+                style={{flex:1,padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              <button onClick={ajouterDemande} style={{background:"#a16207",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+            </div>
+            {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Écrit aussi "VT" dans le planning perso ce jour-là. Peut aussi être saisi directement dans le planning perso — la demande apparaîtra ici automatiquement.</div>
+          </div>
+
+          {/* Demandées */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>⏳ Demandées ({data.demandes.length})</div>
+            {data.demandes.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune demande en attente.</div> :
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.demandes.map(renderEntree)}</div>}
+          </div>
+
+          {/* Accordées à venir */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>✅ Accordées — à venir ({data.accordeesAvenir.length})</div>
+            {data.accordeesAvenir.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.accordeesAvenir.map(renderEntree)}</div>}
+          </div>
+
+          {/* Prises (passées) */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>📌 Prises ({data.prises.length})</div>
+            {data.prises.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.prises.map(renderEntree)}</div>}
+          </div>
+
+          {/* Report vers l'année suivante */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>↪️ Report sur {year+1}</div>
+            <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
+              Un jour de VT pris sur {year+1} mais décompté du solde {year} (tolérance de report).
+            </div>
+            {data.reports.length>0 && (
+              <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:8}}>
+                {data.reports.map(d=>(
+                  <div key={d} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f8fafc",borderRadius:7,padding:"5px 9px"}}>
+                    <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>{fmtDate(d)}</span>
+                    <button onClick={()=>retirerReport(d)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}}>✕ Retirer</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:"flex",gap:6}}>
+              <input type="date" value={reportDate} onChange={e=>{setReportDate(e.target.value);setReportErr("");}}
+                style={{flex:1,padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              <button onClick={ajouterReport} style={{background:"#a16207",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+            </div>
+            {reportErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{reportErr}</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── OUTIL GÉNÉRIQUE "DÉTAIL + JUSQU'À UNE DATE" (RP/RU/RQ/RN/TC/TY/Maladie) ─
 // RP a d'abord eu un outil minimal séparé (juste "pris jusqu'à une date"),
 // remplacé le 12/07 par ce composant générique pour recevoir le même
@@ -3068,6 +3396,10 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const fetesInfo = useMemo(()=>computeFetesLignes(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const nbFetesATraiter = fetesInfo.lignes.filter(l=>l.statut==="attente"||l.statut==="perdue_probable").length;
 
+  // VT (temps partiel) : même principe que Congés (carte reflète le même total
+  // que le tableau de bord dédié), avec en plus le workflow Demandé→Accordé→Pris.
+  const vtData = useMemo(()=>computeDashboardVT(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
+
   const CARDS = [
     {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
@@ -3078,7 +3410,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"RN",      label:"RN",              color:"#4338ca", subtitle:"Repos nuit"},
     {key:"TC",      label:"TC",              color:"#0284c7", subtitle:"Temps compensé"},
     {key:"TY",      label:"TY",              color:"#0284c7", subtitle:"Temps compensé"},
-    {key:"VT",      label:"VT",              color:"#eab308", subtitle:"Temps partiel"},
+    {key:"VT",      label:"VT",              color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2},
     {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation"},
     {key:"MA",      label:"Maladie",         color:"#dc2626", subtitle:"Jours maladie"},
   ];
@@ -3087,6 +3419,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const [showTravailDash, setShowTravailDash] = useState(false);
   const [showCongesDash, setShowCongesDash] = useState(false);
   const [showFetesDash, setShowFetesDash] = useState(false);
+  const [showVtDash, setShowVtDash] = useState(false);
   const [openDetailKey, setOpenDetailKey] = useState(null); // RP/RU/RQ/RN/TC/TY/MA
 
   return(
@@ -3151,16 +3484,17 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       {/* Grille compteurs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
         {CARDS.map(card=>{
-          const v = card.key==="conges" ? congesPris : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
+          const v = card.key==="conges" ? congesPris : card.key==="VT" ? vtData.pris : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
           const corr = corrections[card.key]||0;
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
           const isFetesCard = card.key==="FETE" && !editMode;
+          const isVtCard = card.key==="VT" && !editMode;
           const isDetailCard = !!DETAIL_CONFIG[card.key] && !editMode;
-          const isClickable = isTravailCard || isCongesCard || isFetesCard || isDetailCard;
+          const isClickable = isTravailCard || isCongesCard || isFetesCard || isVtCard || isDetailCard;
           return(
             <div key={card.key}
-              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
+              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
@@ -3187,8 +3521,8 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
                   {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}
                 </span>
               </div>}
-              {/* Contrôles de correction — "conges", "RP" et tout compteur avec un "acquis" dédié (RU/RQ/RN/TC/TY) ont leur propre outil, pas de +/- générique ici */}
-              {editMode&&card.key!=="conges"&&card.key!=="RP"&&!DETAIL_CONFIG[card.key]?.acquisKey&&<div style={{
+              {/* Contrôles de correction — "conges", "VT", "RP" et tout compteur avec un "acquis" dédié (RU/RQ/RN/TC/TY) ont leur propre outil, pas de +/- générique ici */}
+              {editMode&&card.key!=="conges"&&card.key!=="VT"&&card.key!=="RP"&&!DETAIL_CONFIG[card.key]?.acquisKey&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
                 <button onClick={()=>{
@@ -3235,6 +3569,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       )}
       {showFetesDash&&(
         <FetesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isAdmin={isAdmin} isOwnProfile={isOwnProfile} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowFetesDash(false)}/>
+      )}
+      {showVtDash&&(
+        <VtDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowVtDash(false)}/>
       )}
     </div>
   );
