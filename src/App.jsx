@@ -2344,7 +2344,7 @@ function computeDashboardTravail(agent, schedule, year){
 // autre agent, voir PersonalView).
 function TravailDashboardContent({ data }) {
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}) : "—";
-  const SHIFT_LABELS = { M:"Matin", AM:"Soir", N:"Nuit", J:"Journée" };
+  const SHIFT_LABELS = { M:"Matin", AM:"Soirée", N:"Nuit", J:"Journée" };
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
