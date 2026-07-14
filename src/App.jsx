@@ -5312,6 +5312,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
  padding:"4px 5px 5px", minHeight:48,
                 display:"flex", flexDirection:"column", gap:3,
 justifyContent: "flex-start",
+                minWidth:0, overflow:"hidden",
               }}>
        {/* Numéro du jour */}
               <div style={{fontSize:"clamp(13px,1.8vw,18px)",fontWeight:isToday?800:700,
@@ -5344,10 +5345,11 @@ justifyContent: "flex-start",
                 borderRadius:5, padding:CODES_FETES[code]?"4px 7px":"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", flexDirection:"column",
+                minWidth:0,
               }}>
-                <span style={CODES_FETES[code]?{fontSize:14,fontWeight:800}:undefined}>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)}</span>
-                {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
-                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"inline-block"}}>📝 {en.notePerso}</span>}
+                <span style={{...(CODES_FETES[code]?{fontSize:14,fontWeight:800}:null),display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)}</span>
+                {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{posteLabel}</span>}
+                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
               </div>}
 
               {/* ZONE 2bis — RPP : badge rond dédié, palette dissociée de RP */}
@@ -5372,9 +5374,10 @@ justifyContent: "flex-start",
                 borderRadius:5, padding:"2px 5px",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", flexDirection:"column",
+                minWidth:0,
               }}>
-                <span>Nuit</span>
-                {(code==="N"?posteLabel:posteNuitLabel)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
+                <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Nuit</span>
+                {(code==="N"?posteLabel:posteNuitLabel)&&<span style={{fontSize:8,opacity:.85,fontWeight:500,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
               </div>}
 
               {/* Pastilles RC fêtes */}
