@@ -7757,6 +7757,12 @@ export default function App(){
   const [departDates,setDepartDates]=usePersist("departDates",{});
   // ── AUTH ──────────────────────────────────────────────────────────────────
   const [currentUser,setCurrentUser]=usePersist("currentUser",null);
+  // Agents dont le profil a été effectivement rechargé depuis le serveur cette session.
+  // Tant qu'un agent n'y figure pas, l'autosave du profil (ci-dessous) reste bloquée pour lui :
+  // sinon, au chargement de la page, agentProfiles contient encore l'ancien snapshot localStorage
+  // (potentiellement périmé) le temps que api.profil.get() réponde, et l'autosave renverrait ce
+  // snapshot périmé au serveur avant que la vraie donnée à jour n'ait eu le temps d'arriver.
+  const profilLoadedRef = useRef(new Set());
   // Charger les agents depuis l'API (source de verite = Railway) - seulement si connecte
     const rechargerAgents = () => {
     api.agents.getAll().then(rows=>{
@@ -7847,6 +7853,7 @@ export default function App(){
       if(p.habilitations) setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations}}));
       if(p.agentColors && Object.keys(p.agentColors).length>0) setAgentCouleurs(p.agentColors);
     }
+    profilLoadedRef.current.add(agentId);
   }).catch(()=>{});
   };
   const handleLogout=()=>{
@@ -7881,28 +7888,17 @@ export default function App(){
         if(!profile) return;
         setAgentProfiles(prev=>({...prev,[agentId]:{
           ...(prev[agentId]||{}),
-          pinHash:             profile.pin_hash,
-          isAdmin:             profile.is_admin,
-          roulement:           profile.roulement,
-          isReserve:           profile.is_reserve,
-          famillesHab:         profile.familles_hab,
-          habilitations:       Array.isArray(profile.habilitations) ? Object.fromEntries((profile.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (profile.habilitations||{}),
-          agentColors:         profile.agent_colors||{},
-          pauseFigee:          profile.pause_figee||{},
-          compteurCorrections: profile.compteur_corrections||{},
-          fetesTracking:       profile.fetes_tracking||{},
-          pauseFigeeFiaMois:   profile.pause_figee_fia_mois||{},
-          pauseFigeeFiaDone:   profile.pause_figee_fia_done||{},
-          demandesConges:      profile.demandes_conges||[],
-          notificationsAcquittees: profile.notifications_acquittees||[],
+          ...profile,
+          habilitations: Array.isArray(profile.habilitations) ? Object.fromEntries((profile.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (profile.habilitations||{}),
         }}));
         if(profile.agentColors&&Object.keys(profile.agentColors).length>0) setAgentCouleurs(profile.agentColors);
         // Restaurer acquittements
-        if(profile.notifications_acquittees?.length){
+        if(profile.notificationsAcquittees?.length){
           setNotifications(prev=>prev.map(n=>
-            profile.notifications_acquittees.includes(n.id)?{...n,acquitte:true}:n
+            profile.notificationsAcquittees.includes(n.id)?{...n,acquitte:true}:n
           ));
         }
+        profilLoadedRef.current.add(agentId);
       });
       // Recharger planning
       api.planning.getSchedule(agentId).then(entries=>{
@@ -7930,29 +7926,18 @@ export default function App(){
       if(!profile) return;
       setAgentProfiles(prev=>({...prev,[agentId]:{
         ...(prev[agentId]||{}),
-        pinHash:              profile.pin_hash,
-        isAdmin:              profile.is_admin,
-        roulement:            profile.roulement,
-        isReserve:            profile.is_reserve,
-        famillesHab:          profile.familles_hab,
-        habilitations:        profile.habilitations||{},
-        agentColors:          profile.agent_colors||{},
-        pauseFigee:           profile.pause_figee||{},
-        compteurCorrections:  profile.compteur_corrections||{},
-        fetesTracking:        profile.fetes_tracking||{},
-        pauseFigeeFiaMois:    profile.pause_figee_fia_mois||{},
-        pauseFigeeFiaDone:    profile.pause_figee_fia_done||{},
-        demandesConges:       profile.demandes_conges||[],
-        notificationsAcquittees: profile.notifications_acquittees||[],
+        ...profile,
+        habilitations: profile.habilitations||{},
       }}));
     if(profile.agentColors&&Object.keys(profile.agentColors).length>0) setAgentCouleurs(profile.agentColors);
       // Restaurer les notifications acquittées sur cet appareil
-      if(profile.notifications_acquittees?.length){
+      if(profile.notificationsAcquittees?.length){
         setNotifications(prev=>prev.map(n=>
-          profile.notifications_acquittees.includes(n.id)
+          profile.notificationsAcquittees.includes(n.id)
             ? {...n, acquitte:true} : n
         ));
       }
+      profilLoadedRef.current.add(agentId);
     });
     // Charger le planning
     api.planning.getSchedule(agentId).then(entries=>{
@@ -8020,6 +8005,11 @@ export default function App(){
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
+    // Tant que le profil n'a pas été rechargé depuis le serveur pour cet agent dans cette
+    // session, agentProfiles[agentId] peut encore être l'ancien snapshot localStorage — ne
+    // pas le renvoyer au serveur, sous peine d'écraser des données plus récentes enregistrées
+    // depuis un autre appareil (voir profilLoadedRef).
+    if(!profilLoadedRef.current.has(agentId)) return;
     const profile = agentProfiles[agentId];
     if(profile) api.profil.save(agentId, profile);
   },[agentProfiles]);
