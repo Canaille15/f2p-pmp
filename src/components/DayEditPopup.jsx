@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useMemo } from "react";
+import { convertirCodePosteVersJsCode } from "../api/client";
 
 const CODES_REPOS = [
   { code:"RP",  label:"RP",        color:"#16a34a" },
@@ -70,6 +71,24 @@ const POSTES_PAR = [
 
 const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
 
+// jsCode canonique → code court local (sens inverse de convertirCodePosteVersJsCode).
+// entry.jsCode/jsCode2 arrivent ici déjà sous forme canonique (App.jsx les convertit
+// systématiquement après sauvegarde, pour l'affichage — voir le commentaire dans
+// App.jsx sur l'affichage optimiste). Sans cette table, poste1/posteN s'initialisaient
+// avec le code canonique : aucun bouton ne matchait (poste affiché comme "non sélectionné"
+// alors qu'il l'était), et surtout, si l'agent enregistrait à nouveau sans re-choisir de
+// poste (ex: juste pour ajouter une nuit), ce code canonique repartait tel quel vers
+// saveEntry, qui le reconnaît (à raison) comme déjà canonique et refuse de le sauvegarder
+// comme code_poste — effaçant silencieusement le poste en base.
+const CANONIQUE_VERS_COURT = {};
+[...POSTES_PRCI, ...POSTES_PAR].forEach(p => {
+  p.types.forEach(type => {
+    const canon = convertirCodePosteVersJsCode(p.code, type);
+    if (canon) CANONIQUE_VERS_COURT[canon] = p.code;
+  });
+});
+const versCodeCourt = (jsCode) => (jsCode ? (CANONIQUE_VERS_COURT[jsCode] || jsCode) : jsCode);
+
 // Table de correspondance exacte : code court local (ce fichier) → code
 // réellement enregistré dans les habilitations (AgentHeader.jsx / backend).
 // PPRCI et PPAR sont volontairement absents : toujours proposés sans
@@ -120,8 +139,8 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
 
   const initType1 = isNuitSeule ? null : (entry?.equipe || null);
   const initTypeN = (entry?.equipe2 === "N" || isNuitSeule) ? "N" : null;
-  const initPoste1 = isNuitSeule ? "" : (entry?.jsCode || "");
-  const initPosteN = isNuitSeule ? (entry?.jsCode || "") : (entry?.jsCode2 || "");
+  const initPoste1 = isNuitSeule ? "" : (versCodeCourt(entry?.jsCode) || "");
+  const initPosteN = isNuitSeule ? (versCodeCourt(entry?.jsCode) || "") : (versCodeCourt(entry?.jsCode2) || "");
   const initHoraires = isNuitSeule ? "" : (entry?.horaires || "");
 
   const [type1,     setType1]     = useState(initType1);
@@ -240,7 +259,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
                   fontSize:10, fontWeight:700,
                   padding:"2px 7px", borderRadius:5,
                 }}>
-                  {type1}{poste1 ? " · "+poste1 : ""}
+                  {type1}{poste1 ? " · "+(tous_postes.find(p=>p.code===poste1)?.label||poste1) : ""}
                 </span>
               )}
               {typeN && (
@@ -249,7 +268,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, onSave
                   fontSize:10, fontWeight:700,
                   padding:"2px 7px", borderRadius:5,
                 }}>
-                  Nuit{posteN ? " · "+posteN : ""} ↓
+                  Nuit{posteN ? " · "+(tous_postes.find(p=>p.code===posteN)?.label||posteN) : ""} ↓
                 </span>
               )}
               {!finNuit && !type1 && !typeN && !notePerso && (
