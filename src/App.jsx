@@ -5345,7 +5345,7 @@ justifyContent: "flex-start",
                 fontSize:9, fontWeight:700, lineHeight:1.4,
                 display:"flex", flexDirection:"column",
               }}>
-                <span style={CODES_FETES[code]?{fontSize:14,fontWeight:800}:undefined}>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)?.slice(0,5)}</span>
+                <span style={CODES_FETES[code]?{fontSize:14,fontWeight:800}:undefined}>{CODES_FETES[code]?("🩷 "+code):(EQ_COLORS[code]?.label||code)}</span>
                 {posteLabel&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"inline-block"}}>📝 {en.notePerso}</span>}
               </div>}
