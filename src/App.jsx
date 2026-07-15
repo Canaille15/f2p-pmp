@@ -5690,6 +5690,20 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const curMonth=_monthDate.getMonth();
   const monthDates=useMemo(()=>getMonthDates(curYear,curMonth),[curYear,curMonth]);
   const firstDay=useMemo(()=>firstDayOfMonth(curYear,curMonth),[curYear,curMonth]);
+  // Numérotation des congés (Phase 2 refonte Congés, 15/07) : 1er congé posé
+  // dans l'année civile = n°1, le suivant n°2, etc. — recalculé à la volée à
+  // chaque rendu (jamais stocké), donc toute modification (ajout/retrait
+  // d'un jour n'importe où dans l'année) renumérote automatiquement tout ce
+  // qui suit. Volontairement basé sur le calendrier civil de la case
+  // affichée (getCongesBrutsAnnee), pas sur le total "Pris" du tableau de
+  // bord (qui lui tient compte des reports A+1) : la case appartient à
+  // l'année où elle est physiquement affichée.
+  const congeNumeros=useMemo(()=>{
+    const jours=getCongesBrutsAnnee(agent,schedule,curYear).sort();
+    const m={};
+    jours.forEach((d,i)=>{ m[d]=i+1; });
+    return m;
+  },[agent,schedule,curYear]);
   const [showQuit,setShowQuit]=useState(false);
   // ── SAISIE RAPIDE ──────────────────────────────────────────────────────────
   // codeActif : code en cours de saisie (null = mode cycle classique)
@@ -6011,6 +6025,7 @@ justifyContent: "flex-start",
                 <span lang="fr" style={CODES_FETES[code]
                   ? {fontSize:14,fontWeight:800,display:"block",whiteSpace:"nowrap"}
                   : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):avecCesure(EQ_COLORS[code]?.label||code)}</span>
+                {(code==="CA"||code==="CP")&&congeNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeNumeros[dk]}</span>}
                 {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
               </div>}
