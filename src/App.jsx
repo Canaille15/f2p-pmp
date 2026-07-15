@@ -2550,6 +2550,7 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
   const [nouvelleDateFin, setNouvelleDateFin] = useState("");
   const [ajoutErr, setAjoutErr] = useState("");
   const [ajoutInfo, setAjoutInfo] = useState("");
+  const [showRefusDash, setShowRefusDash] = useState(false);
   useEffect(()=>{ setEntitlementInput(String(data.entitlement)); },[data.entitlement]);
 
   const prisJusquA = useMemo(()=>data.tousJours.filter(d=>d<=dateSnapshot).length, [data.tousJours, dateSnapshot]);
@@ -2714,6 +2715,7 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:520,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+        {/* z-index 700 : le Suivi des refus (nested plus bas, z-index 750) s'affiche par-dessus */}
         <div style={{background:"linear-gradient(135deg,#eab308,#ca8a04)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
           <div style={{color:"#fff",fontSize:16,fontWeight:800,flex:"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🏖️ Congés {year}</div>
           {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
@@ -2806,7 +2808,10 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
 
           {/* Refusées récemment */}
           <div>
-            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>❌ Refusées ({data.refusees.length})</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,gap:8,flexWrap:"wrap"}}>
+              <div style={{fontSize:12,fontWeight:800,color:"#1e293b"}}>❌ Refusées ({data.refusees.length})</div>
+              <button onClick={()=>setShowRefusDash(true)} style={{background:"#fef2f2",color:"#991b1b",border:"1px solid #fecaca",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>📋 Suivi détaillé des refus</button>
+            </div>
             {data.refusees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
               <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 {data.refusees.map(e=>(
@@ -2883,6 +2888,230 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
             </div>
             {reportErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{reportErr}</div>}
           </div>
+        </div>
+      </div>
+      {showRefusDash && <RefusCongesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={year} availableYears={availableYears} onYearChange={onYearChange} onClose={()=>setShowRefusDash(false)}/>}
+    </div>
+  );
+}
+
+// ─── SUIVI DES REFUS DE CONGÉS (Phase 4 refonte Congés, 15/07) ──────────────
+// Sous-module de Congés — réutilise la même donnée (agentProfiles[agentId].
+// congesDemandes, statut "refuse") déjà écrite par le bouton "✕ Refuser" du
+// tableau de bord Congés, mais permet AUSSI une saisie directe (jour unique
+// ou période) sans passer par une demande préalable — un refus peut être
+// enregistré rétroactivement, sans que l'agent ait forcément fait sa demande
+// depuis l'appli. Même règle de détachement auto que Phase 3 : un jour dont
+// le planning perso contient déjà un code quelconque est ignoré (suivi
+// périmé). Suivi du "talon de refus" par jour : aucun état → demandé → reçu,
+// ou demandé → jamais reçu (état d'alerte). Portée strictement personnelle
+// (chaque agent ne voit que son propre suivi) — l'agrégat anonymisé tous
+// agents est une phase à part (Phase 5, backend, pas encore construite).
+function computeRefusConges(agent, schedule, agentProfiles, year){
+  const profil = agentProfiles?.[agent?.id] || {};
+  const tracking = profil.congesDemandes || {};
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const refus = [];
+  Object.entries(tracking).forEach(([d,t])=>{
+    if(t.statut!=="refuse") return;
+    if(d<start||d>end) return;
+    const entree = schedule[`${agent.id}-${d}`];
+    const codeActuel = entree?.equipe || entree?.equipe2;
+    if(codeActuel) return; // resolu autrement entre-temps (meme detachement que Phase 3)
+    refus.push({
+      date:d, dateDemande:t.dateDemande||null, dateRefus:t.dateRefus||null,
+      talonStatut:t.talonStatut||null, dateTalonDemande:t.dateTalonDemande||null, dateTalonRecu:t.dateTalonRecu||null,
+    });
+  });
+  refus.sort((a,b)=>a.date<b.date?-1:1);
+  const parMois = {};
+  refus.forEach(r=>{
+    const mois = r.date.slice(0,7);
+    if(!parMois[mois]) parMois[mois]=[];
+    parMois[mois].push(r);
+  });
+  return { refus, parMois, total: refus.length, sansTalon: refus.filter(r=>!r.talonStatut).length };
+}
+
+function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }){
+  const data = useMemo(()=>computeRefusConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
+  const [nouvelleDateDebut, setNouvelleDateDebut] = useState("");
+  const [nouvelleDateFin, setNouvelleDateFin] = useState("");
+  const [ajoutErr, setAjoutErr] = useState("");
+  const [ajoutInfo, setAjoutInfo] = useState("");
+
+  const today = new Date().toISOString().slice(0,10);
+  const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+
+  const listerDatesEntre = (debut, fin) => {
+    const dates = [];
+    let d = new Date(debut+"T12:00:00");
+    const dFin = new Date((fin||debut)+"T12:00:00");
+    while(d<=dFin){ dates.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+    return dates;
+  };
+
+  // Saisie directe d'un refus (jour unique ou période), sans passer par une
+  // demande préalable — le refus a pu être fait hors appli (verbal, papier).
+  const ajouterRefus = () => {
+    setAjoutErr(""); setAjoutInfo("");
+    if(!nouvelleDateDebut) return;
+    if(nouvelleDateFin && nouvelleDateFin<nouvelleDateDebut){ setAjoutErr("La date de fin est avant la date de début."); return; }
+    const dates = listerDatesEntre(nouvelleDateDebut, nouvelleDateFin);
+    if(dates.length>62){ setAjoutErr("Période trop longue (62 jours maximum) — vérifie les dates."); return; }
+    const existants = agentProfiles[agent.id]?.congesDemandes || {};
+    let ajoutes=0, ignores=0;
+    const maj = {};
+    dates.forEach(d=>{
+      if(existants[d]){ ignores++; return; } // deja suivi (demande ou refuse)
+      maj[d] = {statut:"refuse", dateDemande:null, dateRefus:today};
+      ajoutes++;
+    });
+    if(ajoutes>0){
+      setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), ...maj}}}));
+    }
+    setNouvelleDateDebut(""); setNouvelleDateFin("");
+    setAjoutInfo(`${ajoutes} jour${ajoutes>1?"s":""} de refus ajouté${ajoutes>1?"s":""}${ignores>0?`, ${ignores} ignoré${ignores>1?"s":""} (déjà suivi)`:""}.`);
+  };
+
+  const setTalon = (date, statut) => {
+    setAgentProfiles(prev=>{
+      const curr = prev[agent.id]?.congesDemandes?.[date] || {};
+      const next = {...curr};
+      if(statut===null){ delete next.talonStatut; delete next.dateTalonDemande; delete next.dateTalonRecu; }
+      else {
+        next.talonStatut = statut;
+        if(statut==="demande") next.dateTalonDemande = today;
+        if(statut==="recu") next.dateTalonRecu = today;
+      }
+      return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), [date]: next}}};
+    });
+  };
+
+  const retirerRefus = (date) => {
+    setAgentProfiles(prev=>{
+      const curr = {...(prev[agent.id]?.congesDemandes||{})};
+      delete curr[date];
+      return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:curr}};
+    });
+  };
+
+  const redemander = (date) => {
+    setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), [date]:{statut:"demande", dateDemande:today}}}}));
+  };
+
+  const moisTries = Object.keys(data.parMois).sort();
+
+  const renderTalon = (r) => {
+    if(!r.talonStatut) return <button onClick={()=>setTalon(r.date,"demande")} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>📋 Talon demandé</button>;
+    if(r.talonStatut==="demande") return (
+      <>
+        <span style={{fontSize:10,color:"#64748b",fontWeight:600}}>Talon demandé le {fmtDate(r.dateTalonDemande)}</span>
+        <button onClick={()=>setTalon(r.date,"recu")} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>✓ Reçu</button>
+        <button onClick={()=>setTalon(r.date,"jamais_recu")} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>✕ Jamais reçu</button>
+      </>
+    );
+    if(r.talonStatut==="recu") return (
+      <>
+        <span style={{fontSize:10,color:"#166534",fontWeight:700}}>✓ Talon reçu le {fmtDate(r.dateTalonRecu)}</span>
+        <button onClick={()=>setTalon(r.date,null)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:10,fontWeight:700,textDecoration:"underline"}}>↺ Réinitialiser</button>
+      </>
+    );
+    return ( // jamais_recu
+      <>
+        <span style={{fontSize:10,color:"#dc2626",fontWeight:700}}>⚠️ Talon demandé, jamais reçu</span>
+        <button onClick={()=>setTalon(r.date,"recu")} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>✓ Reçu finalement</button>
+        <button onClick={()=>setTalon(r.date,null)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:10,fontWeight:700,textDecoration:"underline"}}>↺ Réinitialiser</button>
+      </>
+    );
+  };
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.65)",zIndex:750,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:540,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.35)"}}>
+        <div style={{background:"linear-gradient(135deg,#dc2626,#991b1b)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800,flex:"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📋 Suivi des refus {year}</div>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8,flexShrink:0}}>✕</button>
+        </div>
+
+        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+
+          <div style={{fontSize:10,color:"#64748b",fontStyle:"italic"}}>Suivi personnel — visible uniquement par toi. Chaque jour refusé peut être suivi jusqu'à réception du talon justificatif.</div>
+
+          <div style={{background:"#fef2f2",borderRadius:10,padding:"12px 8px",textAlign:"center",border:"1px solid #fecaca"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#991b1b"}}>Total annuel refusé</div>
+            <div style={{fontSize:26,fontWeight:900,color:"#dc2626"}}>{data.total}</div>
+            <div style={{fontSize:9,color:"#64748b",marginTop:2}}>jour{data.total>1?"s":""}</div>
+          </div>
+
+          {data.sansTalon>0 && (
+            <div style={{fontSize:11,fontWeight:600,color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"9px 11px"}}>
+              💡 Pense à demander ton talon de refus pour {data.sansTalon===1?"le jour refusé":`les ${data.sansTalon} jours refusés`} sans talon en cours.
+            </div>
+          )}
+
+          {/* Nouveau refus : jour unique ou période, saisie directe */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>+ Nouveau refus</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <div style={{flex:"1 1 120px"}}>
+                <div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginBottom:2}}>Du</div>
+                <input type="date" value={nouvelleDateDebut} onChange={e=>{setNouvelleDateDebut(e.target.value);setAjoutErr("");setAjoutInfo("");}}
+                  style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              </div>
+              <div style={{flex:"1 1 120px"}}>
+                <div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginBottom:2}}>Au (optionnel)</div>
+                <input type="date" value={nouvelleDateFin} onChange={e=>{setNouvelleDateFin(e.target.value);setAjoutErr("");setAjoutInfo("");}}
+                  style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              </div>
+              <button onClick={ajouterRefus} style={{alignSelf:"flex-end",background:"#991b1b",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+            </div>
+            {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
+            {ajoutInfo && <div style={{fontSize:11,fontWeight:600,color:"#166534",marginTop:6}}>{ajoutInfo}</div>}
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Laisse "Au" vide pour un seul jour. N'écrit rien dans le planning perso — un refus est juste un suivi personnel.</div>
+          </div>
+
+          {/* Détail mensuel */}
+          {moisTries.length===0 ? (
+            <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucun refus enregistré cette année.</div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {moisTries.map(mois=>{
+                const items = data.parMois[mois];
+                const moisNum = parseInt(mois.slice(5,7),10)-1;
+                const anneeMois = mois.slice(0,4);
+                const horsAnnee = anneeMois!==String(year);
+                return(
+                  <div key={mois} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>
+                        {MOIS_L[moisNum]}{horsAnnee?` ${anneeMois}`:""}
+                      </span>
+                      <span style={{fontSize:12,fontWeight:700,color:"#991b1b"}}>{items.length}j</span>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {items.map(r=>(
+                        <div key={r.date} style={{border:"1px solid #fecaca",background:"#fef2f2",borderRadius:8,padding:"8px 10px",display:"flex",flexDirection:"column",gap:5}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                            <span style={{fontSize:12,fontWeight:800,color:"#1e293b"}}>{fmtDate(r.date)}</span>
+                            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                              <button onClick={()=>redemander(r.date)} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>↩️ Redemander</button>
+                              <button onClick={()=>retirerRefus(r.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:10,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
+                            </div>
+                          </div>
+                          {r.dateDemande && <div style={{fontSize:9,color:"#64748b"}}>Demandé le {fmtDate(r.dateDemande)} · Refusé le {fmtDate(r.dateRefus)}</div>}
+                          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",borderTop:"1px dashed #fecaca",paddingTop:5}}>
+                            {renderTalon(r)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
