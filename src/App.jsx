@@ -2499,25 +2499,53 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   });
 
   const pris = tousJours.length;
+
+  // Demandes en attente / refusées : suivi indépendant du planning perso —
+  // une demande n'écrit JAMAIS rien dans schedule (contrairement à VT), le
+  // jour de travail existant reste affiché et compté normalement tant que le
+  // congé n'est pas accordé. congesDemandes est une map PLATE indexée par
+  // date ISO (même principe que vtTracking), pas de niveau année.
+  const tracking = profil.congesDemandes || {};
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const demandes = [], refusees = [];
+  Object.entries(tracking).forEach(([d, t])=>{
+    if(d < start || d > end) return;
+    if(t.statut==="demande"){
+      if(brut.includes(d)) return; // deja ecrit dans schedule entre-temps -> demande perimee, ignoree
+      demandes.push({date:d, dateDemande:t.dateDemande});
+    } else if(t.statut==="refuse"){
+      refusees.push({date:d, dateDemande:t.dateDemande, dateRefus:t.dateRefus});
+    }
+  });
+  demandes.sort((a,b)=>a.date<b.date?-1:1);
+  refusees.sort((a,b)=>a.date<b.date?-1:1);
+
   return {
     entitlement, pris, solde: entitlement-pris,
     parMois,
     tousJours,
     reports: reportsValides,
     donnesAnneePrecedente,
+    demandes, refusees,
   };
 }
 
-function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }){
+function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }){
   const data = useMemo(()=>computeDashboardConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const [entitlementInput, setEntitlementInput] = useState(String(data.entitlement));
   const [reportDate, setReportDate] = useState("");
   const [reportErr, setReportErr] = useState("");
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
+  const [nouvelleDateDebut, setNouvelleDateDebut] = useState("");
+  const [nouvelleDateFin, setNouvelleDateFin] = useState("");
+  const [ajoutErr, setAjoutErr] = useState("");
+  const [ajoutInfo, setAjoutInfo] = useState("");
   useEffect(()=>{ setEntitlementInput(String(data.entitlement)); },[data.entitlement]);
 
   const prisJusquA = useMemo(()=>data.tousJours.filter(d=>d<=dateSnapshot).length, [data.tousJours, dateSnapshot]);
 
+  const today = new Date().toISOString().slice(0,10);
+  const agCp = agent?.immatriculation || agent?.cp || agent?.id;
   const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
 
   const saveEntitlement = () => {
@@ -2530,6 +2558,112 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
         congesEntitlement:{ ...(prev[agent.id]?.congesEntitlement||{}), [year]: n },
       }
     }));
+  };
+
+  // ── Cycle Demandé → Accordé / Refusé ────────────────────────────────────
+  // congesDemandes (map plate date ISO -> {statut, dateDemande, dateRefus})
+  // ne contient QUE les jours "demandé" ou "refusé" : tant qu'un congé n'est
+  // pas accordé, rien n'est écrit dans le planning perso — la journée de
+  // travail existante reste affichée et comptée normalement. Dès qu'un jour
+  // est accordé, il est écrit dans schedule (code CA) et retiré de cette
+  // map : sa présence dans schedule fait foi (même logique que getCongesBrutsAnnee).
+  const setCongeTracking = (date, updater) => {
+    setAgentProfiles(prev=>{
+      const curr = prev[agent.id]?.congesDemandes?.[date] || {};
+      const next = typeof updater === 'function' ? updater(curr) : updater;
+      return {...prev, [agent.id]:{
+        ...(prev[agent.id]||{}),
+        congesDemandes:{ ...(prev[agent.id]?.congesDemandes||{}), [date]: next },
+      }};
+    });
+  };
+
+  const retirerCongeTracking = (date) => {
+    setAgentProfiles(prev=>{
+      const curr = {...(prev[agent.id]?.congesDemandes||{})};
+      delete curr[date];
+      return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:curr}};
+    });
+  };
+
+  const listerDatesEntre = (debut, fin) => {
+    const dates = [];
+    let d = new Date(debut+"T12:00:00");
+    const dFin = new Date((fin||debut)+"T12:00:00");
+    while(d<=dFin){ dates.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+    return dates;
+  };
+
+  // Ajouter une demande (jour unique ou période) : n'écrit jamais dans le
+  // planning perso — c'est ce qui protège le planning contre tout risque de
+  // régression tant que rien n'est accordé. Les jours déjà pris ou déjà en
+  // attente sont silencieusement ignorés (pas de blocage sur toute la
+  // période : une demande de période peut légitimement chevaucher des jours
+  // déjà réglés autrement).
+  const ajouterDemande = () => {
+    setAjoutErr(""); setAjoutInfo("");
+    if(!nouvelleDateDebut) return;
+    if(nouvelleDateFin && nouvelleDateFin<nouvelleDateDebut){ setAjoutErr("La date de fin est avant la date de début."); return; }
+    const dates = listerDatesEntre(nouvelleDateDebut, nouvelleDateFin);
+    if(dates.length>62){ setAjoutErr("Période trop longue (62 jours maximum) — vérifie les dates."); return; }
+    const existants = agentProfiles[agent.id]?.congesDemandes || {};
+    let ajoutes=0, ignores=0;
+    const maj = {};
+    dates.forEach(d=>{
+      const v = schedule[`${agCp}-${d}`];
+      const dejaAccorde = v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
+      const dejaDemande = existants[d]?.statut==="demande";
+      if(dejaAccorde || dejaDemande){ ignores++; return; }
+      maj[d] = {statut:"demande", dateDemande: today};
+      ajoutes++;
+    });
+    if(ajoutes>0){
+      setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), ...maj}}}));
+    }
+    setNouvelleDateDebut(""); setNouvelleDateFin("");
+    setAjoutInfo(`${ajoutes} jour${ajoutes>1?"s":""} ajouté${ajoutes>1?"s":""} en demande${ignores>0?`, ${ignores} ignoré${ignores>1?"s":""} (déjà pris ou déjà en attente)`:""}.`);
+  };
+
+  // Accorder : écrase directement le jour dans le planning perso (demandé
+  // explicitement par Olivier — contrairement aux autres garde-fous de cette
+  // session, ici on écrase volontairement ce qui pouvait déjà être prévu).
+  const accorderDemande = (date) => {
+    const key = `${agCp}-${date}`;
+    const entryExistante = schedule[key] || {};
+    const fullEntry = {...entryExistante, equipe:"CA", prive:true};
+    setSchedule(prev=>({...prev, [key]: fullEntry}));
+    api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur sauvegarde congé accordé:", e));
+    retirerCongeTracking(date);
+  };
+
+  const refuserDemande = (date) => {
+    setCongeTracking(date, prev=>({statut:"refuse", dateDemande: prev.dateDemande || null, dateRefus: today}));
+  };
+
+  const redemander = (date) => {
+    setCongeTracking(date, {statut:"demande", dateDemande: today});
+  };
+
+  const retirerDemande = (date) => retirerCongeTracking(date);
+
+  // Annuler un jour déjà accordé : vide simplement le jour dans le planning
+  // (pas de restauration automatique de ce qu'il y avait avant — l'agent
+  // ressaisit si besoin, choix fait explicitement pour rester sur un
+  // mécanisme simple et éprouvé, identique à VT/Fêtes).
+  const annulerAccord = (date) => {
+    const key = `${agCp}-${date}`;
+    const entryExistante = schedule[key];
+    if(!entryExistante || (entryExistante.equipe!=="CA" && entryExistante.equipe!=="CP")) return;
+    const {equipe, ...reste} = entryExistante;
+    const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
+    if(videTotal){
+      setSchedule(prev=>{const n={...prev}; delete n[key]; return n;});
+      api.planning.deleteEntry(agCp, date).catch(e=>console.error("Erreur suppression congé:", e));
+    } else {
+      const fullEntry = {...reste, equipe:null};
+      setSchedule(prev=>({...prev, [key]: fullEntry}));
+      api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur suppression congé:", e));
+    }
   };
 
   const ajouterReport = () => {
@@ -2618,9 +2752,74 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
             </div>
           )}
 
+          {/* Nouvelle demande : jour unique ou période (date de fin optionnelle) */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>+ Nouvelle demande</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <div style={{flex:"1 1 120px"}}>
+                <div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginBottom:2}}>Du</div>
+                <input type="date" value={nouvelleDateDebut} onChange={e=>{setNouvelleDateDebut(e.target.value);setAjoutErr("");setAjoutInfo("");}}
+                  style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              </div>
+              <div style={{flex:"1 1 120px"}}>
+                <div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginBottom:2}}>Au (optionnel)</div>
+                <input type="date" value={nouvelleDateFin} onChange={e=>{setNouvelleDateFin(e.target.value);setAjoutErr("");setAjoutInfo("");}}
+                  style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              </div>
+              <button onClick={ajouterDemande} style={{alignSelf:"flex-end",background:"#a16207",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+            </div>
+            {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
+            {ajoutInfo && <div style={{fontSize:11,fontWeight:600,color:"#166534",marginTop:6}}>{ajoutInfo}</div>}
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Laisse "Au" vide pour un seul jour. Un congé demandé n'apparaît pas dans le planning perso tant qu'il n'est pas accordé — la journée prévue reste affichée et comptée normalement.</div>
+          </div>
+
+          {/* Demandées */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>⏳ Demandées ({data.demandes.length})</div>
+            {data.demandes.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune demande en attente.</div> :
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                {data.demandes.map(e=>(
+                  <div key={e.date} style={{border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                        <button onClick={()=>accorderDemande(e.date)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✓ Accorder</button>
+                        <button onClick={()=>refuserDemande(e.date)} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✕ Refuser</button>
+                        <button onClick={()=>retirerDemande(e.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
+                      </div>
+                    </div>
+                    {e.dateDemande && <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>Demandé le {fmtDate(e.dateDemande)}</div>}
+                  </div>
+                ))}
+              </div>}
+          </div>
+
+          {/* Refusées récemment */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>❌ Refusées ({data.refusees.length})</div>
+            {data.refusees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                {data.refusees.map(e=>(
+                  <div key={e.date} style={{border:"1px solid #fecaca",background:"#fef2f2",borderRadius:9,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                        <button onClick={()=>redemander(e.date)} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>↩️ Redemander</button>
+                        <button onClick={()=>retirerDemande(e.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
+                      </div>
+                    </div>
+                    <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>
+                      {e.dateDemande && <span>Demandé le {fmtDate(e.dateDemande)}</span>}
+                      {e.dateRefus && <span>{e.dateDemande?" · ":""}Refusé le {fmtDate(e.dateRefus)}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>}
+          </div>
+
           {/* Détail mensuel */}
           {moisTries.length===0 ? (
-            <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucun congé saisi cette année.</div>
+            <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucun congé accordé cette année.</div>
           ) : (
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {moisTries.map(mois=>{
@@ -2637,8 +2836,13 @@ function CongesDashboardModal({ agent, schedule, agentProfiles, setAgentProfiles
                         {m.dates.length}j
                       </span>
                     </div>
-                    <div style={{fontSize:10,fontWeight:600,color:"#475569",marginTop:4}}>
-                      {m.dates.map(d=>fmtDate(d)).join(" · ")}
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
+                      {m.dates.map(d=>(
+                        <span key={d} style={{fontSize:10,fontWeight:600,color:"#475569",background:"#f8fafc",borderRadius:5,padding:"2px 5px",display:"inline-flex",alignItems:"center",gap:3}}>
+                          {fmtDate(d)}
+                          <button onClick={()=>annulerAccord(d)} title="Annuler ce congé accordé" style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:10,fontWeight:800,padding:0,lineHeight:1}}>✕</button>
+                        </span>
+                      ))}
                     </div>
                   </div>
                 );
@@ -3562,7 +3766,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         <TravailDashboardModal agent={agent} schedule={schedule} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowTravailDash(false)}/>
       )}
       {showCongesDash&&(
-        <CongesDashboardModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCongesDash(false)}/>
+        <CongesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCongesDash(false)}/>
       )}
       {openDetailKey&&DETAIL_CONFIG[openDetailKey]&&(
         <CompteurDetailModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}/>
