@@ -2520,6 +2520,7 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const demandes = [], refusees = [];
   Object.entries(tracking).forEach(([d, t])=>{
+    if(!t) return; // entree supprimee (tombstone JSON_MERGE_PATCH : null, pas absente)
     if(d < start || d > end) return;
     const entree = schedule[`${agent.id}-${d}`];
     const codeActuel = entree?.equipe || entree?.equipe2;
@@ -2589,10 +2590,15 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
     });
   };
 
+  // Le retrait envoie un tombstone { [date]: null } plutôt qu'une simple absence
+  // de clé : JSON_MERGE_PATCH (backend) fusionne les objets imbriqués au lieu de
+  // les remplacer — envoyer un objet plus petit ne supprime jamais une clé côté
+  // serveur (seule une valeur explicite null le fait). Sans ça, "Retirer" semble
+  // fonctionner en local mais l'entrée reste en base et peut réapparaître.
   const retirerCongeTracking = (date) => {
     setAgentProfiles(prev=>{
       const curr = {...(prev[agent.id]?.congesDemandes||{})};
-      delete curr[date];
+      curr[date] = null;
       return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:curr}};
     });
   };
@@ -2913,6 +2919,7 @@ function computeRefusConges(agent, schedule, agentProfiles, year){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const refus = [];
   Object.entries(tracking).forEach(([d,t])=>{
+    if(!t) return; // entree supprimee (tombstone JSON_MERGE_PATCH : null, pas absente)
     if(t.statut!=="refuse") return;
     if(d<start||d>end) return;
     const entree = schedule[`${agent.id}-${d}`];
@@ -2974,11 +2981,15 @@ function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentPro
     setAjoutInfo(`${ajoutes} jour${ajoutes>1?"s":""} de refus ajouté${ajoutes>1?"s":""}${ignores>0?`, ${ignores} ignoré${ignores>1?"s":""} (déjà suivi)`:""}.`);
   };
 
+  // "Réinitialiser" (statut null) doit mettre ces 3 champs à null explicitement,
+  // pas les delete du JS local : JSON_MERGE_PATCH (backend) fusionne les objets
+  // imbriqués au lieu de les remplacer, donc un champ simplement absent de l'objet
+  // envoyé reste inchangé côté serveur — seule une valeur null explicite l'efface.
   const setTalon = (date, statut) => {
     setAgentProfiles(prev=>{
       const curr = prev[agent.id]?.congesDemandes?.[date] || {};
       const next = {...curr};
-      if(statut===null){ delete next.talonStatut; delete next.dateTalonDemande; delete next.dateTalonRecu; }
+      if(statut===null){ next.talonStatut = null; next.dateTalonDemande = null; next.dateTalonRecu = null; }
       else {
         next.talonStatut = statut;
         if(statut==="demande") next.dateTalonDemande = today;
@@ -2988,10 +2999,13 @@ function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentPro
     });
   };
 
+  // Tombstone explicite (voir retirerCongeTracking dans CongesDashboardModal) :
+  // JSON_MERGE_PATCH ne supprime une clé imbriquée que sur une valeur null
+  // explicite, jamais sur une simple absence dans l'objet envoyé.
   const retirerRefus = (date) => {
     setAgentProfiles(prev=>{
       const curr = {...(prev[agent.id]?.congesDemandes||{})};
-      delete curr[date];
+      curr[date] = null;
       return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:curr}};
     });
   };
@@ -3273,11 +3287,13 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
     setVtTracking(date, prev=>({...prev, accorde:false, dateAccord:null}));
   };
 
+  // Tombstone explicite (même raison que Congés : JSON_MERGE_PATCH ne supprime
+  // une clé imbriquée que sur null explicite, jamais sur une absence).
   const retirer = (date) => {
     retirerVTDuPlanning(date);
     setAgentProfiles(prev=>{
       const curr = {...(prev[agent.id]?.vtTracking||{})};
-      delete curr[date];
+      curr[date] = null;
       return {...prev, [agent.id]:{...(prev[agent.id]||{}), vtTracking:curr}};
     });
   };
@@ -4472,10 +4488,14 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
     setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),
       paiementAnticipe:{...(prev[code]?.paiementAnticipe||{}), moisVu:mois}}}));
   };
+  // paiementAnticipe mis à null explicitement (pas delete) : JSON_MERGE_PATCH
+  // (backend) fusionne les objets imbriqués au lieu de les remplacer — un champ
+  // simplement absent de l'objet envoyé reste inchangé côté serveur, seule une
+  // valeur null explicite l'efface (même bug que Congés/VT, trouvé le 16/07).
   const annulerPaiementAnticipe = (code, targetYear=year) => {
     setFetesDataYear(targetYear, prev=>{
       const curr = {...(prev[code]||{})};
-      delete curr.paiementAnticipe;
+      curr.paiementAnticipe = null;
       return {...prev, [code]:curr};
     });
   };
