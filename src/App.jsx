@@ -2505,17 +2505,27 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   // jour de travail existant reste affiché et compté normalement tant que le
   // congé n'est pas accordé. congesDemandes est une map PLATE indexée par
   // date ISO (même principe que vtTracking), pas de niveau année.
+  //
+  // Détachement auto (Phase 3, 15/07) : un jour suivi (demande OU refusée)
+  // peut être "résolu autrement" entre-temps — accordé (CA/CP, déjà compté
+  // via brut/tousJours plus haut) OU ressaisi directement dans le planning
+  // perso avec un tout autre code (Maladie, RP...). Dans les deux cas, le
+  // suivi demande/refuse est périmé : on l'ignore simplement à l'affichage
+  // (jamais supprimé de agentProfiles — inoffensif, pas besoin de nettoyer).
+  // Aucune modification ailleurs dans l'app n'était nécessaire : tous les
+  // autres compteurs (Maladie, RP...) sont déjà recalculés à la volée depuis
+  // schedule à chaque rendu, donc un jour ressaisi s'y comptabilise
+  // automatiquement sans code supplémentaire.
   const tracking = profil.congesDemandes || {};
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const demandes = [], refusees = [];
   Object.entries(tracking).forEach(([d, t])=>{
     if(d < start || d > end) return;
-    if(t.statut==="demande"){
-      if(brut.includes(d)) return; // deja ecrit dans schedule entre-temps -> demande perimee, ignoree
-      demandes.push({date:d, dateDemande:t.dateDemande});
-    } else if(t.statut==="refuse"){
-      refusees.push({date:d, dateDemande:t.dateDemande, dateRefus:t.dateRefus});
-    }
+    const entree = schedule[`${agent.id}-${d}`];
+    const codeActuel = entree?.equipe || entree?.equipe2;
+    if(codeActuel) return; // resolu autrement (accorde ou remplace) -> suivi perime
+    if(t.statut==="demande") demandes.push({date:d, dateDemande:t.dateDemande});
+    else if(t.statut==="refuse") refusees.push({date:d, dateDemande:t.dateDemande, dateRefus:t.dateRefus});
   });
   demandes.sort((a,b)=>a.date<b.date?-1:1);
   refusees.sort((a,b)=>a.date<b.date?-1:1);
