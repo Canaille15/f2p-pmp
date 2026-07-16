@@ -8704,6 +8704,13 @@ export default function App(){
   // (potentiellement périmé) le temps que api.profil.get() réponde, et l'autosave renverrait ce
   // snapshot périmé au serveur avant que la vraie donnée à jour n'ait eu le temps d'arriver.
   const profilLoadedRef = useRef(new Set());
+  // Miroir synchrone d'agentProfiles, lisible depuis un callback async (.then)
+  // sans closure périmée — sert à détecter si un changement local a eu lieu
+  // PENDANT qu'un fetch profil était en vol (voir les 3 sites api.profil.get
+  // ci-dessous, correctif race condition du 17/07 : une réponse de lecture
+  // périmée ne doit jamais écraser une modification locale plus récente).
+  const agentProfilesRef = useRef(agentProfiles);
+  useEffect(()=>{ agentProfilesRef.current = agentProfiles; },[agentProfiles]);
   // Charger les agents depuis l'API (source de verite = Railway) - seulement si connecte
     const rechargerAgents = () => {
     api.agents.getAll().then(rows=>{
@@ -8789,8 +8796,13 @@ export default function App(){
       }
     }).catch(()=>{});
 
+    const snapshotAvantFetchLogin = agentProfilesRef.current[agentId];
     api.profil.get(agentId).then(p=>{
     if(p){
+      if(agentProfilesRef.current[agentId] !== snapshotAvantFetchLogin){
+        profilLoadedRef.current.add(agentId);
+        return; // un changement local plus recent a eu lieu pendant le fetch -> reponse perimee ignoree
+      }
       if(p.habilitations) setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations}}));
       if(p.agentColors && Object.keys(p.agentColors).length>0) setAgentCouleurs(p.agentColors);
     }
@@ -8825,8 +8837,13 @@ export default function App(){
       if(!currentUser?.agent?.id) return;
       const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
       // Recharger profil
+      const snapshotAvantFetchFocus = agentProfilesRef.current[agentId];
       api.profil.get(agentId).then(profile=>{
         if(!profile) return;
+        if(agentProfilesRef.current[agentId] !== snapshotAvantFetchFocus){
+          profilLoadedRef.current.add(agentId);
+          return; // changement local pendant le fetch -> reponse perimee ignoree
+        }
         setAgentProfiles(prev=>({...prev,[agentId]:{
           ...(prev[agentId]||{}),
           ...profile,
@@ -8863,8 +8880,13 @@ export default function App(){
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     // Charger le profil
+    const snapshotAvantFetchLoginEffect = agentProfilesRef.current[agentId];
     api.profil.get(agentId).then(profile=>{
       if(!profile) return;
+      if(agentProfilesRef.current[agentId] !== snapshotAvantFetchLoginEffect){
+        profilLoadedRef.current.add(agentId);
+        return; // changement local pendant le fetch -> reponse perimee ignoree
+      }
       setAgentProfiles(prev=>({...prev,[agentId]:{
         ...(prev[agentId]||{}),
         ...profile,
