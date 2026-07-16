@@ -3023,11 +3023,6 @@ function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentPro
     });
   };
 
-  const redemander = (date) => {
-    const v = schedule[`${agent.id}-${date}`];
-    setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), [date]:{statut:"demande", dateDemande:today, jourEtaitVide: !(v?.equipe || v?.equipe2)}}}}));
-  };
-
   const moisTries = Object.keys(data.parMois).sort();
 
   const renderTalon = (r) => {
@@ -3124,7 +3119,6 @@ function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentPro
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                             <span style={{fontSize:12,fontWeight:800,color:"#1e293b"}}>{fmtDate(r.date)}</span>
                             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                              <button onClick={()=>redemander(r.date)} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>↩️ Redemander</button>
                               <button onClick={()=>retirerRefus(r.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:10,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
                             </div>
                           </div>
