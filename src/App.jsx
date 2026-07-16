@@ -2506,16 +2506,19 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   // congé n'est pas accordé. congesDemandes est une map PLATE indexée par
   // date ISO (même principe que vtTracking), pas de niveau année.
   //
-  // Détachement auto (Phase 3, 15/07) : un jour suivi (demande OU refusée)
-  // peut être "résolu autrement" entre-temps — accordé (CA/CP, déjà compté
-  // via brut/tousJours plus haut) OU ressaisi directement dans le planning
-  // perso avec un tout autre code (Maladie, RP...). Dans les deux cas, le
-  // suivi demande/refuse est périmé : on l'ignore simplement à l'affichage
-  // (jamais supprimé de agentProfiles — inoffensif, pas besoin de nettoyer).
-  // Aucune modification ailleurs dans l'app n'était nécessaire : tous les
-  // autres compteurs (Maladie, RP...) sont déjà recalculés à la volée depuis
-  // schedule à chaque rendu, donc un jour ressaisi s'y comptabilise
-  // automatiquement sans code supplémentaire.
+  // Détachement auto (Phase 3, 15/07 — CORRIGÉ le 17/07 suite à un bug réel
+  // signalé par Olivier) : un jour "Demandé" se pose presque toujours sur un
+  // jour qui a DÉJÀ un contenu (une journée de travail prévue, un repos...) —
+  // c'est le cas normal décrit dès la Phase 1 ("la journée prévue reste
+  // affichée et comptée tant que le congé n'est pas accordé"). La première
+  // version de ce détachement traitait à tort TOUT contenu existant comme
+  // "résolu autrement", ce qui faisait disparaître quasiment toutes les
+  // demandes réelles de la liste (testé initialement seulement sur des jours
+  // vides, d'où le bug passé inaperçu). Corrigé : on ne détache un suivi que
+  // si le jour était VIDE au moment de la demande/refus (jourEtaitVide, capturé
+  // à la création) et a ÉTÉ REMPLI depuis — jamais si le jour avait déjà un
+  // contenu légitime dès le départ. Un jour réellement accordé (CA/CP) reste
+  // détecté via brut/tousJours, indépendamment de ce champ.
   const tracking = profil.congesDemandes || {};
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const demandes = [], refusees = [];
@@ -2524,9 +2527,11 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
     if(d < start || d > end) return;
     const entree = schedule[`${agent.id}-${d}`];
     const codeActuel = entree?.equipe || entree?.equipe2;
-    if(codeActuel) return; // resolu autrement (accorde ou remplace) -> suivi perime
-    if(t.statut==="demande") demandes.push({date:d, dateDemande:t.dateDemande});
-    else if(t.statut==="refuse") refusees.push({date:d, dateDemande:t.dateDemande, dateRefus:t.dateRefus});
+    if(t.jourEtaitVide && codeActuel) return; // etait vide a la demande/refus, rempli depuis -> perime
+    if(t.statut==="demande"){
+      if(brut.includes(d)) return; // deja accorde -> compte via brut, pas ici
+      demandes.push({date:d, dateDemande:t.dateDemande});
+    } else if(t.statut==="refuse") refusees.push({date:d, dateDemande:t.dateDemande, dateRefus:t.dateRefus});
   });
   demandes.sort((a,b)=>a.date<b.date?-1:1);
   refusees.sort((a,b)=>a.date<b.date?-1:1);
@@ -2631,7 +2636,11 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
       const dejaAccorde = v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
       const dejaDemande = existants[d]?.statut==="demande";
       if(dejaAccorde || dejaDemande){ ignores++; return; }
-      maj[d] = {statut:"demande", dateDemande: today};
+      // jourEtaitVide capturé à la création : sert uniquement au détachement
+      // auto (Phase 3) — ne détacher que si le jour était vide à la demande,
+      // jamais s'il avait déjà un contenu légitime (cas normal).
+      const jourEtaitVide = !(v?.equipe || v?.equipe2);
+      maj[d] = {statut:"demande", dateDemande: today, jourEtaitVide};
       ajoutes++;
     });
     if(ajoutes>0){
@@ -2654,11 +2663,12 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
   };
 
   const refuserDemande = (date) => {
-    setCongeTracking(date, prev=>({statut:"refuse", dateDemande: prev.dateDemande || null, dateRefus: today}));
+    setCongeTracking(date, prev=>({statut:"refuse", dateDemande: prev.dateDemande || null, dateRefus: today, jourEtaitVide: prev.jourEtaitVide}));
   };
 
   const redemander = (date) => {
-    setCongeTracking(date, {statut:"demande", dateDemande: today});
+    const v = schedule[`${agCp}-${date}`];
+    setCongeTracking(date, {statut:"demande", dateDemande: today, jourEtaitVide: !(v?.equipe || v?.equipe2)});
   };
 
   const retirerDemande = (date) => retirerCongeTracking(date);
@@ -2924,7 +2934,9 @@ function computeRefusConges(agent, schedule, agentProfiles, year){
     if(d<start||d>end) return;
     const entree = schedule[`${agent.id}-${d}`];
     const codeActuel = entree?.equipe || entree?.equipe2;
-    if(codeActuel) return; // resolu autrement entre-temps (meme detachement que Phase 3)
+    const estAccorde = entree?.equipe==="CA"||entree?.equipe==="CP"||entree?.equipe2==="CA"||entree?.equipe2==="CP";
+    if(estAccorde) return; // accorde entre-temps (typé directement CA/CP dans le planning)
+    if(t.jourEtaitVide && codeActuel) return; // etait vide au refus, rempli depuis par autre chose -> perime
     refus.push({
       date:d, dateDemande:t.dateDemande||null, dateRefus:t.dateRefus||null,
       talonStatut:t.talonStatut||null, dateTalonDemande:t.dateTalonDemande||null, dateTalonRecu:t.dateTalonRecu||null,
@@ -2971,7 +2983,8 @@ function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentPro
     const maj = {};
     dates.forEach(d=>{
       if(existants[d]){ ignores++; return; } // deja suivi (demande ou refuse)
-      maj[d] = {statut:"refuse", dateDemande:null, dateRefus:today};
+      const v = schedule[`${agent.id}-${d}`];
+      maj[d] = {statut:"refuse", dateDemande:null, dateRefus:today, jourEtaitVide: !(v?.equipe || v?.equipe2)};
       ajoutes++;
     });
     if(ajoutes>0){
@@ -3011,7 +3024,8 @@ function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentPro
   };
 
   const redemander = (date) => {
-    setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), [date]:{statut:"demande", dateDemande:today}}}}));
+    const v = schedule[`${agent.id}-${date}`];
+    setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), [date]:{statut:"demande", dateDemande:today, jourEtaitVide: !(v?.equipe || v?.equipe2)}}}}));
   };
 
   const moisTries = Object.keys(data.parMois).sort();
