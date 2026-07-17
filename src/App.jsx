@@ -2292,6 +2292,12 @@ function computeDashboardTravail(agent, schedule, year){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const postes = {};
   const sansPoste = { total:0, lastDate:null };
+  // Sous-ensemble de sansPoste qui exclut Formation — sert uniquement au
+  // message d'avertissement ci-dessous (sinon un jour de Formation semble à
+  // tort "sans poste précisé" alors qu'il est déjà listé comme tel juste
+  // au-dessus). sansPoste lui-même (avec Formation dedans) reste inchangé
+  // pour la répartition PRCI/PAR/Non affecté, qui doit continuer à faire 100%.
+  const sansPosteVrai = { total:0, lastDate:null };
   let totalTravail = 0;
   // Comptage global M/AM/N/J + FOR, tous postes confondus (+ jours sans poste
   // précisé) — distinct du détail par poste ci-dessous, jamais retiré.
@@ -2303,10 +2309,24 @@ function computeDashboardTravail(agent, schedule, year){
     if(!["M","AM","N","J","FOR"].includes(eq)) return; // pas une journée de travail
     totalTravail++;
     parShiftGlobal[eq]++;
+    // Formation (17/07, demandé par Olivier) : garde sa propre ligne dans
+    // "postes" (total + dernière date, comme un vrai poste) MAIS reste aussi
+    // comptée dans sansPoste pour que la répartition PRCI/PAR/Non affecté
+    // continue de faire 100% (une formation n'est ni un poste PRCI ni PAR).
+    if(eq==="FOR"){
+      sansPoste.total++;
+      if(!sansPoste.lastDate || dk > sansPoste.lastDate) sansPoste.lastDate = dk;
+      if(!postes.FOR) postes.FOR = { code:"FOR", label:"Formation", famille:"FOR", total:0, lastDate:null, parShift:{} };
+      postes.FOR.total++;
+      if(!postes.FOR.lastDate || dk > postes.FOR.lastDate) postes.FOR.lastDate = dk;
+      return;
+    }
     const info = jsCode ? POSTE_REGISTRY[jsCode] : null;
     if(!info){
       sansPoste.total++;
       if(!sansPoste.lastDate || dk > sansPoste.lastDate) sansPoste.lastDate = dk;
+      sansPosteVrai.total++;
+      if(!sansPosteVrai.lastDate || dk > sansPosteVrai.lastDate) sansPosteVrai.lastDate = dk;
       return;
     }
     if(!postes[info.code]){
@@ -2342,6 +2362,7 @@ function computeDashboardTravail(agent, schedule, year){
     totalTravail,
     postes: Object.values(postes).sort((a,b)=> b.total-a.total),
     sansPoste,
+    sansPosteVrai,
     repartition: {
       PRCI: { jours: totalPRCI, pct: pct(totalPRCI) },
       PAR:  { jours: totalPAR,  pct: pct(totalPAR) },
@@ -2399,7 +2420,7 @@ function TravailDashboardContent({ data }) {
             <div key={p.code} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:6,background:p.famille==="PRCI"?"#dbeafe":"#d1fae5",color:p.famille==="PRCI"?"#1e40af":"#065f46"}}>{p.famille}</span>
+                  <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:6,background:p.famille==="PRCI"?"#dbeafe":p.famille==="PAR"?"#d1fae5":"#fef3c7",color:p.famille==="PRCI"?"#1e40af":p.famille==="PAR"?"#065f46":"#92400e"}}>{p.famille==="FOR"?"📚":p.famille}</span>
                   <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{p.label}</span>
                 </div>
                 <div style={{textAlign:"right"}}>
@@ -2407,22 +2428,22 @@ function TravailDashboardContent({ data }) {
                   <div style={{fontSize:10,fontWeight:600,color:"#475569"}}>dernier : {fmtDate(p.lastDate)}</div>
                 </div>
               </div>
-              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {Object.keys(p.parShift).length>0 && <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {Object.entries(p.parShift).map(([shift,s])=>(
                   <div key={shift} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10}}>
                     <span style={{fontWeight:700,color:"#334155"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
                     <span style={{fontWeight:600,color:"#475569",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
                   </div>
                 ))}
-              </div>
+              </div>}
             </div>
           ))}
         </div>
       )}
 
-      {data.sansPoste.total>0 && (
+      {data.sansPosteVrai.total>0 && (
         <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
-          ⚠️ {data.sansPoste.total} jour{data.sansPoste.total>1?"s":""} travaillé{data.sansPoste.total>1?"s":""} sans poste précisé (dernier : {fmtDate(data.sansPoste.lastDate)}) — le poste n'a pas été renseigné dans le planning ce jour-là.
+          ⚠️ {data.sansPosteVrai.total} jour{data.sansPosteVrai.total>1?"s":""} travaillé{data.sansPosteVrai.total>1?"s":""} sans poste précisé (dernier : {fmtDate(data.sansPosteVrai.lastDate)}) — le poste n'a pas été renseigné dans le planning ce jour-là.
         </div>
       )}
     </div>
@@ -2534,7 +2555,13 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
     if(t.statut==="demande"){
       if(brut.includes(d)) return; // deja accorde -> compte via brut, pas ici
       demandes.push({date:d, dateDemande:t.dateDemande});
-    } else if(t.statut==="refuse") refusees.push({date:d, dateDemande:t.dateDemande, dateRefus:t.dateRefus});
+    } else if(t.statut==="refuse"){
+      // Si le jour a finalement ete accorde entre-temps (typé CA/CP directement
+      // dans le planning), on le retire du suivi des refus — demandé par
+      // Olivier le 17/07 : un jour ne doit pas rester "refusé" une fois accordé.
+      if(brut.includes(d)) return;
+      refusees.push({date:d, dateDemande:t.dateDemande, dateRefus:t.dateRefus});
+    }
   });
   demandes.sort((a,b)=>a.date<b.date?-1:1);
   refusees.sort((a,b)=>a.date<b.date?-1:1);
@@ -2667,11 +2694,6 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
 
   const refuserDemande = (date) => {
     setCongeTracking(date, prev=>({statut:"refuse", dateDemande: prev.dateDemande || null, dateRefus: today, jourEtaitVide: prev.jourEtaitVide}));
-  };
-
-  const redemander = (date) => {
-    const v = schedule[`${agCp}-${date}`];
-    setCongeTracking(date, {statut:"demande", dateDemande: today, jourEtaitVide: !(v?.equipe || v?.equipe2)});
   };
 
   const retirerDemande = (date) => retirerCongeTracking(date);
@@ -2838,7 +2860,6 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                       <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
                       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                        <button onClick={()=>redemander(e.date)} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>↩️ Redemander</button>
                         <button onClick={()=>retirerDemande(e.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
                       </div>
                     </div>
@@ -3496,6 +3517,11 @@ const DETAIL_CONFIG = {
   TC: { codes:["TC"], reportKey:null, acquisKey:"tcAcquis", rollingAcquis:true, label:"TC", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
   TY: { codes:["TY"], reportKey:null, acquisKey:"tyAcquis", rollingAcquis:true, label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
   MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
+  // Formation (17/07, demandé par Olivier) : même principe que Maladie — pure
+  // consultation (pas d'acquis, pas de report), archive A+1 + 2 ans, détail
+  // mensuel des dates. Version 1 volontairement minimale — à compléter plus
+  // tard une fois le "module Formation" plus large défini (voir CLAUDE.md).
+  FOR: { codes:["FOR"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Formation", icon:"📚", gradientFrom:"#b45309", gradientTo:"#92400e", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#78350f", accentColor:"#b45309" },
 };
 
 // Jours correspondant à un ou plusieurs codes équipe pour une année, avec
