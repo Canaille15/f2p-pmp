@@ -3164,6 +3164,105 @@ function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentPro
   );
 }
 
+// ─── PAUSE FIGÉE → COMPTEUR TC (solde en heures/minutes) ────────────────────
+// Refonte du 17/07 (demandée par Olivier) : TC n'est plus un simple compteur
+// de jours (ancien mécanisme générique DETAIL_CONFIG, partagé avec RQ/RN/TY)
+// mais un solde continu en MINUTES, plafonné à 32h00, alimenté par les pauses
+// figées validées (+1h30 chacune, voir table pause_figee / pausesData) et
+// diminué par les journées TC réellement prises dans le planning perso
+// (-8h02 chacune). Reporté automatiquement d'une année sur l'autre comme
+// RQ/RN/TY (solde de fin d'année = base de l'année suivante), sauf ajustement
+// manuel explicite de l'agent pour une année donnée (tcAjustementManuel) —
+// notamment utilisé comme "solde de départ" à la prise en main de l'outil.
+const TC_MIN_PAUSE   = 90;   // 1h30 créditées par pause figée validée
+const TC_MIN_JOUR    = 482;  // 8h02 débitées par journée TC prise
+const TC_PLAFOND_MIN = 1920; // 32h00 — au-delà, le surplus n'est pas ajouté (à vérifier en heures sup)
+
+function minToHM(min){
+  const neg = min < 0;
+  const abs = Math.abs(Math.round(min));
+  const h = Math.floor(abs/60), m = abs%60;
+  return `${neg?"-":""}${h}h${String(m).padStart(2,'0')}`;
+}
+
+// Rappel du planning perso pour une date donnée (ex: "Matinée · CCL") — relu
+// EN DIRECT depuis schedule à chaque affichage, jamais stocké : si l'agent
+// complète une case vide après coup, le rappel se met à jour tout seul.
+function getPlanningRappel(schedule, agCp, date){
+  const v = schedule?.[`${agCp}-${date}`];
+  if(!v || (!v.equipe && !v.equipe2)) return null;
+  const OMIS = ["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"];
+  const describe = (code) => {
+    if(!code) return null;
+    const label = EQ_COLORS[code]?.label || code;
+    const poste = v.jsCode && !OMIS.includes(v.jsCode) ? (getPosteLabelFromCode(v.jsCode)||v.jsCode) : null;
+    return poste ? `${label} · ${poste}` : label;
+  };
+  const parts = [describe(v.equipe), describe(v.equipe2)].filter(Boolean);
+  return parts.length ? [...new Set(parts)].join(" + ") : null;
+}
+
+function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year, _depth){
+  const depth = _depth || 0;
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const profil = agentProfiles?.[agent?.id] || {};
+
+  const manuel = profil.tcAjustementManuel?.[year];
+  let soldeDepart;
+  if(manuel !== undefined){
+    soldeDepart = manuel;
+  } else if(depth < 20){
+    soldeDepart = computeDashboardTC(agent, schedule, agentProfiles, pausesData, year-1, depth+1).soldeFin;
+  } else {
+    soldeDepart = 0;
+  }
+
+  const joursTC = [];
+  Object.entries(schedule||{}).forEach(([k,v])=>{
+    if(!agent || !k.startsWith(agent.id+"-")) return;
+    const dk = k.slice(agent.id.length+1);
+    if(dk < start || dk > end) return;
+    if(v?.equipe==="TC" || v?.equipe2==="TC") joursTC.push(dk);
+  });
+  joursTC.sort();
+
+  const pausesValideesAnnee = (pausesData||[])
+    .filter(p => p.fia_done)
+    .map(p => String(p.date_jour).slice(0,10))
+    .filter(d => d>=start && d<=end);
+
+  // Simulation chronologique (ordre réel des dates, pas l'ordre de saisie) —
+  // le plafond de 32h dépend de l'ordre des événements, pas juste d'un total.
+  const evenements = [
+    ...joursTC.map(d=>({date:d, type:"jour_pris"})),
+    ...pausesValideesAnnee.map(d=>({date:d, type:"pause_validee"})),
+  ].sort((a,b)=> a.date===b.date ? (a.type<b.type?-1:1) : a.date.localeCompare(b.date));
+
+  let solde = soldeDepart;
+  const detailPauses = {};
+  evenements.forEach(ev=>{
+    if(ev.type==="pause_validee"){
+      const place = Math.max(0, TC_PLAFOND_MIN - solde);
+      const ajoute = Math.min(TC_MIN_PAUSE, place);
+      solde += ajoute;
+      detailPauses[ev.date] = {ajoute, horsPlafond: TC_MIN_PAUSE-ajoute};
+    } else {
+      solde -= TC_MIN_JOUR;
+    }
+  });
+
+  const parMoisTC = {};
+  joursTC.forEach(d=>{ const m=d.slice(0,7); (parMoisTC[m]=parMoisTC[m]||[]).push(d); });
+
+  return {
+    soldeDepart, soldeFin: solde,
+    joursTC, nbJoursTC: joursTC.length, parMoisTC,
+    detailPauses,
+    totalAjouteAnnee: Object.values(detailPauses).reduce((s,d)=>s+d.ajoute,0),
+    totalHorsPlafondAnnee: Object.values(detailPauses).reduce((s,d)=>s+d.horsPlafond,0),
+  };
+}
+
 // ─── COMPTEUR VT (temps partiel) ─────────────────────────────────────────────
 // Contrairement à Congés (juste "pris"), VT suit un cycle en 3 étapes par jour
 // posé : Demandé → Accordé → Pris (bascule automatique dès que la date passe,
@@ -3494,6 +3593,169 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
   );
 }
 
+// ─── MODULE TC (solde en heures/minutes, plafonné à 32h) ────────────────────
+function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, pausesData, year, availableYears, onYearChange, onClose }){
+  const data = useMemo(()=>computeDashboardTC(agent, schedule, agentProfiles, pausesData, year), [agent, schedule, agentProfiles, pausesData, year]);
+  const agCp = agent?.immatriculation || agent?.cp || agent?.id;
+  const fmtDate = (d)=> d ? new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"}) : "—";
+
+  const [ajustH, setAjustH] = useState("0");
+  const [ajustM, setAjustM] = useState("0");
+  useEffect(()=>{
+    const abs = Math.abs(data.soldeDepart);
+    setAjustH(String(Math.floor(abs/60)));
+    setAjustM(String(abs%60));
+  },[data.soldeDepart]);
+  const soldeIsNegatif = data.soldeDepart < 0;
+  const [ajustNeg, setAjustNeg] = useState(soldeIsNegatif);
+  useEffect(()=>{ setAjustNeg(data.soldeDepart<0); },[data.soldeDepart]);
+
+  const saveAjustement = () => {
+    const h = parseInt(ajustH,10)||0, m = parseInt(ajustM,10)||0;
+    const total = (h*60+m) * (ajustNeg?-1:1);
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{ ...(prev[agent.id]||{}), tcAjustementManuel:{ ...(prev[agent.id]?.tcAjustementManuel||{}), [year]: total } }
+    }));
+  };
+
+  const [nouvelleDate, setNouvelleDate] = useState("");
+  const [ajoutErr, setAjoutErr] = useState("");
+
+  const ecrireTCDansPlanning = (date) => {
+    const key = `${agCp}-${date}`;
+    const entryExistante = schedule[key] || {};
+    const fullEntry = {...entryExistante, equipe:"TC", prive:true};
+    setSchedule(prev=>({...prev, [key]: fullEntry}));
+    api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur sauvegarde TC dans planning:", e));
+  };
+
+  const retirerTCDuPlanning = (date) => {
+    const key = `${agCp}-${date}`;
+    const entryExistante = schedule[key];
+    if(!entryExistante || entryExistante.equipe !== "TC") return;
+    const {equipe, ...reste} = entryExistante;
+    const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
+    if(videTotal){
+      setSchedule(prev=>{const n={...prev}; delete n[key]; return n;});
+      api.planning.deleteEntry(agCp, date).catch(e=>console.error("Erreur suppression TC du planning:", e));
+    } else {
+      const fullEntry = {...reste, equipe:null};
+      setSchedule(prev=>({...prev, [key]: fullEntry}));
+      api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur suppression TC du planning:", e));
+    }
+  };
+
+  // "Forcer manuellement une prise de TC" (demandé par Olivier) : écrit le
+  // code TC dans le planning perso, même garde-fou d'écrasement que VT/Fêtes
+  // — devient ensuite indiscernable d'une saisie directe dans le planning
+  // (même mécanisme de détection, joursTC recalculé depuis schedule).
+  const ajouterJourTC = () => {
+    setAjoutErr("");
+    if(!nouvelleDate) return;
+    if(data.joursTC.includes(nouvelleDate)){ setAjoutErr("Ce jour est déjà enregistré comme TC pris."); return; }
+    const targetEntry = schedule[`${agCp}-${nouvelleDate}`];
+    if(targetEntry?.equipe && targetEntry.equipe!=="TC"){
+      setAjoutErr(`Le ${fmtDate(nouvelleDate)} contient déjà "${EQ_COLORS[targetEntry.equipe]?.label||targetEntry.equipe}" dans ton planning perso. Modifie ou efface ce jour d'abord.`);
+      return;
+    }
+    ecrireTCDansPlanning(nouvelleDate);
+    setNouvelleDate("");
+  };
+
+  const moisTries = Object.keys(data.parMoisTC).sort();
+  const soldeColor = data.soldeFin<0 ? "#dc2626" : data.soldeFin>=TC_PLAFOND_MIN ? "#d97706" : "#0369a1";
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#0284c7,#0369a1)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800,flex:"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🔵 TC {year}</div>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8,flexShrink:0}}>✕</button>
+        </div>
+
+        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+
+          <div style={{fontSize:10,color:"#64748b",fontStyle:"italic"}}>Temps compensé : +1h30 par pause figée validée, -8h02 par journée TC prise, plafonné à 32h00.</div>
+
+          {/* Solde principal */}
+          <div style={{background:"#f0f9ff",border:`2px solid ${data.soldeFin>=TC_PLAFOND_MIN?"#fcd34d":"#bae6fd"}`,borderRadius:12,padding:"16px 12px",textAlign:"center"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Solde TC — fin {year}</div>
+            <div style={{fontSize:34,fontWeight:900,color:soldeColor,lineHeight:1,marginTop:4}}>{minToHM(data.soldeFin)}</div>
+            <div style={{fontSize:10,fontWeight:600,color:"#64748b",marginTop:4}}>Plafond : 32h00</div>
+            {data.soldeFin>=TC_PLAFOND_MIN&&<div style={{fontSize:11,fontWeight:700,color:"#b45309",marginTop:6}}>⚠️ Plafond atteint — toute nouvelle pause validée sera à vérifier en heures sup</div>}
+          </div>
+
+          {data.totalHorsPlafondAnnee>0&&(
+            <div style={{background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:10,padding:"10px 12px"}}>
+              <div style={{fontSize:12,fontWeight:800,color:"#92400e"}}>💶 {minToHM(data.totalHorsPlafondAnnee)} non ajoutées cette année (plafond atteint)</div>
+              <div style={{fontSize:10,color:"#78350f",marginTop:3}}>À vérifier sur la fiche de paie du mois suivant chaque pause concernée (paiement en heures supplémentaires) — détail dans le module Pause Figée.</div>
+            </div>
+          )}
+
+          {/* Solde de départ / ajustement manuel */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:2}}>Solde de départ {year}</div>
+            <div style={{fontSize:10,color:"#64748b",marginBottom:8}}>À la prise en main de l'outil, ou pour ajuster manuellement ton solde à tout moment.</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <button onClick={()=>setAjustNeg(n=>!n)}
+                style={{border:"1.5px solid #cbd5e1",borderRadius:8,padding:"7px 10px",cursor:"pointer",
+                  background:ajustNeg?"#fee2e2":"#dcfce7",color:ajustNeg?"#dc2626":"#16a34a",fontWeight:800,fontSize:13}}>
+                {ajustNeg?"−":"+"}
+              </button>
+              <input type="number" min="0" value={ajustH} onChange={e=>setAjustH(e.target.value)}
+                style={{width:56,textAlign:"center",padding:"7px 4px",border:"1.5px solid #bae6fd",borderRadius:8,fontSize:14,fontWeight:700}}/>
+              <span style={{fontSize:12,fontWeight:700,color:"#334155"}}>h</span>
+              <input type="number" min="0" max="59" value={ajustM} onChange={e=>setAjustM(e.target.value)}
+                style={{width:56,textAlign:"center",padding:"7px 4px",border:"1.5px solid #bae6fd",borderRadius:8,fontSize:14,fontWeight:700}}/>
+              <span style={{fontSize:12,fontWeight:700,color:"#334155"}}>min</span>
+              <button onClick={saveAjustement} style={{background:"#0369a1",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>Enregistrer</button>
+            </div>
+          </div>
+
+          {/* Forcer une prise de TC */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>+ Forcer une prise de TC</div>
+            <div style={{display:"flex",gap:6}}>
+              <input type="date" value={nouvelleDate} onChange={e=>{setNouvelleDate(e.target.value);setAjoutErr("");}}
+                style={{flex:1,padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              <button onClick={ajouterJourTC} style={{background:"#0369a1",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+            </div>
+            {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Écrit "TC" dans le planning perso ce jour-là — équivalent à le taper directement dans le planning. -8h02 sur le solde.</div>
+          </div>
+
+          {/* Journées TC prises */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>📌 Journées prises ({data.nbJoursTC}) — pas de solde restant en jours, uniquement en heures ci-dessus</div>
+            {moisTries.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune journée TC prise cette année.</div> :
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {moisTries.map(mk=>{
+                  const [an,mo] = mk.split("-").map(Number);
+                  const dates = data.parMoisTC[mk];
+                  return(
+                    <div key={mk}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#0369a1",marginBottom:5}}>{MOIS_L[mo-1]} {an} — {dates.length}j</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {dates.map(d=>(
+                          <div key={d} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f8fafc",borderRadius:7,padding:"6px 9px",border:"1px solid #e2e8f0"}}>
+                            <span style={{fontSize:11,fontWeight:600,color:"#334155",textTransform:"capitalize"}}>{fmtDate(d)}</span>
+                            <button onClick={()=>retirerTCDuPlanning(d)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕ Retirer</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── OUTIL GÉNÉRIQUE "DÉTAIL + JUSQU'À UNE DATE" (RP/RU/RQ/RN/TC/TY/Maladie) ─
 // RP a d'abord eu un outil minimal séparé (juste "pris jusqu'à une date"),
 // remplacé le 12/07 par ce composant générique pour recevoir le même
@@ -3514,7 +3776,9 @@ const DETAIL_CONFIG = {
   RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
   RQ: { codes:["RQ"], reportKey:null, acquisKey:"rqAcquis", rollingAcquis:true, label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
   RN: { codes:["RN"], reportKey:null, acquisKey:"rnAcquis", rollingAcquis:true, label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
-  TC: { codes:["TC"], reportKey:null, acquisKey:"tcAcquis", rollingAcquis:true, label:"TC", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
+  // TC (17/07) : sorti de ce mécanisme générique — devient un solde en heures/
+  // minutes plafonné, alimenté par les pauses figées validées, avec sa propre
+  // logique (computeDashboardTC/TcDashboardModal). Voir CLAUDE.md.
   TY: { codes:["TY"], reportKey:null, acquisKey:"tyAcquis", rollingAcquis:true, label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
   MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
   // Formation (17/07, demandé par Olivier) : même principe que Maladie — pure
@@ -3885,9 +4149,8 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const ruData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RU.codes, DETAIL_CONFIG.RU.reportKey, DETAIL_CONFIG.RU.acquisKey, DETAIL_CONFIG.RU.rollingAcquis), [agent, schedule, agentProfiles, year]);
   const rqData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RQ.codes, DETAIL_CONFIG.RQ.reportKey, DETAIL_CONFIG.RQ.acquisKey, DETAIL_CONFIG.RQ.rollingAcquis), [agent, schedule, agentProfiles, year]);
   const rnData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RN.codes, DETAIL_CONFIG.RN.reportKey, DETAIL_CONFIG.RN.acquisKey, DETAIL_CONFIG.RN.rollingAcquis), [agent, schedule, agentProfiles, year]);
-  const tcData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.TC.codes, DETAIL_CONFIG.TC.reportKey, DETAIL_CONFIG.TC.acquisKey, DETAIL_CONFIG.TC.rollingAcquis), [agent, schedule, agentProfiles, year]);
   const tyData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.TY.codes, DETAIL_CONFIG.TY.reportKey, DETAIL_CONFIG.TY.acquisKey, DETAIL_CONFIG.TY.rollingAcquis), [agent, schedule, agentProfiles, year]);
-  const DETAIL_DATA_BY_KEY = {RP:rpData, RU:ruData, RQ:rqData, RN:rnData, TC:tcData, TY:tyData};
+  const DETAIL_DATA_BY_KEY = {RP:rpData, RU:ruData, RQ:rqData, RN:rnData, TY:tyData};
 
   // Fêtes légales : nombre de fêtes "à traiter" (attente ou probable perdue)
   // pour la cloche sur la carte — évite d'ouvrir la fenêtre juste pour savoir
@@ -3899,6 +4162,30 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // que le tableau de bord dédié), avec en plus le workflow Demandé→Accordé→Pris.
   const vtData = useMemo(()=>computeDashboardVT(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
 
+  // Pause Figée (17/07) : données chargées ici (pas dans la modale) pour être
+  // partagées avec le calcul du solde TC, qui en dépend (voir computeDashboardTC).
+  const agentIdPauses = agent?.cp || agent?.immatriculation || agent?.id;
+  const [pausesData, setPausesData] = useState([]);
+  const [pausesLoading, setPausesLoading] = useState(true);
+  const [pausesError, setPausesError] = useState(null);
+  const rechargerPauses = () => {
+    if(!agentIdPauses) return;
+    setPausesError(null);
+    api.pauses.getAll(agentIdPauses).then(rows=>{
+      setPausesData(Array.isArray(rows)?rows:[]);
+      setPausesLoading(false);
+    }).catch(()=>{
+      setPausesError("Impossible de charger les pauses figées. Vérifie ta connexion et réessaie.");
+      setPausesLoading(false);
+    });
+  };
+  useEffect(()=>{ setPausesLoading(true); rechargerPauses(); },[agentIdPauses]); // eslint-disable-line
+
+  // TC (17/07) : solde en heures/minutes plafonné, alimenté par les pauses
+  // figées validées — remplace l'ancien compteur générique "jours".
+  const tcData = useMemo(()=>computeDashboardTC(agent, schedule, agentProfiles, pausesData, year), [agent, schedule, agentProfiles, pausesData, year]);
+  const nbPausesEnAttente = pausesData.filter(p=>!p.fia_done).length;
+
   const CARDS = [
     {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
@@ -3907,7 +4194,8 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"RQ",      label:"RQ",              color:"#d97706", subtitle:"Repos qualif."},
     {key:"FETE",    label:"Fêtes",           color:"#ec4899", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
     {key:"RN",      label:"RN",              color:"#4338ca", subtitle:"Repos nuit"},
-    {key:"TC",      label:"TC",              color:"#0284c7", subtitle:"Temps compensé"},
+    {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
+    {key:"TC",      label:"TC",              color:"#0284c7", subtitle:`Plafond 32h00${tcData.soldeFin>=TC_PLAFOND_MIN?" · ATTEINT":""}`, alert: tcData.soldeFin>=TC_PLAFOND_MIN},
     {key:"TY",      label:"TY",              color:"#0284c7", subtitle:"Temps compensé"},
     {key:"VT",      label:"VT",              color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2},
     {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation"},
@@ -3919,7 +4207,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const [showCongesDash, setShowCongesDash] = useState(false);
   const [showFetesDash, setShowFetesDash] = useState(false);
   const [showVtDash, setShowVtDash] = useState(false);
-  const [openDetailKey, setOpenDetailKey] = useState(null); // RP/RU/RQ/RN/TC/TY/MA
+  const [showPauseFigeeDash, setShowPauseFigeeDash] = useState(false);
+  const [showTcDash, setShowTcDash] = useState(false);
+  const [openDetailKey, setOpenDetailKey] = useState(null); // RP/RU/RQ/RN/TY/MA/FOR
 
   return(
     <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid #e2e8f0",
@@ -3983,17 +4273,23 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       {/* Grille compteurs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
         {CARDS.map(card=>{
-          const v = card.key==="conges" ? congesPris : card.key==="VT" ? vtData.pris : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
+          const v = card.key==="conges" ? congesPris
+            : card.key==="VT" ? vtData.pris
+            : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
+            : card.key==="TC" ? minToHM(tcData.soldeFin)
+            : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
           const corr = corrections[card.key]||0;
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
           const isFetesCard = card.key==="FETE" && !editMode;
           const isVtCard = card.key==="VT" && !editMode;
+          const isPfCard = card.key==="PF" && !editMode;
+          const isTcCard = card.key==="TC" && !editMode;
           const isDetailCard = !!DETAIL_CONFIG[card.key] && !editMode;
-          const isClickable = isTravailCard || isCongesCard || isFetesCard || isVtCard || isDetailCard;
+          const isClickable = isTravailCard || isCongesCard || isFetesCard || isVtCard || isPfCard || isTcCard || isDetailCard;
           return(
             <div key={card.key}
-              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
+              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
@@ -4020,8 +4316,8 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
                   {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}
                 </span>
               </div>}
-              {/* Contrôles de correction — "conges", "VT", "RP" et tout compteur avec un "acquis" dédié (RU/RQ/RN/TC/TY) ont leur propre outil, pas de +/- générique ici */}
-              {editMode&&card.key!=="conges"&&card.key!=="VT"&&card.key!=="RP"&&!DETAIL_CONFIG[card.key]?.acquisKey&&<div style={{
+              {/* Contrôles de correction — "conges", "VT", "PF", "TC", "RP" et tout compteur avec un "acquis" dédié (RU/RQ/RN/TY) ont leur propre outil, pas de +/- générique ici */}
+              {editMode&&card.key!=="conges"&&card.key!=="VT"&&card.key!=="RP"&&card.key!=="PF"&&card.key!=="TC"&&!DETAIL_CONFIG[card.key]?.acquisKey&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
                 <button onClick={()=>{
@@ -4050,13 +4346,6 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
 
       </div>}
 
-      {/* ── PAUSE FIGÉE ─────────────────────────────────────── */}
-      <PauseFigeeSection
-        agent={agent}
-        year={selectedYear}
-        agentProfiles={agentProfiles}
-        setAgentProfiles={setAgentProfiles}/>
-
       {showTravailDash&&(
         <TravailDashboardModal agent={agent} schedule={schedule} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowTravailDash(false)}/>
       )}
@@ -4071,6 +4360,12 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       )}
       {showVtDash&&(
         <VtDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowVtDash(false)}/>
+      )}
+      {showPauseFigeeDash&&(
+        <PauseFigeeDashboardModal agent={agent} schedule={schedule} pausesData={pausesData} loading={pausesLoading} loadError={pausesError} recharger={rechargerPauses} tcData={tcData} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowPauseFigeeDash(false)}/>
+      )}
+      {showTcDash&&(
+        <TcDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} pausesData={pausesData} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowTcDash(false)}/>
       )}
     </div>
   );
@@ -4929,86 +5224,72 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
 }
 
 // ─── MÉMO PAUSES FIGÉES ──────────────────────────────────────────────────────
-function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
-  const [ouvert, setOuvert] = useState(true);
+// ─── MODULE PAUSE FIGÉE ──────────────────────────────────────────────────────
+// Refonte du 17/07 (demandée par Olivier) : n'est plus un bandeau accordéon
+// toujours affiché, mais une carte compteur cliquable comme les autres
+// (voir DashboardCompteurs, card "PF"), ouvrant cette modale. Le mot "FIA" a
+// disparu de l'interface — le mécanisme sous-jacent (mois de constatation +
+// bascule "validé") est inchangé, juste renommé. Une pause "validée" ici
+// alimente automatiquement le solde TC de +1h30 (voir computeDashboardTC,
+// tcData passé en prop pour afficher le détail plafond/heures sup par pause).
+function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadError, recharger, tcData, year, availableYears, onYearChange, onClose}){
   const [showCal, setShowCal] = useState(false);
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
-
-  // Données réelles issues du backend (table pause_figee) — plus aucune
-  // dépendance à agentProfiles pour la lecture/écriture, ce qui évite le bug
-  // où une resynchronisation de profil (au focus, au refresh) écrasait les
-  // pauses figées saisies localement puisqu'elles n'étaient jamais réellement
-  // envoyées au serveur.
-  const [pausesData, setPausesData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null);
   const agentId = agent?.cp || agent?.immatriculation || agent?.id;
-
-  const recharger = () => {
-    if(!agentId) return;
-    setLoadError(null);
-    api.pauses.getAll(agentId).then(rows=>{
-      setPausesData(Array.isArray(rows)?rows:[]);
-      setLoading(false);
-    }).catch(()=>{
-      setLoadError("Impossible de charger les pauses figées. Vérifie ta connexion et réessaie.");
-      setLoading(false);
-    });
-  };
-  useEffect(()=>{ setLoading(true); recharger(); },[agentId]); // eslint-disable-line
+  const start = `${year}-01-01`, end = `${year}-12-31`;
 
   const allDates = useMemo(()=>{
     const obj = {};
-    pausesData.forEach(p=>{ obj[String(p.date_jour).slice(0,10)] = true; });
+    (pausesData||[]).forEach(p=>{
+      const dk = String(p.date_jour).slice(0,10);
+      if(dk>=start && dk<=end) obj[dk] = true;
+    });
     return obj;
-  },[pausesData]);
+  },[pausesData, start, end]);
   const fiaMois = useMemo(()=>{
     const obj = {};
-    pausesData.forEach(p=>{ if(p.mois_fia) obj[String(p.date_jour).slice(0,10)] = p.mois_fia; });
+    (pausesData||[]).forEach(p=>{ if(p.mois_fia) obj[String(p.date_jour).slice(0,10)] = String(p.mois_fia).slice(0,7); });
     return obj;
   },[pausesData]);
   const fiaDone = useMemo(()=>{
     const obj = {};
-    pausesData.forEach(p=>{ if(p.fia_done) obj[String(p.date_jour).slice(0,10)] = true; });
+    (pausesData||[]).forEach(p=>{ if(p.fia_done) obj[String(p.date_jour).slice(0,10)] = true; });
     return obj;
   },[pausesData]);
 
   const allDatesSorted = Object.keys(allDates).sort();
-
-  const totalMinutesAll = allDatesSorted.length * 90;
-  const totalHAll = Math.floor(totalMinutesAll/60);
-  const totalMAll = totalMinutesAll%60;
+  const nbValideesAnnee = allDatesSorted.filter(dk=>fiaDone[dk]).length;
 
   const toggleDate = (dk) => {
     if(allDates[dk]){
-      api.pauses.delete(agentId, dk).then(recharger).catch(()=>setLoadError("Erreur lors de la suppression de cette journée. Réessaie."));
+      api.pauses.delete(agentId, dk).then(recharger).catch(()=>{});
     } else {
-      api.pauses.add(agentId, dk).then(recharger).catch(()=>setLoadError("Erreur lors de l'ajout de cette journée. Réessaie."));
+      api.pauses.add(agentId, dk).then(recharger).catch(()=>{});
     }
   };
 
   const setFiaMois = (dk, moisKey) => {
-    api.pauses.setFiaMois(agentId, dk, moisKey||null).then(recharger).catch(()=>setLoadError("Erreur lors de la mise à jour du mois FIA. Réessaie."));
+    api.pauses.setFiaMois(agentId, dk, moisKey||null).then(recharger).catch(()=>{});
   };
   const toggleFiaDone = (dk) => {
     const nouveauDone = !fiaDone[dk];
     if(!nouveauDone){
-      // On décoche une FIA : on efface aussi le mois renseigné, pour repartir
-      // vraiment de zéro (sinon la fiche restait affichée alors que ce n'est
-      // plus confirmé).
+      // On décoche une validation : on efface aussi le mois renseigné, pour
+      // repartir vraiment de zéro (sinon la fiche restait affichée alors que
+      // ce n'est plus confirmé).
       Promise.all([
         api.pauses.setFiaDone(agentId, dk, false),
         api.pauses.setFiaMois(agentId, dk, null),
-      ]).then(recharger).catch(()=>setLoadError("Erreur lors de la mise à jour. Réessaie."));
+      ]).then(recharger).catch(()=>{});
     } else {
-      api.pauses.setFiaDone(agentId, dk, true).then(recharger).catch(()=>setLoadError("Erreur lors de la mise à jour. Réessaie."));
+      api.pauses.setFiaDone(agentId, dk, true).then(recharger).catch(()=>{});
     }
   };
 
   // Tri des journées :
-  // - En haut : journées SANS mois FIA (orange) — triées par date croissante (les plus urgentes en premier)
-  // - En bas  : journées AVEC mois FIA (vert)   — triées par mois FIA décroissant (les plus récentes en premier)
+  // - En haut : journées EN ATTENTE de vérification — triées par date croissante (les plus urgentes en premier)
+  // - En bas  : journées VALIDÉES — triées par mois de constatation décroissant (les plus récentes en premier)
   const {datesOrange, datesVertes} = useMemo(()=>{
     const orange = allDatesSorted.filter(dk => !fiaDone[dk]);
     const verte  = allDatesSorted.filter(dk =>  fiaDone[dk]);
@@ -5070,23 +5351,22 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
     return opts;
   },[]);
 
-  const nbFiaDone = allDatesSorted.filter(dk=>fiaDone[dk]).length;
+  const nbFiaDone = nbValideesAnnee;
   const nbFiaRestant = allDatesSorted.length - nbFiaDone;
 
-  if(loading){
-    return(
-      <div style={{margin:"20px 0 8px",background:"#fff",borderRadius:14,border:"1.5px solid #e2e8f0",
-        overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.05)",padding:"20px",textAlign:"center",
-        color:"#94a3b8",fontSize:13}}>
-        Chargement des pauses figées…
-      </div>
-    );
-  }
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
+        <div style={{background:"linear-gradient(135deg,#0f766e,#0C447C)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:1}}>
+          <div style={{color:"#fff",fontSize:16,fontWeight:800,flex:"1 1 auto",minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>⏸️ Pause Figée {year}</div>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.8,flexShrink:0}}>✕</button>
+        </div>
 
-  return(
-    <div style={{margin:"20px 0 8px",background:"#fff",borderRadius:14,border:"1.5px solid #e2e8f0",
-      overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
-
+      {loading ? (
+        <div style={{padding:"30px 20px",textAlign:"center",color:"#94a3b8",fontSize:13}}>Chargement des pauses figées…</div>
+      ) : (
+      <div>
       {loadError&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
         padding:"10px 14px",background:"#fee2e2",borderBottom:"1.5px solid #fca5a5"}}>
         <span style={{fontSize:12,fontWeight:600,color:"#991b1b"}}>{loadError}</span>
@@ -5094,44 +5374,32 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
           fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>Réessayer</button>
       </div>}
 
-      {/* ── Header cliquable ── */}
-      <div onClick={()=>setOuvert(o=>!o)}
-        style={{background:"#0C447C",padding:"14px 18px",
-          display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none",flexWrap:"nowrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,flex:"1 1 auto",minWidth:0,flexWrap:"wrap"}}>
-          <span style={{fontSize:17}}>⏸️</span>
-          <div style={{minWidth:160}}>
-            <div style={{color:"#fff",fontSize:15,fontWeight:800}}>Mémo pauses figées</div>
-            <div style={{color:"#B5D4F4",fontSize:12,marginTop:2,fontWeight:600}}>
-              {allDatesSorted.length} jour{allDatesSorted.length>1?"s":""} · {totalHAll}h{String(totalMAll).padStart(2,'0')} TC
-              {nbFiaDone>0&&<span style={{marginLeft:8,background:"rgba(255,255,255,.25)",
-                borderRadius:10,padding:"2px 8px"}}>✅ {nbFiaDone} FIA</span>}
-              {nbFiaRestant>0&&<span style={{marginLeft:4,background:"rgba(255,255,255,.2)",
-                borderRadius:10,padding:"2px 8px"}}>⏳ {nbFiaRestant} en attente</span>}
-            </div>
-          </div>
+      <div style={{padding:"14px 18px",display:"flex",gap:10,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:110,background:"#f0fdfa",border:"1.5px solid #99f6e4",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+          <div style={{fontSize:22,fontWeight:900,color:"#0f766e",lineHeight:1}}>{nbValideesAnnee}</div>
+          <div style={{fontSize:10,fontWeight:700,color:"#134e4a",marginTop:3}}>validées {year}</div>
         </div>
-        <span style={{color:"#fff",fontSize:18,fontWeight:700,flexShrink:0,
-          display:"inline-flex",alignItems:"center",justifyContent:"center",width:36,height:36,
-          transform:ouvert?"rotate(0deg)":"rotate(-90deg)",
-          transition:"transform .2s"}} title={ouvert?"Réduire":"Déplier"}>▼</span>
+        <div style={{flex:1,minWidth:110,background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+          <div style={{fontSize:22,fontWeight:900,color:"#c2410c",lineHeight:1}}>{nbFiaRestant}</div>
+          <div style={{fontSize:10,fontWeight:700,color:"#7c2d12",marginTop:3}}>en attente</div>
+        </div>
       </div>
 
-      {ouvert&&<>
+      <div>
         {/* ── Bouton pour afficher/masquer le calendrier d'ajout ── */}
-        <div style={{padding:"12px 14px",borderBottom:"1px solid #e2e8f0",background:"#f8fafc"}}>
+        <div style={{padding:"0 14px 12px"}}>
           <button onClick={()=>setShowCal(v=>!v)}
             style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-              background:showCal?"#f1f5f9":"#E6F1FB",
-              border:`1px solid ${showCal?"#cbd5e1":"#B5D4F4"}`,color:showCal?"#334155":"#0C447C",
+              background:showCal?"#f1f5f9":"#0f766e",
+              border:"none",color:showCal?"#334155":"#fff",
               borderRadius:10,padding:"12px 16px",
-              cursor:"pointer",fontSize:14,fontWeight:600,minHeight:44}}>
-            {showCal?"✕ Fermer le calendrier":"📅 Ajouter une journée"}
+              cursor:"pointer",fontSize:14,fontWeight:700,minHeight:44}}>
+            {showCal?"✕ Fermer le calendrier":"📅 Ajouter une ou plusieurs journées"}
           </button>
         </div>
 
         {/* ── Calendrier ajout ── */}
-        {showCal&&<div style={{padding:"14px",borderBottom:"1px solid #e2e8f0",background:"#f0f9ff"}}>
+        {showCal&&<div style={{padding:"14px",borderBottom:"1px solid #e2e8f0",background:"#f0fdfa"}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
             <button onClick={()=>{if(calMonth===0){setCalMonth(11);setCalYear(y=>y-1);}else setCalMonth(m=>m-1);}}
               style={{border:"1.5px solid #7dd3fc",borderRadius:8,padding:"7px 14px",cursor:"pointer",
@@ -5169,7 +5437,7 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
           </div>
         </div>}
 
-        {/* ── Jours triés : orange (sans FIA) en haut, vert (avec FIA) en bas ── */}
+        {/* ── Jours triés : en attente en haut, validées en bas ── */}
         {(()=>{
           const renderGroupe = (moisKey, dates, isVert) => {
             const [annee, mois] = moisKey.split("-").map(Number);
@@ -5178,7 +5446,7 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
             const m2 = nbMin%60;
             const fiaRef = isVert ? fiaMois[dates[0]] : null;
             const fiaLabel = fiaRef
-              ? `FIA ${MOIS_L[parseInt(fiaRef.slice(5,7))-1]} ${fiaRef.slice(0,4)}`
+              ? `Constaté ${MOIS_L[parseInt(fiaRef.slice(5,7))-1]} ${fiaRef.slice(0,4)}`
               : null;
             return(
               <div key={`${isVert?"v":"o"}-${moisKey}`} style={{borderBottom:"1px solid #f1f5f9"}}>
@@ -5203,6 +5471,8 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
                     const jourLabel = new Date(dk).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});
                     const moisFia = fiaMois[dk]||"";
                     const done = !!fiaDone[dk];
+                    const rappel = getPlanningRappel(schedule, agentId, dk);
+                    const overflow = done ? tcData?.detailPauses?.[dk] : null;
                     return(
                       <div key={dk} style={{
                         display:"flex",alignItems:"center",gap:8,
@@ -5218,12 +5488,20 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
                             {done&&<span style={{marginRight:4}}>✅</span>}
                             {jourLabel}
                           </div>
+                          <div style={{fontSize:11,fontWeight:600,marginTop:3,
+                            color:rappel?(done?"#0F6E56":"#993C1D"):"#94a3b8",fontStyle:rappel?"normal":"italic"}}>
+                            {rappel ? `📋 ${rappel}` : "Planning vide ce jour-là"}
+                          </div>
+                          {overflow&&overflow.horsPlafond>0&&<div style={{fontSize:10,fontWeight:700,color:"#b45309",marginTop:4,
+                            background:"#fffbeb",border:"1px solid #fde68a",borderRadius:6,padding:"3px 7px",display:"inline-block"}}>
+                            ⚠️ {minToHM(overflow.horsPlafond)} non ajoutées (plafond TC) — à vérifier en heures sup
+                          </div>}
                           <div style={{display:"flex",alignItems:"center",gap:7,marginTop:7,flexWrap:"wrap"}}>
                             <span style={{fontSize:12,color:done?"#04342C":"#712B13",fontWeight:600,whiteSpace:"nowrap"}}>
-                              Prise FIA :
+                              Mois de constatation :
                             </span>
                             <select value={moisFia} disabled={!done}
-                              title={!done?"Confirme d'abord avec le bouton FIA pour pouvoir choisir un mois":""}
+                              title={!done?"Marque d'abord cette pause comme vérifiée pour pouvoir choisir un mois":""}
                               onChange={e=>setFiaMois(dk,e.target.value)}
                               style={{fontSize:13,
                                 border:`1px solid ${done?"#5DCAA5":"#e2e8f0"}`,
@@ -5245,13 +5523,13 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
                         </div>
                         <div style={{display:"flex",gap:7,flexShrink:0,alignItems:"center"}}>
                           <button onClick={()=>toggleFiaDone(dk)}
-                            title={done?"Retirer FIA":"Marquer pris en compte FIA"}
+                            title={done?"Repasser en attente":"Marquer vérifié — ajoute 1h30 au TC"}
                             style={{background:done?"#1D9E75":"#fff",
                               border:`1px solid ${done?"#0F6E56":"#F0997B"}`,
                               color:done?"#fff":"#712B13",
                               borderRadius:9,padding:"10px 13px",cursor:"pointer",
                               fontSize:13,fontWeight:600,whiteSpace:"nowrap",minHeight:42}}>
-                            {done?"✓ FIA":"FIA ?"}
+                            {done?"✓ Validée":"Vérifié ?"}
                           </button>
                           <button onClick={()=>toggleDate(dk)} title="Retirer cette journée"
                             style={{background:"#fff",border:`1px solid ${done?"#9FE1CB":"#F0997B"}`,
@@ -5269,7 +5547,7 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
           const hasData = allDatesSorted.length > 0;
           if(!hasData) return !showCal&&(
             <div style={{padding:"18px",textAlign:"center",fontSize:12,color:"#64748b",fontWeight:500}}>
-              Aucune pause figée enregistrée
+              Aucune pause figée enregistrée pour {year}.
             </div>
           );
 
@@ -5279,7 +5557,7 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
                 <div style={{padding:"5px 14px",background:"#FAECE7",
                   borderBottom:"1px solid #F0997B"}}>
                   <span style={{fontSize:10,fontWeight:700,color:"#712B13",letterSpacing:.5}}>
-                    ⏳ EN ATTENTE DE PRISE EN COMPTE FIA ({datesOrange.length})
+                    ⏳ EN ATTENTE DE VÉRIFICATION ({datesOrange.length})
                   </span>
                 </div>
                 {parMoisOrange.map(([moisKey,dates])=>renderGroupe(moisKey,dates,false))}
@@ -5290,30 +5568,18 @@ function PauseFigeeSection({agent, year, agentProfiles, setAgentProfiles}){
                   borderBottom:"1px solid #5DCAA5",
                   borderTop:parMoisOrange.length>0?"2px solid #e2e8f0":"none"}}>
                   <span style={{fontSize:10,fontWeight:700,color:"#04342C",letterSpacing:.5}}>
-                    ✅ PRISES EN COMPTE SUR FIA ({datesVertes.length})
+                    ✅ VALIDÉES ({datesVertes.length})
                   </span>
                 </div>
                 {parMoisVert.map(([moisKey,dates])=>renderGroupe(moisKey,dates,true))}
               </>}
-
-              <div style={{padding:"10px 14px",background:"#E6F1FB",
-                display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:6}}>
-                <span style={{fontSize:12,fontWeight:600,color:"#0C447C"}}>Total TC généré</span>
-                <span style={{fontSize:13,fontWeight:700,color:"#0C447C"}}>
-                  {totalHAll}h{String(totalMAll).padStart(2,'0')}
-                  <span style={{fontSize:10,fontWeight:500,color:"#185FA5",marginLeft:5}}>
-                    ({allDatesSorted.length} × 1h30)
-                  </span>
-                </span>
-                {nbFiaDone>0&&<span style={{fontSize:11,color:"#0F6E56",fontWeight:600,width:"100%"}}>
-                  ✅ {datesVertes.length} prise{datesVertes.length>1?"s":""} en compte FIA
-                  {datesOrange.length>0&&` · ⏳ ${datesOrange.length} en attente`}
-                </span>}
-              </div>
             </div>
           );
         })()}
-      </>}
+      </div>
+      </div>
+      )}
+      </div>
     </div>
   );
 }

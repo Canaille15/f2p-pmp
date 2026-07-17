@@ -449,6 +449,7 @@ export const profil = {
       vtTracking:               extra.vtTracking              || {},
       vtReports:                extra.vtReports               || {},
       congesDemandes:           extra.congesDemandes          || {},
+      tcAjustementManuel:       extra.tcAjustementManuel      || {},
     };
   },
 
@@ -481,7 +482,7 @@ export const profil = {
       'pauseFigeeFiaMois','pauseFigeeFiaDone','demandesConges','notificationsAcquittees',
       'congesEntitlement','congesReports','ruReports','rpReports','rqReports','rnReports',
       'tcReports','tyReports','rpAcquis','ruAcquis','rqAcquis','rnAcquis','tcAcquis','tyAcquis',
-      'vtEntitlement','vtTracking','vtReports','congesDemandes',
+      'vtEntitlement','vtTracking','vtReports','congesDemandes','tcAjustementManuel',
     ];
     const donnees_json = {};
     EXTRA_KEYS.forEach(k => { if (data[k] !== undefined) donnees_json[k] = data[k]; });
