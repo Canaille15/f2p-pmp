@@ -2022,12 +2022,20 @@ function firstDayOfMonth(year,month){
 // Couleurs par défaut
 // DEFAULT_COLORS : couleurs par défaut de l'agenda PERSONNEL uniquement
 // La vue globale utilise toujours les couleurs de EQUIPES (non modifiables)
+// Mise à jour le 17/07 (demandé par Olivier, à la place de l'ancienne palette
+// trop sombre) : reprend telles quelles ses propres couleurs personnalisées
+// (compte 6810186B) pour les codes qu'il avait déjà réglés — M/AM/N/J, CA,
+// RU, RQ, FOR, RPP, NOTE, fêtes (voir plus bas, code séparé) — et complète
+// les codes qu'il n'avait pas touchés avec des teintes vives et distinctes
+// entre elles (jamais de noir/gris très foncé, pour que le sélecteur de
+// couleur natif du navigateur s'ouvre sur une zone vive du dégradé plutôt
+// que dans un coin sombre).
 const DEFAULT_COLORS = {
-  M:"#8B0000", AM:"#8B0000", N:"#8B0000", J:"#8B0000", JF:"#8B0000",
-  RP:"#16a34a", RPP:"#0d9488", RU:"#ca8a04", RQ:"#ca8a04", TC:"#0284c7", TY:"#0284c7", RN:"#4338ca",
-  NU:"#475569", CA:"#eab308", CP:"#eab308",
-  MA:"#dc2626", ABS:"#dc2626", VT:"#eab308", VM:"#6b7280",
-  FOR:"#b45309", DISPO:"#059669", NOTE:"#b45309",
+  M:"#ff0000", AM:"#ff0000", N:"#ff0000", J:"#ff0000", JF:"#ff82e8",
+  RP:"#16a34a", RPP:"#67bf15", RU:"#ffde08", RQ:"#ffe100", TC:"#7c3aed", TY:"#a855f7", RN:"#4338ca",
+  NU:"#64748b", CA:"#f5e900", CP:"#f5e900",
+  MA:"#dc2626", ABS:"#b91c1c", VT:"#f59e0b", VM:"#6b7280",
+  FOR:"#0dcbff", DISPO:"#059669", NOTE:"#0080ff",
 };
 
 // Texte blanc sur fonds sombres, noir sur fonds clairs
@@ -2122,7 +2130,7 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
 
   // Lire/écrire une couleur (FETE = clé spéciale pour toutes les fêtes)
   const getColor = (code) => {
-    if(code==="FETE") return (agentColors||{})["F1"]||"#ec4899";
+    if(code==="FETE") return (agentColors||{})["F1"]||"#ff82e8";
     return (agentColors||{})[code]||DEFAULT_COLORS[code]||"#f8fafc";
   };
   const setColor = (code, color) => {
@@ -2141,6 +2149,11 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
 
   const [activeGroup, setActiveGroup] = useState("travail");
   const groupe = GROUPES.find(g=>g.id===activeGroup)||GROUPES[0];
+  // Réinitialisation déplacée dans l'en-tête fixe (17/07, demandé par Olivier —
+  // le bouton était en bas d'une liste longue et défilante, plus exposé à un tap
+  // accidentel en parcourant les couleurs) + confirmation obligatoire avant
+  // d'agir, même principe que la confirmation déjà en place ailleurs (Fêtes).
+  const [resetConfirm, setResetConfirm] = useState(false);
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.75)",zIndex:700,
@@ -2159,10 +2172,32 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
           borderRadius:"20px 20px 0 0",flexShrink:0}}>
           <span style={{fontSize:20}}>🎨</span>
           <div style={{flex:1,color:"#fff",fontSize:14,fontWeight:800}}>Mes couleurs personnalisées</div>
+          <button onClick={()=>setResetConfirm(true)} title="Réinitialiser toutes les couleurs par défaut"
+            style={{background:"rgba(255,255,255,.15)",border:"none",
+            color:"#fff",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:16,
+            display:"flex",alignItems:"center",justifyContent:"center"}}>↺</button>
           <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",
             color:"#fff",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:18,
             display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
         </div>
+
+        {/* Confirmation de réinitialisation — n'agit qu'après un second tap explicite */}
+        {resetConfirm&&<div style={{background:"#fef2f2",borderBottom:"1.5px solid #fecaca",
+          padding:"10px 16px",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{flex:1,fontSize:12,color:"#991b1b",fontWeight:600}}>
+            ⚠️ Remettre toutes tes couleurs à leur valeur par défaut ?
+          </span>
+          <button onClick={()=>{setAgentColors({});setResetConfirm(false);}}
+            style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:8,
+            padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>
+            Oui, réinitialiser
+          </button>
+          <button onClick={()=>setResetConfirm(false)}
+            style={{background:"#fff",color:"#64748b",border:"1.5px solid #e2e8f0",borderRadius:8,
+            padding:"7px 12px",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>
+            Annuler
+          </button>
+        </div>}
 
         {/* Sélecteur de groupe — select natif universel */}
         <div style={{padding:"10px 16px",borderBottom:"1.5px solid #f1f5f9",
@@ -2244,14 +2279,6 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
               </div>
             );
           })}
-
-          {/* Reset */}
-          <button onClick={()=>setAgentColors({})}
-            style={{background:"#fef2f2",color:"#dc2626",border:"1.5px solid #fecaca",
-              borderRadius:12,padding:"12px 0",cursor:"pointer",fontSize:13,fontWeight:700,
-              marginTop:4}}>
-            ↺ Réinitialiser toutes les couleurs par défaut
-          </button>
         </div>
       </div>
     </div>
@@ -4395,7 +4422,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
 
         <div style={{display:"flex",alignItems:"center",gap:8,flex:"1 1 auto",minWidth:0,flexWrap:"wrap"}}>
           <span style={{fontSize:13,fontWeight:800,color:"#fff",letterSpacing:-.2}}>
-            Compteurs {selectedYear}
+            {selectedYear} - Tableau de bords
           </span>
 
           {/* Résumé rapide quand fermé */}
@@ -6310,7 +6337,7 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   return result;
 }
 
-function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,agentCouleurs,setAgentCouleurs,echangesCount,onOpenEchanges}){
+function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,onOpenEchanges}){
   const [echangesDismissedCount,setEchangesDismissedCount]=usePersist("echangesDismissedCount",0);
   const [showHab,setShowHab]=useState(false);
   const [showHabRoul,setShowHabRoul]=useState(false);
@@ -6358,29 +6385,33 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   const swipeWeek=useSwipeHandlers(()=>setWeekOffset(w=>w+1),()=>setWeekOffset(w=>w-1));
   const swipeMonth=useSwipeHandlers(()=>setMonthOff(m=>m+1),()=>setMonthOff(m=>m-1));
   const [showColorPicker,setShowColorPicker]=useState(false);
-  // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate
-  // Source unique de vérité : agentProfiles[agent.id].agentColors
-  const agKeyColors=agent?.immatriculation||agent?.cp||agent?.id;const agentColors = agentProfiles[agKeyColors]?.agentColors || {};
+  // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate.
+  // Source unique de vérité : agentProfiles[agent.id].agentColors — plus d'état
+  // parallèle séparé (l'ancien `agentCouleurs` dupliqué au niveau App a été
+  // supprimé le 17/07 : il pouvait se désynchroniser entre appareils et, combiné
+  // à un garde-fou de sauvegarde bogué, empêchait une réinitialisation de la
+  // palette de vraiment persister côté serveur — voir résolus du 17/07).
+  const agKeyColors=agent?.immatriculation||agent?.cp||agent?.id;
+  const agentColors = agentProfiles[agKeyColors]?.agentColors || {};
 
-  // Setter : met à jour agentProfiles directement (→ Supabase via useEffect save)
+  // Setter : met à jour agentProfiles directement (→ Supabase via l'autosave
+  // générique). Lit toujours l'état frais dans l'updater (p[agKeyColors]),
+  // jamais une variable capturée au rendu — voir feedback_stale_closure_setters.
   const setAgentColors = (updater) => {
-    if(typeof setAgentCouleurs !== "function") { console.error("setAgentCouleurs is not a function!"); return; }
-    const current = agentCouleurs || {};
-    const next = typeof updater==="function" ? updater(current) : updater;
-    setAgentCouleurs(next||{});
     setAgentProfiles(p=>{
-      const key=agent?.immatriculation||agent?.cp||agent?.id;
-      return {...p,[key]:{...(p[key]||{}),agentColors:next||{}}};
+      const current = p[agKeyColors]?.agentColors || {};
+      const next = typeof updater==="function" ? updater(current) : updater;
+      return {...p,[agKeyColors]:{...(p[agKeyColors]||{}),agentColors:next||{}}};
     });
   };
 
   // v2 - Couleur effective pour un code
   const getColor=(code)=>{
-    const colors = agentCouleurs || {};
+    const colors = agentColors || {};
 
     if(colors[code]) return colors[code];
     // Fêtes légales F1..VN → couleur perso de F1 ou défaut rose
-    if(CODES_FETES[code]) return colors["F1"] || "#ec4899";
+    if(CODES_FETES[code]) return colors["F1"] || "#ff82e8";
     // Couleur par défaut connue
     if(DEFAULT_COLORS[code]) return DEFAULT_COLORS[code];
     // Fallback EQUIPES
@@ -6872,12 +6903,19 @@ justifyContent: "flex-start",
 
     </>}
     {showColorPicker&&<ColorCustomizer
-      agentColors={agentCouleurs||{}}
+      agentColors={agentColors}
       setAgentColors={setAgentColors}
       onClose={()=>{
           setShowColorPicker(false);
+          // Sauvegarde explicite et INCONDITIONNELLE à la fermeture (17/07) — l'ancien
+          // garde-fou `if(length>0)` ignorait silencieusement une réinitialisation
+          // (palette vidée à {}), qui ne partait donc jamais vers le serveur : au
+          // rechargement suivant, l'ancienne palette personnalisée revenait, donnant
+          // l'impression que "ça ne tient pas". L'autosave générique (App, sur
+          // agentProfiles) couvre déjà ce cas, mais cet appel explicite garantit une
+          // sauvegarde immédiate et déterministe, sans dépendre de son timing.
           const agKeyS=agent?.immatriculation||agent?.cp||agent?.id;
-          if(agentCouleurs&&Object.keys(agentCouleurs).length>0) api.profil.save(agKeyS, {agentColors: agentCouleurs});
+          api.profil.save(agKeyS, {agentColors});
         }}/>}
 
     {dayPopup&&<DayEditPopup
@@ -6995,7 +7033,7 @@ justifyContent: "flex-start",
 
     {/* Tableau de bord compteurs */}
     {agent&&<DashboardCompteurs agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
-        agentCouleurs={agentCouleurs} setAgentCouleurs={setAgentCouleurs} isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
+        isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
   </div>);
 }
 
@@ -9211,7 +9249,6 @@ export default function App(){
   const [previsionnelSignalements,setPrevisionnelSignalements]=usePersist("previsionnelSignalements",[]);
   const [journeeSpecialeNotes,setJourneeSpecialeNotes]=usePersist("journeeSpecialeNotes",[]);
   const [previsionnelSchedule,setPrevisionnelSchedule]=usePersist("previsionnelSchedule",{});
-  const [agentCouleurs, setAgentCouleurs] = React.useState({});
   const [agentProfiles,setAgentProfiles]=usePersist("agentProfiles",{});
   const [importDPTarget,setImportDPTarget]=useState(null);
   const [addAgentOpen,setAddAgentOpen]=useState(false);
@@ -9325,7 +9362,6 @@ export default function App(){
         return; // un changement local plus recent a eu lieu pendant le fetch -> reponse perimee ignoree
       }
       if(p.habilitations) setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations}}));
-      if(p.agentColors && Object.keys(p.agentColors).length>0) setAgentCouleurs(p.agentColors);
     }
     profilLoadedRef.current.add(agentId);
   }).catch(()=>{});
@@ -9370,7 +9406,6 @@ export default function App(){
           ...profile,
           habilitations: Array.isArray(profile.habilitations) ? Object.fromEntries((profile.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (profile.habilitations||{}),
         }}));
-        if(profile.agentColors&&Object.keys(profile.agentColors).length>0) setAgentCouleurs(profile.agentColors);
         // Restaurer acquittements
         if(profile.notificationsAcquittees?.length){
           setNotifications(prev=>prev.map(n=>
@@ -9413,7 +9448,6 @@ export default function App(){
         ...profile,
         habilitations: profile.habilitations||{},
       }}));
-    if(profile.agentColors&&Object.keys(profile.agentColors).length>0) setAgentCouleurs(profile.agentColors);
       // Restaurer les notifications acquittées sur cet appareil
       if(profile.notificationsAcquittees?.length){
         setNotifications(prev=>prev.map(n=>
@@ -9784,8 +9818,6 @@ export default function App(){
         departDates={departDates}
         isAdmin={isAdmin}
         currentUser={currentUser}
-        agentCouleurs={agentCouleurs}
-        setAgentCouleurs={setAgentCouleurs}
         echangesCount={echangesOuvertesCount}
         onOpenEchanges={()=>setView("echanges")}/>}
       {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
