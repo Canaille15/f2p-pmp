@@ -3165,18 +3165,30 @@ function RefusCongesDashboardModal({ agent, schedule, agentProfiles, setAgentPro
 }
 
 // ─── PAUSE FIGÉE → COMPTEUR TC (solde en heures/minutes) ────────────────────
-// Refonte du 17/07 (demandée par Olivier) : TC n'est plus un simple compteur
-// de jours (ancien mécanisme générique DETAIL_CONFIG, partagé avec RQ/RN/TY)
-// mais un solde continu en MINUTES, plafonné à 32h00, alimenté par les pauses
-// figées validées (+1h30 chacune, voir table pause_figee / pausesData) et
-// diminué par les journées TC réellement prises dans le planning perso
-// (-8h02 chacune). Reporté automatiquement d'une année sur l'autre comme
-// RQ/RN/TY (solde de fin d'année = base de l'année suivante), sauf ajustement
-// manuel explicite de l'agent pour une année donnée (tcAjustementManuel) —
-// notamment utilisé comme "solde de départ" à la prise en main de l'outil.
+// Refonte du 17/07, puis re-précisée le même jour après retours d'Olivier :
+// le solde TC/TY/RN n'est PLUS lié automatiquement aux jours détectés dans le
+// planning perso (découplage total demandé) — seules les pauses figées
+// validées continuent de créditer automatiquement le TC (+1h30, plafonné à
+// 32h00). Tout le reste (TC/TY/RN) ne bouge que par saisie manuelle de
+// l'agent, sous forme d'un JOURNAL d'ajustements datés par mois (pas un
+// simple "solde de départ" unique) — et **sans remise à zéro annuelle** :
+// "c'est suivi en permanence" (mots d'Olivier). Le compteur de JOURS pris
+// (détecté depuis le planning perso) reste lui annuel et purement informatif,
+// complètement indépendant du solde en heures.
 const TC_MIN_PAUSE   = 90;   // 1h30 créditées par pause figée validée
-const TC_MIN_JOUR    = 482;  // 8h02 débitées par journée TC prise
 const TC_PLAFOND_MIN = 1920; // 32h00 — au-delà, le surplus n'est pas ajouté (à vérifier en heures sup)
+
+// Solde en heures/minutes d'un journal d'ajustements manuels (utilisé par
+// TC/TY/RN) — pas de notion d'année : simple somme de tous les ajustements
+// jamais saisis, chacun tagué avec un mois pour repère/tri, mais qui
+// n'affecte jamais le calcul lui-même (pas de remise à zéro).
+function computeLedgerSolde(agentProfiles, agentId, ledgerKey){
+  const ledger = agentProfiles?.[agentId]?.[ledgerKey] || [];
+  const solde = ledger.reduce((s,e)=>s+(e.deltaMinutes||0), 0);
+  const dernierSaisiLe = ledger.reduce((max,e)=> (!max || (e.saisiLe||"")>max) ? e.saisiLe : max, null);
+  const trie = [...ledger].sort((a,b)=>(b.mois||"").localeCompare(a.mois||"") || (b.saisiLe||"").localeCompare(a.saisiLe||""));
+  return { solde, ledger: trie, dernierSaisiLe };
+}
 
 function minToHM(min){
   const neg = min < 0;
@@ -3202,21 +3214,14 @@ function getPlanningRappel(schedule, agCp, date){
   return parts.length ? [...new Set(parts)].join(" + ") : null;
 }
 
-function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year, _depth){
-  const depth = _depth || 0;
+function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year){
+  const agentId = agent?.id;
+  const profil = agentProfiles?.[agentId] || {};
+  const ledger = profil.tcLedger || [];
+
+  // Jours TC pris : reste annuel et purement informatif (compteur de jours,
+  // trié par mois) — complètement découplé du solde en heures ci-dessous.
   const start = `${year}-01-01`, end = `${year}-12-31`;
-  const profil = agentProfiles?.[agent?.id] || {};
-
-  const manuel = profil.tcAjustementManuel?.[year];
-  let soldeDepart;
-  if(manuel !== undefined){
-    soldeDepart = manuel;
-  } else if(depth < 20){
-    soldeDepart = computeDashboardTC(agent, schedule, agentProfiles, pausesData, year-1, depth+1).soldeFin;
-  } else {
-    soldeDepart = 0;
-  }
-
   const joursTC = [];
   Object.entries(schedule||{}).forEach(([k,v])=>{
     if(!agent || !k.startsWith(agent.id+"-")) return;
@@ -3225,41 +3230,43 @@ function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year, _d
     if(v?.equipe==="TC" || v?.equipe2==="TC") joursTC.push(dk);
   });
   joursTC.sort();
+  const parMoisTC = {};
+  joursTC.forEach(d=>{ const m=d.slice(0,7); (parMoisTC[m]=parMoisTC[m]||[]).push(d); });
 
-  const pausesValideesAnnee = (pausesData||[])
+  // Solde en heures : suivi en continu, PAS de remise à zéro annuelle. Rejoue
+  // en ordre chronologique réel tous les ajustements manuels jamais saisis
+  // (tagués par mois, pour repère seulement) et toutes les pauses figées
+  // validées de tous les temps — le plafond de 32h dépend de cet ordre.
+  const pausesValidees = (pausesData||[])
     .filter(p => p.fia_done)
-    .map(p => String(p.date_jour).slice(0,10))
-    .filter(d => d>=start && d<=end);
+    .map(p => String(p.date_jour).slice(0,10));
 
-  // Simulation chronologique (ordre réel des dates, pas l'ordre de saisie) —
-  // le plafond de 32h dépend de l'ordre des événements, pas juste d'un total.
   const evenements = [
-    ...joursTC.map(d=>({date:d, type:"jour_pris"})),
-    ...pausesValideesAnnee.map(d=>({date:d, type:"pause_validee"})),
+    ...ledger.map(e=>({date:(e.mois||"0000-00")+"-01", type:"manuel", delta:e.deltaMinutes||0})),
+    ...pausesValidees.map(d=>({date:d, type:"pause_validee"})),
   ].sort((a,b)=> a.date===b.date ? (a.type<b.type?-1:1) : a.date.localeCompare(b.date));
 
-  let solde = soldeDepart;
+  let solde = 0;
   const detailPauses = {};
   evenements.forEach(ev=>{
-    if(ev.type==="pause_validee"){
+    if(ev.type==="manuel"){
+      solde += ev.delta;
+    } else {
       const place = Math.max(0, TC_PLAFOND_MIN - solde);
       const ajoute = Math.min(TC_MIN_PAUSE, place);
       solde += ajoute;
       detailPauses[ev.date] = {ajoute, horsPlafond: TC_MIN_PAUSE-ajoute};
-    } else {
-      solde -= TC_MIN_JOUR;
     }
   });
 
-  const parMoisTC = {};
-  joursTC.forEach(d=>{ const m=d.slice(0,7); (parMoisTC[m]=parMoisTC[m]||[]).push(d); });
+  const dernierSaisiLe = ledger.reduce((max,e)=> (!max || (e.saisiLe||"")>max) ? e.saisiLe : max, null);
+  const ledgerTrie = [...ledger].sort((a,b)=>(b.mois||"").localeCompare(a.mois||"") || (b.saisiLe||"").localeCompare(a.saisiLe||""));
 
   return {
-    soldeDepart, soldeFin: solde,
+    solde, ledger: ledgerTrie, dernierSaisiLe,
     joursTC, nbJoursTC: joursTC.length, parMoisTC,
     detailPauses,
-    totalAjouteAnnee: Object.values(detailPauses).reduce((s,d)=>s+d.ajoute,0),
-    totalHorsPlafondAnnee: Object.values(detailPauses).reduce((s,d)=>s+d.horsPlafond,0),
+    totalHorsPlafond: Object.values(detailPauses).reduce((s,d)=>s+d.horsPlafond,0),
   };
 }
 
@@ -3599,23 +3606,30 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
   const agCp = agent?.immatriculation || agent?.cp || agent?.id;
   const fmtDate = (d)=> d ? new Date(d+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"}) : "—";
 
-  const [ajustH, setAjustH] = useState("0");
-  const [ajustM, setAjustM] = useState("0");
-  useEffect(()=>{
-    const abs = Math.abs(data.soldeDepart);
-    setAjustH(String(Math.floor(abs/60)));
-    setAjustM(String(abs%60));
-  },[data.soldeDepart]);
-  const soldeIsNegatif = data.soldeDepart < 0;
-  const [ajustNeg, setAjustNeg] = useState(soldeIsNegatif);
-  useEffect(()=>{ setAjustNeg(data.soldeDepart<0); },[data.soldeDepart]);
+  // Journal d'ajustements manuels datés par mois (17/07, re-précisé le même
+  // jour) — remplace l'ancien "solde de départ" unique : pas de remise à
+  // zéro annuelle, l'agent ajoute/retire des entrées à tout moment.
+  const [ledgerMois, setLedgerMois] = useState(()=>new Date().toISOString().slice(0,7));
+  const [ledgerH, setLedgerH] = useState("0");
+  const [ledgerM, setLedgerM] = useState("0");
+  const [ledgerNeg, setLedgerNeg] = useState(false);
 
-  const saveAjustement = () => {
-    const h = parseInt(ajustH,10)||0, m = parseInt(ajustM,10)||0;
-    const total = (h*60+m) * (ajustNeg?-1:1);
+  const ajouterLedger = () => {
+    const hh = parseInt(ledgerH,10)||0, mm = parseInt(ledgerM,10)||0;
+    if(hh===0 && mm===0) return;
+    const delta = (hh*60+mm) * (ledgerNeg?-1:1);
+    const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, mois: ledgerMois, deltaMinutes: delta, saisiLe: new Date().toISOString().slice(0,10) };
     setAgentProfiles(prev=>({
       ...prev,
-      [agent.id]:{ ...(prev[agent.id]||{}), tcAjustementManuel:{ ...(prev[agent.id]?.tcAjustementManuel||{}), [year]: total } }
+      [agent.id]:{ ...(prev[agent.id]||{}), tcLedger: [...(prev[agent.id]?.tcLedger||[]), entry] }
+    }));
+    setLedgerH("0"); setLedgerM("0"); setLedgerNeg(false);
+  };
+
+  const retirerLedger = (id) => {
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{ ...(prev[agent.id]||{}), tcLedger: (prev[agent.id]?.tcLedger||[]).filter(e=>e.id!==id) }
     }));
   };
 
@@ -3668,7 +3682,7 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
   };
 
   const moisTries = Object.keys(data.parMoisTC).sort();
-  const soldeColor = data.soldeFin<0 ? "#dc2626" : data.soldeFin>=TC_PLAFOND_MIN ? "#d97706" : "#0369a1";
+  const soldeColor = data.solde<0 ? "#dc2626" : data.solde>=TC_PLAFOND_MIN ? "#d97706" : "#0369a1";
 
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
@@ -3688,41 +3702,62 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
               fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>✕</button>
           </div>}
 
-          <div style={{fontSize:10,color:"#64748b",fontStyle:"italic"}}>Temps compensé : +1h30 par pause figée validée, -8h02 par journée TC prise, plafonné à 32h00.</div>
+          <div style={{fontSize:10,color:"#64748b",fontStyle:"italic"}}>Temps compensé : +1h30 par pause figée validée, plafonné à 32h00. Le reste (ajouts/retraits) se règle manuellement ci-dessous, suivi en permanence — pas de remise à zéro annuelle.</div>
 
           {/* Solde principal */}
-          <div style={{background:"#f0f9ff",border:`2px solid ${data.soldeFin>=TC_PLAFOND_MIN?"#fcd34d":"#bae6fd"}`,borderRadius:12,padding:"16px 12px",textAlign:"center"}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Solde TC — fin {year}</div>
-            <div style={{fontSize:34,fontWeight:900,color:soldeColor,lineHeight:1,marginTop:4}}>{minToHM(data.soldeFin)}</div>
-            <div style={{fontSize:10,fontWeight:600,color:"#64748b",marginTop:4}}>Plafond : 32h00</div>
-            {data.soldeFin>=TC_PLAFOND_MIN&&<div style={{fontSize:11,fontWeight:700,color:"#b45309",marginTop:6}}>⚠️ Plafond atteint — toute nouvelle pause validée sera à vérifier en heures sup</div>}
+          <div style={{background:"#f0f9ff",border:`2px solid ${data.solde>=TC_PLAFOND_MIN?"#fcd34d":"#bae6fd"}`,borderRadius:12,padding:"16px 12px",textAlign:"center"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Solde TC (en cours)</div>
+            <div style={{fontSize:34,fontWeight:900,color:soldeColor,lineHeight:1,marginTop:4}}>{minToHM(data.solde)}</div>
+            <div style={{fontSize:10,fontWeight:600,color:"#64748b",marginTop:4}}>
+              {data.dernierSaisiLe ? `Mis à jour le ${new Date(data.dernierSaisiLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}` : "Plafond : 32h00"}
+            </div>
+            {data.solde>=TC_PLAFOND_MIN&&<div style={{fontSize:11,fontWeight:700,color:"#b45309",marginTop:6}}>⚠️ Plafond atteint — toute nouvelle pause validée sera à vérifier en heures sup</div>}
           </div>
 
-          {data.totalHorsPlafondAnnee>0&&(
+          {data.totalHorsPlafond>0&&(
             <div style={{background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:10,padding:"10px 12px"}}>
-              <div style={{fontSize:12,fontWeight:800,color:"#92400e"}}>💶 {minToHM(data.totalHorsPlafondAnnee)} non ajoutées cette année (plafond atteint)</div>
+              <div style={{fontSize:12,fontWeight:800,color:"#92400e"}}>💶 {minToHM(data.totalHorsPlafond)} non ajoutées au total (plafond atteint)</div>
               <div style={{fontSize:10,color:"#78350f",marginTop:3}}>À vérifier sur la fiche de paie du mois suivant chaque pause concernée (paiement en heures supplémentaires) — détail dans le module Pause Figée.</div>
             </div>
           )}
 
-          {/* Solde de départ / ajustement manuel */}
+          {/* Journal d'ajustements manuels — remplace l'ancien "solde de
+              départ" : modulable à tout moment, pas de remise à zéro. */}
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
-            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:2}}>Solde de départ {year}</div>
-            <div style={{fontSize:10,color:"#64748b",marginBottom:8}}>À la prise en main de l'outil, ou pour ajuster manuellement ton solde à tout moment.</div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:2}}>+ Ajuster le solde</div>
+            <div style={{fontSize:10,color:"#64748b",marginBottom:8}}>Indépendant du planning perso — indique juste le mois concerné pour repère, n'affecte pas le calcul.</div>
             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-              <button onClick={()=>setAjustNeg(n=>!n)}
+              <button onClick={()=>setLedgerNeg(n=>!n)}
                 style={{border:"1.5px solid #cbd5e1",borderRadius:8,padding:"7px 10px",cursor:"pointer",
-                  background:ajustNeg?"#fee2e2":"#dcfce7",color:ajustNeg?"#dc2626":"#16a34a",fontWeight:800,fontSize:13}}>
-                {ajustNeg?"−":"+"}
+                  background:ledgerNeg?"#fee2e2":"#dcfce7",color:ledgerNeg?"#dc2626":"#16a34a",fontWeight:800,fontSize:13}}>
+                {ledgerNeg?"−":"+"}
               </button>
-              <input type="number" min="0" value={ajustH} onChange={e=>setAjustH(e.target.value)}
+              <input type="number" min="0" value={ledgerH} onChange={e=>setLedgerH(e.target.value)}
                 style={{width:56,textAlign:"center",padding:"7px 4px",border:"1.5px solid #bae6fd",borderRadius:8,fontSize:14,fontWeight:700}}/>
               <span style={{fontSize:12,fontWeight:700,color:"#334155"}}>h</span>
-              <input type="number" min="0" max="59" value={ajustM} onChange={e=>setAjustM(e.target.value)}
+              <input type="number" min="0" max="59" value={ledgerM} onChange={e=>setLedgerM(e.target.value)}
                 style={{width:56,textAlign:"center",padding:"7px 4px",border:"1.5px solid #bae6fd",borderRadius:8,fontSize:14,fontWeight:700}}/>
               <span style={{fontSize:12,fontWeight:700,color:"#334155"}}>min</span>
-              <button onClick={saveAjustement} style={{background:"#0369a1",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>Enregistrer</button>
+              <input type="month" value={ledgerMois} onChange={e=>setLedgerMois(e.target.value)}
+                style={{padding:"6px 8px",border:"1.5px solid #bae6fd",borderRadius:8,fontSize:12,fontWeight:600}}/>
+              <button onClick={ajouterLedger} style={{background:"#0369a1",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>Ajouter</button>
             </div>
+            {data.ledger.length>0 && (
+              <div style={{display:"flex",flexDirection:"column",gap:5,marginTop:10}}>
+                {data.ledger.map(e=>{
+                  const [an,mo] = (e.mois||"").split("-").map(Number);
+                  return(
+                    <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px"}}>
+                      <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>{mo?`${MOIS_L[mo-1]} ${an}`:"—"}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:12,fontWeight:800,color:e.deltaMinutes<0?"#dc2626":"#16a34a"}}>{e.deltaMinutes<0?"−":"+"}{minToHM(Math.abs(e.deltaMinutes)).replace("-","")}</span>
+                        <button onClick={()=>retirerLedger(e.id)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Forcer une prise de TC */}
@@ -3734,16 +3769,16 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
               <button onClick={ajouterJourTC} style={{background:"#0369a1",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
             </div>
             {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
-            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Écrit "TC" dans le planning perso ce jour-là — équivalent à le taper directement dans le planning. -8h02 sur le solde.</div>
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Écrit "TC" dans le planning perso ce jour-là — équivalent à le taper directement dans le planning. N'affecte plus le solde en heures (indépendant) — ajuste-le toi-même ci-dessus si besoin.</div>
           </div>
 
-          {/* Traçabilité : d'où vient chaque 1h30 (demandé par Olivier le 17/07) */}
+          {/* Traçabilité : d'où vient chaque 1h30 (demandé par Olivier le 17/07) — tout l'historique, pas juste l'année en cours */}
           <div>
             {(()=>{
-              const pausesCreditees = Object.entries(data.detailPauses).sort(([a],[b])=>a.localeCompare(b));
+              const pausesCreditees = Object.entries(data.detailPauses).sort(([a],[b])=>b.localeCompare(a));
               return(<>
                 <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>📋 Historique des pauses créditées ({pausesCreditees.length})</div>
-                {pausesCreditees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune pause figée validée cette année — le détail de chaque pause (planning du jour, statut) est dans le module Pause Figée.</div> :
+                {pausesCreditees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune pause figée validée pour l'instant — le détail de chaque pause (planning du jour, statut) est dans le module Pause Figée.</div> :
                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
                     {pausesCreditees.map(([d,{ajoute,horsPlafond}])=>(
                       <div key={d} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,
@@ -3809,11 +3844,17 @@ const DETAIL_CONFIG = {
   RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:"rpAcquis", rollingAcquis:false, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
   RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
   RQ: { codes:["RQ"], reportKey:null, acquisKey:"rqAcquis", rollingAcquis:true, label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
-  RN: { codes:["RN"], reportKey:null, acquisKey:"rnAcquis", rollingAcquis:true, label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
+  // RN et TY (17/07, re-précisé le même jour) : le compteur "acquis" en JOURS
+  // est retiré (acquisKey/rollingAcquis) au profit d'un solde en HEURES/MINUTES
+  // suivi en continu (ledgerKey → computeLedgerSolde), saisi manuellement par
+  // l'agent, sans lien automatique avec les jours détectés dans le planning
+  // perso — voir CLAUDE.md. Le compteur de jours (codes ci-dessous) reste,
+  // purement informatif désormais.
+  RN: { codes:["RN"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"rnLedger", label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
   // TC (17/07) : sorti de ce mécanisme générique — devient un solde en heures/
   // minutes plafonné, alimenté par les pauses figées validées, avec sa propre
   // logique (computeDashboardTC/TcDashboardModal). Voir CLAUDE.md.
-  TY: { codes:["TY"], reportKey:null, acquisKey:"tyAcquis", rollingAcquis:true, label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
+  TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
   MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
   // Formation (17/07, demandé par Olivier) : même principe que Maladie — pure
   // consultation (pas d'acquis, pas de report), archive A+1 + 2 ans, détail
@@ -3909,13 +3950,40 @@ function YearSwitcher({ year, availableYears, onChange }){
   );
 }
 
-function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose }){
+function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose }){
   const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis]);
+  const ledgerData = useMemo(()=> ledgerKey ? computeLedgerSolde(agentProfiles, agent?.id, ledgerKey) : null, [agentProfiles, agent?.id, ledgerKey]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
   const [reportDate, setReportDate] = useState("");
   const [reportErr, setReportErr] = useState("");
   const [acquisInput, setAcquisInput] = useState(String(data.acquis ?? 0));
   useEffect(()=>{ setAcquisInput(String(data.acquis ?? 0)); },[data.acquis]);
+
+  // Ajustement manuel en heures/minutes daté par mois (RN/TY) — même principe
+  // que le journal TC : pas de remise à zéro, suivi en permanence.
+  const [ledgerMois, setLedgerMois] = useState(()=>new Date().toISOString().slice(0,7));
+  const [ledgerH, setLedgerH] = useState("0");
+  const [ledgerM, setLedgerM] = useState("0");
+  const [ledgerNeg, setLedgerNeg] = useState(false);
+
+  const ajouterLedger = () => {
+    const hh = parseInt(ledgerH,10)||0, mm = parseInt(ledgerM,10)||0;
+    if(hh===0 && mm===0) return;
+    const delta = (hh*60+mm) * (ledgerNeg?-1:1);
+    const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, mois: ledgerMois, deltaMinutes: delta, saisiLe: new Date().toISOString().slice(0,10) };
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{ ...(prev[agent.id]||{}), [ledgerKey]: [...(prev[agent.id]?.[ledgerKey]||[]), entry] }
+    }));
+    setLedgerH("0"); setLedgerM("0"); setLedgerNeg(false);
+  };
+
+  const retirerLedger = (id) => {
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{ ...(prev[agent.id]||{}), [ledgerKey]: (prev[agent.id]?.[ledgerKey]||[]).filter(e=>e.id!==id) }
+    }));
+  };
 
   const prisJusquA = useMemo(()=>data.tousJours.filter(d=>d<=dateSnapshot).length, [data.tousJours, dateSnapshot]);
   const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
@@ -3965,6 +4033,61 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
         </div>
 
         <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* Solde en heures/minutes (RN/TY, 17/07) — journal d'ajustements
+              manuels datés par mois, suivi en permanence (pas de remise à
+              zéro annuelle), complètement indépendant du compteur de jours
+              ci-dessous (qui reste, lui, purement informatif). */}
+          {ledgerKey && ledgerData && (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{background:bgLight,border:`2px solid ${borderLight}`,borderRadius:12,padding:"14px 12px",textAlign:"center"}}>
+                <div style={{fontSize:11,fontWeight:700,color:accentDark}}>Solde {label} (en cours)</div>
+                <div style={{fontSize:32,fontWeight:900,color:accentColor,lineHeight:1,marginTop:4}}>{minToHM(ledgerData.solde)}</div>
+                <div style={{fontSize:10,fontWeight:600,color:"#64748b",marginTop:4}}>
+                  {ledgerData.dernierSaisiLe ? `Mis à jour le ${new Date(ledgerData.dernierSaisiLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}` : "Aucune saisie pour l'instant"}
+                </div>
+              </div>
+
+              <div>
+                <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>+ Ajuster le solde</div>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <button onClick={()=>setLedgerNeg(n=>!n)}
+                    style={{border:"1.5px solid #cbd5e1",borderRadius:8,padding:"7px 10px",cursor:"pointer",
+                      background:ledgerNeg?"#fee2e2":"#dcfce7",color:ledgerNeg?"#dc2626":"#16a34a",fontWeight:800,fontSize:13}}>
+                    {ledgerNeg?"−":"+"}
+                  </button>
+                  <input type="number" min="0" value={ledgerH} onChange={e=>setLedgerH(e.target.value)}
+                    style={{width:52,textAlign:"center",padding:"7px 4px",border:`1.5px solid ${borderLight}`,borderRadius:8,fontSize:14,fontWeight:700}}/>
+                  <span style={{fontSize:12,fontWeight:700,color:"#334155"}}>h</span>
+                  <input type="number" min="0" max="59" value={ledgerM} onChange={e=>setLedgerM(e.target.value)}
+                    style={{width:52,textAlign:"center",padding:"7px 4px",border:`1.5px solid ${borderLight}`,borderRadius:8,fontSize:14,fontWeight:700}}/>
+                  <span style={{fontSize:12,fontWeight:700,color:"#334155"}}>min</span>
+                  <input type="month" value={ledgerMois} onChange={e=>setLedgerMois(e.target.value)}
+                    style={{padding:"6px 8px",border:`1.5px solid ${borderLight}`,borderRadius:8,fontSize:12,fontWeight:600}}/>
+                  <button onClick={ajouterLedger} style={{background:accentDark,color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>Ajouter</button>
+                </div>
+                <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Indépendant du planning perso — indique juste le mois concerné pour repère, n'affecte pas le calcul.</div>
+              </div>
+
+              {ledgerData.ledger.length>0 && (
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  {ledgerData.ledger.map(e=>{
+                    const [an,mo] = (e.mois||"").split("-").map(Number);
+                    return(
+                      <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px"}}>
+                        <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>{mo?`${MOIS_L[mo-1]} ${an}`:"—"}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:12,fontWeight:800,color:e.deltaMinutes<0?"#dc2626":"#16a34a"}}>{e.deltaMinutes<0?"−":"+"}{minToHM(Math.abs(e.deltaMinutes)).replace("-","")}</span>
+                          <button onClick={()=>retirerLedger(e.id)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div style={{borderTop:"1px solid #e2e8f0"}}/>
+            </div>
+          )}
 
           {/* Acquis/Pris/Restant — pour les compteurs qui s'accumulent au fil
               du temps (comme le Droit à congés) : l'agent déclare son solde
@@ -4185,6 +4308,11 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const rnData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RN.codes, DETAIL_CONFIG.RN.reportKey, DETAIL_CONFIG.RN.acquisKey, DETAIL_CONFIG.RN.rollingAcquis), [agent, schedule, agentProfiles, year]);
   const tyData = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.TY.codes, DETAIL_CONFIG.TY.reportKey, DETAIL_CONFIG.TY.acquisKey, DETAIL_CONFIG.TY.rollingAcquis), [agent, schedule, agentProfiles, year]);
   const DETAIL_DATA_BY_KEY = {RP:rpData, RU:ruData, RQ:rqData, RN:rnData, TY:tyData};
+  // RN/TY (17/07) : solde en heures/minutes, suivi en continu (journal
+  // d'ajustements manuels datés par mois), affiché sur la carte à la place
+  // du nombre de jours — voir DETAIL_CONFIG.RN/TY (ledgerKey).
+  const rnLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agent?.id, "rnLedger"), [agentProfiles, agent?.id]);
+  const tyLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agent?.id, "tyLedger"), [agentProfiles, agent?.id]);
 
   // Fêtes légales : nombre de fêtes "à traiter" (attente ou probable perdue)
   // pour la cloche sur la carte — évite d'ouvrir la fenêtre juste pour savoir
@@ -4229,7 +4357,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"FETE",    label:"Fêtes",           color:"#ec4899", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
     {key:"RN",      label:"RN",              color:"#4338ca", subtitle:"Repos nuit"},
     {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
-    {key:"TC",      label:"TC",              color:"#0284c7", subtitle:`Plafond 32h00${tcData.soldeFin>=TC_PLAFOND_MIN?" · ATTEINT":""}`, alert: tcData.soldeFin>=TC_PLAFOND_MIN},
+    {key:"TC",      label:"TC",              color:"#0284c7", subtitle:`Plafond 32h00${tcData.solde>=TC_PLAFOND_MIN?" · ATTEINT":""}`, alert: tcData.solde>=TC_PLAFOND_MIN},
     {key:"TY",      label:"TY",              color:"#0284c7", subtitle:"Temps compensé"},
     {key:"VT",      label:"VT",              color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2},
     {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation"},
@@ -4310,7 +4438,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           const v = card.key==="conges" ? congesPris
             : card.key==="VT" ? vtData.pris
             : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
-            : card.key==="TC" ? minToHM(tcData.soldeFin)
+            : card.key==="TC" ? minToHM(tcData.solde)
+            : card.key==="RN" ? minToHM(rnLedgerData.solde)
+            : card.key==="TY" ? minToHM(tyLedgerData.solde)
             : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
@@ -4349,8 +4479,8 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
                   {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}
                 </span>
               </div>}
-              {/* Contrôles de correction — "conges", "VT", "PF", "TC", "RP" et tout compteur avec un "acquis" dédié (RU/RQ/RN/TY) ont leur propre outil, pas de +/- générique ici */}
-              {editMode&&card.key!=="conges"&&card.key!=="VT"&&card.key!=="RP"&&card.key!=="PF"&&card.key!=="TC"&&!DETAIL_CONFIG[card.key]?.acquisKey&&<div style={{
+              {/* Contrôles de correction — "conges", "VT", "PF", "TC", "RN", "TY", "RP" et tout compteur avec un "acquis" dédié (RU/RQ) ont leur propre outil, pas de +/- générique ici */}
+              {editMode&&card.key!=="conges"&&card.key!=="VT"&&card.key!=="RP"&&card.key!=="PF"&&card.key!=="TC"&&card.key!=="RN"&&card.key!=="TY"&&!DETAIL_CONFIG[card.key]?.acquisKey&&<div style={{
                 display:"flex",gap:4,marginTop:6,justifyContent:"center"
               }}>
                 <button onClick={()=>{
@@ -4370,13 +4500,16 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           );
         };
 
-        // Pause Figée + TC toujours côte à côte, sur mobile comme sur ordi
-        // (demandé par Olivier le 17/07) : regroupées dans un seul item de la
-        // grille externe (pleine largeur, gridColumn:"1 / -1") contenant sa
-        // propre mini-grille à 2 colonnes fixes — garantit qu'elles restent
-        // toujours sur la même ligne, quelle que soit la largeur d'écran,
-        // contrairement au reste de la grille en auto-fill qui peut les
-        // séparer sur des lignes différentes selon la largeur disponible.
+        // Pause Figée + TC toujours côte à côte, sur mobile comme sur ordi,
+        // mais avec le même format carré que les autres cartes (demandé par
+        // Olivier le 17/07 — le format "pleine largeur" du premier essai
+        // faisait des cartes plus larges que leurs voisines). Regroupées
+        // dans un seul item de la grille externe, en flex à largeur FIXE
+        // (130px chacune, comme le minimum des autres cartes en auto-fill) :
+        // 130×2+8 = 268px tient sur n'importe quel écran réel (dès ~300px),
+        // donc toujours côte à côte sans jamais passer à la ligne, sans
+        // avoir besoin de media query ni de les étirer plus large que le
+        // format habituel d'une carte.
         const tcCard = CARDS.find(c=>c.key==="TC");
         return(
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
@@ -4384,9 +4517,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
               if(card.key==="TC") return null;
               if(card.key==="PF"){
                 return(
-                  <div key="pf-tc-pair" style={{gridColumn:"1 / -1",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    {renderCard(card)}
-                    {tcCard&&renderCard(tcCard)}
+                  <div key="pf-tc-pair" style={{display:"flex",gap:8,flexWrap:"nowrap"}}>
+                    <div style={{width:130,flexShrink:0}}>{renderCard(card)}</div>
+                    {tcCard&&<div style={{width:130,flexShrink:0}}>{renderCard(tcCard)}</div>}
                   </div>
                 );
               }
@@ -6550,7 +6683,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
                         fontSize:8,fontWeight:800,
                         border:"1px solid #db2777",
                       }}>
-                      🩷 {f.type!=="fete"?"RC-":""}{f.code}{f.type==="RC_manuel"&&<span style={{fontSize:6,opacity:.8}}> ✎</span>}
+                      🩷 {f.code}{f.type==="RC_manuel"&&<span style={{fontSize:6,opacity:.8}}> ✎</span>}
                     </span>
                   ))}
                 </div>;
@@ -6710,7 +6843,7 @@ justifyContent: "flex-start",
                         border:"1px solid #db2777",
                         whiteSpace:"nowrap",
                       }}>
-                      {f.type!=="fete"?"RC-":""}{f.code}{f.type==="RC_manuel"?" ✎":""}
+                      {f.code}{f.type==="RC_manuel"?" ✎":""}
                     </span>
                   ))}
                 </div>;
