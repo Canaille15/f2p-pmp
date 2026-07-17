@@ -4501,15 +4501,17 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         };
 
         // Pause Figée + TC toujours côte à côte, sur mobile comme sur ordi,
-        // mais avec le même format carré que les autres cartes (demandé par
-        // Olivier le 17/07 — le format "pleine largeur" du premier essai
-        // faisait des cartes plus larges que leurs voisines). Regroupées
-        // dans un seul item de la grille externe, en flex à largeur FIXE
-        // (130px chacune, comme le minimum des autres cartes en auto-fill) :
-        // 130×2+8 = 268px tient sur n'importe quel écran réel (dès ~300px),
-        // donc toujours côte à côte sans jamais passer à la ligne, sans
-        // avoir besoin de media query ni de les étirer plus large que le
-        // format habituel d'une carte.
+        // avec EXACTEMENT le même format que les autres cartes. Une largeur
+        // fixe en pixels (essai précédent) ne peut pas correspondre à la
+        // largeur réelle des cartes voisines : elles sont en 1fr dans la
+        // grille auto-fill, donc plus larges que 130px dès que l'écran a de
+        // la place — d'où une carte PF visiblement plus petite que ses
+        // voisines et un texte TC cramponné/coupé sur deux lignes. Corrigé
+        // en faisant de la paire un item de grille qui span exactement 2
+        // colonnes (gridColumn:"span 2") avec 2 sous-colonnes 1fr à
+        // l'intérieur : chaque moitié fait alors très exactement la largeur
+        // d'une carte normale, quelle que soit la largeur d'écran, sans
+        // media query — comportement natif de CSS Grid.
         const tcCard = CARDS.find(c=>c.key==="TC");
         return(
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
@@ -4517,9 +4519,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
               if(card.key==="TC") return null;
               if(card.key==="PF"){
                 return(
-                  <div key="pf-tc-pair" style={{display:"flex",gap:8,flexWrap:"nowrap"}}>
-                    <div style={{width:130,flexShrink:0}}>{renderCard(card)}</div>
-                    {tcCard&&<div style={{width:130,flexShrink:0}}>{renderCard(tcCard)}</div>}
+                  <div key="pf-tc-pair" style={{gridColumn:"span 2",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minWidth:0}}>
+                    <div style={{minWidth:0}}>{renderCard(card)}</div>
+                    {tcCard&&<div style={{minWidth:0}}>{renderCard(tcCard)}</div>}
                   </div>
                 );
               }
