@@ -1231,7 +1231,7 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
 }
 
 function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClose,onSaved}){
-  const [type,setType]=useState(null); // "echange" | "erreur_cps" | "non_tenu"
+  const [type,setType]=useState(null); // "echange" | "erreur_cps" | "non_tenu" | "message"
   const [agentsChoisis,setAgentsChoisis]=useState([]);
   const [motif,setMotif]=useState("");
   const [busy,setBusy]=useState(false);
@@ -1249,7 +1249,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
         date_jour:dateKey,
         famille,
         type,
-        agents_concernes: type==="non_tenu" ? [] : agentsChoisis.map(a=>a.id),
+        agents_concernes: (type==="non_tenu"||type==="message") ? [] : agentsChoisis.map(a=>a.id),
         motif: motif||null,
       });
       onSaved&&onSaved();
@@ -1276,6 +1276,9 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
         </button>
         <button onClick={()=>{setType("non_tenu");}} style={{padding:"12px 14px",border:"1.5px solid #fdba74",borderRadius:10,textAlign:"left",background:"#fff7ed",cursor:"pointer",fontSize:13,fontWeight:600,color:"#c2410c"}}>
           🚫 Poste non tenu<div style={{fontSize:11,color:"#c2410c",fontWeight:400,marginTop:2,opacity:.8}}>Personne n'assure ce poste</div>
+        </button>
+        <button onClick={()=>{setType("message");}} style={{padding:"12px 14px",border:"1.5px solid #93c5fd",borderRadius:10,textAlign:"left",background:"#eff6ff",cursor:"pointer",fontSize:13,fontWeight:600,color:"#1d4ed8"}}>
+          📢 Message libre<div style={{fontSize:11,color:"#1d4ed8",fontWeight:400,marginTop:2,opacity:.8}}>Laisser une info visible par tous sur ce poste</div>
         </button>
       </div>)}
 
@@ -1313,6 +1316,20 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
           <button onClick={valider} disabled={busy}
             style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,background:"#ea580c",color:"#fff"}}>
             {busy?"…":"Confirmer poste non tenu"}
+          </button>
+        </div>
+      </div>)}
+
+      {type==="message"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#1d4ed8"}}>📢 Message libre</div>
+        <textarea placeholder="Ton message, visible par tous les agents…" value={motif} onChange={e=>setMotif(e.target.value)} autoFocus
+          style={{padding:"8px 10px",border:"1.5px solid #93c5fd",borderRadius:8,fontSize:13,minHeight:80,resize:"vertical"}}/>
+        <div style={{display:"flex",gap:8,marginTop:4}}>
+          <button onClick={()=>setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Retour</button>
+          <button onClick={valider} disabled={busy||!motif.trim()}
+            style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
+            background:!motif.trim()?"#e2e8f0":"#1d4ed8",color:!motif.trim()?"#94a3b8":"#fff"}}>
+            {busy?"…":"Publier le message"}
           </button>
         </div>
       </div>)}
@@ -1910,17 +1927,24 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         <button onClick={()=>setPrevisionnelTarget({agentId:ag.id,nomTitulaire:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
                       </div>);
                     }
-                    if(ag)return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?"#fafdf0":(fam?.light||"rgba(255,255,255,.8)"),border:`1.5px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px"}}>
-                      <Av initials={ag.initials} size={22} famille={ag.famille}/>
-                      <div>
-                        <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
-                        <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
-                          {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
+                    if(ag)return(<div key={si} style={{display:"flex",flexDirection:"column",gap:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?"#fafdf0":(fam?.light||"rgba(255,255,255,.8)"),border:`1.5px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:alea?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px"}}>
+                        <Av initials={ag.initials} size={22} famille={ag.famille}/>
+                        <div>
+                          <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
+                          <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
+                            {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
+                        </div>
+                        {row.isJourneeSpeciale?
+                        <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>📝</button>
+                        :
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
                       </div>
-                      {row.isJourneeSpeciale?
-                      <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>📝</button>
-                      :
-                      <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
+                      {alea?.type==="message"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"4px 9px"}}>
+                        <span style={{fontSize:12}}>📢</span>
+                        <div style={{fontSize:10,color:"#1d4ed8",flex:1,lineHeight:1.4}}>{alea.motif}</div>
+                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button>
+                      </div>}
                     </div>);
                     if(row.maxSlots<99){
                       const aleaVacant=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
@@ -1946,6 +1970,14 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                           {aleaVacant.motif&&<div style={{fontSize:10,color:"#a16207",fontStyle:"italic"}}>{aleaVacant.motif}</div>}
                         </div>);
                       }
+                      if(aleaVacant&&aleaVacant.type==="message")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#eff6ff",border:"1.5px solid #93c5fd",borderRadius:9,padding:"4px 9px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{fontSize:14}}>📢</span>
+                          <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>Vacant</div>
+                          <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#1d4ed8",opacity:.6,marginLeft:"auto"}}>✕</button>
+                        </div>
+                        <div style={{fontSize:10,color:"#1d4ed8",paddingLeft:20,lineHeight:1.4}}>{aleaVacant.motif}</div>
+                      </div>);
                       if(estNonTenuWeekend(row.jsCode,dateKey))return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#f1f5f9",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
                         <div style={{width:22,height:22,borderRadius:"50%",background:"#cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11}}>📅</div>
                         <div style={{fontSize:10,color:"#475569",fontWeight:600}}>Non tenu (week-end)</div>
@@ -2172,10 +2204,15 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
           borderRadius:"20px 20px 0 0",flexShrink:0}}>
           <span style={{fontSize:20}}>🎨</span>
           <div style={{flex:1,color:"#fff",fontSize:14,fontWeight:800}}>Mes couleurs personnalisées</div>
+          {/* Couleur distincte (ambre) + marge supplémentaire par rapport au ✕ (17/07,
+              question posée par Olivier sur le risque de tap accidentel — le bouton est
+              déjà protégé par une confirmation obligatoire, mais on l'éloigne et on le
+              différencie visuellement en plus, pour qu'une hésitation au doigt reste
+              improbable). */}
           <button onClick={()=>setResetConfirm(true)} title="Réinitialiser toutes les couleurs par défaut"
-            style={{background:"rgba(255,255,255,.15)",border:"none",
-            color:"#fff",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:16,
-            display:"flex",alignItems:"center",justifyContent:"center"}}>↺</button>
+            style={{background:"rgba(251,191,36,.25)",border:"1px solid rgba(251,191,36,.4)",
+            color:"#fef3c7",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:16,
+            display:"flex",alignItems:"center",justifyContent:"center",marginRight:8}}>↺</button>
           <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",
             color:"#fff",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:18,
             display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
@@ -4416,8 +4453,11 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       <div onClick={()=>setOuvert(o=>!o)}
         style={{display:"flex",alignItems:"center",gap:8,padding:"12px 16px",
           cursor:"pointer",userSelect:"none",
-          background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
-          borderBottom:ouvert?"1.5px solid #818cf8":"none",
+          // Bleu-marine de la marque (identique au logo/écran de connexion) au lieu
+          // du violet d'origine, jugé moche par Olivier le 17/07 — plus cohérent
+          // avec le reste de l'identité visuelle de l'appli.
+          background:"linear-gradient(135deg,#0f4c81,#1e3a5f)",
+          borderBottom:ouvert?"1.5px solid #2d5a8e":"none",
           flexWrap:"nowrap"}}>
 
         <div style={{display:"flex",alignItems:"center",gap:8,flex:"1 1 auto",minWidth:0,flexWrap:"wrap"}}>

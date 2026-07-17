@@ -22,7 +22,7 @@ async function createAlea(req, res) {
   if (!js_code || !date_jour || !famille || !type) {
     return res.status(400).json({ error: 'js_code, date_jour, famille et type sont requis' });
   }
-  if (!['echange','erreur_cps','non_tenu'].includes(type)) {
+  if (!['echange','erreur_cps','non_tenu','message'].includes(type)) {
     return res.status(400).json({ error: 'Type invalide' });
   }
   try {
