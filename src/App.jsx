@@ -4348,20 +4348,25 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const tcData = useMemo(()=>computeDashboardTC(agent, schedule, agentProfiles, pausesData, year), [agent, schedule, agentProfiles, pausesData, year]);
   const nbPausesEnAttente = pausesData.filter(p=>!p.fia_done).length;
 
+  // Libellé "mois en cours" réutilisé par TC/RN/TY (17/07, demandé par
+  // Olivier : la carte doit clairement dire que le solde ledger affiché est
+  // celui d'aujourd'hui, pas un solde figé de fin d'année).
+  const moisEnCoursLabel = new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+
   const CARDS = [
-    {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Solde : ${solde} / ${CONGES_ANNUELS}`, alert:solde<5},
+    {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:solde<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
-    {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Repos périodiques"},
-    {key:"RU",      label:"RU",              color:"#d97706", subtitle:"Repos utilisation"},
-    {key:"RQ",      label:"RQ",              color:"#d97706", subtitle:"Repos qualif."},
+    {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Pris au 31/12"},
+    {key:"RU",      label:"RU",              color:"#d97706", subtitle:"Pris au 31/12"},
+    {key:"RQ",      label:"RQ",              color:"#d97706", subtitle:"Restant au 31/12"},
     {key:"FETE",    label:"Fêtes",           color:"#ec4899", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
-    {key:"RN",      label:"RN",              color:"#4338ca", subtitle:"Repos nuit"},
+    {key:"RN",      label:"RN",              color:"#4338ca", subtitle:`Solde — ${moisEnCoursLabel}`},
     {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
-    {key:"TC",      label:"TC",              color:"#0284c7", subtitle:`Plafond 32h00${tcData.solde>=TC_PLAFOND_MIN?" · ATTEINT":""}`, alert: tcData.solde>=TC_PLAFOND_MIN},
-    {key:"TY",      label:"TY",              color:"#0284c7", subtitle:"Temps compensé"},
+    {key:"TC",      label:"TC",              color:"#0284c7", subtitle: tcData.solde>=TC_PLAFOND_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tcData.solde>=TC_PLAFOND_MIN},
+    {key:"TY",      label:"TY",              color:"#0284c7", subtitle:`Solde — ${moisEnCoursLabel}`},
     {key:"VT",      label:"VT",              color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2},
-    {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation"},
-    {key:"MA",      label:"Maladie",         color:"#dc2626", subtitle:"Jours maladie"},
+    {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation dans l'année"},
+    {key:"MA",      label:"Maladie",         color:"#dc2626", subtitle:"Jours maladie dans l'année"},
   ];
 
   const [ouvert, setOuvert] = usePersist("compteursOuvert", false);
@@ -4401,7 +4406,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
               {k:"FETE",    label:"Fête"},
               {k:"conges",  label:"CA"},
             ].map(({k,label})=>{
-              const v = k==="conges" ? congesPris : k==="RP" ? rpData.total : val(k);
+              const v = k==="conges" ? congesData.solde : k==="RP" ? rpData.total : val(k);
               if(!v) return null;
               return <span key={k} style={{
                 fontSize:10,fontWeight:700,color:"#fff",
@@ -4435,12 +4440,15 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       {/* Grille compteurs */}
       {(()=>{
         const renderCard = (card) => {
-          const v = card.key==="conges" ? congesPris
+          const v = card.key==="conges" ? congesData.solde
             : card.key==="VT" ? vtData.pris
             : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
             : card.key==="TC" ? minToHM(tcData.solde)
             : card.key==="RN" ? minToHM(rnLedgerData.solde)
             : card.key==="TY" ? minToHM(tyLedgerData.solde)
+            // RQ affiche le restant (Acquis - Pris) au lieu du nombre de jours pris
+            // (17/07, demandé par Olivier) — RP/RU restent sur le total "pris".
+            : card.key==="RQ" ? (rqData.solde ?? rqData.total)
             : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
