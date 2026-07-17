@@ -2285,19 +2285,22 @@ const POSTE_REGISTRY = (() => {
 // jour par jour dans le passé (même principe que les compteurs existants).
 // Même définition de "jour travaillé" que DashboardCompteurs.computed (M/AM/N/J,
 // pas JF qui est une fête) et même garde "nuit seule" (equipe=equipe2="N").
+// FOR (Formation) compte aussi comme jour travaillé depuis le 17/07 (demandé
+// par Olivier) — tombe naturellement dans "sans poste" (pas de jsCode associé
+// à une formation), et alimente sa propre case dans parShiftGlobal.
 function computeDashboardTravail(agent, schedule, year){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const postes = {};
   const sansPoste = { total:0, lastDate:null };
   let totalTravail = 0;
-  // Comptage global M/AM/N/J, tous postes confondus (+ jours sans poste
+  // Comptage global M/AM/N/J + FOR, tous postes confondus (+ jours sans poste
   // précisé) — distinct du détail par poste ci-dessous, jamais retiré.
-  const parShiftGlobal = { M:0, AM:0, N:0, J:0 };
+  const parShiftGlobal = { M:0, AM:0, N:0, J:0, FOR:0 };
 
   const traiter = (eq, jsCode, dk) => {
     if(!eq) return;
     if(CODES_FETES[eq] || eq==="JF") return; // fête, pas travail
-    if(!["M","AM","N","J"].includes(eq)) return; // pas une journée de travail
+    if(!["M","AM","N","J","FOR"].includes(eq)) return; // pas une journée de travail
     totalTravail++;
     parShiftGlobal[eq]++;
     const info = jsCode ? POSTE_REGISTRY[jsCode] : null;
@@ -2355,7 +2358,7 @@ function computeDashboardTravail(agent, schedule, year){
 // autre agent, voir PersonalView).
 function TravailDashboardContent({ data }) {
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"}) : "—";
-  const SHIFT_LABELS = { M:"Matin", AM:"Soirée", N:"Nuit", J:"Journée" };
+  const SHIFT_LABELS = { M:"Matin", AM:"Soirée", N:"Nuit", J:"Journée", FOR:"Formation" };
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
@@ -2374,11 +2377,11 @@ function TravailDashboardContent({ data }) {
         ))}
       </div>
 
-      {/* Comptage global M/AM/N/J — tous postes confondus, distinct du détail par poste ci-dessous */}
+      {/* Comptage global M/AM/N/J/FOR — tous postes confondus, distinct du détail par poste ci-dessous */}
       <div>
         <div style={{fontSize:11,fontWeight:700,color:"#334155",marginBottom:6}}>Total par vacation (tous postes confondus)</div>
-        <div style={{display:"flex",gap:8}}>
-          {["M","AM","N","J"].map(shift=>(
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {["M","AM","N","J","FOR"].map(shift=>(
             <div key={shift} style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#475569"}}>{SHIFT_LABELS[shift]}</div>
               <div style={{fontSize:20,fontWeight:900,color:"#1e293b"}}>{data.parShiftGlobal[shift]}</div>
@@ -3766,7 +3769,10 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       // Fêtes légales (F1,F2…) et JF → compteur FETE, pas travail
       if(CODES_FETES[eq] || eq==="JF"){
         c.FETE++;
-      } else if(["M","AM","N","J"].includes(eq)){
+      } else if(["M","AM","N","J","FOR"].includes(eq)){
+        // FOR (Formation) compte aussi comme jour travaillé (17/07, demandé
+        // par Olivier) — en plus d'alimenter son propre compteur "Formation"
+        // ci-dessous (eqCompteur), pas à la place.
         c.travail++;
       }
       // RPP alimente le même compteur que RP (palette dissociée, même comptabilisation)
