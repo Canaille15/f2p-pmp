@@ -46,7 +46,21 @@ async function apiFetch(path, opts = {}) {
   // tentative de connexion avec un mauvais PIN) n'est pas une session expiree
   // mais une erreur de connexion normale — geree par l'appelant (LoginPage),
   // pas de deconnexion forcee ni d'alerte bloquante dans ce cas.
-  if (res.status === 401 && token) {
+  //
+  // Cas supplementaire (17/07, trouve en debuggant des sauvegardes qui
+  // echouaient silencieusement) : le token peut disparaitre de localStorage
+  // (vide, onglet ancien, quota depasse...) alors que l'agent croit toujours
+  // etre connecte (f2ppmp_currentUser encore present). Dans ce cas, apiFetch
+  // envoie la requete SANS Authorization, le serveur repond 401 "Token
+  // manquant", mais token est null donc l'ancienne condition ne se declenchait
+  // JAMAIS — l'erreur remontait silencieusement jusqu'a un .catch(()=>{})
+  // quelque part dans l'appli (ex: sauvegarde de couleur, validation d'une
+  // pause figee...) sans que rien ne soit visible pour l'agent : l'action
+  // semblait avoir echoue sans message, et au rechargement suivant la vraie
+  // valeur serveur (jamais mise a jour) ecrasait ce qui avait ete saisi.
+  let etaitConnecte = false;
+  try { etaitConnecte = !!localStorage.getItem('f2ppmp_currentUser'); } catch {}
+  if (res.status === 401 && (token || etaitConnecte)) {
     tokenStore.clear();
     // Déclencher un event custom pour que l'app redirige vers login
     window.dispatchEvent(new CustomEvent('f2ppmp:unauthorized'));

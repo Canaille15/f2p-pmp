@@ -3621,13 +3621,17 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
 
   const [nouvelleDate, setNouvelleDate] = useState("");
   const [ajoutErr, setAjoutErr] = useState("");
+  // Erreur visible sur une action réseau échouée (ajustement, écriture/retrait
+  // planning) — sans ça un échec silencieux (ex: token perdu) laisse l'agent
+  // sans aucun retour et sans savoir que rien n'a été enregistré (17/07).
+  const [actionError, setActionError] = useState(null);
 
   const ecrireTCDansPlanning = (date) => {
     const key = `${agCp}-${date}`;
     const entryExistante = schedule[key] || {};
     const fullEntry = {...entryExistante, equipe:"TC", prive:true};
     setSchedule(prev=>({...prev, [key]: fullEntry}));
-    api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur sauvegarde TC dans planning:", e));
+    api.planning.saveEntry(agCp, date, fullEntry).catch(e=>{ console.error("Erreur sauvegarde TC dans planning:", e); setActionError("Erreur lors de l'enregistrement dans le planning. Réessaie."); });
   };
 
   const retirerTCDuPlanning = (date) => {
@@ -3638,11 +3642,11 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
     const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
     if(videTotal){
       setSchedule(prev=>{const n={...prev}; delete n[key]; return n;});
-      api.planning.deleteEntry(agCp, date).catch(e=>console.error("Erreur suppression TC du planning:", e));
+      api.planning.deleteEntry(agCp, date).catch(e=>{ console.error("Erreur suppression TC du planning:", e); setActionError("Erreur lors de la suppression dans le planning. Réessaie."); });
     } else {
       const fullEntry = {...reste, equipe:null};
       setSchedule(prev=>({...prev, [key]: fullEntry}));
-      api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur suppression TC du planning:", e));
+      api.planning.saveEntry(agCp, date, fullEntry).catch(e=>{ console.error("Erreur suppression TC du planning:", e); setActionError("Erreur lors de la suppression dans le planning. Réessaie."); });
     }
   };
 
@@ -3676,6 +3680,13 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
         </div>
 
         <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {actionError&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
+            padding:"10px 12px",background:"#fee2e2",border:"1.5px solid #fca5a5",borderRadius:10}}>
+            <span style={{fontSize:12,fontWeight:600,color:"#991b1b"}}>⚠️ {actionError}</span>
+            <button onClick={()=>setActionError(null)} style={{border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,
+              fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>✕</button>
+          </div>}
 
           <div style={{fontSize:10,color:"#64748b",fontStyle:"italic"}}>Temps compensé : +1h30 par pause figée validée, -8h02 par journée TC prise, plafonné à 32h00.</div>
 
@@ -3724,6 +3735,29 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
             </div>
             {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
             <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Écrit "TC" dans le planning perso ce jour-là — équivalent à le taper directement dans le planning. -8h02 sur le solde.</div>
+          </div>
+
+          {/* Traçabilité : d'où vient chaque 1h30 (demandé par Olivier le 17/07) */}
+          <div>
+            {(()=>{
+              const pausesCreditees = Object.entries(data.detailPauses).sort(([a],[b])=>a.localeCompare(b));
+              return(<>
+                <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>📋 Historique des pauses créditées ({pausesCreditees.length})</div>
+                {pausesCreditees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune pause figée validée cette année — le détail de chaque pause (planning du jour, statut) est dans le module Pause Figée.</div> :
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    {pausesCreditees.map(([d,{ajoute,horsPlafond}])=>(
+                      <div key={d} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,
+                        background:horsPlafond>0?"#fffbeb":"#f0fdfa",border:`1px solid ${horsPlafond>0?"#fde68a":"#99f6e4"}`,
+                        borderRadius:7,padding:"7px 10px"}}>
+                        <span style={{fontSize:11,fontWeight:600,color:"#334155",textTransform:"capitalize"}}>{fmtDate(d)}</span>
+                        <span style={{fontSize:11,fontWeight:700,color:horsPlafond>0?"#92400e":"#0f766e"}}>
+                          +{minToHM(ajoute)}{horsPlafond>0&&<span style={{fontWeight:600}}> · ⚠️ {minToHM(horsPlafond)} hors plafond</span>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>}
+              </>);
+            })()}
           </div>
 
           {/* Journées TC prises */}
@@ -4271,14 +4305,13 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         </div>
 
       {/* Grille compteurs */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
-        {CARDS.map(card=>{
+      {(()=>{
+        const renderCard = (card) => {
           const v = card.key==="conges" ? congesPris
             : card.key==="VT" ? vtData.pris
             : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
             : card.key==="TC" ? minToHM(tcData.soldeFin)
             : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
-          const corr = corrections[card.key]||0;
           const isTravailCard = card.key==="travail" && !editMode;
           const isCongesCard = card.key==="conges" && !editMode;
           const isFetesCard = card.key==="FETE" && !editMode;
@@ -4294,7 +4327,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
               padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",
-              position:"relative",overflow:"hidden",
+              position:"relative",overflow:"hidden",minWidth:0,
               cursor:isClickable?"pointer":"default",
             }}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:4,
@@ -4335,8 +4368,33 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
               </div>}
             </div>
           );
-        })}
-      </div>
+        };
+
+        // Pause Figée + TC toujours côte à côte, sur mobile comme sur ordi
+        // (demandé par Olivier le 17/07) : regroupées dans un seul item de la
+        // grille externe (pleine largeur, gridColumn:"1 / -1") contenant sa
+        // propre mini-grille à 2 colonnes fixes — garantit qu'elles restent
+        // toujours sur la même ligne, quelle que soit la largeur d'écran,
+        // contrairement au reste de la grille en auto-fill qui peut les
+        // séparer sur des lignes différentes selon la largeur disponible.
+        const tcCard = CARDS.find(c=>c.key==="TC");
+        return(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
+            {CARDS.map(card=>{
+              if(card.key==="TC") return null;
+              if(card.key==="PF"){
+                return(
+                  <div key="pf-tc-pair" style={{gridColumn:"1 / -1",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    {renderCard(card)}
+                    {tcCard&&renderCard(tcCard)}
+                  </div>
+                );
+              }
+              return renderCard(card);
+            })}
+          </div>
+        );
+      })()}
       {editMode&&<div style={{
         background:"#eff6ff",borderRadius:10,padding:"8px 12px",marginTop:8,
         fontSize:10,color:"#1e40af",fontWeight:500,
@@ -5238,6 +5296,11 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const agentId = agent?.cp || agent?.immatriculation || agent?.id;
   const start = `${year}-01-01`, end = `${year}-12-31`;
+  // Erreur d'action (ajout/retrait/validation) — distincte de loadError (erreur
+  // du chargement initial, géré par le parent). Sans ça, un échec silencieux
+  // (ex: token perdu) laissait l'agent sans aucun retour : l'action semblait
+  // n'avoir rien fait, sans explication ni possibilité de réessayer (17/07).
+  const [actionError, setActionError] = useState(null);
 
   const allDates = useMemo(()=>{
     const obj = {};
@@ -5262,17 +5325,20 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
   const nbValideesAnnee = allDatesSorted.filter(dk=>fiaDone[dk]).length;
 
   const toggleDate = (dk) => {
+    setActionError(null);
     if(allDates[dk]){
-      api.pauses.delete(agentId, dk).then(recharger).catch(()=>{});
+      api.pauses.delete(agentId, dk).then(recharger).catch(()=>setActionError("Erreur lors de la suppression de cette journée. Réessaie."));
     } else {
-      api.pauses.add(agentId, dk).then(recharger).catch(()=>{});
+      api.pauses.add(agentId, dk).then(recharger).catch(()=>setActionError("Erreur lors de l'ajout de cette journée. Réessaie."));
     }
   };
 
   const setFiaMois = (dk, moisKey) => {
-    api.pauses.setFiaMois(agentId, dk, moisKey||null).then(recharger).catch(()=>{});
+    setActionError(null);
+    api.pauses.setFiaMois(agentId, dk, moisKey||null).then(recharger).catch(()=>setActionError("Erreur lors de la mise à jour du mois de constatation. Réessaie."));
   };
   const toggleFiaDone = (dk) => {
+    setActionError(null);
     const nouveauDone = !fiaDone[dk];
     if(!nouveauDone){
       // On décoche une validation : on efface aussi le mois renseigné, pour
@@ -5281,9 +5347,9 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
       Promise.all([
         api.pauses.setFiaDone(agentId, dk, false),
         api.pauses.setFiaMois(agentId, dk, null),
-      ]).then(recharger).catch(()=>{});
+      ]).then(recharger).catch(()=>setActionError("Erreur lors de la mise à jour. Réessaie."));
     } else {
-      api.pauses.setFiaDone(agentId, dk, true).then(recharger).catch(()=>{});
+      api.pauses.setFiaDone(agentId, dk, true).then(recharger).catch(()=>setActionError("Erreur lors de la validation. Réessaie."));
     }
   };
 
@@ -5372,6 +5438,12 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
         <span style={{fontSize:12,fontWeight:600,color:"#991b1b"}}>{loadError}</span>
         <button onClick={recharger} style={{border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,
           fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>Réessayer</button>
+      </div>}
+      {actionError&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
+        padding:"10px 14px",background:"#fee2e2",borderBottom:"1.5px solid #fca5a5"}}>
+        <span style={{fontSize:12,fontWeight:600,color:"#991b1b"}}>⚠️ {actionError}</span>
+        <button onClick={()=>setActionError(null)} style={{border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,
+          fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>✕</button>
       </div>}
 
       <div style={{padding:"14px 18px",display:"flex",gap:10,flexWrap:"wrap"}}>
