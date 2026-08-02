@@ -8032,20 +8032,25 @@ const OPTIONS_POSTES_CPS = [
 function resoudreTitulaireCps(uoRow,agents,cpsSchedule,cpsAleas){
   if(!uoRow.cps_type||!uoRow.cps_code||!uoRow.cps_famille) return null;
   const now=new Date();
-  const dateKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
-  let jsCode=null, posteLabel=null;
+  let jsCode=null, posteLabel=null, dateRef=now;
   if(uoRow.cps_type==="journee"){
     const def=POSTES_JOURNEE.find(p=>p.jsCode===uoRow.cps_code);
     jsCode=uoRow.cps_code; posteLabel=def?.label||null;
   }else{
     const heure=now.getHours()*60+now.getMinutes();
     const shiftKey=(heure>=1335||heure<370)?"N":(heure<845)?"M":"AM";
+    // Nuit après minuit (00h00-06h09) appartient au service qui a commencé la
+    // veille à 22h15 — sans ça, on cherchait le mauvais jour dans cpsAleas/
+    // cpsSchedule entre minuit et 06h10 (18/07, trouvé en vérifiant le
+    // mécanisme "titulaire dynamique" avec de vraies données CPS).
+    if(shiftKey==="N"&&heure<370){ dateRef=new Date(now); dateRef.setDate(dateRef.getDate()-1); }
     const liste=uoRow.cps_famille==="PAR"?POSTES_PAR_3x8:POSTES_PRCI_3x8;
     const def=liste.find(p=>p.code===uoRow.cps_code);
     if(!def) return null;
     jsCode=def[shiftKey]; posteLabel=def.label;
     if(!jsCode) return null;
   }
+  const dateKey=`${dateRef.getFullYear()}-${String(dateRef.getMonth()+1).padStart(2,"0")}-${String(dateRef.getDate()).padStart(2,"0")}`;
   const alea=(cpsAleas||[]).find(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===uoRow.cps_famille);
   if(alea){
     if(alea.type==="non_tenu") return {statut:"non_tenu",noms:[]};
