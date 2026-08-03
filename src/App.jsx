@@ -790,23 +790,11 @@ function BulletinImportButton({ agentCp, onImported }) {
         if (file.type === "application/pdf") {
           text = await extraireTextePdfNatif(b64);
           if (!text || text.replace(/\s/g, "").length < 30) {
-            // PDF scanné sans texte natif -> fallback OCR page par page
-            const pdfjsLib = await import("pdfjs-dist");
-            pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
-            const raw = atob(b64); const bytes = new Uint8Array(raw.length);
-            for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-            const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
-            const texts = [];
-            for (let n = 1; n <= pdf.numPages; n++) {
-              const page = await pdf.getPage(n);
-              const viewport = page.getViewport({ scale: 3.0 });
-              const canvas = document.createElement("canvas");
-              canvas.width = viewport.width; canvas.height = viewport.height;
-              await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-              const pageB64 = canvas.toDataURL("image/png").split(",")[1];
-              texts.push(await ocrImageViaOcrSpace(pageB64, "image/png"));
-            }
-            text = texts.join("\n");
+            // PDF scanné sans texte natif -> envoi direct a OCR.space (rendu
+            // PDF->image et decoupage par page geres cote serveur) plutot qu'un
+            // rendu pdfjs-dist cote client : voir handleCpsImport pour le detail
+            // du bug pdf.js rencontre le 04/08 (pages rendues blanches).
+            text = await ocrImageViaOcrSpace(b64, "application/pdf");
           }
         } else {
           text = await ocrImageViaOcrSpace(b64, file.type || "image/jpeg");
@@ -1570,29 +1558,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
 
         let text="";
         if(file.type==="application/pdf"){
-          // Charger le PDF avec pdfjs-dist et OCRiser page par page
-          const pdfjsLib=await import("pdfjs-dist");
-          pdfjsLib.GlobalWorkerOptions.workerSrc=new URL("pdfjs-dist/build/pdf.worker.mjs",import.meta.url).toString();
-          const pdfData=atob(b64);
-          const pdfBytes=new Uint8Array(pdfData.length);
-          for(let i=0;i<pdfData.length;i++) pdfBytes[i]=pdfData.charCodeAt(i);
-          const pdf=await pdfjsLib.getDocument({data:pdfBytes}).promise;
-          const numPages=pdf.numPages;
-          const texts=[];
-          for(let pageNum=1;pageNum<=numPages;pageNum++){
-            const page=await pdf.getPage(pageNum);
-            const scale=3.0; // haute résolution pour meilleur OCR
-            const viewport=page.getViewport({scale});
-            const canvas=document.createElement("canvas");
-            canvas.width=viewport.width;
-            canvas.height=viewport.height;
-            const ctx=canvas.getContext("2d");
-            await page.render({canvasContext:ctx,viewport}).promise;
-            const pageB64=canvas.toDataURL("image/png").split(",")[1];
-            const pageText=await ocrPage(pageB64,"image/png");
-            texts.push(pageText);
-          }
-          text=texts.join("\n");
+          // Envoi direct du PDF a OCR.space (qui gere le rendu PDF->image et le
+          // decoupage par page cote serveur) plutot qu'un rendu pdfjs-dist cote
+          // client page par page : ce rendu client produisait des pages
+          // entierement blanches sur les PDF CPS scannes d'Olivier (bug pdf.js
+          // connu, warning "Dependent image isn't ready yet" sur des images avec
+          // SMask), constate et confirme le 04/08. OCR.space gere nativement le
+          // multi-page et renvoie un ParsedResults par page, deja concatenes par
+          // ocrImageViaOcrSpace.
+          text=await ocrPage(b64,"application/pdf");
         }else{
           // Image directe
           text=await ocrPage(b64,file.type||"image/jpeg");
