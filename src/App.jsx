@@ -293,17 +293,38 @@ const EQ_COLORS = Object.fromEntries(
 // ─── IMPORT BULLETIN DE COMMANDE / DÉROULÉ PRÉVISIONNEL ──────────────────────
 const BULLETIN_OCR_APIKEY = "K85147389088957";
 
-async function ocrImageViaOcrSpace(imageB64, mimeType) {
+async function ocrSpaceRequest(imageB64, mimeType, engine, timeoutMs) {
   const form = new URLSearchParams();
   form.append("apikey", BULLETIN_OCR_APIKEY);
   form.append("base64Image", "data:" + mimeType + ";base64," + imageB64);
   form.append("filetype", "Auto");
-  form.append("OCREngine", "2");
+  form.append("OCREngine", engine);
   form.append("isTable", "true");
-  const res = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: form });
-  const data = await res.json();
-  if (data.IsErroredOnProcessing) throw new Error(data.ErrorMessage?.[0] || "Erreur OCR");
-  return data.ParsedResults?.map(r => r.ParsedText).join("\n") || "";
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch("https://api.ocr.space/parse/image", { method: "POST", body: form, signal: controller.signal });
+    const data = await res.json();
+    if (data.IsErroredOnProcessing) throw new Error(data.ErrorMessage?.[0] || "Erreur OCR");
+    return data.ParsedResults?.map(r => r.ParsedText).join("\n") || "";
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// Moteur 2 = meilleure lecture des tableaux mais parfois surchargé côté ocr.space
+// (timeout après 60s constaté le 03/08) — on borne l'attente à 25s puis on
+// bascule automatiquement sur le moteur 1 (plus rapide, moins précis sur les
+// tableaux mais reste fiable) plutôt que de laisser l'agent attendre une minute
+// pour rien à chaque import.
+async function ocrImageViaOcrSpace(imageB64, mimeType) {
+  try {
+    const text = await ocrSpaceRequest(imageB64, mimeType, "2", 25000);
+    if (text) return text;
+  } catch (e) {
+    console.warn("OCR moteur 2 indisponible, nouvelle tentative avec le moteur 1:", e.message);
+  }
+  return ocrSpaceRequest(imageB64, mimeType, "1", 45000);
 }
 
 async function extraireTextePdfNatif(base64Pdf) {
@@ -1543,19 +1564,9 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     reader.onload=async()=>{
       const b64=reader.result.split(",")[1];
       try{
-        // Fonction OCR d'une image base64 via OCR.space
-        const ocrPage=async(imageB64,mimeType)=>{
-          const form=new URLSearchParams();
-          form.append("apikey","K85147389088957");
-          form.append("base64Image","data:"+mimeType+";base64,"+imageB64);
-          form.append("filetype","Auto");
-          form.append("OCREngine","2");
-          form.append("isTable","true");
-          const res=await fetch("https://api.ocr.space/parse/image",{method:"POST",body:form});
-          const data=await res.json();
-          if(data.IsErroredOnProcessing) throw new Error(data.ErrorMessage?.[0]||"Erreur OCR");
-          return data.ParsedResults?.map(r=>r.ParsedText).join("\n")||"";
-        };
+        // OCR d'une image base64 via OCR.space (moteur 2 avec repli auto sur le
+        // moteur 1 en cas de timeout — voir ocrImageViaOcrSpace)
+        const ocrPage=ocrImageViaOcrSpace;
 
         let text="";
         if(file.type==="application/pdf"){
@@ -7100,9 +7111,9 @@ justifyContent: "flex-start",
                 display:"flex", flexDirection:"column",
                 minWidth:0,
               }}>
-                <span lang="fr" style={CODES_FETES[code]
+                <span lang="fr" style={CODES_FETES[code]||code==="CA"||code==="CP"
                   ? {fontSize:14,fontWeight:800,display:"block",whiteSpace:"nowrap"}
-                  : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):avecCesure(EQ_COLORS[code]?.label||code)}</span>
+                  : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):(code==="CA"||code==="CP")?code:avecCesure(EQ_COLORS[code]?.label||code)}</span>
                 {(code==="CA"||code==="CP")&&congeNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeNumeros[dk]}</span>}
                 {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
