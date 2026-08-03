@@ -4253,6 +4253,223 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
   );
 }
 
+// ─── BILAN GLOBAL (03/08) ─────────────────────────────────────────────────────
+// Vue d'ensemble des jours ET des heures que l'agent a encore à sa disposition
+// — uniquement les compteurs que l'agent POSE lui-même à sa discrétion (Congés,
+// RU, RQ, VT, Fêtes). RP est volontairement exclu (demandé explicitement par
+// Olivier le 03/08 : "c'est le bilan global des jours que l'agent peut poser
+// et a sa disposition", RP n'entre pas dans ce cadre). Chaque ligne réutilise
+// directement les fonctions de calcul déjà existantes (computeDashboardConges,
+// computeCompteurAvecDetail, computeDashboardVT, computeFetesLignes) — une
+// seule source de vérité par compteur, jamais de recalcul parallèle qui
+// pourrait diverger.
+function computeBilanGlobalJours(agent, schedule, agentProfiles, year, dateProjection){
+  const congesData = computeDashboardConges(agent, schedule, agentProfiles, year);
+  const ruData = computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RU.codes, DETAIL_CONFIG.RU.reportKey, DETAIL_CONFIG.RU.acquisKey, DETAIL_CONFIG.RU.rollingAcquis);
+  const rqData = computeCompteurAvecDetail(agent, schedule, agentProfiles, year, DETAIL_CONFIG.RQ.codes, DETAIL_CONFIG.RQ.reportKey, DETAIL_CONFIG.RQ.acquisKey, DETAIL_CONFIG.RQ.rollingAcquis);
+  const vtData = computeDashboardVT(agent, schedule, agentProfiles, year);
+  const fetesInfo = computeFetesLignes(agent, schedule, agentProfiles, year);
+
+  // Fêtes n'a pas d'"Acquis"/solde continu comme les 4 autres — c'est une
+  // liste de dates nommées avec un statut (réglée / à traiter / perdue / à
+  // venir). "Pris" = fêtes réglées cette année (prises ou payées), "Restant"
+  // = fêtes encore à traiter (même définition que la cloche 🔔 de la carte
+  // Fêtes). Pas de projection "avant une date choisie" pour Fêtes : ça ne
+  // correspond à rien de calculable de la même façon qu'un solde de jours qui
+  // s'épuise au fil de l'année — colonne affichée à "—" pour cette ligne.
+  const feteReglees = (fetesInfo.lignes||[]).filter(l=>l && (l.statut==="prise"||l.statut==="payee"||l.statut==="payee_auto"));
+  const feteATraiter = (fetesInfo.lignes||[]).filter(l=>l && (l.statut==="attente"||l.statut==="perdue_probable"));
+
+  const projeter = (data) => dateProjection
+    ? (data.acquis ?? data.entitlement ?? 0) - (data.tousJours||[]).filter(d=>d<=dateProjection).length
+    : null;
+
+  const lignes = [
+    {key:"conges", label:"Congés", acquis:congesData.entitlement, pris:congesData.pris, restant31:congesData.solde, restantProj:projeter(congesData)},
+    {key:"RU",     label:"RU",     acquis:ruData.acquis??0,       pris:ruData.total,     restant31:(ruData.acquis??0)-ruData.total, restantProj:projeter(ruData)},
+    {key:"RQ",     label:"RQ",     acquis:rqData.acquis??0,       pris:rqData.total,     restant31:(rqData.acquis??0)-rqData.total, restantProj:projeter(rqData)},
+    {key:"VT",     label:"VT",     acquis:vtData.entitlement,     pris:vtData.pris,      restant31:vtData.solde, restantProj:projeter(vtData)},
+    {key:"FETE",   label:"Fêtes",  acquis:null,                   pris:feteReglees.length, restant31:feteATraiter.length, restantProj:null},
+  ];
+
+  const totalRestant31 = lignes.reduce((s,l)=>s+(l.restant31||0),0);
+  return {lignes, totalRestant31};
+}
+
+// TC/RN/TY sont déjà des soldes continus (ledger, pas de notion d'Acquis/Pris
+// annuel depuis la refonte du 17/07) — le récap se limite donc au solde actuel
+// de chacun + un total, pas de colonnes Pris/Restant comme pour les jours.
+function computeBilanGlobalHeures(tcData, rnLedgerData, tyLedgerData){
+  const lignes = [
+    {key:"TC", label:"TC", solde:tcData.solde},
+    {key:"RN", label:"RN", solde:rnLedgerData.solde},
+    {key:"TY", label:"TY", solde:tyLedgerData.solde},
+  ];
+  const totalMinutes = lignes.reduce((s,l)=>s+(l.solde||0),0);
+  return {lignes, totalMinutes};
+}
+
+function BilanGlobalModal({agent, schedule, agentProfiles, setAgentProfiles, pausesData, year, availableYears, onYearChange, onClose}){
+  const agKey = agent?.immatriculation||agent?.cp||agent?.id;
+  const [dateProjection, setDateProjection] = useState("");
+
+  const bilanJours = useMemo(()=>computeBilanGlobalJours(agent, schedule, agentProfiles, year, dateProjection||null), [agent, schedule, agentProfiles, year, dateProjection]);
+  const tcData = useMemo(()=>computeDashboardTC(agent, schedule, agentProfiles, pausesData, year), [agent, schedule, agentProfiles, pausesData, year]);
+  const rnLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agKey, "rnLedger"), [agentProfiles, agKey]);
+  const tyLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agKey, "tyLedger"), [agentProfiles, agKey]);
+  const bilanHeures = useMemo(()=>computeBilanGlobalHeures(tcData, rnLedgerData, tyLedgerData), [tcData, rnLedgerData, tyLedgerData]);
+
+  // Durée de référence d'une journée pour le calculateur jours⇄heures —
+  // mémorisée par agent (indépendante de l'année, comme le solde ledger
+  // TC/RN/TY lui-même). Saisie en heures + minutes séparées pour rester
+  // cohérent avec les autres formulaires h/min déjà en place (ledger TC...).
+  const dureeJourMin = agentProfiles[agKey]?.bilanGlobalDureeJourMin ?? null;
+  const [dureeH, setDureeH] = useState(dureeJourMin!=null ? Math.floor(dureeJourMin/60) : "");
+  const [dureeM, setDureeM] = useState(dureeJourMin!=null ? dureeJourMin%60 : "");
+  const enregistrerDuree = () => {
+    const h = parseInt(dureeH,10)||0, m = parseInt(dureeM,10)||0;
+    const total = h*60+m;
+    setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),bilanGlobalDureeJourMin: total>0?total:null}}));
+  };
+
+  const totalMinutesAbs = Math.abs(bilanHeures.totalMinutes);
+  const signe = bilanHeures.totalMinutes<0 ? -1 : 1;
+  const joursEquivalents = dureeJourMin ? Math.floor(totalMinutesAbs/dureeJourMin)*signe : null;
+  const resteMin = dureeJourMin ? (totalMinutesAbs%dureeJourMin)*signe : null;
+  const totalGlobalJoursEquivalents = dureeJourMin!=null ? bilanJours.totalRestant31 + joursEquivalents : null;
+
+  const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:750,display:"flex",alignItems:"center",justifyContent:"center",padding:12}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,maxWidth:640,width:"100%",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,.25)"}}>
+        <div style={{background:"linear-gradient(135deg,#0f4c81,#1e3a5f)",padding:"16px 20px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:1}}>
+          <span style={{fontSize:18}}>🧮</span>
+          <div style={{flex:1,color:"#fff",fontSize:15,fontWeight:800}}>Bilan Global {year}</div>
+          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          <button onClick={onClose} style={{background:"rgba(255,255,255,.15)",border:"none",color:"#fff",borderRadius:10,width:32,height:32,cursor:"pointer",fontSize:16}}>✕</button>
+        </div>
+
+        <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:20}}>
+          <div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>
+            📆 Congés, RU, RQ, VT et Fêtes : les jours que tu peux poser à ta discrétion. RP n'est pas inclus (ce n'est pas un jour que tu choisis de poser).
+          </div>
+
+          {/* ── Date de projection ── */}
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <label style={{fontSize:12,fontWeight:700,color:"#475569"}}>Me projeter avant une date :</label>
+            <input type="date" value={dateProjection} onChange={e=>setDateProjection(e.target.value)}
+              style={{padding:"6px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13}}/>
+            {dateProjection&&<button onClick={()=>setDateProjection("")} style={{background:"#fef2f2",color:"#dc2626",border:"1.5px solid #fecaca",borderRadius:8,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>✕ Effacer</button>}
+          </div>
+
+          {/* ── Section Jours ── */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8,textTransform:"uppercase",letterSpacing:.4}}>📅 Jours</div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{textAlign:"left",color:"#94a3b8",fontSize:10,textTransform:"uppercase"}}>
+                    <th style={{padding:"4px 6px"}}>Compteur</th>
+                    <th style={{padding:"4px 6px"}}>Acquis</th>
+                    <th style={{padding:"4px 6px"}}>Pris</th>
+                    <th style={{padding:"4px 6px"}}>{dateProjection?`Restant avant ${fmtDate(dateProjection)}`:"Restant avant date"}</th>
+                    <th style={{padding:"4px 6px"}}>Restant au 31/12</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bilanJours.lignes.map(l=>(
+                    <tr key={l.key} style={{borderTop:"1px solid #f1f5f9"}}>
+                      <td style={{padding:"7px 6px",fontWeight:700,color:"#1e293b"}}>{l.label}</td>
+                      <td style={{padding:"7px 6px",color:"#64748b"}}>{l.acquis??"—"}</td>
+                      <td style={{padding:"7px 6px",color:"#64748b"}}>{l.pris}</td>
+                      <td style={{padding:"7px 6px",color:"#64748b"}}>{l.restantProj??"—"}</td>
+                      <td style={{padding:"7px 6px",fontWeight:800,fontSize:14,color:l.restant31<0?"#dc2626":"#16a34a"}}>{l.restant31}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{borderTop:"2px solid #1e293b"}}>
+                    <td style={{padding:"8px 6px",fontWeight:800,color:"#1e293b"}}>Total</td>
+                    <td/><td/><td/>
+                    <td style={{padding:"8px 6px",fontWeight:900,fontSize:16,color:"#0f4c81"}}>{bilanJours.totalRestant31} j</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Section Heures ── */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8,textTransform:"uppercase",letterSpacing:.4}}>⏱️ Heures</div>
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead>
+                  <tr style={{textAlign:"left",color:"#94a3b8",fontSize:10,textTransform:"uppercase"}}>
+                    <th style={{padding:"4px 6px"}}>Compteur</th>
+                    <th style={{padding:"4px 6px"}}>Solde actuel</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bilanHeures.lignes.map(l=>(
+                    <tr key={l.key} style={{borderTop:"1px solid #f1f5f9"}}>
+                      <td style={{padding:"7px 6px",fontWeight:700,color:"#1e293b"}}>{l.label}</td>
+                      <td style={{padding:"7px 6px",fontWeight:800,fontSize:14,color:l.solde<0?"#dc2626":"#16a34a"}}>{minToHM(l.solde)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{borderTop:"2px solid #1e293b"}}>
+                    <td style={{padding:"8px 6px",fontWeight:800,color:"#1e293b"}}>Total</td>
+                    <td style={{padding:"8px 6px",fontWeight:900,fontSize:16,color:"#0f4c81"}}>{minToHM(bilanHeures.totalMinutes)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Calculateur jours ⇄ heures ── */}
+          <div style={{background:"#f8fafc",borderRadius:12,padding:"12px 14px",border:"1.5px solid #e2e8f0"}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>🧮 Convertir le solde d'heures en jours</div>
+            <div style={{fontSize:10,color:"#64748b",marginBottom:10,lineHeight:1.5}}>
+              Indique la durée d'une journée pour toi (ex: 07h43, 08h02, ou une autre valeur libre) — mémorisée pour la prochaine fois.
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <input type="number" placeholder="h" value={dureeH} onChange={e=>setDureeH(e.target.value)}
+                style={{width:56,padding:"6px 8px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,textAlign:"center"}}/>
+              <span style={{fontSize:12,color:"#64748b"}}>h</span>
+              <input type="number" placeholder="min" value={dureeM} onChange={e=>setDureeM(e.target.value)}
+                style={{width:56,padding:"6px 8px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,textAlign:"center"}}/>
+              <span style={{fontSize:12,color:"#64748b"}}>min</span>
+              <button onClick={enregistrerDuree} style={{background:"#0f4c81",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Enregistrer</button>
+            </div>
+            {dureeJourMin!=null&&(
+              <div style={{marginTop:10,fontSize:13}}>
+                Avec des journées de <b>{minToHM(dureeJourMin)}</b>, ton solde de <b>{minToHM(bilanHeures.totalMinutes)}</b> représente :
+                <div style={{fontSize:20,fontWeight:900,color:"#0f4c81",marginTop:4}}>{joursEquivalents} j <span style={{fontSize:13,fontWeight:700,color:"#64748b"}}>+ {minToHM(resteMin)}</span></div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Total global final ── */}
+          <div style={{background:"linear-gradient(135deg,#0f4c81,#1e3a5f)",borderRadius:12,padding:"14px 16px",color:"#fff"}}>
+            <div style={{fontSize:11,fontWeight:700,opacity:.85,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Total à ta disposition</div>
+            <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+              <div><div style={{fontSize:22,fontWeight:900}}>{bilanJours.totalRestant31} j</div><div style={{fontSize:10,opacity:.8}}>en jours</div></div>
+              <div><div style={{fontSize:22,fontWeight:900}}>{minToHM(bilanHeures.totalMinutes)}</div><div style={{fontSize:10,opacity:.8}}>en heures</div></div>
+            </div>
+            {totalGlobalJoursEquivalents!=null&&(
+              <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,.25)",fontSize:12}}>
+                Tout compris (jours + heures converties) : <b style={{fontSize:15}}>{totalGlobalJoursEquivalents} j</b>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
 function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
@@ -4440,6 +4657,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const [showVtDash, setShowVtDash] = useState(false);
   const [showPauseFigeeDash, setShowPauseFigeeDash] = useState(false);
   const [showTcDash, setShowTcDash] = useState(false);
+  const [showBilanGlobal, setShowBilanGlobal] = useState(false);
   const [openDetailKey, setOpenDetailKey] = useState(null); // RP/RU/RQ/RN/TY/MA/FOR
 
   return(
@@ -4495,6 +4713,12 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
           <span style={{fontSize:9,color:"#94a3b8"}}>⚠️ Selon planning saisi</span>
           <div style={{flex:1}}/>
+          <button onClick={e=>{e.stopPropagation();setShowBilanGlobal(true);}}
+            style={{background:"#0f4c81",color:"#fff",
+              border:"none",borderRadius:8,padding:"5px 10px",
+              cursor:"pointer",fontSize:11,fontWeight:700}}>
+            🧮 Bilan Global
+          </button>
           <button onClick={e=>{e.stopPropagation();setEditMode(e=>!e);}}
             style={{background:editMode?"#1e293b":"#f1f5f9",
               color:editMode?"#fff":"#475569",
@@ -4634,6 +4858,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       )}
       {showTcDash&&(
         <TcDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} pausesData={pausesData} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowTcDash(false)}/>
+      )}
+      {showBilanGlobal&&(
+        <BilanGlobalModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} pausesData={pausesData} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowBilanGlobal(false)}/>
       )}
     </div>
   );
