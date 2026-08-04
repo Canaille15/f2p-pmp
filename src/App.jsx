@@ -2107,7 +2107,7 @@ const DEFAULT_COLORS = {
   RP:"#16a34a", RPP:"#67bf15", RU:"#ffde08", RQ:"#ffe100", TC:"#7c3aed", TY:"#a855f7", RN:"#4338ca",
   NU:"#64748b", CA:"#f5e900", CP:"#f5e900",
   MA:"#dc2626", ABS:"#b91c1c", VT:"#f59e0b", VM:"#6b7280",
-  FOR:"#0dcbff", DISPO:"#059669", NOTE:"#0080ff", GREVE:"#dc2626",
+  FOR:"#0dcbff", DISPO:"#059669", NOTE:"#0080ff", GREVE:"#1d51a5",
 };
 
 // Texte blanc sur fonds sombres, noir sur fonds clairs
