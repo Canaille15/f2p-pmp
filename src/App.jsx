@@ -4253,11 +4253,30 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
                       <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{MOIS_L[moisNum]}{horsAnnee?` ${anneeMois}`:""}</span>
                       <span style={{fontSize:12,fontWeight:700,color:accentDark}}>{dates.length}j</span>
                     </div>
-                    <div style={{fontSize:10,fontWeight:600,color:"#475569",marginTop:4}}>{dates.map(d=>fmtDate(d)).join(" · ")}</div>
+                    <div style={{fontSize:10,fontWeight:600,color:"#475569",marginTop:4}}>
+                      {dates.map((d,i)=>{
+                        // Repère visuel RPP (04/08, demandé par Olivier) : RP et RPP sont
+                        // regroupés dans un seul decompte (codes ci-dessus), mais un petit
+                        // astérisque rouge permet de reperer d'un coup d'oeil, mois par
+                        // mois, lesquelles de ces dates sont des RPP — sans rien changer
+                        // au calcul ni au regroupement existants.
+                        const v = schedule[`${agent.id}-${d}`];
+                        const isRPP = codes.includes("RPP") && (v?.equipe==="RPP"||v?.equipe2==="RPP");
+                        return (
+                          <span key={d}>
+                            {i>0 && " · "}
+                            {fmtDate(d)}{isRPP && <span style={{color:"#dc2626",fontWeight:800}}>*</span>}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
             </div>
+          )}
+          {codes.includes("RPP") && moisTries.length>0 && (
+            <div style={{fontSize:10,fontWeight:600,color:"#dc2626"}}>* jour RPP</div>
           )}
 
           {reportKey && (
