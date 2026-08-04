@@ -8476,9 +8476,9 @@ const HAB_PRCI = [
   {code:"PILCL", label:"AC LC",        subtitle:"Agent Circulation LC",        type:"3x8"},
   {code:"PIVGD", label:"AC VGD",       subtitle:"Agent Circulation VGD",       type:"3x8"},
   // ── Journée ──
-  {code:"PIPA1J", label:"Pauseur PA1", subtitle:"Pauseur PA1 · 08h45–18h15",  type:"J"},
-  {code:"PIPA2J", label:"Pauseur PA2", subtitle:"Pauseur PA2 · 10h15–19h45",  type:"J"},
-  {code:"PIPA3J", label:"Pauseur PA3", subtitle:"Pauseur PA3 · 08h45–16h30",  type:"J"},
+  {code:"PIPA1J", label:"Pauseur CCL", subtitle:"Pauseur CCL · 08h45–18h15",  type:"J"},
+  {code:"PIPA2J", label:"Pauseur Adjoint", subtitle:"Pauseur Adjoint · 10h15–19h45",  type:"J"},
+  {code:"PIPA3J", label:"Pauseur VGD", subtitle:"Pauseur VGD · 08h45–16h30",  type:"J"},
   {code:"PIDPXJ", label:"DPX PRCI",   subtitle:"DPX PRCI · 08h00–16h45",     type:"J"},
   {code:"PIASSJ", label:"Adj DPX",    subtitle:"Adjoint DPX PRCI",            type:"J"},
   {code:"PPRCI",  label:"PPRCI",        subtitle:"PPRCI · 09h00–16h45",         type:"J"},
