@@ -2575,6 +2575,22 @@ function getCongesBrutsAnnee(agent, schedule, year){
   return jours;
 }
 
+// Générique : jours d'un ensemble de codes équipe/équipe2 pour une année donnée
+// (réutilisé pour la numérotation RU/RQ/RP+RPP dans le planning perso, 04/08 —
+// même principe que getCongesBrutsAnnee).
+function getJoursCodesAnnee(agent, schedule, year, codes){
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const jours = [];
+  Object.entries(schedule).forEach(([k,v])=>{
+    if(!agent || !k.startsWith(agent.id+"-")) return;
+    const dk = k.slice(agent.id.length+1);
+    if(dk < start || dk > end) return;
+    if(codes.includes(v?.equipe)) jours.push(dk);
+    else if(codes.includes(v?.equipe2)) jours.push(dk);
+  });
+  return jours;
+}
+
 // Calcule le détail des congés d'une année : droit, jours pris par mois (avec
 // cumul), et gestion des "reports" — des jours de congé physiquement pris sur
 // l'année suivante mais décomptés du solde de cette année-ci (tolérance de
@@ -6803,6 +6819,35 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     jours.forEach((d,i)=>{ m[d]=i+1; });
     return m;
   },[agent,schedule,curYear]);
+  // Numérotation RU et RQ (04/08, même principe que les congés ci-dessus) :
+  // chaque code est numéroté séparément (1er RU de l'année = n°1, etc. ; RQ a
+  // sa propre numérotation indépendante), sur toutes les occurrences.
+  const ruNumeros=useMemo(()=>{
+    const jours=getJoursCodesAnnee(agent,schedule,curYear,["RU"]).sort();
+    const m={};
+    jours.forEach((d,i)=>{ m[d]=i+1; });
+    return m;
+  },[agent,schedule,curYear]);
+  const rqNumeros=useMemo(()=>{
+    const jours=getJoursCodesAnnee(agent,schedule,curYear,["RQ"]).sort();
+    const m={};
+    jours.forEach((d,i)=>{ m[d]=i+1; });
+    return m;
+  },[agent,schedule,curYear]);
+  // Numérotation RP+RPP (04/08, demandé par Olivier) : RP et RPP comptent
+  // ensemble dans une seule numérotation cumulative (comme le compteur), mais
+  // le numéro n'est affiché que sur le DERNIER RP ou RPP de chaque mois civil
+  // (ex: 7 RP + 3 RPP en janvier -> seul le dernier des deux affiche "n°10").
+  const rpNumeros=useMemo(()=>{
+    const jours=getJoursCodesAnnee(agent,schedule,curYear,["RP","RPP"]).sort();
+    const m={};
+    jours.forEach((d,i)=>{
+      const mois=d.slice(0,7);
+      const moisSuivant=jours[i+1]?.slice(0,7);
+      if(mois!==moisSuivant) m[d]=i+1;
+    });
+    return m;
+  },[agent,schedule,curYear]);
   const [showQuit,setShowQuit]=useState(false);
   // ── SAISIE RAPIDE ──────────────────────────────────────────────────────────
   // codeActif : code en cours de saisie (null = mode cycle classique)
@@ -7125,6 +7170,9 @@ justifyContent: "flex-start",
                   ? {fontSize:14,fontWeight:800,display:"block",whiteSpace:"nowrap"}
                   : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):(code==="CA"||code==="CP")?code:avecCesure(EQ_COLORS[code]?.label||code)}</span>
                 {(code==="CA"||code==="CP")&&congeNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeNumeros[dk]}</span>}
+                {code==="RU"&&ruNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{ruNumeros[dk]}</span>}
+                {code==="RQ"&&rqNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rqNumeros[dk]}</span>}
+                {code==="RP"&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rpNumeros[dk]}</span>}
                 {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
               </div>}
@@ -7139,6 +7187,7 @@ justifyContent: "flex-start",
               }}>
                 RPP
               </div>}
+              {code==="RPP"&&showData&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block",textAlign:"center"}}>n°{rpNumeros[dk]}</span>}
               {code==="RPP"&&showData&&isOwnProfile&&en?.notePerso&&<span style={{
                 fontSize:8, color:"#fff", fontWeight:700,
                 background:getColor("NOTE"), borderRadius:4, padding:"1px 5px",
