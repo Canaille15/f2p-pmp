@@ -7306,7 +7306,22 @@ justifyContent: "flex-start",
         try {
           await api.planning.saveEntry(agCp, dk, fullEntry);
           api.planning.getSchedule(agCp).then(entries=>{if(entries)setSchedule(prev=>({...prev,...entries}));});
-        } catch(e) { console.error('Erreur save:', e); }
+        } catch(e) {
+          console.error('Erreur save:', e);
+          // La sauvegarde reseau a echoue : annuler l'affichage optimiste
+          // (revenir a prevEntry) plutot que de laisser une case "fausse" qui
+          // donne l'illusion que c'est enregistre. Bug reel constate le 04/08
+          // : deux RP saisis sur telephone restes affiches (meme apres
+          // rechargement complet, via le cache local) sans jamais avoir
+          // atteint le serveur, decouverts seulement en comparant avec l'ordi.
+          setSchedule(prev=>{
+            const n={...prev};
+            const hadPrev = prevEntry && (prevEntry.equipe||prevEntry.equipe2||prevEntry.finNuit||prevEntry.notePerso);
+            if(hadPrev) n[agCp+'-'+dk]=prevEntry; else delete n[agCp+'-'+dk];
+            return n;
+          });
+          alert("⚠️ La sauvegarde du "+dk+" n'a pas abouti (problème réseau ?). Ta saisie n'a PAS été enregistrée — la case a été remise comme avant. Réessaie dès que la connexion est meilleure.\n\nErreur : "+e.message);
+        }
       }}
       onDelete={async (type)=>{
         const agCp=agent.immatriculation||agent.cp||agent.id;
@@ -7339,7 +7354,19 @@ justifyContent: "flex-start",
             await api.planning.deleteEntry(agCp, dk);
 
           }
-        } catch(e) { console.error('Erreur delete:', e); }
+        } catch(e) {
+          console.error('Erreur delete:', e);
+          // Meme principe que onSave : annuler l'effacement optimiste plutot
+          // que de laisser une case vide/modifiee alors que rien n'a ete
+          // confirme cote serveur.
+          const hadPrev = entry && (entry.equipe||entry.equipe2||entry.finNuit||entry.notePerso);
+          setSchedule(prev=>{
+            const n={...prev};
+            if(hadPrev) n[agCp+'-'+dk]=entry; else delete n[agCp+'-'+dk];
+            return n;
+          });
+          alert("⚠️ La suppression du "+dk+" n'a pas abouti (problème réseau ?). La case a été remise comme avant. Réessaie dès que la connexion est meilleure.\n\nErreur : "+e.message);
+        }
       }}
       onClose={()=>setDayPopup(null)}
     />}
