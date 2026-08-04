@@ -2107,7 +2107,7 @@ const DEFAULT_COLORS = {
   RP:"#16a34a", RPP:"#67bf15", RU:"#ffde08", RQ:"#ffe100", TC:"#7c3aed", TY:"#a855f7", RN:"#4338ca",
   NU:"#64748b", CA:"#f5e900", CP:"#f5e900",
   MA:"#dc2626", ABS:"#b91c1c", VT:"#f59e0b", VM:"#6b7280",
-  FOR:"#0dcbff", DISPO:"#059669", NOTE:"#0080ff",
+  FOR:"#0dcbff", DISPO:"#059669", NOTE:"#0080ff", GREVE:"#dc2626",
 };
 
 // Texte blanc sur fonds sombres, noir sur fonds clairs
@@ -2129,7 +2129,7 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
     RP:"RP", RPP:"RPP", RU:"RU", RQ:"RQ", TC:"TC", TY:"TY", RN:"RN",
     NU:"NU", CA:"Congés", CP:"Congés", MA:"Maladie",
     ABS:"Absent", VT:"VT", VM:"Visite méd.", FOR:"Formation", DISPO:"Dispo",
-    FETE:"Fêtes légales", NOTE:"Note perso",
+    FETE:"Fêtes légales", NOTE:"Note perso", GREVE:"Grève",
   };
 
   // Tous les groupes complets — incluant JF, TY, CP, FETE
@@ -2170,6 +2170,12 @@ function ColorCustomizer({agentColors, setAgentColors, onClose}){
       label:"🤒 Absences / Santé",
       codes:["MA","ABS","VT","VM"],
       note:"MA = Maladie · ABS = Absent · VT = Temps Partiel · VM = Visite médicale",
+    },
+    {
+      id:"greve",
+      label:"✊ Grève",
+      codes:["GREVE"],
+      note:"Couleur appliquée aux codes DA (01h00 grève), DB (1/2 journée grève) et DC (journée grève) dans l'agenda",
     },
     {
       id:"formation",
@@ -6689,10 +6695,12 @@ justifyContent: "flex-start",
                 🌙
               </div>}
               {/* Grève (DA/DB/DC, 04/08) : independant de equipe/equipe2, se
-                  combine avec n'importe quelle journee - couleur du code
-                  "Absent" (ABS) reutilisee telle quelle, comme demande. */}
+                  combine avec n'importe quelle journee - couleur dediee et
+                  personnalisable ("GREVE"), separee du reste de la palette
+                  depuis le 04/08 (demande d'Olivier, auparavant alignee sur
+                  "Absent"). */}
               {isOwnProfile&&en?.greve&&<div style={{
-                background:getColor("ABS"), color:getTc("ABS"),
+                background:getColor("GREVE"), color:getTc("GREVE"),
                 borderRadius:5, padding:"2px 6px",
                 fontSize:10, fontWeight:700,
                 display:"inline-flex", alignItems:"center", gap:4,
