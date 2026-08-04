@@ -4552,7 +4552,6 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // était consulté après une actualisation, plutôt que de revenir par défaut
   // à l'année en cours ou de refermer le panneau à chaque F5.
   const [selectedYear, setSelectedYear] = usePersist("compteursSelectedYear", currentYear);
-  const [editMode, setEditMode] = useState(false);
   const year = selectedYear;
   const start = `${year}-01-01`;
   const end   = `${year}-12-31`;
@@ -4602,53 +4601,13 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     return c;
   },[agent,schedule,year]);
 
-  // Corrections manuelles sauvegardées
-  const savedCorrections = agentProfiles[agent?.id]?.compteurCorrections?.[selectedYear] || {};
-  const [corrections, setCorrections] = useState(savedCorrections);
-  
-  // Recharger les corrections quand on change d'année
-  useEffect(()=>{
-    const c = agentProfiles[agent?.id]?.compteurCorrections?.[selectedYear] || {};
-    setCorrections(c);
-    setEditMode(false);
-  },[selectedYear, agent?.id]);
-
-  // Valeur finale = calculée + correction manuelle
-  const val = (key) => (computed[key]||0) + (corrections[key]||0);
-
-  const saveCorrections = (newCorr) => {
-    const withDate = {...newCorr, _updatedAt: new Date().toISOString()};
-    setCorrections(withDate);
-    setAgentProfiles(prev=>({
-      ...prev,
-      [agent.id]:{
-        ...(prev[agent.id]||{}),
-        compteurCorrections:{
-          ...(prev[agent.id]?.compteurCorrections||{}),
-          [selectedYear]: withDate,
-        }
-      }
-    }));
-  };
-
-  // Détecter changement de planning → mettre à jour la date
-  const computedStr = JSON.stringify(computed);
-  useEffect(()=>{
-    if(!agent||Object.keys(computed).length===0) return;
-    const updated = {...corrections, _updatedAt: new Date().toISOString()};
-    setCorrections(updated);
-    setAgentProfiles(pp=>({
-      ...pp,
-      [agent.id]:{
-        ...(pp[agent.id]||{}),
-        compteurCorrections:{
-          ...(pp[agent.id]?.compteurCorrections||{}),
-          [year]: updated,
-        }
-      }
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[computedStr]);
+  // 04/08 : le correcteur manuel generique (+/-, bouton "Corriger") a ete
+  // retire - confirme sans aucun usage reel sur les 10 comptes existants
+  // (juste des _updatedAt vides), et desactivait la clique sur 9 des 13
+  // cartes pendant qu'il etait actif. Les 4 cartes qu'il touchait (Jours
+  // travailles/Fetes/Maladie/Formation) seront ameliorees carte par carte
+  // si besoin plutot que via ce mecanisme generique. Voir CLAUDE.md.
+  const val = (key) => computed[key]||0;
 
   const congesData = useMemo(()=>computeDashboardConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const CONGES_ANNUELS = congesData.entitlement;
@@ -4794,13 +4753,6 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
               cursor:"pointer",fontSize:11,fontWeight:700}}>
             🧮 Bilan Global
           </button>
-          <button onClick={e=>{e.stopPropagation();setEditMode(e=>!e);}}
-            style={{background:editMode?"#1e293b":"#f1f5f9",
-              color:editMode?"#fff":"#475569",
-              border:"none",borderRadius:8,padding:"5px 10px",
-              cursor:"pointer",fontSize:11,fontWeight:700}}>
-            {editMode?"✅ Terminer":"✏️ Corriger"}
-          </button>
         </div>
 
       {/* Grille compteurs */}
@@ -4816,13 +4768,13 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
             // (17/07, demandé par Olivier) — RP/RU restent sur le total "pris".
             : card.key==="RQ" ? (rqData.solde ?? rqData.total)
             : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
-          const isTravailCard = card.key==="travail" && !editMode;
-          const isCongesCard = card.key==="conges" && !editMode;
-          const isFetesCard = card.key==="FETE" && !editMode;
-          const isVtCard = card.key==="VT" && !editMode;
-          const isPfCard = card.key==="PF" && !editMode;
-          const isTcCard = card.key==="TC" && !editMode;
-          const isDetailCard = !!DETAIL_CONFIG[card.key] && !editMode;
+          const isTravailCard = card.key==="travail";
+          const isCongesCard = card.key==="conges";
+          const isFetesCard = card.key==="FETE";
+          const isVtCard = card.key==="VT";
+          const isPfCard = card.key==="PF";
+          const isTcCard = card.key==="TC";
+          const isDetailCard = !!DETAIL_CONFIG[card.key];
           const isClickable = isTravailCard || isCongesCard || isFetesCard || isVtCard || isPfCard || isTcCard || isDetailCard;
           return(
             <div key={card.key}
@@ -4844,32 +4796,6 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
                 fontWeight:card.alert?700:400,lineHeight:1.3}}>
                 {card.subtitle}
               </div>
-              {corrections._updatedAt&&<div style={{
-                fontSize:9,fontWeight:600,color:"#475569",marginTop:5,
-                borderTop:"1px solid #e2e8f0",paddingTop:4,lineHeight:1.4,
-              }}>
-                Mis à jour le<br/>
-                <span style={{fontWeight:700,color:"#1e293b"}}>
-                  {new Date(corrections._updatedAt).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}
-                </span>
-              </div>}
-              {/* Contrôles de correction — "conges", "VT", "PF", "TC", "RN", "TY", "RP" et tout compteur avec un "acquis" dédié (RU/RQ) ont leur propre outil, pas de +/- générique ici */}
-              {editMode&&card.key!=="conges"&&card.key!=="VT"&&card.key!=="RP"&&card.key!=="PF"&&card.key!=="TC"&&card.key!=="RN"&&card.key!=="TY"&&!DETAIL_CONFIG[card.key]?.acquisKey&&<div style={{
-                display:"flex",gap:4,marginTop:6,justifyContent:"center"
-              }}>
-                <button onClick={()=>{
-                  saveCorrections({...corrections,[card.key]:(corrections[card.key]||0)-1});
-                }}
-                  style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
-                    background:"#fee2e2",color:"#dc2626",cursor:"pointer",fontSize:16,fontWeight:800,
-                    display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
-                <button onClick={()=>{
-                  saveCorrections({...corrections,[card.key]:(corrections[card.key]||0)+1});
-                }}
-                  style={{width:28,height:28,borderRadius:7,border:"1px solid #e2e8f0",
-                    background:"#dcfce7",color:"#16a34a",cursor:"pointer",fontSize:16,fontWeight:800,
-                    display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
-              </div>}
             </div>
           );
         };
@@ -4904,12 +4830,6 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           </div>
         );
       })()}
-      {editMode&&<div style={{
-        background:"#eff6ff",borderRadius:10,padding:"8px 12px",marginTop:8,
-        fontSize:10,color:"#1e40af",fontWeight:500,
-      }}>
-        💡 Le chiffre central = calculé depuis votre planning. Utilisez +/− pour corriger si votre planning n'est pas à jour. Les corrections sont sauvegardées automatiquement.
-      </div>}
 
       </div>}
 
