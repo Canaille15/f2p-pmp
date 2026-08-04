@@ -9508,7 +9508,17 @@ export default function App(){
     // depuis un autre appareil (voir profilLoadedRef).
     if(!profilLoadedRef.current.has(agentId)) return;
     const profile = agentProfiles[agentId];
-    if(profile) api.profil.save(agentId, profile);
+    // 04/08 : cet appel etait fire-and-forget, sans aucune gestion d'erreur - un
+    // echec (couac reseau/DB, deja arrive plusieurs fois sur ce projet) etait
+    // totalement silencieux : la modif reste visible en optimiste a l'ecran mais
+    // n'atteint jamais le serveur, et disparait au rechargement suivant sans le
+    // moindre signal (vecu par Olivier : ajustement TC ledger jamais enregistre).
+    // Couvre TOUS les compteurs (RP/RU/RQ/RN/TY/TC/VT/Conges/Fetes...), donc le
+    // plus critique des points de sauvegarde silencieux du projet a corriger.
+    if(profile) api.profil.save(agentId, profile).catch(e=>{
+      console.error('Erreur sauvegarde profil:', e);
+      alert("⚠️ Une modification de tes compteurs n'a pas pu être enregistrée (problème réseau ?). Réessaie l'action dans quelques instants — sinon elle sera perdue au prochain rechargement.\n\nErreur : "+e.message);
+    });
   },[agentProfiles]);
 
   // ── RAPPEL CONGÉS PROTOCOLAIRES ─────────────────────────────────────────────
