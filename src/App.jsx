@@ -6396,251 +6396,6 @@ function BarreSaisieRapide({barreConfig, setBarreConfig, codeActif, setCodeActif
   );
 }
 
-// ─── VUE PLANNING (style Google Calendar) ────────────────────────────────────
-// Grille 0h-24h scrollable verticalement, un bloc par jour en colonne
-
-// Parse "06h10" → minutes depuis minuit
-function parseHeures(h) {
-  if(!h) return null;
-  const m = h.match(/(\d{1,2})h(\d{2})/);
-  if(!m) return null;
-  return parseInt(m[1])*60 + parseInt(m[2]);
-}
-
-// Retourne {debut, fin} en minutes pour un code équipe
-function getPlageMinutes(code) {
-  const heures = EQ[code]?.heures || "";
-  if(!heures) return null;
-  const parts = heures.split("–");
-  if(parts.length !== 2) return null;
-  const debut = parseHeures(parts[0].trim());
-  let fin   = parseHeures(parts[1].trim());
-  if(debut===null||fin===null) return null;
-  // Nuit : fin < debut → fin le lendemain (ex 22h15-06h17)
-  if(fin < debut) fin += 1440;
-  return {debut, fin};
-}
-
-function VuePlanning({dates, agent, schedule, getColor, getTc, isOwnProfile, onDayClick}){
-  const todayRowRef = useRef(null);
-  useEffect(()=>{ todayRowRef.current?.scrollIntoView({block:"center"}); },[dates]);
-  useEffect(()=>{
-    const handler=()=>todayRowRef.current?.scrollIntoView({block:"center",behavior:"smooth"});
-    window.addEventListener("f2ppmp:scrolltoday",handler);
-    return ()=>window.removeEventListener("f2ppmp:scrolltoday",handler);
-  },[]);
-  // Vue liste verticale scrollable (style Google Agenda mobile)
-  // Un jour par ligne, bloc horaire visuel à droite
-
-  const JOURS_LONG = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
-  const BAR_PX_PER_MIN = 0.5; // 1px = 2 minutes → barre de 480px pour 24h
-
-  const lignes = dates.map(dk=>{
-    const agKeyL=agent?.immatriculation||agent?.cp||agent?.id;
-    const en   = schedule[`${agKeyL}-${dk}`];
-    const code = en?.equipe;
-    const eq   = code ? EQ[code] : null;
-    const isPrive  = en?.prive||eq?.prive||false;
-    const showData = isOwnProfile||!isPrive;
-    const jsCode = en?.jsCode||null;
-    const dow   = new Date(dk).getDay();
-    const isWE  = dow===0||dow===6;
-    const isToday = dk===TODAY;
-
-    let plage = null;
-    let label = null;
-    let couleur = "#f1f5f9";
-    let tc = "#94a3b8";
-
-    if(code && showData){
-      label   = eq?.label||code;
-      couleur = getColor(code);
-      tc      = getTc(code);
-      plage   = getPlageMinutes(code);
-    }
-
-    const d = new Date(dk);
-    return {dk, code, eq, label, plage, couleur, tc, isWE, isToday, dow, jsCode, showData,
-      jourNom: JOURS_LONG[dow],
-      jourNum: d.getDate(),
-      moisNom: d.toLocaleDateString("fr-FR",{month:"short"})};
-  });
-
-  // Grouper par semaine pour afficher un séparateur
-  const lignesAvecSep = [];
-  let dernSemaine = null;
-  lignes.forEach(l=>{
-    const d = new Date(l.dk);
-    // Numéro de semaine ISO
-    const sem = Math.ceil((((d - new Date(d.getFullYear(),0,1))/86400000)+1)/7);
-    if(sem !== dernSemaine){
-      dernSemaine = sem;
-    }
-    lignesAvecSep.push(l);
-  });
-
-  return(
-    <div style={{border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden",background:"#fff"}}>
-      {/* Légende */}
-      <div style={{padding:"8px 14px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",
-        display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:11,fontWeight:700,color:"#64748b"}}>📋 Vue Planning</span>
-        <span style={{fontSize:9,color:"#94a3b8"}}>— Scroll pour naviguer dans le mois</span>
-      </div>
-
-      {/* Liste des jours */}
-      <div style={{overflowY:"auto",maxHeight:"75vh",WebkitOverflowScrolling:"touch"}}>
-        {lignesAvecSep.map((l,i)=>{
-          const isFirstOfMonth = l.jourNum===1;
-          return(
-            <div key={l.dk}>
-              {/* Séparateur semaine si lundi */}
-              {l.dow===1&&i>0&&<div style={{height:1,background:"#e2e8f0",margin:"0 14px"}}/>}
-
-              {/* Ligne jour */}
-              <div ref={l.isToday?todayRowRef:null} onClick={()=>onDayClick&&onDayClick(l.dk, schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]||null)} style={{
-                display:"flex",alignItems:"stretch",
-                minHeight:48,
-                background:l.isToday?"#eef2ff":l.isWE?"#fafafa":"#fff",
-                borderBottom:"1px solid #f8fafc",
-                borderLeft:l.isToday?"3px solid #6366f1":"3px solid transparent",
-                cursor:"pointer",
-              }}>
-                {/* Colonne date */}
-                <div style={{
-                  width:56,flexShrink:0,
-                  display:"flex",flexDirection:"column",
-                  alignItems:"center",justifyContent:"center",
-                  padding:"6px 4px",
-                  borderRight:"1px solid #f1f5f9",
-                }}>
-                  <div style={{
-                    fontSize:10,fontWeight:700,
-                    color:l.isToday?"#6366f1":l.isWE?"#f97316":"#94a3b8",
-                    textTransform:"uppercase",letterSpacing:.3,
-                  }}>{l.jourNom.slice(0,3)}</div>
-                  <div style={{
-                    fontSize:18,fontWeight:l.isToday?900:600,
-                    color:l.isToday?"#fff":"#1e293b",
-                    background:l.isToday?"#6366f1":"transparent",
-                    borderRadius:"50%",width:32,height:32,
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    lineHeight:1,
-                  }}>{l.jourNum}</div>
-                  <div style={{fontSize:8,color:"#94a3b8",marginTop:1}}>{l.moisNom}</div>
-                </div>
-
-                {/* Contenu : bloc équipe */}
-                <div style={{flex:1,padding:"6px 10px",display:"flex",
-                  flexDirection:"column",justifyContent:"center",gap:4}}>
-                  {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.finNuit&&<div style={{fontSize:11,color:"#0369a1",background:"#f0f9ff",borderRadius:6,padding:"2px 8px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>🌙 Descente de nuit</div>}
-                  {isOwnProfile&&schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.notePerso&&<div style={{fontSize:11,color:"#fff",background:getColor("NOTE"),borderRadius:6,padding:"3px 9px",marginBottom:4,display:"inline-flex",alignItems:"center",gap:4,fontWeight:700}}>📝 {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`].notePerso}</div>}
-                    {l.code&&l.showData?(
-                    <div>
-                      {/* Badge code + label */}
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                        {l.code==="RPP"?(
-                          <span style={{
-                            display:"flex",alignItems:"center",justifyContent:"center",
-                            width:36,height:36,borderRadius:"50%",
-                            background:l.couleur,color:l.tc,
-                            fontSize:11,fontWeight:800,
-                            boxShadow:"0 1px 3px rgba(0,0,0,.12)",
-                          }}>RPP</span>
-                        ):(
-                        <span style={{
-                          background:l.couleur,color:l.tc,
-                          borderRadius:8,padding:"3px 10px",
-                          fontSize:12,fontWeight:800,
-                          boxShadow:"0 1px 3px rgba(0,0,0,.12)",
-                        }}>
-                          {CODES_FETES[l.code]?"🩷":""}{l.label}
-                        {l.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(l.jsCode)?<span style={{fontSize:10,opacity:.8}}> / {l.jsCode}</span>:null}</span>
-                        )}
-                        {l.eq?.heures&&<span style={{
-                          fontSize:10,color:"#64748b",fontWeight:600,
-                          fontFamily:"monospace",
-                        }}>{l.eq.heures}</span>}
-                      </div>
-
-                      {/* Badge nuit du soir */}
-                      {schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.equipe2==="N"&&l.code!=="N"&&l.showData&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-                        <span style={{background:getColor("N"),color:getTc("N"),borderRadius:8,padding:"3px 10px",fontSize:12,fontWeight:800,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}><span>Nuit</span>{schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.jsCode2&&<span style={{fontSize:10,opacity:.85,fontWeight:500}}>{schedule[`${agent.immatriculation||agent.cp||agent.id}-${l.dk}`]?.jsCode2}</span>}</span>
-                      </div>}
-                      {/* Barre horaire visuelle */}
-                      {l.plage&&(()=>{
-                        const totalMin = 24*60;
-                        const debutPct = Math.min(l.plage.debut/totalMin*100,100);
-                        const largeurPct = Math.min((l.plage.fin-l.plage.debut)/totalMin*100,100-debutPct);
-                        return(
-                          <div style={{position:"relative",height:8,
-                            background:"#f1f5f9",borderRadius:4,overflow:"visible"}}>
-                            {/* Fond barre */}
-                            <div style={{
-                              position:"absolute",
-                              left:`${debutPct}%`,
-                              width:`${largeurPct}%`,
-                              height:"100%",
-                              background:l.couleur,
-                              borderRadius:4,
-                              minWidth:3,
-                            }}/>
-                            {/* Marqueurs 6h, 12h, 18h */}
-                            {[6,12,18].map(h=>(
-                              <div key={h} style={{
-                                position:"absolute",
-                                left:`${h/24*100}%`,
-                                top:-2,bottom:-2,
-                                width:1,background:"rgba(0,0,0,.08)",
-                              }}/>
-                            ))}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Ligne "maintenant" si aujourd'hui */}
-                      {l.isToday&&(()=>{
-                        const now = new Date();
-                        const minNow = now.getHours()*60+now.getMinutes();
-                        const pct = minNow/1440*100;
-                        return(
-                          <div style={{position:"relative",height:2,marginTop:2}}>
-                            <div style={{
-                              position:"absolute",
-                              left:`${pct}%`,
-                              top:0,
-                              width:3,height:3,
-                              borderRadius:"50%",
-                              background:"#ef4444",
-                              transform:"translateX(-50%)",
-                            }}/>
-                            <div style={{
-                              position:"absolute",
-                              left:`${pct}%`,
-                              right:0,
-                              height:1,
-                              background:"#ef4444",
-                              opacity:.4,
-                            }}/>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  ):(
-                    <div style={{fontSize:10,color:"#cbd5e1",fontStyle:"italic"}}>
-                      {l.showData?"—":"·"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 
 // ─── HELPER RC FÊTES AGENDA ──────────────────────────────────────────────────
 // Retourne la liste des codes fêtes dont ce jour est soit :
@@ -6679,11 +6434,10 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   return result;
 }
 
-function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,onOpenEchanges}){
+function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,onOpenEchanges}){
   const [echangesDismissedCount,setEchangesDismissedCount]=usePersist("echangesDismissedCount",0);
   const [showHab,setShowHab]=useState(false);
   const [showHabRoul,setShowHabRoul]=useState(false);
-  const [calView,setCalView]=useState("mois");
   const [dayPopup,setDayPopup]=useState(null); // {dk, entry}
   // Fêtes déjà "prises" ou "payées" cette année-là (code -> message d'explication), pour
   // griser dans le popup les codes fête déjà réglés et éviter d'en saisir un doublon ou de
@@ -6706,25 +6460,12 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
   }, [dayPopup, agent, schedule, agentProfiles]);
   const [monthOff,setMonthOff]=useState(0);
   const personalDateJumpRef=useRef();
-  const jumpToWeekDate=(dateStr)=>{
-    const target=new Date(dateStr+"T12:00:00");
-    const targetDow=target.getDay();
-    const targetMondayOffset=targetDow===0?-6:1-targetDow;
-    const targetMonday=new Date(target); targetMonday.setDate(target.getDate()+targetMondayOffset); targetMonday.setHours(12,0,0,0);
-    const today=new Date();
-    const todayDow=today.getDay();
-    const todayMondayOffset=todayDow===0?-6:1-todayDow;
-    const currentMonday=new Date(today); currentMonday.setDate(today.getDate()+todayMondayOffset); currentMonday.setHours(12,0,0,0);
-    const diffWeeks=Math.round((targetMonday-currentMonday)/(7*24*60*60*1000));
-    setWeekOffset(diffWeeks);
-  };
   const jumpToMonthDate=(dateStr)=>{
     const target=new Date(dateStr+"T12:00:00");
     const today=new Date();
     const diffMonths=(target.getFullYear()*12+target.getMonth())-(today.getFullYear()*12+today.getMonth());
     setMonthOff(diffMonths);
   };
-  const swipeWeek=useSwipeHandlers(()=>setWeekOffset(w=>w+1),()=>setWeekOffset(w=>w-1));
   const swipeMonth=useSwipeHandlers(()=>setMonthOff(m=>m+1),()=>setMonthOff(m=>m-1));
   const [showColorPicker,setShowColorPicker]=useState(false);
   // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate.
@@ -6905,7 +6646,6 @@ function PersonalView({agent,schedule,setSchedule,weekOffset,setWeekOffset,onImp
     {c:"FOR",l:"Formation"},{c:"DISPO",l:"Dispo"},
     {c:"FETES",l:"🩷 Fêtes"}, // bouton spécial ouvrant le menu fêtes
   ];
-  const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset]);
   const currentYear=new Date().getFullYear();
   const [compteurYear,setCompteurYear]=useState(currentYear);
 
@@ -6937,187 +6677,29 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
       </button>
       <button onClick={()=>setEchangesDismissedCount(echangesCount||0)} title="Masquer ce bandeau" style={{border:"none",background:"none",cursor:"pointer",fontSize:17,color:"#94a3b8",padding:"0 10px"}}>✕</button>
     </div>}
-    {/* Toggle vue semaine / mois */}
-    {/* Toggle vue semaine / mois */}
-    {/* BULLETIN_IMPORT_REPOSITIONNE */}
-    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-      <div style={{display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,gap:2}}>
-        {[["mois","📆 Mois"],["semaine","📅 Semaine"],["planning","📋 Planning"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setCalView(k)} style={{border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",background:calView===k?"#fff":"transparent",color:calView===k?"#1e293b":"#475569",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:calView===k?700:600,boxShadow:calView===k?"0 1px 4px rgba(0,0,0,.08)":"none"}}>
-            {l}
-          </button>
-        ))}
+    {/* En-tete simplifiee (04/08, demande par Olivier) : plus de bascule Mois/Semaine/Planning
+        (les 2 autres vues retirees, voir CLAUDE.md resolus du 04/08) - nom du mois complet
+        toujours visible, navigation par flecheS precedent/suivant (avant : uniquement le
+        calendrier natif via showPicker(), pas pratique a la souris) + bouton "Aujourd'hui". */}
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
+      <div style={{display:"flex",alignItems:"center",gap:2}}>
+        <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={{border:"none",background:"none",cursor:"pointer",fontSize:20,color:"#475569",padding:"4px 8px",lineHeight:1}}>‹</button>
+        <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer"}}>
+          <span style={{fontSize:"clamp(13px,1.6vw,16px)",fontWeight:700,color:"#1e293b",whiteSpace:"nowrap"}}>{MOIS_L[curMonth]} {curYear}</span>
+          <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
+        </button>
+        <button onClick={()=>setMonthOff(m=>m+1)} aria-label="Mois suivant" style={{border:"none",background:"none",cursor:"pointer",fontSize:20,color:"#475569",padding:"4px 8px",lineHeight:1}}>›</button>
       </div>
-      {/* Nav selon la vue */}
-      {calView==="semaine"?<>
-        <button onClick={()=>setWeekOffset(0)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:weekOffset===0?"#f1f5f9":"#eef2ff",color:weekOffset===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700}}>Aujourd'hui</button>
-        <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",flex:1}}>
-          <span style={{fontSize:12,color:"#475569",fontWeight:700}}>{weekDates[0]?.slice(8)}/{weekDates[0]?.slice(5,7)}–{weekDates[6]?.slice(8)}/{weekDates[6]?.slice(5,7)}</span>
-          <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
-        </button>
-      </>:<>
-        <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
-        <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer",flex:1}}>
-          <span style={{fontSize:13,fontWeight:700,color:"#1e293b"}}>{MOIS_L[curMonth].slice(0,4)} {curYear}</span>
-          <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
-        </button>
-      </>}
       {isOwnProfile && <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
         const agCp=agent.immatriculation||agent.cp||agent.id;
         api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
       }}/>}
     </div>
 
-    <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value){if(calView==="semaine")jumpToWeekDate(e.target.value);else jumpToMonthDate(e.target.value);}}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
-    {/* ── VUE SEMAINE ── */}
-    {calView==="semaine"&&<>
-      <div onTouchStart={swipeWeek.onTouchStart} onTouchEnd={swipeWeek.onTouchEnd} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
-        {weekDates.map((dk,i)=>{
-          const en=schedule[`${agent.id}-${dk}`];
-          const code=en?.equipe;
-          const eq=EQ_COLORS[code]||EQ[code];
-          const isPrive=en?.prive||eq?.prive||false;
-          const showData=isOwnProfile||!isPrive;
-          const isToday=dk===TODAY;
-          const dow=new Date(dk).getDay();
-          const isWE=dow===0||dow===6;
-          const hasNuit2=en?.equipe2==="N";
-          const isFinNuit2=en?.finNuit;
-          const barColor=isFinNuit2?"#1e3a8a":code&&showData?getColor(code):isWE?"#e2e8f0":"#f1f5f9";
-
-          return <div key={dk}
-            onClick={()=>{
-              if(isOwnProfile) setDayPopup({dk, entry:en||null});
-            }}
-            style={{
-            borderRadius:12,
-            overflow:"hidden",
-            background:codeActif&&code===codeActif?"#fafafa":"#fff",
-            border:codeActif?(code===codeActif?"2px solid #6366f1":"1.5px solid rgba(99,102,241,.3)")
-              :isToday?"2px solid #6366f1":"1.5px solid #e2e8f0",
-            boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.06)",
-            display:"flex",
-            flexDirection:"column",
-            minHeight:110,
-            cursor:"pointer",
-          }}>
-            {/* Barre colorée en haut */}
-            <div style={{
-              height:6,
-              background:barColor,
-              borderRadius:"10px 10px 0 0",
-            }}/>
-
-            {/* Header jour */}
-            <div style={{
-              padding:"6px 8px 4px",
-              borderBottom:"1px solid #f1f5f9",
-              background:isToday?"#f5f3ff":isWE?"#f8fafc":"#fff",
-            }}>
-              <div style={{fontSize:"clamp(11px,1.4vw,15px)",fontWeight:isToday?800:700,
-                color:isToday?"#6366f1":isWE?"#b45309":"#1e293b"}}>
-                {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"][i]}
-              </div>
-              <div style={{fontSize:"clamp(11px,1.4vw,15px)",fontWeight:700,color:isToday?"#6366f1":"#334155",marginTop:1}}>
-                {dk?.slice(8)}/{dk?.slice(5,7)}
-              </div>
-            </div>
-
-            {/* Contenu */}
-            <div style={{padding:"6px 7px",flex:1,display:"flex",flexDirection:"column",gap:4}}>
-           {/* ZONE 1 — 🌙 descente de nuit (haut) */}
-              {en?.finNuit&&showData&&<div style={{
-                background:"#f0f9ff",color:"#0369a1",
-                borderRadius:5,padding:"2px 6px",
-                fontSize:10,fontWeight:700,
-                display:"inline-flex",alignItems:"center",gap:4,
-                alignSelf:"flex-start",
-              }}>🌙</div>}
-              {isOwnProfile&&en?.notePerso&&!code&&<div style={{
-                background:getColor("NOTE"),color:"#fff",
-                borderRadius:5,padding:"3px 7px",
-                fontSize:10,fontWeight:700,lineHeight:1.3,
-                display:"flex",alignItems:"flex-start",gap:4,
-              }}>📝 <span>{en.notePerso}</span></div>}
-
-              {/* ZONE 2 — Utilisation journée (milieu) */}
-              {code&&showData&&code!=="N"&&code!=="RPP"&&<div style={{
-                background:getColor(code),color:getTc(code),
-                borderRadius:8,padding:"4px 8px",
-                fontSize:10,fontWeight:700,textAlign:"center",
-                display:"flex",flexDirection:"column",gap:2,
-              }}>
-                <span style={CODES_FETES[code]?{fontSize:15,fontWeight:800}:undefined}>{CODES_FETES[code]?`🩷 ${code}`:(eq?.label||code)}</span>
-                {en?.jsCode&&!["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{getPosteLabelFromCode(en.jsCode)||en.jsCode}</span>}
-                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:9,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 5px",marginTop:1}}>📝 {en.notePerso}</span>}
-              </div>}
-
-              {/* ZONE 2bis — RPP : badge rond dédié, centré, palette dissociée de RP */}
-              {code==="RPP"&&showData&&<div style={{
-                display:"flex", alignItems:"center", justifyContent:"center",
-                width:32, height:32, borderRadius:"50%",
-                background:getColor("RPP"), color:getTc("RPP"),
-                fontSize:10, fontWeight:800, alignSelf:"center",
-                flexShrink:0, margin:"2px auto",
-              }}>
-                RPP
-              </div>}
-              {code==="RPP"&&showData&&isOwnProfile&&en?.notePerso&&<span style={{
-                fontSize:9, color:"#fff", fontWeight:700,
-                background:getColor("NOTE"), borderRadius:4, padding:"1px 6px",
-                textAlign:"center", display:"block", margin:"0 auto",
-              }}>📝 {en.notePerso}</span>}
-
-              {/* ZONE 3 — Nuit (bas) */}
-              {(code==="N"||en?.equipe2==="N")&&showData&&<div style={{
-                background:getColor("N"),color:getTc("N"),
-                borderRadius:8,padding:"4px 8px",
-                fontSize:10,fontWeight:700,textAlign:"center",
-                display:"flex",flexDirection:"column",gap:2,
-              }}>
-                <span>Nuit</span>
-                {(code==="N"?en?.jsCode:en?.jsCode2)&&<span style={{fontSize:8,opacity:.85,fontWeight:500}}>{getPosteLabelFromCode(code==="N"?en?.jsCode:en?.jsCode2)||(code==="N"?en?.jsCode:en?.jsCode2)}</span>}
-              </div>}
-
-
-              {/* Pastilles RC fêtes */}
-              {(()=>{
-                const rcFetes = getRCFetesDuJour(agent.id, dk, schedule, agentProfiles, parseInt(dk.slice(0,4)));
-                if(!rcFetes.length) return null;
-                return <div style={{display:"flex",flexWrap:"wrap",gap:2,marginTop:2}}>
-                  {rcFetes.map(f=>(
-                    <span key={f.code}
-                      title={`${f.type==="fete"?"Fête prise":f.type==="RC_manuel"?"RC manuel":"RC"} : ${f.label}`}
-                      style={{
-                        display:"inline-flex",alignItems:"center",gap:2,
-                        background:"#ec4899",color:"#fff",
-                        borderRadius:6,padding:"1px 5px",
-                        fontSize:8,fontWeight:800,
-                        border:"1px solid #db2777",
-                      }}>
-                      🩷 {f.code}{f.type==="RC_manuel"&&<span style={{fontSize:6,opacity:.8}}> ✎</span>}
-                    </span>
-                  ))}
-                </div>;
-              })()}
-
-              {/* Vide */}
-              {!en&&<div style={{
-                flex:1,display:"flex",alignItems:"center",justifyContent:"center",
-                color:"#e2e8f0",fontSize:18,
-              }}>—</div>}
-            </div>
-
-            
-
-            
-          </div>;
-        })}
-      </div>
-    </>}
-
-    {/* ── VUE MOIS ── */}
-    {calView==="mois"&&<>
+    <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToMonthDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
+    {/* ── VUE MOIS (seule vue restante depuis le 04/08, voir CLAUDE.md) ── */}
+    <>
 
       {/* Grille mensuelle */}
       <div onTouchStart={swipeMonth.onTouchStart} onTouchEnd={swipeMonth.onTouchEnd} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
@@ -7166,7 +6748,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
                 borderRadius:10, cursor:"pointer",
                 position:"relative",
                 boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.04)",
- padding:"4px 3px 5px", minHeight:48,
+ padding:"4px 3px 5px", minHeight:76,
                 display:"flex", flexDirection:"column", gap:3,
 justifyContent: "flex-start",
                 minWidth:0, overflow:"hidden",
@@ -7286,9 +6868,7 @@ justifyContent: "flex-start",
       <div style={{fontSize:10,color:codeActif?"#6366f1":"#94a3b8",textAlign:"center",fontWeight:codeActif?700:400}}>
         {codeActif ? `✏️ Mode saisie : tap sur un jour pour appliquer "${codeActif}" — tap à nouveau pour effacer` : ""}
       </div>
-
-
-    </>}
+    </>
     {showColorPicker&&<ColorCustomizer
       agentColors={agentColors}
       setAgentColors={setAgentColors}
@@ -7433,19 +7013,6 @@ justifyContent: "flex-start",
       habilitations={profile.habilitations||{}}
       onSave={hab=>{setProfile({habilitations:hab});setShowHabRoul(false);}}
       onClose={()=>setShowHabRoul(false)}/>}
-    {/* ── VUE PLANNING ── */}
-    {calView==="planning"&&<div onTouchStart={swipeMonth.onTouchStart} onTouchEnd={swipeMonth.onTouchEnd}>
-      <VuePlanning
-        dates={monthDates}
-        agent={agent}
-        schedule={schedule}
-        getColor={getColor}
-        getTc={getTc}
-        isOwnProfile={isOwnProfile}
-        onDayClick={(dk,en)=>{ if(isOwnProfile) setDayPopup({dk,entry:en||null}); }}
-      />
-    </div>}
-
     {/* Tableau de bord compteurs */}
     {agent&&<DashboardCompteurs agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
         isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
@@ -10220,7 +9787,6 @@ export default function App(){
       {view==="personal"&&<PersonalView
         agent={currentAgent||currentUser?.agent}
         schedule={schedule} setSchedule={setSchedule}
-        weekOffset={weekOffset} setWeekOffset={setWeekOffset}
         onImportDP={setImportDPTarget}
         agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
         onFetePaye={handleFetePaye}
