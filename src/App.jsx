@@ -123,6 +123,25 @@ function usePersist(key, defaultValue) {
   }, [key]);
   return [value, setPersist];
 }
+// Fusionne une reponse api.planning.getSchedule(agentId) dans le state schedule,
+// en reconciliant les entrees de CET agent : une date qui n'existe plus cote
+// serveur (supprimee sur un autre appareil, par un admin, ou en base) est
+// retiree du cache local plutot que laissee en fantome indefiniment (bug
+// decouvert le 04/08 - la fusion additive {...prev,...entries} ne peut jamais
+// supprimer une cle absente de la nouvelle reponse). getSchedule(agentId) est
+// toujours un instantane COMPLET du planning de cet agent (aucun parametre
+// from/to cote appelant), donc toute cle "agentId-date" absente de entries
+// n'existe vraiment plus. Les entrees d'autres agents (vue admin) ne sont
+// jamais touchees.
+function reconcileSchedule(prev, agentId, entries) {
+  const next = { ...prev };
+  const prefix = agentId + "-";
+  Object.keys(next).forEach(k => {
+    if (k.startsWith(prefix) && !(k in entries)) delete next[k];
+  });
+  Object.entries(entries).forEach(([k, v]) => { next[k] = v; });
+  return next;
+}
 
 // ─── MIGRATION DONNÉES ────────────────────────────────────────────────────────
 const DATA_VERSION = "1.0";
@@ -6945,7 +6964,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
       </>}
       {isOwnProfile && <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
         const agCp=agent.immatriculation||agent.cp||agent.id;
-        api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>({...prev, ...entries})); });
+        api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
       }}/>}
     </div>
 
@@ -7337,7 +7356,7 @@ justifyContent: "flex-start",
         // correct si la sauvegarde met plus de 500ms a aboutir).
         try {
           await api.planning.saveEntry(agCp, dk, fullEntry);
-          api.planning.getSchedule(agCp).then(entries=>{if(entries)setSchedule(prev=>({...prev,...entries}));});
+          api.planning.getSchedule(agCp).then(entries=>{if(entries)setSchedule(prev=>reconcileSchedule(prev, agCp, entries));});
         } catch(e) {
           console.error('Erreur save:', e);
           // La sauvegarde reseau a echoue : annuler l'affichage optimiste
@@ -9729,7 +9748,7 @@ export default function App(){
     if(!agId||agId===myId) return;
     const chargerPlanningVisualise=()=>{
       api.planning.getSchedule(agId).then(entries=>{
-        if(entries) setSchedule(prev=>({...prev,...entries}));
+        if(entries) setSchedule(prev=>reconcileSchedule(prev, agId, entries));
       }).catch(()=>{});
     };
     chargerPlanningVisualise();
@@ -9745,14 +9764,8 @@ export default function App(){
     setCurrentAgent(user.agent);
     setView("personal");const agentId = user.agent.immatriculation || user.agent.cp || user.agent.id;
     api.planning.getSchedule(agentId).then(entries=>{
-      if(entries&&Object.keys(entries).length>0){
-        setSchedule(prev=>{
-          // Railway gagne toujours sur le localStorage
-          const next={...prev};
-          Object.entries(entries).forEach(([k,v])=>{ next[k]=v; });
-          return next;
-        });
-      }
+      // Railway gagne toujours sur le localStorage
+      if(entries) setSchedule(prev=>reconcileSchedule(prev, agentId, entries));
     }).catch(()=>{});
 
     const snapshotAvantFetchLogin = agentProfilesRef.current[agentId];
@@ -9817,9 +9830,7 @@ export default function App(){
       });
       // Recharger planning
       api.planning.getSchedule(agentId).then(entries=>{
-        if(entries&&Object.keys(entries).length>0){
-          setSchedule(prev=>({...prev,...entries}));
-        }
+        if(entries) setSchedule(prev=>reconcileSchedule(prev, agentId, entries));
       });
     };
     window.addEventListener('focus', handleFocus);
@@ -9860,8 +9871,8 @@ export default function App(){
     });
     // Charger le planning
     api.planning.getSchedule(agentId).then(entries=>{
-      if(!entries||Object.keys(entries).length===0) return;
-      setSchedule(prev=>({...prev,...entries}));
+      if(!entries) return;
+      setSchedule(prev=>reconcileSchedule(prev, agentId, entries));
     });
   },[currentUser?.agent?.id]); // eslint-disable-line
   // Charger le planning CPS officiel (partage entre tous les agents), et le
@@ -10085,9 +10096,7 @@ export default function App(){
     loadedRef.current[currentUser.agent.id] = true;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
     api.planning.getSchedule(agentId).then(entries=>{
-      if(entries && Object.keys(entries).length>0){
-        setSchedule(prev=>({...prev,...entries}));
-      }
+      if(entries) setSchedule(prev=>reconcileSchedule(prev, agentId, entries));
     });
   }
 
