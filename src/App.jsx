@@ -1567,7 +1567,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       chargerHistory();
       chargerDernierImport();
       const entries=await api.cps.getSchedule();
-      if(entries) setSchedule(prev=>({...prev,...entries}));
+      // 04/08 : api.cps.getSchedule() sans from/to renvoie toujours l'instantane
+      // COMPLET du planning officiel - remplacement direct plutot qu'une fusion
+      // additive (meme bug/meme correctif que reconcileSchedule pour le planning
+      // perso : une fusion ne peut jamais faire disparaitre une entree annulee
+      // cote serveur, ici precisement apres une annulation d'import).
+      if(entries) setSchedule(entries);
     }catch(err){
       alert("Erreur lors de l'annulation : "+err.message);
     }
@@ -9410,7 +9415,9 @@ export default function App(){
     const chargerCps=()=>{
       api.cps.getSchedule().then(entries=>{
         if(!entries) return;
-        setCpsSchedule(prev=>({...prev,...entries}));
+        // 04/08 : instantane complet (pas de from/to) -> remplacement direct,
+        // voir commentaire jumeau dans annulerDernierImport ci-dessus.
+        setCpsSchedule(entries);
       }).catch(e=>console.error("Erreur chargement CPS:",e));
     };
     chargerCps();
