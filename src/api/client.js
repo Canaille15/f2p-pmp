@@ -256,8 +256,13 @@ export const planning = {
     });
     const result = {};
     Object.entries(byDate).forEach(([date, periodes]) => {
-      const p1 = periodes.find(p => p.note !== 'debut_nuit') || periodes[0];
-      const p2 = periodes.find(p => p.note === 'debut_nuit');
+      // Grève (04/08) : periode independante (note='greve'), exclue du calcul
+      // p1/p2 ci-dessous pour ne jamais etre confondue avec l'equipe du jour
+      // ou la nuit (sinon un jour "greve seule" ferait passer equipe='DA').
+      const pGreve = periodes.find(p => p.note === 'greve');
+      const periodesJour = periodes.filter(p => p.note !== 'greve');
+      const p1 = periodesJour.find(p => p.note !== 'debut_nuit') || periodesJour[0] || {code_equipe:null, note:'note_seule', prive:true};
+      const p2 = periodesJour.find(p => p.note === 'debut_nuit');
       const horaires = p1.heure_debut ? (p1.heure_debut.slice(0,5).replace(':','h')+'–'+(p1.heure_fin||'').slice(0,5).replace(':','h')) : null;
       const isFinNuit = p1.note === 'fin_nuit';
       // Deux marqueurs synthétiques différents peuvent forcer code_equipe='N'
@@ -279,6 +284,7 @@ export const planning = {
         prive:    !!p1.prive,
         finNuit:  isFinNuit,
         notePerso: p1.note_perso || null,
+        greve:    pGreve ? pGreve.code_equipe : null,
         impressionAt: null,
       };
     });
@@ -355,6 +361,21 @@ result[`${row.agent_id || agentId}-${date}`] = {
       });
     }
     if (periodes.length === 0) periodes.push({ordre:1, code_equipe:'N', code_poste:null, heure_debut:null, heure_fin:null, prive:false, note:'note_seule', note_perso: entry.notePerso || null});
+    // Grève (DA/DB/DC, 04/08) : periode independante supplementaire, se combine
+    // avec n'importe quelle journee ci-dessus (ou reste seule, portee par le
+    // placeholder 'note_seule' cree juste au-dessus) - jamais mise dans la
+    // periode 1 pour ne pas interferer avec equipe/code_poste.
+    if (entry.greve) {
+      periodes.push({
+        ordre: periodes.length + 1,
+        code_equipe: entry.greve,
+        code_poste: null,
+        heure_debut: null,
+        heure_fin: null,
+        prive: true,
+        note: 'greve',
+      });
+    }
     return apiFetch(`/planning/${agentId}/${date}`, {
       method: 'PUT',
       body: JSON.stringify({ periodes, source: 'manuel' }),

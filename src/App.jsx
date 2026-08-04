@@ -7157,7 +7157,7 @@ justifyContent: "flex-start",
                 color:isToday?"#6366f1":isWE?"#b45309":"#1e293b",
                 lineHeight:1.3, marginBottom:1}}>{dayNum}</div>
 
-              {/* ZONE 1 — 🌙 descente de nuit + 📝 note perso (toujours en haut) */}
+              {/* ZONE 1 — 🌙 descente de nuit + ✊ grève + 📝 note perso (toujours en haut) */}
               {en?.finNuit&&<div style={{
                 background:"#f0f9ff", color:"#0369a1",
                 borderRadius:5, padding:"2px 6px",
@@ -7166,6 +7166,18 @@ justifyContent: "flex-start",
                 alignSelf:"flex-start",
               }}>
                 🌙
+              </div>}
+              {/* Grève (DA/DB/DC, 04/08) : independant de equipe/equipe2, se
+                  combine avec n'importe quelle journee - couleur du code
+                  "Absent" (ABS) reutilisee telle quelle, comme demande. */}
+              {isOwnProfile&&en?.greve&&<div style={{
+                background:getColor("ABS"), color:getTc("ABS"),
+                borderRadius:5, padding:"2px 6px",
+                fontSize:10, fontWeight:700,
+                display:"inline-flex", alignItems:"center", gap:4,
+                alignSelf:"flex-start",
+              }}>
+                ✊ {en.greve}
               </div>}
               {isOwnProfile&&en?.notePerso&&!code&&<div style={{
                 background:getColor("NOTE"), color:"#fff",
@@ -7298,12 +7310,13 @@ justifyContent: "flex-start",
           prive:    newEntry.prive||false,
           finNuit:  newEntry.finNuit !== undefined ? newEntry.finNuit : (prevEntry.finNuit||false),
           notePerso: newEntry.notePerso !== undefined ? (newEntry.notePerso||null) : (prevEntry.notePerso||null),
+          greve:    newEntry.greve !== undefined ? (newEntry.greve||null) : (prevEntry.greve||null),
           impressionAt: null,
         };
         // Sauvegarder localement
         setDayPopup(null);
-        // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit, pas de note) : supprimer la case
-        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit || fullEntry.notePerso);
+        // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit, pas de note, pas de greve) : supprimer la case
+        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit || fullEntry.notePerso || fullEntry.greve);
         if(!hasContent) {
           setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
           try { await api.planning.deleteEntry(agCp, dk); } catch(e){}
@@ -7335,7 +7348,7 @@ justifyContent: "flex-start",
           // atteint le serveur, decouverts seulement en comparant avec l'ordi.
           setSchedule(prev=>{
             const n={...prev};
-            const hadPrev = prevEntry && (prevEntry.equipe||prevEntry.equipe2||prevEntry.finNuit||prevEntry.notePerso);
+            const hadPrev = prevEntry && (prevEntry.equipe||prevEntry.equipe2||prevEntry.finNuit||prevEntry.notePerso||prevEntry.greve);
             if(hadPrev) n[agCp+'-'+dk]=prevEntry; else delete n[agCp+'-'+dk];
             return n;
           });
@@ -7378,7 +7391,7 @@ justifyContent: "flex-start",
           // Meme principe que onSave : annuler l'effacement optimiste plutot
           // que de laisser une case vide/modifiee alors que rien n'a ete
           // confirme cote serveur.
-          const hadPrev = entry && (entry.equipe||entry.equipe2||entry.finNuit||entry.notePerso);
+          const hadPrev = entry && (entry.equipe||entry.equipe2||entry.finNuit||entry.notePerso||entry.greve);
           setSchedule(prev=>{
             const n={...prev};
             if(hadPrev) n[agCp+'-'+dk]=entry; else delete n[agCp+'-'+dk];

@@ -33,6 +33,17 @@ const CODES_TRAVAIL = [
   { code:"J",  label:"Journée",  heures:"08h00–17h45", color:"#8B0000" },
 ];
 
+// Grève (04/08, demandé par Olivier) : DA/DB/DC sont une absence indépendante
+// qui se combine avec n'importe quelle journée de travail (ou reste seule) —
+// contrairement aux codes de CODES_REPOS ci-dessus, qui occupent le même
+// emplacement que "Travail" (un seul choisi à la fois). Couleur alignée sur
+// celle du code "Absent" existant (ABS), voir getColor("ABS") côté App.jsx.
+const GREVE = [
+  { code:"DA", label:"01h00 grève" },
+  { code:"DB", label:"1/2 journée grève" },
+  { code:"DC", label:"journée grève" },
+];
+
 const FETES = [
   {code:"F1",label:"1er Jan."},{code:"F2",label:"Lundi Pâques"},
   {code:"F3",label:"1er Mai"},{code:"F4",label:"Ascension"},
@@ -153,6 +164,10 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const [notePerso, setNotePerso] = useState(entry?.notePerso || "");
   const [showFetes, setShowFetes] = useState(false);
   const [feteBloqueeMsg, setFeteBloqueeMsg] = useState(null);
+  // Grève (04/08) : indépendant de type1/typeN, coexiste avec tout comme finNuit.
+  const [greve, setGreve] = useState(entry?.greve || null);
+  const [showGreve, setShowGreve] = useState(false);
+  const toggleGreve = (code) => { setGreve(prev => prev === code ? null : code); setShowGreve(false); };
 
   const dateObj = new Date(date + "T12:00:00");
   const dateLabel = dateObj.toLocaleDateString("fr-FR", {
@@ -203,6 +218,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     ...FETES.map(f=>f.code)].includes(type1),
       finNuit:    finNuit,
       notePerso:  notePerso || null,   // indépendant, disponible sur tout type de jour, sauvegardé tel quel
+      greve:      greve || null,       // indépendant, se combine avec n'importe quelle journée (comme finNuit)
     };
     onSave(newEntry);
   };
@@ -272,7 +288,16 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   Nuit{posteN ? " · "+(tous_postes.find(p=>p.code===posteN)?.label||posteN) : ""} ↓
                 </span>
               )}
-              {!finNuit && !type1 && !typeN && !notePerso && (
+              {greve && (
+                <span style={{
+                  background:"#dc2626", color:"#fff",
+                  fontSize:10, fontWeight:700,
+                  padding:"2px 7px", borderRadius:5,
+                }}>
+                  ✊ {GREVE.find(g=>g.code===greve)?.label||greve}
+                </span>
+              )}
+              {!finNuit && !type1 && !typeN && !notePerso && !greve && (
                 <span style={{color:"#475569",fontSize:10}}>case vide</span>
               )}
             </div>
@@ -388,7 +413,30 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 background: showFetes || FETES.find(f=>f.code===type1) ? "#ec4899" : "#fdf2f8",
                 color: showFetes || FETES.find(f=>f.code===type1) ? "#fff" : "#9d174d",
               }}>🩷 Fêtes</button>
+              {/* Grève (04/08) : indépendant de type1, se combine avec n'importe
+                  quelle journée de travail — toggleGreve plutôt que toggleType1. */}
+              <button onClick={() => setShowGreve(v=>!v)} style={{
+                padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                fontSize:12, fontWeight:700,
+                background: showGreve || greve ? "#dc2626" : "#fef2f2",
+                color: showGreve || greve ? "#fff" : "#991b1b",
+              }}>✊ Grève{greve ? " · "+greve : ""}</button>
             </div>
+            {showGreve && (
+              <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
+                {GREVE.map(g => (
+                  <button key={g.code} onClick={() => toggleGreve(g.code)} style={{
+                    padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer",
+                    fontSize:11, fontWeight:700,
+                    background: greve === g.code ? "#dc2626" : "#fef2f2",
+                    color: greve === g.code ? "#fff" : "#991b1b",
+                  }}>
+                    <span>{g.code}</span>
+                    <span style={{fontSize:9,opacity:.8,marginLeft:3}}>{g.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {showFetes && (
               <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
                 {FETES.map(f => {
