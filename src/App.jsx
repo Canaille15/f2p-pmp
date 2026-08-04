@@ -9249,6 +9249,19 @@ export default function App(){
   // (potentiellement périmé) le temps que api.profil.get() réponde, et l'autosave renverrait ce
   // snapshot périmé au serveur avant que la vraie donnée à jour n'ait eu le temps d'arriver.
   const profilLoadedRef = useRef(new Set());
+  // 04/08 : si les 3 tentatives de chargement du profil (login, focus, effet de
+  // login) echouent toutes (couac reseau/DB), profilLoadedRef ne se remplit
+  // jamais et l'autosave ci-dessous reste bloquee EN SILENCE pour le reste de
+  // la session - l'agent peut modifier ses compteurs autant qu'il veut, rien
+  // ne part jamais au serveur, sans le moindre message (vecu par Olivier :
+  // deco/reco sur 2 appareils, toujours bloque). Ce ref evite de spammer
+  // plusieurs alertes si les 3 tentatives echouent presque en meme temps.
+  const profilLoadFailAlertedRef = useRef(false);
+  const signalerEchecChargementProfil = () => {
+    if(profilLoadFailAlertedRef.current) return;
+    profilLoadFailAlertedRef.current = true;
+    alert("⚠️ Impossible de charger ton profil (problème réseau ou serveur). Tes compteurs ne pourront pas être enregistrés tant que la page n'est pas rechargée — recharge la page dès que possible avant de faire une modification.");
+  };
   // Miroir synchrone d'agentProfiles, lisible depuis un callback async (.then)
   // sans closure périmée — sert à détecter si un changement local a eu lieu
   // PENDANT qu'un fetch profil était en vol (voir les 3 sites api.profil.get
@@ -9342,10 +9355,23 @@ export default function App(){
         profilLoadedRef.current.add(agentId);
         return; // un changement local plus recent a eu lieu pendant le fetch -> reponse perimee ignoree
       }
-      if(p.habilitations) setAgentProfiles(prev=>({...prev,[agentId]:{...(prev[agentId]||{}),...p,habilitations:p.habilitations}}));
+      // 04/08 : le merge etait bloque par erreur derriere "if(p.habilitations)" -
+      // un agent sans habilitations (habilitations:null cote serveur) ne
+      // recevait donc JAMAIS le reste de son profil (compteurs compris) a la
+      // connexion, contrairement aux 2 autres effets de rechargement (focus,
+      // login) qui n'ont pas ce garde. Fusion desormais inconditionnelle,
+      // habilitations normalisee comme dans les 2 autres effets.
+      setAgentProfiles(prev=>({...prev,[agentId]:{
+        ...(prev[agentId]||{}),
+        ...p,
+        habilitations: Array.isArray(p.habilitations) ? Object.fromEntries((p.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (p.habilitations||{}),
+      }}));
     }
     profilLoadedRef.current.add(agentId);
-  }).catch(()=>{});
+  }).catch(e=>{
+    console.error('Erreur chargement profil (login):', e);
+    signalerEchecChargementProfil();
+  });
   };
   const handleLogout=()=>{
     setCurrentUser(null);
@@ -9394,6 +9420,9 @@ export default function App(){
           ));
         }
         profilLoadedRef.current.add(agentId);
+      }).catch(e=>{
+        console.error('Erreur chargement profil (focus):', e);
+        signalerEchecChargementProfil();
       });
       // Recharger planning
       api.planning.getSchedule(agentId).then(entries=>{
@@ -9435,6 +9464,9 @@ export default function App(){
         ));
       }
       profilLoadedRef.current.add(agentId);
+    }).catch(e=>{
+      console.error('Erreur chargement profil (effet login):', e);
+      signalerEchecChargementProfil();
     });
     // Charger le planning
     api.planning.getSchedule(agentId).then(entries=>{
