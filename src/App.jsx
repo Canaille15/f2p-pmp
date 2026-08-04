@@ -4255,17 +4255,17 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
                     </div>
                     <div style={{fontSize:10,fontWeight:600,color:"#475569",marginTop:4}}>
                       {dates.map((d,i)=>{
-                        // Repère visuel RPP (04/08, demandé par Olivier) : RP et RPP sont
-                        // regroupés dans un seul decompte (codes ci-dessus), mais un petit
-                        // astérisque rouge permet de reperer d'un coup d'oeil, mois par
-                        // mois, lesquelles de ces dates sont des RPP — sans rien changer
-                        // au calcul ni au regroupement existants.
+                        // Repère visuel RPP (04/08, demandé par Olivier — d'abord un
+                        // astérisque, jugé peu lisible, remplacé le même jour par la date
+                        // entière en rouge) : RP et RPP restent regroupés dans un seul
+                        // decompte (codes ci-dessus), ceci n'est qu'un repère visuel, sans
+                        // rien changer au calcul ni au regroupement existants.
                         const v = schedule[`${agent.id}-${d}`];
                         const isRPP = codes.includes("RPP") && (v?.equipe==="RPP"||v?.equipe2==="RPP");
                         return (
-                          <span key={d}>
-                            {i>0 && " · "}
-                            {fmtDate(d)}{isRPP && <span style={{color:"#dc2626",fontWeight:800}}>*</span>}
+                          <span key={d} style={isRPP?{color:"#dc2626",fontWeight:800}:undefined}>
+                            {i>0 && <span style={{color:"#475569",fontWeight:600}}> · </span>}
+                            {fmtDate(d)}
                           </span>
                         );
                       })}
@@ -4276,7 +4276,7 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
             </div>
           )}
           {codes.includes("RPP") && moisTries.length>0 && (
-            <div style={{fontSize:10,fontWeight:600,color:"#dc2626"}}>* jour RPP</div>
+            <div style={{fontSize:10,fontWeight:600,color:"#dc2626"}}>Date en rouge = jour RPP</div>
           )}
 
           {reportKey && (
