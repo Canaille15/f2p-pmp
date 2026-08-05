@@ -426,13 +426,15 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
               <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
                 {GREVE.map(g => (
                   <button key={g.code} onClick={() => toggleGreve(g.code)} style={{
-                    padding:"4px 9px", borderRadius:7, border:"none", cursor:"pointer",
+                    width:96, padding:"4px 6px", borderRadius:7, border:"none", cursor:"pointer",
                     fontSize:11, fontWeight:700,
+                    display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                    textAlign:"center", lineHeight:1.25,
                     background: greve === g.code ? "#dc2626" : "#fef2f2",
                     color: greve === g.code ? "#fff" : "#991b1b",
                   }}>
                     <span>{g.code}</span>
-                    <span style={{fontSize:9,opacity:.8,marginLeft:3}}>{g.label}</span>
+                    <span style={{fontSize:9,opacity:.8}}>{g.label}</span>
                   </button>
                 ))}
               </div>
