@@ -5168,8 +5168,21 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
     if(override.priseLe!==undefined){ priseLe = override.priseLe; priseType = override.priseType||"manuel"; }
     const estPayee = override.estPayee || (!priseLe && today2 > limiteDate);
 
+    // 05/08 : meme regle GRH00143 que le calcul principal (voir computeFetesLignes
+    // ci-dessus) - une fete tombant un dimanche est TOUJOURS perdue, non
+    // reportable. Manquait ici (estPerdue etait fige a false) : une fete perdue
+    // de N-1 (ex: F8/1er nov. un dimanche) apparaissait a tort comme reportable
+    // dans le tableau de bord de l'annee N (signale par Olivier en consultant
+    // 2027). F3 n'est jamais en T4 donc pas d'exception 1er-mai a gerer ici ;
+    // F0/Noel exclu comme dans le calcul principal (remplace par VN, jamais
+    // dimanche par construction).
+    const dowN1 = new Date(dateFete).getDay();
+    const estDimancheN1 = code !== "F0" && dowN1 === 0;
+    const estPerdueN1 = estDimancheN1;
+
     let statut;
-    if(priseLe)      statut = "prise";
+    if(estPerdueN1)   statut = "perdue";
+    else if(priseLe)  statut = "prise";
     else if(estPayee) statut = "payee";
     else if(today2 > limiteDate) statut = "payee_auto";
     else             statut = "attente";
@@ -5177,8 +5190,10 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
     return {
       code, label, dateFete, limiteDate, priseLe, priseType, statut,
       estPayee, moisPaye, anneePaye,
-      estDimanche:false, estF3Dimanche:false, estPerdue:false,
-      motifReglementaire:`Fête légale de ${yearMoins1} reportable jusqu'au 31 mars ${year} (trimestre civil suivant). (Réf. GRH00143)`,
+      estDimanche:estDimancheN1, estF3Dimanche:false, estPerdue:estPerdueN1,
+      motifReglementaire: estPerdueN1
+        ? `Fête légale de ${yearMoins1} tombée un dimanche — perdue, non récupérable (rémunérée comme un dimanche normal). (Réf. GRH00143)`
+        : `Fête légale de ${yearMoins1} reportable jusqu'au 31 mars ${year} (trimestre civil suivant). (Réf. GRH00143)`,
       override,
     };
   }).filter(Boolean);
