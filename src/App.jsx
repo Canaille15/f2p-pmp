@@ -4976,8 +4976,14 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
     const dow = dateFeteObj.getDay(); // 0=dim
 
     // F2 (Lundi de Pâques) et F5 (Lundi de Pentecôte) sont TOUJOURS des lundis
-    // par construction — ils ne peuvent jamais tomber un dimanche
-    const jamaisDimanche = code === "F2" || code === "F5";
+    // par construction — ils ne peuvent jamais tomber un dimanche.
+    // F0 (Noël) exclu ici pour une autre raison (05/08, précisé par Olivier) :
+    // Noël PEUT tomber un dimanche, mais n'est alors jamais perdu — la fête
+    // "VN" (veille de Noël, samedi 24/12) apparaît alors comme ligne séparée
+    // et porte elle-même la logique de perte/récupération à la place de F0.
+    // F0 suit donc toujours le calcul générique (semaine), jamais la branche
+    // "perdue automatiquement si dimanche" ci-dessous.
+    const jamaisDimanche = code === "F2" || code === "F5" || code === "F0";
     const estDimanche = !jamaisDimanche && dow === 0;
     const estF3Dimanche = code === "F3" && estDimanche;
 
@@ -5058,38 +5064,26 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
           estPerdue = true; // Pas de travail ce jour → PERDUE
         }
       } else {
-        // Toutes les autres fêtes dimanche (hors F2/F5)
-        if(estTravaillePlanning || estRPCeJour){
-          estRCAccorde = true; // Service imposé ou RP → RC accordé
-        } else if(!planningRenseigneCeJour && estFutur){
-          // Futur non renseigné → on anticipe PERDUE
-          // Mais si l'agent a un roulement, on peut affiner :
-          // Sans table de roulement détaillée, on marque comme PERDUE par anticipation
-          // (l'agent peut corriger manuellement)
-          estPerdue = true; // Anticipé PERDUE — corrigeable manuellement
-        } else if(!planningRenseigneCeJour && !estFutur){
-          estPerdue = true; // Passé non renseigné → PERDUE
-        } else {
-          // Planning renseigné mais pas travail ni RP (ex: CA, MA…) → pas de RC
-          estPerdue = true;
-        }
+        // Toutes les autres fêtes dimanche (hors F2/F5, hors F3) : TOUJOURS
+        // perdue, que l'agent travaille ce jour-là ou soit en RP, ou non —
+        // règle précisée par Olivier le 05/08 (diffère du 1er mai/F3, seul
+        // cas où le travail réel sauve la fête). Déterminé par le seul
+        // calendrier, connu à l'avance : pas de statut "probable/anticipée"
+        // ni d'attente du planning nécessaire ici, contrairement à F3.
+        estPerdue = true;
       }
     }
 
     // Motif réglementaire
     let motifReglementaire = null;
     if(estPerdue && estF3Dimanche){
-      motifReglementaire = "Lorsque le 1er mai tombe un dimanche, seuls les agents qui travaillent ce jour-là bénéficient d'un RC (le repos périodique ne compte pas, contrairement aux autres fêtes du dimanche). Aucun service imposé détecté. (Réf. GRH00143)";
+      motifReglementaire = "Lorsque le 1er mai tombe un dimanche, seuls les agents qui travaillent réellement ce jour-là bénéficient d'un RC (le repos périodique ne compte pas). Toutes les autres fêtes tombant un dimanche sont perdues sans exception, contrairement au 1er mai. Aucun service imposé détecté. (Réf. GRH00143)";
     } else if(estPerdueProbable && estF3Dimanche){
       motifReglementaire = "1er mai dimanche — Planning non encore saisi ce jour-là. Ce sera PERDUE sauf si vous travaillez ce jour (le RP ne compte pas pour cette fête). (Réf. GRH00143)";
-    } else if(estPerdue && !estF3Dimanche && estFutur){
-      motifReglementaire = "Fête tombant un dimanche — aucun planning saisi. PERDUE par anticipation si ni service imposé ni RP ce jour. Corrigeable si planning mis à jour. (Réf. GRH00143)";
-    } else if(estPerdue && !estF3Dimanche && !estFutur){
-      motifReglementaire = "Fête tombant un dimanche — aucun service imposé ni RP détecté dans le planning. (Réf. GRH00143)";
+    } else if(estPerdue && !estF3Dimanche){
+      motifReglementaire = "Fête tombant un dimanche — toujours perdue, que vous travailliez ou soyez en repos périodique ce jour-là (seul le 1er mai fait exception). (Réf. GRH00143)";
     } else if(estRCAccorde && estDimanche){
-      motifReglementaire = estRPCeJour
-        ? "Agent en repos périodique ce jour : RC accordé dans le trimestre civil suivant. (Réf. GRH00143)"
-        : "Agent utilisé ce jour : RC accordé dans le trimestre civil suivant. (Réf. GRH00143)";
+      motifReglementaire = "Agent utilisé ce jour (1er mai) : RC accordé dans le trimestre civil suivant. (Réf. GRH00143)";
     } else if(code === "VN"){
       motifReglementaire = "Les agents chôment le samedi veille de Noël lorsque cette fête tombe un dimanche. Ceux utilisés ou en RP bénéficient d'un RC dans le trimestre suivant. (Réf. GRH00143)";
     }
