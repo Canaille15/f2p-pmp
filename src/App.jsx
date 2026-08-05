@@ -6595,6 +6595,19 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
     });
     return m;
   },[agent,schedule,curYear]);
+  // Numérotation VT (05/08, demandé par Olivier, même principe que RP+RPP
+  // ci-dessus) : cumul annuel, mais le numéro n'est affiché que sur le
+  // DERNIER VT de chaque mois civil.
+  const vtNumeros=useMemo(()=>{
+    const jours=getJoursCodesAnnee(agent,schedule,curYear,["VT"]).sort();
+    const m={};
+    jours.forEach((d,i)=>{
+      const mois=d.slice(0,7);
+      const moisSuivant=jours[i+1]?.slice(0,7);
+      if(mois!==moisSuivant) m[d]=i+1;
+    });
+    return m;
+  },[agent,schedule,curYear]);
   const [showQuit,setShowQuit]=useState(false);
   // ── SAISIE RAPIDE ──────────────────────────────────────────────────────────
   // codeActif : code en cours de saisie (null = mode cycle classique)
@@ -6775,6 +6788,7 @@ justifyContent: "flex-start",
                 {code==="RU"&&ruNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{ruNumeros[dk]}</span>}
                 {code==="RQ"&&rqNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rqNumeros[dk]}</span>}
                 {code==="RP"&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rpNumeros[dk]}</span>}
+                {code==="VT"&&vtNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{vtNumeros[dk]}</span>}
                 {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
               </div>}
