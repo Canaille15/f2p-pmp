@@ -5313,11 +5313,14 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
     setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
   };
   const resetManuel = (code, targetYear=year) => {
-    setFetesDataYear(targetYear, prev=>{
-      const next = {...prev};
-      delete next[code];
-      return next;
-    });
+    // 05/08 : "delete" local ne suffit pas - le backend fusionne donnees_json
+    // via JSON_MERGE_PATCH, une cle simplement absente du patch envoye reste
+    // INCHANGEE cote serveur (seule une valeur null explicite l'efface). Meme
+    // bug deja corrige le 16/07 pour Conges/VT/paiement anticipe (voir
+    // annulerPaiementAnticipe juste en dessous), oublie ici : la correction
+    // manuelle revenait silencieusement au prochain rechargement du profil
+    // ("ca se remet tout seul", signale par Olivier).
+    setFetesDataYear(targetYear, prev=>({...prev, [code]: null}));
     setEditingCode(null);
   };
 
