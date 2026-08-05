@@ -2621,6 +2621,21 @@ function getJoursCodesAnnee(agent, schedule, year, codes){
   return jours;
 }
 
+// Comme getJoursCodesAnnee, mais pour la grève (05/08) : le code (DA/DB/DC)
+// est stocké dans le champ independant "greve", jamais dans equipe/equipe2
+// (voir DayEditPopup/toggleGreve) - un seul code precis, pas une liste.
+function getJoursGreveAnnee(agent, schedule, year, code){
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const jours = [];
+  Object.entries(schedule).forEach(([k,v])=>{
+    if(!agent || !k.startsWith(agent.id+"-")) return;
+    const dk = k.slice(agent.id.length+1);
+    if(dk < start || dk > end) return;
+    if(v?.greve === code) jours.push(dk);
+  });
+  return jours;
+}
+
 // Calcule le détail des congés d'une année : droit, jours pris par mois (avec
 // cumul), et gestion des "reports" — des jours de congé physiquement pris sur
 // l'année suivante mais décomptés du solde de cette année-ci (tolérance de
@@ -6621,6 +6636,24 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
     });
     return m;
   },[agent,schedule,curYear]);
+  // Numérotation Grève (05/08, demandé par Olivier : "en différenciant DA,
+  // DB, DC") : même principe cumul/dernier-du-mois que RP+RPP/VT/Maladie,
+  // mais CHACUN des 3 codes a sa propre série indépendante (pas combinés
+  // comme RP+RPP) — reflète que DA/DB/DC sont des types de grève distincts,
+  // pas des variantes d'un même repos.
+  const greveNumeros=useMemo(()=>{
+    const calc=(code)=>{
+      const jours=getJoursGreveAnnee(agent,schedule,curYear,code).sort();
+      const m={};
+      jours.forEach((d,i)=>{
+        const mois=d.slice(0,7);
+        const moisSuivant=jours[i+1]?.slice(0,7);
+        if(mois!==moisSuivant) m[d]=i+1;
+      });
+      return m;
+    };
+    return {DA:calc("DA"), DB:calc("DB"), DC:calc("DC")};
+  },[agent,schedule,curYear]);
   const [showQuit,setShowQuit]=useState(false);
   // ── SAISIE RAPIDE ──────────────────────────────────────────────────────────
   // codeActif : code en cours de saisie (null = mode cycle classique)
@@ -6766,15 +6799,18 @@ justifyContent: "flex-start",
                   combine avec n'importe quelle journee - couleur dediee et
                   personnalisable ("GREVE"), separee du reste de la palette
                   depuis le 04/08 (demande d'Olivier, auparavant alignee sur
-                  "Absent"). */}
+                  "Absent"). Numerotation ajoutee le 05/08 : cumul annuel par
+                  code (DA/DB/DC differencies, pas combines), numero affiche
+                  uniquement sur le dernier jour du mois pour CE code precis. */}
               {isOwnProfile&&en?.greve&&<div style={{
                 background:getColor("GREVE"), color:getTc("GREVE"),
                 borderRadius:5, padding:"2px 6px",
                 fontSize:10, fontWeight:700,
-                display:"inline-flex", alignItems:"center", gap:4,
+                display:"flex", flexDirection:"column",
                 alignSelf:"flex-start",
               }}>
-                ✊ {en.greve}
+                <span style={{display:"inline-flex",alignItems:"center",gap:4}}>✊ {en.greve}</span>
+                {greveNumeros[en.greve]?.[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{greveNumeros[en.greve][dk]}</span>}
               </div>}
               {isOwnProfile&&en?.notePerso&&!code&&<div style={{
                 background:getColor("NOTE"), color:"#fff",
