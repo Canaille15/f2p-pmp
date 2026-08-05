@@ -5482,34 +5482,55 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
             </div>
           )}
 
-          {/* Boutons actions */}
+          {/* Boutons actions — icone + legende toujours visible (05/08, demande
+              par Olivier) : auparavant icone seule + title au survol, invisible
+              au doigt sur mobile ("il faut passer la souris... sur le tel on a
+              rien"). Option 2 retenue (icone en haut, legende minuscule en
+              dessous) pour rester compact et garder les 5 boutons alignes sur
+              une seule ligne meme a l'etroit. title conserve en plus, pour le
+              survol desktop. */}
           {canEdit&&!isEditing&&<div style={{display:"flex",gap:6,flexShrink:0}}>
             <button onClick={()=>{setEditingCode(editKey);setEditVal(l.priseLe||"");}}
               title="Modifier la date de prise"
               style={{background:"#f1f5f9",border:"1px solid #cbd5e1",borderRadius:8,
-                padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>📅</button>
+                padding:"6px 4px",cursor:"pointer",width:52,
+                display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <span style={{fontSize:15}}>📅</span>
+              <span style={{fontSize:9,fontWeight:600,color:"#475569"}}>Date</span>
+            </button>
             <button onClick={()=>setManualPayee(l.code,!l.estPayee,targetYear)}
               title={l.estPayee?"Non payé":"Marquer payé"}
               style={{background:l.estPayee?"#dbeafe":"#f1f5f9",
                 border:`1.5px solid ${l.estPayee?"#93c5fd":"#cbd5e1"}`,
-                borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38}}>💶</button>
+                borderRadius:8,padding:"6px 4px",cursor:"pointer",width:52,
+                display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <span style={{fontSize:15}}>💶</span>
+              <span style={{fontSize:9,fontWeight:600,color:"#475569"}}>Payé</span>
+            </button>
             {/* Bouton réinitialiser — visible seulement si une correction manuelle a été posée sur cette fête */}
             {(l.override?.priseLe!==undefined||l.override?.estPayee!==undefined)&&<button
               onClick={()=>setResetConfirmOuvert(resetConfirmOuvert===editKey?null:editKey)}
               title="Annuler la correction manuelle et revenir au calcul automatique"
               style={{background:resetConfirmOuvert===editKey?"#ffedd5":"#fff7ed",
                 border:`1.5px solid ${resetConfirmOuvert===editKey?"#f97316":"#fdba74"}`,borderRadius:8,
-                padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38,
-                color:"#c2410c"}}>↺</button>}
+                padding:"6px 4px",cursor:"pointer",width:52,
+                display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                color:"#c2410c"}}>
+              <span style={{fontSize:15}}>↺</span>
+              <span style={{fontSize:9,fontWeight:600}}>Annuler</span>
+            </button>}
             {/* Bouton motif réglementaire */}
             {l.motifReglementaire&&<button
               onClick={()=>setMotifOuvert(motifVisible?null:editKey)}
               title="Motif réglementaire"
               style={{background:motifVisible?"#fce7f3":"#f1f5f9",
                 border:`1.5px solid ${motifVisible?"#f9a8d4":"#cbd5e1"}`,
-                borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,
-                minWidth:38,minHeight:38,
-                color:motifVisible?"#9d174d":"#64748b"}}>📋</button>}
+                borderRadius:8,padding:"6px 4px",cursor:"pointer",width:52,
+                display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                color:motifVisible?"#9d174d":"#64748b"}}>
+              <span style={{fontSize:15}}>📋</span>
+              <span style={{fontSize:9,fontWeight:600}}>Motif</span>
+            </button>}
             {/* Paiement anticipé — annulable, sans effet sur le calcul tant que "vu sur la feuille" n'est pas confirmé */}
             <button onClick={()=>{
                 const paiementVisible = paiementOuvert===editKey;
@@ -5519,8 +5540,12 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
               title="Paiement anticipé"
               style={{background:paiementOuvert===editKey?"#ecfdf5":l.paiementAnticipe?.moisVu?"#ecfdf5":l.paiementAnticipe?.moisDemande?"#fffbeb":"#f1f5f9",
                 border:`1.5px solid ${paiementOuvert===editKey||l.paiementAnticipe?"#6ee7b7":"#cbd5e1"}`,
-                borderRadius:8,padding:"7px 11px",cursor:"pointer",fontSize:15,minWidth:38,minHeight:38,
-                color:l.paiementAnticipe?.moisVu?"#047857":l.paiementAnticipe?.moisDemande?"#b45309":"#64748b"}}>⏩</button>
+                borderRadius:8,padding:"6px 4px",cursor:"pointer",width:52,
+                display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                color:l.paiementAnticipe?.moisVu?"#047857":l.paiementAnticipe?.moisDemande?"#b45309":"#64748b"}}>
+              <span style={{fontSize:15}}>⏩</span>
+              <span style={{fontSize:9,fontWeight:600}}>Anticipé</span>
+            </button>
           </div>}
         </div>
 
