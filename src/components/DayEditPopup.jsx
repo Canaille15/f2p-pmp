@@ -114,7 +114,7 @@ const CODE_VERS_HAB = {
   "ASMP":"PAASMJ",
 };
 
-export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesPrises, onSave, onDelete, onClose }) {
+export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesPrises, onSave, onDelete, onClose, onCongeStatutChange }) {
 
   const agKey = agent?.immatriculation || agent?.cp || agent?.id;
   const profile = agentProfiles?.[agKey] || {};
@@ -169,6 +169,33 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const [showGreve, setShowGreve] = useState(false);
   const toggleGreve = (code) => { setGreve(prev => prev === code ? null : code); setShowGreve(false); };
 
+  // Congés Demandé/Refusé (06/08) : contrairement à "Accordé" (type1="CA",
+  // écrit directement dans la case comme avant), Demandé/Refusé n'écrivent
+  // JAMAIS dans le planning perso — c'est un suivi indépendant qui alimente
+  // agentProfiles[agentId].congesDemandes (même modèle que le popup Congés,
+  // voir computeDashboardConges/App.jsx). jourEtaitVideAtOpen est capturé UNE
+  // FOIS depuis la prop entry (l'état AVANT ouverture du popup) — sert au
+  // détachement auto (Phase 3, 15/07) : un suivi ne doit se détacher que si
+  // le jour était vide au moment du marquage, jamais s'il avait déjà un
+  // contenu légitime dès le départ (exactement ce cas ici, puisqu'on autorise
+  // justement de marquer "Demandé" sur un jour déjà rempli).
+  const jourEtaitVideAtOpen = !(entry?.equipe || entry?.equipe2);
+  const trackingExistant = agentProfiles?.[agKey]?.congesDemandes?.[date];
+  const codeActuelAuOuverture = entry?.equipe || entry?.equipe2;
+  const congeStatutInitial = (trackingExistant && trackingExistant.statut &&
+      !(trackingExistant.jourEtaitVide && codeActuelAuOuverture))
+    ? trackingExistant.statut : null;
+  const [congeStatut, setCongeStatut] = useState(congeStatutInitial);
+  const [showConges, setShowConges] = useState(false);
+  const toggleCongeStatut = (statut) => {
+    if (congeStatut === statut) { setCongeStatut(null); return; }
+    setCongeStatut(statut);
+    // Un jour ne peut pas être à la fois "Accordé" (écrit CA dans la case) ET
+    // "Demandé"/"Refusé" (suivi indépendant) — si le jour était déjà accordé,
+    // choisir Demandé/Refusé désélectionne l'accord.
+    if (type1 === "CA") { setType1(null); setPoste1(""); setHoraires1(""); }
+  };
+
   const dateObj = new Date(date + "T12:00:00");
   const dateLabel = dateObj.toLocaleDateString("fr-FR", {
     weekday:"long", day:"numeric", month:"long"
@@ -221,6 +248,9 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
       greve:      greve || null,       // indépendant, se combine avec n'importe quelle journée (comme finNuit)
     };
     onSave(newEntry);
+    if (congeStatut !== congeStatutInitial && onCongeStatutChange) {
+      onCongeStatutChange(date, congeStatut, jourEtaitVideAtOpen);
+    }
   };
 
   return (
@@ -297,7 +327,16 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   ✊ {GREVE.find(g=>g.code===greve)?.label||greve}
                 </span>
               )}
-              {!finNuit && !type1 && !typeN && !notePerso && !greve && (
+              {congeStatut && (
+                <span style={{
+                  background: congeStatut==="demande" ? "#92400e" : "#991b1b",
+                  color:"#fff", fontSize:10, fontWeight:700,
+                  padding:"2px 7px", borderRadius:5,
+                }}>
+                  {congeStatut==="demande" ? "⏳ Congé demandé" : "✕ Congé refusé"}
+                </span>
+              )}
+              {!finNuit && !type1 && !typeN && !notePerso && !greve && !congeStatut && (
                 <span style={{color:"#475569",fontSize:10}}>case vide</span>
               )}
             </div>
@@ -398,7 +437,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
               Repos / Absences
             </div>
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {CODES_REPOS.map(r => (
+              {CODES_REPOS.filter(r => r.code !== "CA").map(r => (
                 <button key={r.code} onClick={() => toggleType1(r.code)} style={{
                   padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                   fontSize:12, fontWeight:700,
@@ -407,6 +446,26 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   transition:"all .1s",
                 }}>{r.label}</button>
               ))}
+              {/* Congés (06/08) : bouton dédié avec sous-menu Accordé/Demandé/Refusé
+                  — contrairement aux autres codes de CODES_REPOS ci-dessus (un seul
+                  toggle direct), "Congés" a 3 états distincts. Seul "Accordé" écrit
+                  dans le planning perso (type1="CA", comportement inchangé depuis
+                  toujours) ; "Demandé"/"Refusé" alimentent congesDemandes sans
+                  jamais toucher à la case (voir toggleCongeStatut plus haut). */}
+              <button onClick={() => setShowConges(v=>!v)} style={{
+                padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                fontSize:12, fontWeight:700,
+                background: type1==="CA" ? "#eab308"
+                  : congeStatut==="demande" ? "#fef3c7"
+                  : congeStatut==="refuse" ? "#fef2f2" : "#f1f5f9",
+                color: type1==="CA" ? "#fff"
+                  : congeStatut==="demande" ? "#92400e"
+                  : congeStatut==="refuse" ? "#991b1b" : "#475569",
+              }}>
+                {type1==="CA" ? "Congés · Accordé"
+                  : congeStatut==="demande" ? "⏳ Congés · Demandé"
+                  : congeStatut==="refuse" ? "✕ Congés · Refusé" : "Congés"}
+              </button>
               <button onClick={() => setShowFetes(v=>!v)} style={{
                 padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                 fontSize:12, fontWeight:700,
@@ -437,6 +496,33 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     <span style={{fontSize:9,opacity:.8}}>{g.label}</span>
                   </button>
                 ))}
+              </div>
+            )}
+            {showConges && (
+              <div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
+                  <button onClick={() => { toggleType1("CA"); setCongeStatut(null); setShowConges(false); }} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: type1==="CA" ? "#16a34a" : "#f0fdf4",
+                    color: type1==="CA" ? "#fff" : "#166534",
+                  }}>✓ Accordé</button>
+                  <button onClick={() => { toggleCongeStatut("demande"); setShowConges(false); }} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: congeStatut==="demande" ? "#eab308" : "#fefce8",
+                    color: congeStatut==="demande" ? "#fff" : "#92400e",
+                  }}>⏳ Demandé</button>
+                  <button onClick={() => { toggleCongeStatut("refuse"); setShowConges(false); }} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: congeStatut==="refuse" ? "#dc2626" : "#fef2f2",
+                    color: congeStatut==="refuse" ? "#fff" : "#991b1b",
+                  }}>✕ Refusé</button>
+                </div>
+                <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>
+                  Seul "Accordé" écrit dans le planning — "Demandé"/"Refusé" n'effacent jamais ce qui est déjà saisi ce jour-là, et alimentent le suivi dans le panneau Congés.
+                </div>
               </div>
             )}
             {showFetes && (

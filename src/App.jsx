@@ -2712,8 +2712,16 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   demandes.sort((a,b)=>a.date<b.date?-1:1);
   refusees.sort((a,b)=>a.date<b.date?-1:1);
 
+  // Solde théorique (06/08, demandé par Olivier) : projection "si toutes les
+  // demandes en attente sont accordées" — soustrait uniquement demandes.length
+  // (jamais refusees, qui ne consommeront jamais le solde). Peut devenir
+  // négatif si l'agent demande plus que son solde réel restant (signal
+  // volontairement affiché tel quel, pas plafonné à 0, pour alerter).
+  const soldeTheorique = (entitlement-pris) - demandes.length;
+
   return {
     entitlement, pris, solde: entitlement-pris,
+    soldeTheorique,
     parMois,
     tousJours,
     reports: reportsValides,
@@ -3031,6 +3039,15 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
               <div style={{fontSize:20,fontWeight:900,color:refusData.total>0?"#dc2626":"#94a3b8"}}>{refusData.total}</div>
             </div>
           </div>
+
+          {/* Solde théorique (06/08) : projection "si toutes les demandes en
+              attente sont accordées" — visible uniquement s'il y a des
+              demandes en cours, jamais affecté par les refus. */}
+          {data.demandes.length>0 && (
+            <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:10,padding:"9px 12px",fontSize:11.5,fontWeight:600,color:"#1e40af"}}>
+              ⏳ {data.demandes.length} jour{data.demandes.length>1?"s":""} en attente d'accord — solde théorique si tout accordé : <strong style={{color:data.soldeTheorique<0?"#dc2626":"#1e40af",fontSize:13}}>{data.soldeTheorique}</strong>
+            </div>
+          )}
 
           {/* Jours pris jusqu'à une date choisie (aujourd'hui par défaut) */}
           <div style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -7029,6 +7046,27 @@ justifyContent: "flex-start",
         }
       }}
       onClose={()=>setDayPopup(null)}
+      // Congés Demandé/Refusé saisis directement depuis le popup de saisie
+      // (06/08) : n'écrit jamais dans schedule, alimente le même suivi
+      // congesDemandes que le popup Congés (voir CongesDashboardModal) —
+      // tombstone null explicite pour "retirer" (JSON_MERGE_PATCH, comme
+      // partout ailleurs sur ce champ), sauvegarde automatique via l'effet
+      // générique agentProfiles déjà en place (avec alerte si échec réseau).
+      onCongeStatutChange={(dk, statut, jourEtaitVide)=>{
+        const todayIso = new Date().toISOString().slice(0,10);
+        setAgentProfiles(prev=>{
+          const curr = prev[agent.id]?.congesDemandes?.[dk];
+          let next;
+          if(statut==="demande"){
+            next = { statut:"demande", dateDemande: curr?.dateDemande || todayIso, jourEtaitVide };
+          } else if(statut==="refuse"){
+            next = { statut:"refuse", dateDemande: curr?.dateDemande||null, dateRefus: todayIso, jourEtaitVide };
+          } else {
+            next = null;
+          }
+          return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), [dk]: next}}};
+        });
+      }}
     />}
     {showHab&&<HabilitationsModal
       agent={agent}
