@@ -5,6 +5,7 @@ import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
 import DayEditPopup from "./components/DayEditPopup";
 import DemandeCongesView from "./components/DemandeCongesView";
+import { CetDashboardModal, computeDashboardCet } from "./components/CetView";
 
 
 // ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
@@ -4874,6 +4875,11 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // que le tableau de bord dédié), avec en plus le workflow Demandé→Accordé→Pris.
   const vtData = useMemo(()=>computeDashboardVT(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
 
+  // CET (Compte Épargne Temps, 06/08) : module isolé dans CetView.jsx, voir
+  // ce fichier pour toute la logique métier — App.jsx ne fait qu'afficher la
+  // carte et ouvrir le modal, comme pour n'importe quel autre compteur.
+  const cetData = useMemo(()=>computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
+
   // Pause Figée (17/07) : données chargées ici (pas dans la modale) pour être
   // partagées avec le calcul du solde TC, qui en dépend (voir computeDashboardTC).
   const agentIdPauses = agent?.cp || agent?.immatriculation || agent?.id;
@@ -4915,6 +4921,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"TC",      label:"TC",              color:"#0284c7", subtitle: tcData.solde>=TC_PLAFOND_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tcData.solde>=TC_PLAFOND_MIN},
     {key:"TY",      label:"TY",              color:"#0284c7", subtitle:`Solde — ${moisEnCoursLabel}`},
     {key:"VT",      label:"VT",              color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2},
+    {key:"CET",     label:"CET",             color:"#7c3aed", subtitle:"Compte épargne temps"},
     {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation dans l'année"},
     {key:"MA",      label:"Maladie",         color:"#dc2626", subtitle:"Jours maladie dans l'année"},
   ];
@@ -4924,6 +4931,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const [showCongesDash, setShowCongesDash] = useState(false);
   const [showFetesDash, setShowFetesDash] = useState(false);
   const [showVtDash, setShowVtDash] = useState(false);
+  const [showCetDash, setShowCetDash] = useState(false);
   const [showPauseFigeeDash, setShowPauseFigeeDash] = useState(false);
   const [showTcDash, setShowTcDash] = useState(false);
   const [showBilanGlobal, setShowBilanGlobal] = useState(false);
@@ -4981,6 +4989,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         const renderCard = (card) => {
           const v = card.key==="conges" ? congesData.solde
             : card.key==="VT" ? vtData.pris
+            : card.key==="CET" ? cetData.soldeTotal
             : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
             : card.key==="TC" ? minToHM(tcData.solde)
             : card.key==="RN" ? minToHM(rnLedgerData.solde)
@@ -4993,13 +5002,14 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           const isCongesCard = card.key==="conges";
           const isFetesCard = card.key==="FETE";
           const isVtCard = card.key==="VT";
+          const isCetCard = card.key==="CET";
           const isPfCard = card.key==="PF";
           const isTcCard = card.key==="TC";
           const isDetailCard = !!DETAIL_CONFIG[card.key];
-          const isClickable = isTravailCard || isCongesCard || isFetesCard || isVtCard || isPfCard || isTcCard || isDetailCard;
+          const isClickable = isTravailCard || isCongesCard || isFetesCard || isVtCard || isCetCard || isPfCard || isTcCard || isDetailCard;
           return(
             <div key={card.key}
-              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
+              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isCetCard ? ()=>setShowCetDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
@@ -5068,6 +5078,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       )}
       {showVtDash&&(
         <VtDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowVtDash(false)}/>
+      )}
+      {showCetDash&&(
+        <CetDashboardModal agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCetDash(false)}/>
       )}
       {showPauseFigeeDash&&(
         <PauseFigeeDashboardModal agent={agent} schedule={schedule} pausesData={pausesData} loading={pausesLoading} loadError={pausesError} recharger={rechargerPauses} tcData={tcData} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowPauseFigeeDash(false)}/>

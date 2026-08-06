@@ -489,6 +489,7 @@ export const profil = {
       tyLedger:                 extra.tyLedger                || [],
       rnLedger:                 extra.rnLedger                || [],
       bilanGlobalDureeJourMin:  extra.bilanGlobalDureeJourMin ?? null,
+      cetLedger:                extra.cetLedger               || { courant: [], finActivite: [] },
     };
   },
 
@@ -522,7 +523,7 @@ export const profil = {
       'congesEntitlement','congesReports','ruReports','rpReports','rqReports','rnReports',
       'tcReports','tyReports','rpAcquis','ruAcquis','rqAcquis','rnAcquis','tcAcquis','tyAcquis',
       'vtEntitlement','vtTracking','vtReports','congesDemandes','tcAjustementManuel',
-      'tcLedger','tyLedger','rnLedger','bilanGlobalDureeJourMin',
+      'tcLedger','tyLedger','rnLedger','bilanGlobalDureeJourMin','cetLedger',
     ];
     const donnees_json = {};
     EXTRA_KEYS.forEach(k => { if (data[k] !== undefined) donnees_json[k] = data[k]; });
