@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 // ─── CET (Compte Épargne Temps) ─────────────────────────────────────────────
 // Module volontairement isolé du reste de l'appli (même principe que
@@ -7,8 +7,13 @@ import { useState } from "react";
 // App.jsx se contente d'importer computeDashboardCet + CetDashboardModal et
 // d'afficher une carte cliquable, comme pour n'importe quel autre compteur.
 //
-// Phase 1 (06/08) : structure + notice + soldes à 0, AUCUN lien avec les
-// autres compteurs (RQ/RN/TC/TY/Congés) — ça viendra en phase 2+.
+// Phase 1 (06/08) : structure + notice + soldes à 0, aucun lien avec les
+// autres compteurs.
+// Phase 2 (06/08) : épargne RQ/RN/TC/TY/Médaille, cycle Demandé→Accordé/
+// Refusé (même principe que Congés/VT), abondement automatique du 1er jour
+// de l'année, déduction du compteur source à l'accord — RQ recalculé à la
+// volée (voir getCetTransfereJours, consommé par App.jsx), RN/TC/TY via une
+// écriture négative dans leur ledger existant (rnLedger/tcLedger/tyLedger).
 
 // Constantes réglementaires — jamais en dur dans la logique de calcul, pour
 // pouvoir les ajuster sans toucher au reste du fichier.
@@ -25,13 +30,38 @@ export const SOUS_COMPTES = [
 // exclus (aucun compteur correspondant dans l'appli). "Médaille" est une
 // source propre au module CET, sans compteur dédié ailleurs dans l'appli.
 export const SOURCES_EPARGNE = [
-  { code: "CA", label: "Congés annuels", detail: "à partir du 21e jour (20 jours doivent rester pris dans l'année)" },
   { code: "RQ", label: "RQ (repos supplémentaires)", detail: "articles 32-I, 38-5 et 47 du RH0077" },
   { code: "RN", label: "RN (repos compensateur de nuit)" },
   { code: "TC", label: "TC (temps compensé mensuel)" },
   { code: "TY", label: "TY (temps compensé semestriel)" },
-  { code: "MEDAILLE", label: "Congé médaille d'honneur des Chemins de Fer", detail: "article 8 chapitre 10 du Statut — saisie libre, propre au CET" },
+  { code: "MEDAILLE", label: "Congé médaille d'honneur des Chemins de Fer", detail: "article 8 chapitre 10 du Statut — saisie libre, propre au CET, ne déduit aucun autre compteur" },
 ];
+// Congés (CA) reste hors de cette liste en Phase 2 — cycle d'épargne à part
+// (intention → confirmation manuelle par l'agent), prévu en Phase 5.
+
+// RQ est déjà en jours (aucune conversion) — seuls RN/TC/TY ont un ledger en
+// heures/minutes à débiter. Médaille ne débite jamais rien (source propre au
+// CET, voir SOURCES_EPARGNE ci-dessus).
+export const LEDGER_KEY_BY_SOURCE = { RN: "rnLedger", TC: "tcLedger", TY: "tyLedger" };
+
+// Total de jours transférés au CET pour une source donnée (RQ typiquement),
+// tous sous-comptes confondus, sur une année — recalculé à la volée depuis
+// cetLedger, jamais stocké séparément. Consommé par App.jsx pour ajuster
+// l'affichage de la carte/du tableau de bord RQ (voir CompteurDetailModal,
+// prop cetDeduction) sans toucher à computeCompteurAvecDetail lui-même.
+export function getCetTransfereJours(agentProfiles, agentId, year, source) {
+  const ledger = agentProfiles?.[agentId]?.cetLedger || { courant: [], finActivite: [] };
+  let total = 0;
+  const parSousCompte = {};
+  SOUS_COMPTES.forEach(sc => {
+    const jours = (ledger[sc.key] || [])
+      .filter(m => m?.statut === "accorde" && m.source === source && m.annee === year)
+      .reduce((s, m) => s + (m.jours || 0), 0);
+    parSousCompte[sc.key] = jours;
+    total += jours;
+  });
+  return { total, parSousCompte };
+}
 
 // Notice réglementaire — texte verbatim (fourni par Olivier le 06/08, issu
 // des formulaires officiels RH0930). Ne jamais reformuler le contenu, seule
@@ -83,22 +113,29 @@ Compte fin d'activité : RQ, RN, TC, TY et Congés → à partir de l'âge d'ouv
   },
 ];
 
-// ─── Calcul (phase 1 : structure seule, aucun lien avec les autres compteurs) ──
+// ─── Calcul ──────────────────────────────────────────────────────────────────
 // Le ledger est une simple liste de mouvements par sous-compte — un mouvement
 // "accordé" avec sens "credit" alimente le solde, "debit" (monétisation ou
-// utilisation) le réduit. Rien n'est encore écrit nulle part : le ledger est
-// vide tant qu'aucune action n'existe (phases suivantes).
+// utilisation, phases suivantes) le réduit.
 export function computeDashboardCet(agentProfiles, agentId, year) {
   const ledger = agentProfiles?.[agentId]?.cetLedger || { courant: [], finActivite: [] };
+  let totalAccordeAnneeHorsAbondement = 0;
   const comptes = SOUS_COMPTES.map(sc => {
     const mouvements = ledger[sc.key] || [];
     const accordes = mouvements.filter(m => m?.statut === "accorde");
     const solde = accordes.reduce((s, m) => s + (m.sens === "debit" ? -m.jours : m.jours), 0);
-    const enAttente = mouvements.filter(m => m?.statut === "demande").length;
-    return { ...sc, solde, mouvements, enAttente };
+    const enAttente = mouvements.filter(m => m?.statut === "demande");
+    const refusees = mouvements.filter(m => m?.statut === "refuse");
+    accordes.forEach(m => {
+      if (m.type === "epargne" && m.annee === year) totalAccordeAnneeHorsAbondement += m.jours || 0;
+    });
+    return { ...sc, solde, mouvements, enAttente, accordes, refusees };
   });
   const soldeTotal = comptes.reduce((s, c) => s + c.solde, 0);
-  return { comptes, soldeTotal, ledger };
+  const demandesEnAttente = comptes.flatMap(c => c.enAttente.map(m => ({ ...m, sousCompte: c.key })));
+  const mouvementsAccordes = comptes.flatMap(c => c.accordes.map(m => ({ ...m, sousCompte: c.key })));
+  const mouvementsRefuses = comptes.flatMap(c => c.refusees.map(m => ({ ...m, sousCompte: c.key })));
+  return { comptes, soldeTotal, ledger, demandesEnAttente, mouvementsAccordes, mouvementsRefuses, totalAccordeAnneeHorsAbondement };
 }
 
 function NoticeSection() {
@@ -143,8 +180,119 @@ function YearSwitcherMini({ year, availableYears, onChange }) {
   );
 }
 
+const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+const labelSource = (code) => SOURCES_EPARGNE.find(s => s.code === code)?.label || code;
+
 export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }) {
-  const data = computeDashboardCet(agentProfiles, agent?.id, year);
+  const data = useMemo(() => computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
+
+  const [source, setSource] = useState("RQ");
+  const [sousCompte, setSousCompte] = useState("courant");
+  const [jours, setJours] = useState("1");
+  const [valH, setValH] = useState("0");
+  const [valM, setValM] = useState("0");
+  const [ajoutErr, setAjoutErr] = useState("");
+  const [ajoutInfo, setAjoutInfo] = useState("");
+
+  const besoinValeur = source === "RN" || source === "TC" || source === "TY";
+
+  // Nouvelle demande d'épargne (06/08) : n'écrit rien dans le compteur source
+  // tant que non accordée — même principe que Congés/VT.
+  const ajouterDemande = () => {
+    setAjoutErr(""); setAjoutInfo("");
+    const j = parseInt(jours, 10) || 0;
+    if (j <= 0) { setAjoutErr("Indique un nombre de jours valide."); return; }
+    const hh = parseInt(valH, 10) || 0, mm = parseInt(valM, 10) || 0;
+    if (besoinValeur && hh === 0 && mm === 0) { setAjoutErr("Indique la valeur en heures/minutes à déduire du compteur source pour ce jour."); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    const mouvement = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      type: "epargne", source, jours: j,
+      valeurMinutes: besoinValeur ? (hh * 60 + mm) : null,
+      sens: "credit", statut: "demande",
+      dateDemande: today, dateAccord: null, dateRefus: null, annee: year,
+    };
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      return { ...prev, [agent.id]: { ...profil, cetLedger: { ...ledger, [sousCompte]: [...(ledger[sousCompte] || []), mouvement] } } };
+    });
+    const projete = data.totalAccordeAnneeHorsAbondement + j;
+    if (projete > CAP_EPARGNE_AN) {
+      setAjoutInfo(`⚠️ Demande ajoutée — attention, en comptant cette demande le total épargné cette année (${projete}j) dépasserait le cap réglementaire de ${CAP_EPARGNE_AN}j/an.`);
+    } else {
+      setAjoutInfo("Demande ajoutée.");
+    }
+    setJours("1"); setValH("0"); setValM("0");
+  };
+
+  const trouverMouvement = (sc, id) => (agentProfiles?.[agent.id]?.cetLedger?.[sc] || []).find(m => m.id === id);
+
+  // Accorder : déduit le compteur source (RN/TC/TY via une écriture négative
+  // dans leur ledger existant, RQ n'a rien à écrire — voir
+  // getCetTransfereJours, recalcul à la volée) et déclenche l'abondement
+  // automatique si c'est le tout premier mouvement accordé de l'année civile
+  // (tous sous-comptes confondus, texte réglementaire fourni par Olivier).
+  const accorderDemande = (sc, id) => {
+    const today = new Date().toISOString().slice(0, 10);
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      const mouvement = (ledger[sc] || []).find(m => m.id === id);
+      if (!mouvement) return prev;
+
+      const dejaAccordeCetteAnnee = SOUS_COMPTES.some(s =>
+        (ledger[s.key] || []).some(m => m.statut === "accorde" && m.annee === mouvement.annee)
+      );
+
+      const nextLedger = { ...ledger };
+      nextLedger[sc] = (ledger[sc] || []).map(m => m.id === id ? { ...m, statut: "accorde", dateAccord: today } : m);
+      if (!dejaAccordeCetteAnnee) {
+        nextLedger[sc] = [...nextLedger[sc], {
+          id: `abond-${mouvement.id}`, type: "abondement", source: null, jours: 1,
+          valeurMinutes: null, sens: "credit", statut: "accorde",
+          dateDemande: today, dateAccord: today, dateRefus: null, annee: mouvement.annee,
+        }];
+      }
+
+      const next = { ...profil, cetLedger: nextLedger };
+      const ledgerKey = LEDGER_KEY_BY_SOURCE[mouvement.source];
+      if (ledgerKey && mouvement.valeurMinutes) {
+        const entry = { id: `cet-${mouvement.id}`, mois: today.slice(0, 7), deltaMinutes: -mouvement.valeurMinutes, saisiLe: today, cetSousCompte: sc };
+        next[ledgerKey] = [...(profil[ledgerKey] || []), entry];
+      }
+      return { ...prev, [agent.id]: next };
+    });
+  };
+
+  const refuserDemande = (sc, id) => {
+    const today = new Date().toISOString().slice(0, 10);
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      return { ...prev, [agent.id]: { ...profil, cetLedger: { ...ledger, [sc]: (ledger[sc] || []).map(m => m.id === id ? { ...m, statut: "refuse", dateRefus: today } : m) } } };
+    });
+  };
+
+  // Retirer une demande en attente (jamais rien écrit ailleurs, rien à
+  // défaire). Annuler un mouvement déjà accordé retire aussi l'écriture
+  // correspondante du ledger source (RN/TC/TY) — l'abondement éventuellement
+  // déclenché par ce mouvement n'est volontairement pas retiré automatiquement
+  // (même logique que "Annuler" sur Congés/VT : pas de restauration en
+  // cascade, l'agent ajuste manuellement si besoin).
+  const retirerMouvement = (sc, id) => {
+    const mouvement = trouverMouvement(sc, id);
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      const next = { ...profil, cetLedger: { ...ledger, [sc]: (ledger[sc] || []).filter(m => m.id !== id) } };
+      const ledgerKey = mouvement && LEDGER_KEY_BY_SOURCE[mouvement.source];
+      if (ledgerKey && mouvement?.statut === "accorde") {
+        next[ledgerKey] = (profil[ledgerKey] || []).filter(e => e.id !== `cet-${id}`);
+      }
+      return { ...prev, [agent.id]: next };
+    });
+  };
 
   return (
     <div onClick={onClose} style={{
@@ -169,7 +317,7 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
         <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
 
           <div style={{ fontSize: 10, color: "#64748b", fontStyle: "italic" }}>
-            Compte Épargne Temps — 2 sous-comptes distincts, chacun avec son propre plafond. Module en construction : la structure et la notice sont en place, les mouvements (épargne/monétisation/utilisation) arrivent dans une prochaine étape.
+            Compte Épargne Temps — 2 sous-comptes distincts, chacun avec son propre plafond.
           </div>
 
           {/* Les 2 sous-comptes côte à côte */}
@@ -180,16 +328,118 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
                 <div style={{ fontSize: 28, fontWeight: 900, color: "#5b21b6", lineHeight: 1, marginTop: 6 }}>{c.solde}</div>
                 <div style={{ fontSize: 9, color: "#7c3aed", marginTop: 2 }}>jour{c.solde > 1 ? "s" : ""} épargné{c.solde > 1 ? "s" : ""}</div>
                 <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 6 }}>Plafond : {c.plafond}j</div>
-                {c.enAttente > 0 && (
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#a16207", marginTop: 5 }}>⏳ {c.enAttente} en attente</div>
+                {c.enAttente.length > 0 && (
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#a16207", marginTop: 5 }}>⏳ {c.enAttente.length} en attente</div>
                 )}
               </div>
             ))}
           </div>
 
           <div style={{ fontSize: 10.5, color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 10px" }}>
-            Cap d'épargne : {CAP_EPARGNE_AN} jours par année civile (hors abondement), tous sous-comptes confondus. Le premier jour épargné dans l'année est abondé à 100% par l'entreprise.
+            Cap d'épargne : {CAP_EPARGNE_AN} jours par année civile (hors abondement), tous sous-comptes confondus — {data.totalAccordeAnneeHorsAbondement}j déjà épargnés cette année. Le premier jour épargné dans l'année est abondé à 100% par l'entreprise.
           </div>
+
+          {/* + Nouvelle épargne (Phase 2, 06/08) */}
+          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>+ Nouvelle épargne</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+              {SOURCES_EPARGNE.map(s => (
+                <button key={s.code} onClick={() => setSource(s.code)} style={{
+                  background: source === s.code ? "#5b21b6" : "#faf5ff",
+                  color: source === s.code ? "#fff" : "#5b21b6",
+                  border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 10px",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                }}>{s.code === "MEDAILLE" ? "🎖️ Médaille" : s.code}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {SOUS_COMPTES.map(sc => (
+                <button key={sc.key} onClick={() => setSousCompte(sc.key)} style={{
+                  flex: 1, background: sousCompte === sc.key ? "#5b21b6" : "#faf5ff",
+                  color: sousCompte === sc.key ? "#fff" : "#5b21b6",
+                  border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                }}>{sc.icone} {sc.label}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <input type="number" min="1" value={jours} onChange={e => setJours(e.target.value)}
+                style={{ width: 56, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>jour{parseInt(jours, 10) > 1 ? "s" : ""}</span>
+              {besoinValeur && (<>
+                <span style={{ fontSize: 10, color: "#94a3b8" }}>· déduire</span>
+                <input type="number" min="0" value={valH} onChange={e => setValH(e.target.value)}
+                  style={{ width: 48, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>h</span>
+                <input type="number" min="0" max="59" value={valM} onChange={e => setValM(e.target.value)}
+                  style={{ width: 48, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>min de {source}</span>
+              </>)}
+            </div>
+            <button onClick={ajouterDemande} style={{ marginTop: 8, background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>+ Ajouter la demande</button>
+            {ajoutErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginTop: 6 }}>{ajoutErr}</div>}
+            {ajoutInfo && <div style={{ fontSize: 11, fontWeight: 600, color: "#166534", marginTop: 6 }}>{ajoutInfo}</div>}
+            {besoinValeur && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6 }}>Valeur libre — indique combien d'heures/minutes ce jour représente pour toi dans ton compteur {source}, déduites au moment de l'accord.</div>}
+          </div>
+
+          {/* Demandées */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>⏳ Demandées ({data.demandesEnAttente.length})</div>
+            {data.demandesEnAttente.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune demande en attente.</div> :
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {data.demandesEnAttente.map(m => (
+                  <div key={m.id} style={{ border: "1px solid #e2e8f0", borderRadius: 9, padding: "9px 11px", display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelSource(m.source)} — {m.jours}j</span>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button onClick={() => accorderDemande(m.sousCompte, m.id)} style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>✓ Accorder</button>
+                        <button onClick={() => refuserDemande(m.sousCompte, m.id)} style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>✕ Refuser</button>
+                        <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>🗑 Retirer</button>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
+                      {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.icone} {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.label}
+                      {m.valeurMinutes ? ` · ${Math.floor(m.valeurMinutes / 60)}h${String(m.valeurMinutes % 60).padStart(2, "0")} à déduire` : ""}
+                      {` · Demandé le ${fmtDate(m.dateDemande)}`}
+                    </div>
+                  </div>
+                ))}
+              </div>}
+          </div>
+
+          {/* Épargnées (accordées) */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✅ Épargnées ({data.mouvementsAccordes.length})</div>
+            {data.mouvementsAccordes.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {data.mouvementsAccordes.map(m => (
+                  <div key={m.id} style={{ border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{m.type === "abondement" ? "🎁 Abondement" : labelSource(m.source)} — {m.jours}j</span>
+                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
+                        {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.icone} {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.label} · Accordé le {fmtDate(m.dateAccord)}
+                      </div>
+                    </div>
+                    <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
+                  </div>
+                ))}
+              </div>}
+          </div>
+
+          {/* Refusées */}
+          {data.mouvementsRefuses.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>❌ Refusées ({data.mouvementsRefuses.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {data.mouvementsRefuses.map(m => (
+                  <div key={m.id} style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelSource(m.source)} — {m.jours}j</span>
+                    <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>🗑 Retirer</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <NoticeSection />
         </div>
