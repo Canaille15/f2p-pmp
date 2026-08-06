@@ -114,7 +114,7 @@ const CODE_VERS_HAB = {
   "ASMP":"PAASMJ",
 };
 
-export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesPrises, onSave, onDelete, onClose, onCongeStatutChange }) {
+export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesPrises, onSave, onDelete, onClose, onCongeStatutChange, onVtStatutChange }) {
 
   const agKey = agent?.immatriculation || agent?.cp || agent?.id;
   const profile = agentProfiles?.[agKey] || {};
@@ -196,6 +196,22 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     if (type1 === "CA") { setType1(null); setPoste1(""); setHoraires1(""); }
   };
 
+  // VT Demandé/Refusé (06/08, même principe que Congés ci-dessus, sur demande
+  // d'Olivier — VT suit désormais exactement le même mécanisme, seul
+  // l'affichage du numéro dans le calendrier reste sur la convention propre à
+  // VT, cumul de fin de mois, voir App.jsx).
+  const vtTrackingExistant = agentProfiles?.[agKey]?.vtTracking?.[date];
+  const vtStatutInitial = (vtTrackingExistant && vtTrackingExistant.statut &&
+      !(vtTrackingExistant.jourEtaitVide && codeActuelAuOuverture))
+    ? vtTrackingExistant.statut : null;
+  const [vtStatut, setVtStatut] = useState(vtStatutInitial);
+  const [showVt, setShowVt] = useState(false);
+  const toggleVtStatut = (statut) => {
+    if (vtStatut === statut) { setVtStatut(null); return; }
+    setVtStatut(statut);
+    if (type1 === "VT") { setType1(null); setPoste1(""); setHoraires1(""); }
+  };
+
   const dateObj = new Date(date + "T12:00:00");
   const dateLabel = dateObj.toLocaleDateString("fr-FR", {
     weekday:"long", day:"numeric", month:"long"
@@ -250,6 +266,9 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     onSave(newEntry);
     if (congeStatut !== congeStatutInitial && onCongeStatutChange) {
       onCongeStatutChange(date, congeStatut, jourEtaitVideAtOpen);
+    }
+    if (vtStatut !== vtStatutInitial && onVtStatutChange) {
+      onVtStatutChange(date, vtStatut, jourEtaitVideAtOpen);
     }
   };
 
@@ -336,7 +355,16 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   {congeStatut==="demande" ? "⏳ Congé demandé" : "✕ Congé refusé"}
                 </span>
               )}
-              {!finNuit && !type1 && !typeN && !notePerso && !greve && !congeStatut && (
+              {vtStatut && (
+                <span style={{
+                  background: vtStatut==="demande" ? "#92400e" : "#991b1b",
+                  color:"#fff", fontSize:10, fontWeight:700,
+                  padding:"2px 7px", borderRadius:5,
+                }}>
+                  {vtStatut==="demande" ? "⏳ VT demandé" : "✕ VT refusé"}
+                </span>
+              )}
+              {!finNuit && !type1 && !typeN && !notePerso && !greve && !congeStatut && !vtStatut && (
                 <span style={{color:"#475569",fontSize:10}}>case vide</span>
               )}
             </div>
@@ -437,7 +465,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
               Repos / Absences
             </div>
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {CODES_REPOS.filter(r => r.code !== "CA").map(r => (
+              {CODES_REPOS.filter(r => r.code !== "CA" && r.code !== "VT").map(r => (
                 <button key={r.code} onClick={() => toggleType1(r.code)} style={{
                   padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                   fontSize:12, fontWeight:700,
@@ -465,6 +493,24 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 {type1==="CA" ? "Congés · Accordé"
                   : congeStatut==="demande" ? "⏳ Congés · Demandé"
                   : congeStatut==="refuse" ? "✕ Congés · Refusé" : "Congés"}
+              </button>
+              {/* VT (06/08) : même sous-menu Accordé/Demandé/Refusé que Congés,
+                  sur demande d'Olivier — "le même fonctionnement pour les
+                  demande accord et refus". Seul "Accordé" écrit dans le
+                  planning perso (type1="VT"). */}
+              <button onClick={() => setShowVt(v=>!v)} style={{
+                padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                fontSize:12, fontWeight:700,
+                background: type1==="VT" ? "#eab308"
+                  : vtStatut==="demande" ? "#fef3c7"
+                  : vtStatut==="refuse" ? "#fef2f2" : "#f1f5f9",
+                color: type1==="VT" ? "#fff"
+                  : vtStatut==="demande" ? "#92400e"
+                  : vtStatut==="refuse" ? "#991b1b" : "#475569",
+              }}>
+                {type1==="VT" ? "VT · Accordé"
+                  : vtStatut==="demande" ? "⏳ VT · Demandé"
+                  : vtStatut==="refuse" ? "✕ VT · Refusé" : "VT"}
               </button>
               <button onClick={() => setShowFetes(v=>!v)} style={{
                 padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
@@ -522,6 +568,33 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 </div>
                 <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>
                   Seul "Accordé" écrit dans le planning — "Demandé"/"Refusé" n'effacent jamais ce qui est déjà saisi ce jour-là, et alimentent le suivi dans le panneau Congés.
+                </div>
+              </div>
+            )}
+            {showVt && (
+              <div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
+                  <button onClick={() => { toggleType1("VT"); setVtStatut(null); setShowVt(false); }} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: type1==="VT" ? "#16a34a" : "#f0fdf4",
+                    color: type1==="VT" ? "#fff" : "#166534",
+                  }}>✓ Accordé</button>
+                  <button onClick={() => { toggleVtStatut("demande"); setShowVt(false); }} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: vtStatut==="demande" ? "#eab308" : "#fefce8",
+                    color: vtStatut==="demande" ? "#fff" : "#92400e",
+                  }}>⏳ Demandé</button>
+                  <button onClick={() => { toggleVtStatut("refuse"); setShowVt(false); }} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: vtStatut==="refuse" ? "#dc2626" : "#fef2f2",
+                    color: vtStatut==="refuse" ? "#fff" : "#991b1b",
+                  }}>✕ Refusé</button>
+                </div>
+                <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>
+                  Seul "Accordé" écrit dans le planning — "Demandé"/"Refusé" n'effacent jamais ce qui est déjà saisi ce jour-là, et alimentent le suivi dans le panneau VT.
                 </div>
               </div>
             )}

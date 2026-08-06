@@ -2625,6 +2625,25 @@ function getCongesDemandeesAnnee(agent, agentProfiles, schedule, year){
   return jours;
 }
 
+// Jours "VT demandé" de l'année (06/08, même principe que
+// getCongesDemandeesAnnee — VT suit désormais le même cycle
+// Accordé/Demandé/Refusé que Congés, voir computeDashboardVT).
+function getJoursVTDemandeesAnnee(agent, agentProfiles, schedule, year){
+  const profil = agentProfiles?.[agent?.id] || {};
+  const tracking = profil.vtTracking || {};
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const jours = [];
+  Object.entries(tracking).forEach(([d,t])=>{
+    if(!t || t.statut!=="demande") return;
+    if(d<start||d>end) return;
+    const entree = schedule[`${agent?.id}-${d}`];
+    const codeActuel = entree?.equipe || entree?.equipe2;
+    if(t.jourEtaitVide && codeActuel) return;
+    jours.push(d);
+  });
+  return jours;
+}
+
 // Générique : jours d'un ensemble de codes équipe/équipe2 pour une année donnée
 // (réutilisé pour la numérotation RU/RQ/RP+RPP dans le planning perso, 04/08 —
 // même principe que getCongesBrutsAnnee).
@@ -3514,15 +3533,15 @@ function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year){
 }
 
 // ─── COMPTEUR VT (temps partiel) ─────────────────────────────────────────────
-// Contrairement à Congés (juste "pris"), VT suit un cycle en 3 étapes par jour
-// posé : Demandé → Accordé → Pris (bascule automatique dès que la date passe,
-// tant que l'agent n'a pas annulé). Le suivi (accordé oui/non, date de la
-// demande, date de l'accord) vit dans agentProfiles[agentId].vtTracking, une
-// map PLATE indexée directement par date ISO (pas de niveau année : la date
-// suffit à identifier une entrée sans ambiguïté, y compris pour les jours
-// reportés sur A+1). Le planning perso (schedule, code "VT") reste la source
-// de vérité pour "ce jour compte-t-il dans le solde" — vtTracking ne fait
-// qu'ajouter le détail du workflow par-dessus.
+// Refonte du 06/08 : VT suit désormais EXACTEMENT le même cycle que Congés
+// (Accordé/Demandé/Refusé, voir computeDashboardConges) — "Demandé" et
+// "Refusé" n'écrivent JAMAIS dans le planning perso (agentProfiles[agentId].
+// vtTracking, statut "demande"/"refuse", même détachement auto que Congés).
+// Seul "Accordé" écrit "VT" dans schedule, qui reste la SEULE source de
+// vérité pour la bascule automatique Accordé→Pris selon la date (plus besoin
+// d'un flag "accorde" séparé : présence dans schedule = accordé). Compat
+// rétro : une ancienne entrée déjà écrite en VT avant cette refonte est donc
+// automatiquement traitée comme accordée ici (brut fait foi).
 function computeDashboardVT(agent, schedule, agentProfiles, year){
   const profil = agentProfiles?.[agent?.id] || {};
   const entitlement = profil.vtEntitlement?.[year] ?? 0;
@@ -3550,16 +3569,10 @@ function computeDashboardVT(agent, schedule, agentProfiles, year){
   const tousJours = [...propresAnnee, ...reportsValides].sort();
 
   const today = new Date().toISOString().slice(0,10);
-  const statutDe = (d) => {
-    if(!tracking[d]?.accorde) return "demande";
-    return d <= today ? "pris" : "accorde";
-  };
-
   const entries = tousJours.map(d => ({
     date: d,
-    statut: statutDe(d),
+    statut: d <= today ? "pris" : "accorde",
     dateDemande: tracking[d]?.dateDemande || null,
-    dateAccord: tracking[d]?.dateAccord || null,
   }));
 
   const parMois = {};
@@ -3569,13 +3582,32 @@ function computeDashboardVT(agent, schedule, agentProfiles, year){
     parMois[mois].push(d);
   });
 
+  // Demandées / Refusées en attente (jamais dans schedule) — même filtrage
+  // que computeDashboardConges : ignore les suivis périmés (détachement
+  // auto) et tout jour déjà réellement accordé (présent dans brut).
+  const demandes = [], refusees = [];
+  Object.entries(tracking).forEach(([d,t])=>{
+    if(!t) return;
+    if(d<start||d>end) return;
+    const entree = schedule[`${agent.id}-${d}`];
+    const codeActuel = entree?.equipe || entree?.equipe2;
+    if(t.jourEtaitVide && codeActuel) return;
+    if(brut.includes(d)) return;
+    if(t.statut==="demande") demandes.push({date:d, dateDemande:t.dateDemande||null});
+    else if(t.statut==="refuse") refusees.push({date:d, dateDemande:t.dateDemande||null, dateRefus:t.dateRefus||null});
+  });
+  demandes.sort((a,b)=>a.date<b.date?-1:1);
+  refusees.sort((a,b)=>a.date<b.date?-1:1);
+
   const pris = tousJours.length;
+  const soldeTheorique = (entitlement-pris) - demandes.length;
   return {
-    entitlement, pris, solde: entitlement-pris,
+    entitlement, pris, solde: entitlement-pris, soldeTheorique,
     parMois, tousJours, entries,
-    demandes: entries.filter(e=>e.statut==="demande"),
+    demandes,
     accordeesAvenir: entries.filter(e=>e.statut==="accorde"),
     prises: entries.filter(e=>e.statut==="pris"),
+    refusees,
     reports: reportsValides, donnesAnneePrecedente,
   };
 }
@@ -3588,7 +3620,8 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
   const [nouvelleDate, setNouvelleDate] = useState("");
   const [ajoutErr, setAjoutErr] = useState("");
-  const [accordDateParEntree, setAccordDateParEntree] = useState({}); // date -> valeur du champ "date d'accord" en cours d'edition
+  const [nouvelleDateRefus, setNouvelleDateRefus] = useState("");
+  const [ajoutRefusErr, setAjoutRefusErr] = useState("");
   useEffect(()=>{ setEntitlementInput(String(data.entitlement)); },[data.entitlement]);
 
   const today = new Date().toISOString().slice(0,10);
@@ -3606,17 +3639,6 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
     }));
   };
 
-  const setVtTracking = (date, updater) => {
-    setAgentProfiles(prev=>{
-      const curr = prev[agent.id]?.vtTracking?.[date] || {};
-      const next = typeof updater === 'function' ? updater(curr) : updater;
-      return {...prev, [agent.id]:{
-        ...(prev[agent.id]||{}),
-        vtTracking:{ ...(prev[agent.id]?.vtTracking||{}), [date]: next },
-      }};
-    });
-  };
-
   const ecrireVTDansPlanning = (date) => {
     const key = `${agCp}-${date}`;
     const entryExistante = schedule[key] || {};
@@ -3625,10 +3647,66 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
     api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur sauvegarde VT dans planning:", e));
   };
 
-  const retirerVTDuPlanning = (date) => {
+  // Tombstone explicite (même raison que Congés : JSON_MERGE_PATCH ne supprime
+  // une clé imbriquée que sur null explicite, jamais sur une absence).
+  const retirerVtTracking = (date) => {
+    setAgentProfiles(prev=>{
+      const curr = {...(prev[agent.id]?.vtTracking||{})};
+      curr[date] = null;
+      return {...prev, [agent.id]:{...(prev[agent.id]||{}), vtTracking:curr}};
+    });
+  };
+
+  // Nouvelle demande (06/08, même principe que Congés) : n'écrit JAMAIS dans
+  // le planning perso — la journée prévue reste affichée et comptée
+  // normalement tant que le VT n'est pas accordé.
+  const ajouterDemande = () => {
+    setAjoutErr("");
+    if(!nouvelleDate) return;
+    const existants = agentProfiles[agent.id]?.vtTracking || {};
+    if(existants[nouvelleDate] || data.tousJours.includes(nouvelleDate)){ setAjoutErr("Ce jour est déjà suivi (demandé, accordé ou pris)."); return; }
+    const v = schedule[`${agCp}-${nouvelleDate}`];
+    const jourEtaitVide = !(v?.equipe || v?.equipe2);
+    setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), vtTracking:{...(prev[agent.id]?.vtTracking||{}), [nouvelleDate]:{statut:"demande", dateDemande:today, jourEtaitVide}}}}));
+    setNouvelleDate("");
+  };
+
+  const ajouterRefus = () => {
+    setAjoutRefusErr("");
+    if(!nouvelleDateRefus) return;
+    const existants = agentProfiles[agent.id]?.vtTracking || {};
+    if(existants[nouvelleDateRefus] || data.tousJours.includes(nouvelleDateRefus)){ setAjoutRefusErr("Ce jour est déjà suivi (demandé, accordé ou pris)."); return; }
+    const v = schedule[`${agCp}-${nouvelleDateRefus}`];
+    const jourEtaitVide = !(v?.equipe || v?.equipe2);
+    setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), vtTracking:{...(prev[agent.id]?.vtTracking||{}), [nouvelleDateRefus]:{statut:"refuse", dateDemande:null, dateRefus:today, jourEtaitVide}}}}));
+    setNouvelleDateRefus("");
+  };
+
+  // Accorder : écrit "VT" dans le planning perso (écrase uniquement le champ
+  // équipe du jour — préserve la nuit éventuellement déjà notée, voir
+  // ecrireVTDansPlanning qui spread l'entrée existante) et retire le suivi.
+  const accorderDemande = (date) => {
+    ecrireVTDansPlanning(date);
+    retirerVtTracking(date);
+  };
+
+  const refuserDemande = (date) => {
+    setAgentProfiles(prev=>{
+      const curr = prev[agent.id]?.vtTracking?.[date] || {};
+      const next = {statut:"refuse", dateDemande:curr.dateDemande||null, dateRefus:today, jourEtaitVide:curr.jourEtaitVide};
+      return {...prev, [agent.id]:{...(prev[agent.id]||{}), vtTracking:{...(prev[agent.id]?.vtTracking||{}), [date]:next}}};
+    });
+  };
+
+  const retirerDemande = (date) => retirerVtTracking(date);
+
+  // Annuler un jour déjà accordé/pris : vide simplement le jour dans le
+  // planning (pas de restauration du contenu d'origine — même principe que
+  // Congés, voir annulerAccord dans CongesDashboardModal).
+  const annulerAccordDuPlanning = (date) => {
     const key = `${agCp}-${date}`;
     const entryExistante = schedule[key];
-    if(!entryExistante || entryExistante.equipe !== "VT") return; // deja change entre temps, on ne touche pas
+    if(!entryExistante || entryExistante.equipe !== "VT") return;
     const {equipe, ...reste} = entryExistante;
     const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
     if(videTotal){
@@ -3639,44 +3717,6 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
       setSchedule(prev=>({...prev, [key]: fullEntry}));
       api.planning.saveEntry(agCp, date, fullEntry).catch(e=>console.error("Erreur suppression VT du planning:", e));
     }
-  };
-
-  // Nouvelle demande saisie directement depuis ce tableau de bord (écrit aussi
-  // "VT" dans le planning perso — même garde-fou que Fêtes : on ne touche
-  // jamais un jour qui contient déjà autre chose).
-  const ajouterDemande = () => {
-    setAjoutErr("");
-    if(!nouvelleDate) return;
-    if(data.tousJours.includes(nouvelleDate)){ setAjoutErr("Ce jour est déjà enregistré comme VT."); return; }
-    const targetEntry = schedule[`${agCp}-${nouvelleDate}`];
-    if(targetEntry?.equipe && targetEntry.equipe!=="VT"){
-      setAjoutErr(`Le ${fmtDate(nouvelleDate)} contient déjà "${EQ_COLORS[targetEntry.equipe]?.label||targetEntry.equipe}" dans ton planning perso. Modifie ou efface ce jour d'abord.`);
-      return;
-    }
-    ecrireVTDansPlanning(nouvelleDate);
-    setVtTracking(nouvelleDate, {accorde:false, dateDemande:today});
-    setNouvelleDate("");
-  };
-
-  const accorder = (date) => {
-    ecrireVTDansPlanning(date); // au cas ou ce jour ne serait pas deja dans le planning
-    const dateAccordVal = accordDateParEntree[date] || today;
-    setVtTracking(date, prev=>({...prev, accorde:true, dateAccord:dateAccordVal}));
-  };
-
-  const annulerAccord = (date) => {
-    setVtTracking(date, prev=>({...prev, accorde:false, dateAccord:null}));
-  };
-
-  // Tombstone explicite (même raison que Congés : JSON_MERGE_PATCH ne supprime
-  // une clé imbriquée que sur null explicite, jamais sur une absence).
-  const retirer = (date) => {
-    retirerVTDuPlanning(date);
-    setAgentProfiles(prev=>{
-      const curr = {...(prev[agent.id]?.vtTracking||{})};
-      curr[date] = null;
-      return {...prev, [agent.id]:{...(prev[agent.id]||{}), vtTracking:curr}};
-    });
   };
 
   const ajouterReport = () => {
@@ -3702,28 +3742,43 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
 
   const moisTries = Object.keys(data.parMois).sort();
 
-  const renderEntree = (e) => (
+  // Demandées (06/08) : mêmes 3 actions que Congés (Accorder/Refuser/Retirer),
+  // n'écrit jamais dans le planning tant que non accordé.
+  const renderDemande = (e) => (
     <div key={e.date} style={{border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
         <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {e.statut==="demande" && (
-            <>
-              <input type="date" value={accordDateParEntree[e.date]||today}
-                onChange={ev=>setAccordDateParEntree(p=>({...p,[e.date]:ev.target.value}))}
-                style={{border:"1px solid #cbd5e1",borderRadius:6,padding:"4px 6px",fontSize:11,minHeight:30}}/>
-              <button onClick={()=>accorder(e.date)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✓ Accorder</button>
-            </>
-          )}
-          {(e.statut==="accorde") && (
-            <button onClick={()=>annulerAccord(e.date)} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>↩️ Repasser en demande</button>
-          )}
-          <button onClick={()=>retirer(e.date)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕ Retirer</button>
+          <button onClick={()=>accorderDemande(e.date)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✓ Accorder</button>
+          <button onClick={()=>refuserDemande(e.date)} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✕ Refuser</button>
+          <button onClick={()=>retirerDemande(e.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
         </div>
+      </div>
+      {e.dateDemande && <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>Demandé le {fmtDate(e.dateDemande)}</div>}
+    </div>
+  );
+
+  // Accordées à venir / Prises : jours réellement dans le planning (equipe
+  // "VT") — seule action possible : annuler (vide le jour, pas de
+  // restauration du contenu d'origine, même principe que Congés).
+  const renderPlanifie = (e) => (
+    <div key={e.date} style={{border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
+        <button onClick={()=>annulerAccordDuPlanning(e.date)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕ Annuler</button>
+      </div>
+    </div>
+  );
+
+  const renderRefus = (e) => (
+    <div key={e.date} style={{border:"1px solid #fecaca",background:"#fef2f2",borderRadius:9,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
+        <button onClick={()=>retirerDemande(e.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
       </div>
       <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>
         {e.dateDemande && <span>Demandé le {fmtDate(e.dateDemande)}</span>}
-        {e.dateAccord && <span>{e.dateDemande?" · ":""}Accordé le {fmtDate(e.dateAccord)}</span>}
+        {e.dateRefus && <span>{e.dateDemande?" · ":""}Refusé le {fmtDate(e.dateRefus)}</span>}
       </div>
     </div>
   );
@@ -3753,12 +3808,16 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
               <div style={{fontSize:9,color:"#475569",marginTop:2}}>modifiable</div>
             </div>
             <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
-              <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Demandé+Accordé</div>
+              <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris</div>
               <div style={{fontSize:20,fontWeight:900,color:"#a16207"}}>{data.pris}</div>
             </div>
             <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${data.solde<2?"#fca5a5":"#e2e8f0"}`}}>
               <div style={{fontSize:11,fontWeight:700,color:data.solde<2?"#dc2626":"#334155"}}>Restant</div>
               <div style={{fontSize:20,fontWeight:900,color:data.solde<2?"#dc2626":"#16a34a"}}>{data.solde}</div>
+            </div>
+            <div style={{flex:1,background:data.refusees.length>0?"#fef2f2":"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${data.refusees.length>0?"#fecaca":"#e2e8f0"}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:data.refusees.length>0?"#991b1b":"#334155"}}>Refusés</div>
+              <div style={{fontSize:20,fontWeight:900,color:data.refusees.length>0?"#dc2626":"#94a3b8"}}>{data.refusees.length}</div>
             </div>
           </div>
 
@@ -3781,7 +3840,18 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
             </div>
           )}
 
-          {/* Ajouter une nouvelle demande */}
+          {/* Solde théorique (06/08, même principe que Congés) : projection si
+              toutes les demandes en attente sont accordées, jamais affectée
+              par les refus. */}
+          {data.demandes.length>0 && (
+            <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:10,padding:"9px 12px",fontSize:11.5,fontWeight:600,color:"#1e40af"}}>
+              ⏳ {data.demandes.length} jour{data.demandes.length>1?"s":""} en attente d'accord — solde théorique si tout accordé : <strong style={{color:data.soldeTheorique<0?"#dc2626":"#1e40af",fontSize:13}}>{data.soldeTheorique}</strong>
+            </div>
+          )}
+
+          {/* Ajouter une nouvelle demande (06/08) : n'écrit plus dans le
+              planning perso — coexiste avec un jour déjà rempli, affiché
+              comme un badge indépendant "⏳ VT (n°X)". */}
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>+ Nouvelle demande</div>
             <div style={{display:"flex",gap:6}}>
@@ -3790,28 +3860,47 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
               <button onClick={ajouterDemande} style={{background:"#a16207",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
             </div>
             {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
-            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Écrit aussi "VT" dans le planning perso ce jour-là. Peut aussi être saisi directement dans le planning perso — la demande apparaîtra ici automatiquement.</div>
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Un VT demandé n'apparaît pas dans le planning perso tant qu'il n'est pas accordé — la journée prévue reste affichée et comptée normalement. Peut aussi être saisi directement depuis le popup du planning perso.</div>
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:6,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{background:"#eab308",color:"#1e293b",border:"1.5px dashed #1e293b",borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:700,flexShrink:0}}>⏳ VT (n°X)</span>
+              <span>= badge visible dans le planning tant que le VT n'est pas accordé.</span>
+            </div>
           </div>
 
           {/* Demandées */}
           <div>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>⏳ Demandées ({data.demandes.length})</div>
             {data.demandes.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune demande en attente.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.demandes.map(renderEntree)}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.demandes.map(renderDemande)}</div>}
           </div>
 
           {/* Accordées à venir */}
           <div>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>✅ Accordées — à venir ({data.accordeesAvenir.length})</div>
             {data.accordeesAvenir.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.accordeesAvenir.map(renderEntree)}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.accordeesAvenir.map(renderPlanifie)}</div>}
           </div>
 
           {/* Prises (passées) */}
           <div>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>📌 Prises ({data.prises.length})</div>
             {data.prises.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.prises.map(renderEntree)}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.prises.map(renderPlanifie)}</div>}
+          </div>
+
+          {/* Refusées (06/08, même principe que Congés) */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>❌ Refusées ({data.refusees.length})</div>
+            <div style={{marginBottom:10}}>
+              <div style={{display:"flex",gap:6}}>
+                <input type="date" value={nouvelleDateRefus} onChange={e=>{setNouvelleDateRefus(e.target.value);setAjoutRefusErr("");}}
+                  style={{flex:1,padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+                <button onClick={ajouterRefus} style={{background:"#991b1b",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter un refus</button>
+              </div>
+              {ajoutRefusErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutRefusErr}</div>}
+            </div>
+            {data.refusees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.refusees.map(renderRefus)}</div>}
           </div>
 
           {/* Report vers l'année suivante */}
@@ -6701,19 +6790,27 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
     });
     return m;
   },[agent,schedule,curYear]);
-  // Numérotation VT (05/08, demandé par Olivier, même principe que RP+RPP
-  // ci-dessus) : cumul annuel, mais le numéro n'est affiché que sur le
-  // DERNIER VT de chaque mois civil.
-  const vtNumeros=useMemo(()=>{
-    const jours=getJoursCodesAnnee(agent,schedule,curYear,["VT"]).sort();
+  // Numérotation VT (05/08, étendue le 06/08 pour inclure les VT "Demandés"
+  // dans la MÊME série cumulative que les VT accordés — exactement le même
+  // principe que congeToutNumeros ci-dessous pour les Congés, sur demande
+  // explicite d'Olivier ("le même fonctionnement pour les demande accord et
+  // refus"). Seule différence assumée avec Congés : l'affichage du numéro
+  // reste sur la convention propre à VT (cumul annuel, mais numéro affiché
+  // uniquement sur le DERNIER VT — accordé ou demandé — de chaque mois civil,
+  // "tu garde juste le compteur de fin de mois pour l'affichage").
+  const vtDemandeesSet=useMemo(()=> new Set(getJoursVTDemandeesAnnee(agent,agentProfiles,schedule,curYear)), [agent,agentProfiles,schedule,curYear]);
+  const vtToutNumeros=useMemo(()=>{
+    const accordes=getJoursCodesAnnee(agent,schedule,curYear,["VT"]).map(d=>({date:d,statut:"accorde"}));
+    const demandes=[...vtDemandeesSet].map(d=>({date:d,statut:"demande"}));
+    const combine=[...accordes,...demandes].sort((a,b)=>a.date<b.date?-1:1);
     const m={};
-    jours.forEach((d,i)=>{
-      const mois=d.slice(0,7);
-      const moisSuivant=jours[i+1]?.slice(0,7);
-      if(mois!==moisSuivant) m[d]=i+1;
+    combine.forEach((it,i)=>{
+      const mois=it.date.slice(0,7);
+      const moisSuivant=combine[i+1]?.date.slice(0,7);
+      if(mois!==moisSuivant) m[it.date]={numero:i+1,statut:it.statut};
     });
     return m;
-  },[agent,schedule,curYear]);
+  },[agent,schedule,agentProfiles,curYear,vtDemandeesSet]);
   // Numérotation Maladie (05/08, demandé par Olivier, même principe que
   // RP+RPP/VT ci-dessus) : cumul annuel, numéro affiché uniquement sur le
   // DERNIER jour de maladie de chaque mois civil.
@@ -6920,6 +7017,21 @@ justifyContent: "flex-start",
               }}>
                 ⏳ CA (n°{congeToutNumeros[dk].numero})
               </div>}
+              {/* VT demandé (06/08, même principe que Congés ci-dessus) — le
+                  badge s'affiche toujours pour un VT en attente, le numéro
+                  n'apparaît que sur le dernier VT (accordé ou demandé) du
+                  mois civil (vtToutNumeros conserve la convention "fin de
+                  mois" propre à VT, cf. commentaire plus haut). */}
+              {isOwnProfile&&vtDemandeesSet.has(dk)&&<div style={{
+                background:getColor("VT"), color:getTc("VT"),
+                border:`1.5px dashed ${getTc("VT")}`,
+                borderRadius:5, padding:"2px 6px",
+                fontSize:10, fontWeight:700,
+                display:"inline-flex", alignItems:"center", gap:4,
+                alignSelf:"flex-start",
+              }}>
+                ⏳ VT{vtToutNumeros[dk]?.statut==="demande" ? ` (n°${vtToutNumeros[dk].numero})` : ""}
+              </div>}
               {isOwnProfile&&en?.notePerso&&!code&&<div style={{
                 background:getColor("NOTE"), color:"#fff",
                 borderRadius:5, padding:"2px 5px",
@@ -6945,7 +7057,7 @@ justifyContent: "flex-start",
                 {code==="RU"&&ruNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{ruNumeros[dk]}</span>}
                 {code==="RQ"&&rqNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rqNumeros[dk]}</span>}
                 {code==="RP"&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rpNumeros[dk]}</span>}
-                {code==="VT"&&vtNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{vtNumeros[dk]}</span>}
+                {code==="VT"&&vtToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{vtToutNumeros[dk].numero}</span>}
                 {code==="MA"&&maNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{maNumeros[dk]}</span>}
                 {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
@@ -7161,6 +7273,22 @@ justifyContent: "flex-start",
             next = null;
           }
           return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), [dk]: next}}};
+        });
+      }}
+      // VT Demandé/Refusé (06/08, même mécanisme que Congés ci-dessus).
+      onVtStatutChange={(dk, statut, jourEtaitVide)=>{
+        const todayIso = new Date().toISOString().slice(0,10);
+        setAgentProfiles(prev=>{
+          const curr = prev[agent.id]?.vtTracking?.[dk];
+          let next;
+          if(statut==="demande"){
+            next = { statut:"demande", dateDemande: curr?.dateDemande || todayIso, jourEtaitVide };
+          } else if(statut==="refuse"){
+            next = { statut:"refuse", dateDemande: curr?.dateDemande||null, dateRefus: todayIso, jourEtaitVide };
+          } else {
+            next = null;
+          }
+          return {...prev, [agent.id]:{...(prev[agent.id]||{}), vtTracking:{...(prev[agent.id]?.vtTracking||{}), [dk]: next}}};
         });
       }}
     />}
