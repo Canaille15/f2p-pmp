@@ -14,6 +14,12 @@ import { useState, useMemo } from "react";
 // de l'année, déduction du compteur source à l'accord — RQ recalculé à la
 // volée (voir getCetTransfereJours, consommé par App.jsx), RN/TC/TY via une
 // écriture négative dans leur ledger existant (rnLedger/tcLedger/tyLedger).
+// Phase 2bis (06/08) : ajustement manuel du solde par sous-compte (type
+// "ajustement") — pour déclarer les jours déjà acquis avant ce module
+// (quasiment tous les agents en ont déjà), effectif immédiatement, sans
+// cycle demande/accord ni lien avec un compteur source (même principe que
+// le "+ Ajuster le solde" déjà utilisé pour TC/RN/TY) — exclu du cap
+// d'épargne annuel et de l'abondement (voir accorderDemande/ajusterSolde).
 
 // Constantes réglementaires — jamais en dur dans la logique de calcul, pour
 // pouvoir les ajuster sans toucher au reste du fichier.
@@ -193,6 +199,9 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
   const [valM, setValM] = useState("0");
   const [ajoutErr, setAjoutErr] = useState("");
   const [ajoutInfo, setAjoutInfo] = useState("");
+  const [ajustSousCompte, setAjustSousCompte] = useState("courant");
+  const [ajustJours, setAjustJours] = useState("1");
+  const [ajustNeg, setAjustNeg] = useState(false);
 
   const besoinValeur = source === "RN" || source === "TC" || source === "TY";
 
@@ -241,8 +250,13 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
       const mouvement = (ledger[sc] || []).find(m => m.id === id);
       if (!mouvement) return prev;
 
+      // L'abondement ne se déclenche que sur une vraie épargne accordée —
+      // un ajustement manuel (solde de départ, voir ajusterSolde) n'est pas
+      // une épargne au sens réglementaire et ne doit ni déclencher
+      // l'abondement lui-même, ni empêcher qu'une épargne ultérieure le
+      // déclenche dans l'année.
       const dejaAccordeCetteAnnee = SOUS_COMPTES.some(s =>
-        (ledger[s.key] || []).some(m => m.statut === "accorde" && m.annee === mouvement.annee)
+        (ledger[s.key] || []).some(m => m.statut === "accorde" && m.annee === mouvement.annee && m.type === "epargne")
       );
 
       const nextLedger = { ...ledger };
@@ -262,6 +276,27 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
         next[ledgerKey] = [...(profil[ledgerKey] || []), entry];
       }
       return { ...prev, [agent.id]: next };
+    });
+  };
+
+  // Ajustement manuel du solde (06/08, demandé par Olivier — "quasiment
+  // tout le monde a deja des jours") : effectif immédiatement, pas de
+  // cycle demande/accord (comme le "+ Ajuster le solde" déjà utilisé pour
+  // TC/RN/TY), aucun lien avec un compteur source, jamais compté dans le
+  // cap d'épargne ni dans l'éligibilité à l'abondement (voir plus haut).
+  const ajusterSolde = (sc, deltaJours) => {
+    if (!deltaJours) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const mouvement = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      type: "ajustement", source: null, jours: Math.abs(deltaJours),
+      valeurMinutes: null, sens: deltaJours < 0 ? "debit" : "credit", statut: "accorde",
+      dateDemande: today, dateAccord: today, dateRefus: null, annee: year,
+    };
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      return { ...prev, [agent.id]: { ...profil, cetLedger: { ...ledger, [sc]: [...(ledger[sc] || []), mouvement] } } };
     });
   };
 
@@ -337,6 +372,40 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
 
           <div style={{ fontSize: 10.5, color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 10px" }}>
             Cap d'épargne : {CAP_EPARGNE_AN} jours par année civile (hors abondement), tous sous-comptes confondus — {data.totalAccordeAnneeHorsAbondement}j déjà épargnés cette année. Le premier jour épargné dans l'année est abondé à 100% par l'entreprise.
+          </div>
+
+          {/* ✏️ Ajuster le solde (06/08, demandé par Olivier — "quasiment
+              tout le monde a deja des jours") : effectif immédiatement, pour
+              déclarer un solde de départ ou corriger si besoin — jamais
+              compté dans le cap d'épargne ni dans l'abondement. */}
+          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✏️ Ajuster le solde</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>Pour déclarer des jours déjà acquis avant ce module, ou corriger le solde si besoin — n'affecte ni le cap d'épargne annuel ni l'abondement.</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {SOUS_COMPTES.map(sc => (
+                <button key={sc.key} onClick={() => setAjustSousCompte(sc.key)} style={{
+                  flex: 1, background: ajustSousCompte === sc.key ? "#5b21b6" : "#faf5ff",
+                  color: ajustSousCompte === sc.key ? "#fff" : "#5b21b6",
+                  border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                }}>{sc.icone} {sc.label}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button onClick={() => setAjustNeg(n => !n)} style={{
+                border: "1.5px solid #cbd5e1", borderRadius: 8, padding: "7px 10px", cursor: "pointer",
+                background: ajustNeg ? "#fee2e2" : "#dcfce7", color: ajustNeg ? "#dc2626" : "#16a34a", fontWeight: 800, fontSize: 13,
+              }}>{ajustNeg ? "−" : "+"}</button>
+              <input type="number" min="0" value={ajustJours} onChange={e => setAjustJours(e.target.value)}
+                style={{ width: 64, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>jour{parseInt(ajustJours, 10) > 1 ? "s" : ""}</span>
+              <button onClick={() => {
+                const n = parseInt(ajustJours, 10) || 0;
+                if (n <= 0) return;
+                ajusterSolde(ajustSousCompte, ajustNeg ? -n : n);
+                setAjustJours("1"); setAjustNeg(false);
+              }} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Ajouter</button>
+            </div>
           </div>
 
           {/* + Nouvelle épargne (Phase 2, 06/08) */}
@@ -415,7 +484,9 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
                 {data.mouvementsAccordes.map(m => (
                   <div key={m.id} style={{ border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <div>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{m.type === "abondement" ? "🎁 Abondement" : labelSource(m.source)} — {m.jours}j</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>
+                        {m.type === "abondement" ? "🎁 Abondement" : m.type === "ajustement" ? `✏️ Ajustement (${m.sens === "debit" ? "−" : "+"})` : labelSource(m.source)} — {m.jours}j
+                      </span>
                       <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
                         {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.icone} {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.label} · Accordé le {fmtDate(m.dateAccord)}
                       </div>
