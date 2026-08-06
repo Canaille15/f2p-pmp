@@ -3783,6 +3783,28 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
     </div>
   );
 
+  // Tri mensuel (même principe que Congés, voir groupParMois) pour les 4
+  // listes VT — purement visuel, aucun changement de calcul ni de donnée.
+  const renderListeParMois = (list, renderItem, headerColor) => (
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {groupParMois(list, e=>e.date).map(({mois, items})=>{
+        const moisNum = parseInt(mois.slice(5,7),10)-1;
+        const anneeMois = mois.slice(0,4);
+        const horsAnnee = anneeMois!==String(year);
+        return (
+          <div key={mois}>
+            <div style={{fontSize:11,fontWeight:800,color:headerColor,marginBottom:6,textTransform:"uppercase",letterSpacing:.3}}>
+              {MOIS_L[moisNum]}{horsAnnee?` ${anneeMois}`:""} · {items.length}j
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {items.map(renderItem)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
@@ -3867,28 +3889,29 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
             </div>
           </div>
 
-          {/* Demandées */}
+          {/* Demandées — regroupées par mois (même principe que Congés, voir
+              renderListeParMois) */}
           <div>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>⏳ Demandées ({data.demandes.length})</div>
             {data.demandes.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune demande en attente.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.demandes.map(renderDemande)}</div>}
+              renderListeParMois(data.demandes, renderDemande, "#a16207")}
           </div>
 
-          {/* Accordées à venir */}
+          {/* Accordées à venir — regroupées par mois */}
           <div>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>✅ Accordées — à venir ({data.accordeesAvenir.length})</div>
             {data.accordeesAvenir.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.accordeesAvenir.map(renderPlanifie)}</div>}
+              renderListeParMois(data.accordeesAvenir, renderPlanifie, "#166534")}
           </div>
 
-          {/* Prises (passées) */}
+          {/* Prises (passées) — regroupées par mois */}
           <div>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>📌 Prises ({data.prises.length})</div>
             {data.prises.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.prises.map(renderPlanifie)}</div>}
+              renderListeParMois(data.prises, renderPlanifie, "#334155")}
           </div>
 
-          {/* Refusées (06/08, même principe que Congés) */}
+          {/* Refusées (06/08, même principe que Congés) — regroupées par mois */}
           <div>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>❌ Refusées ({data.refusees.length})</div>
             <div style={{marginBottom:10}}>
@@ -3900,7 +3923,7 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
               {ajoutRefusErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutRefusErr}</div>}
             </div>
             {data.refusees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>{data.refusees.map(renderRefus)}</div>}
+              renderListeParMois(data.refusees, renderRefus, "#991b1b")}
           </div>
 
           {/* Report vers l'année suivante */}
