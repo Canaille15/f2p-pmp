@@ -3145,6 +3145,10 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
             {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
             {ajoutInfo && <div style={{fontSize:11,fontWeight:600,color:"#166534",marginTop:6}}>{ajoutInfo}</div>}
             <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Laisse "Au" vide pour un seul jour. Un congé demandé n'apparaît pas dans le planning perso tant qu'il n'est pas accordé — la journée prévue reste affichée et comptée normalement.</div>
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:6,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{background:"#eab308",color:"#1e293b",border:"1.5px dashed #1e293b",borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:700,flexShrink:0}}>⏳ CA (n°X)</span>
+              <span>= badge visible dans le planning tant que le congé n'est pas accordé.</span>
+            </div>
           </div>
 
           {/* Demandées */}
@@ -6907,13 +6911,14 @@ justifyContent: "flex-start",
                   cumulative que les congés accordés (congeToutNumeros
                   ci-dessus), ne change pas quand le jour bascule en accordé. */}
               {isOwnProfile&&congeToutNumeros[dk]?.statut==="demande"&&<div style={{
-                background:"transparent", border:`1.5px dashed ${getColor("CA")}`, color:getColor("CA"),
+                background:getColor("CA"), color:getTc("CA"),
+                border:`1.5px dashed ${getTc("CA")}`,
                 borderRadius:5, padding:"2px 6px",
                 fontSize:10, fontWeight:700,
                 display:"inline-flex", alignItems:"center", gap:4,
                 alignSelf:"flex-start",
               }}>
-                ⏳ (n°{congeToutNumeros[dk].numero})
+                ⏳ CA (n°{congeToutNumeros[dk].numero})
               </div>}
               {isOwnProfile&&en?.notePerso&&!code&&<div style={{
                 background:getColor("NOTE"), color:"#fff",
