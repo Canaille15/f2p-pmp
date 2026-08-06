@@ -2605,6 +2605,26 @@ function getCongesBrutsAnnee(agent, schedule, year){
   return jours;
 }
 
+// Jours "Congé demandé" de l'année (06/08, pour le badge + numérotation
+// combinée dans le planning perso) — même règle de détachement auto (Phase 3,
+// 15/07) que computeDashboardConges : un suivi périmé (jour vide à la demande,
+// rempli depuis par autre chose) n'est jamais affiché comme actif.
+function getCongesDemandeesAnnee(agent, agentProfiles, schedule, year){
+  const profil = agentProfiles?.[agent?.id] || {};
+  const tracking = profil.congesDemandes || {};
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const jours = [];
+  Object.entries(tracking).forEach(([d,t])=>{
+    if(!t || t.statut!=="demande") return;
+    if(d<start||d>end) return;
+    const entree = schedule[`${agent?.id}-${d}`];
+    const codeActuel = entree?.equipe || entree?.equipe2;
+    if(t.jourEtaitVide && codeActuel) return;
+    jours.push(d);
+  });
+  return jours;
+}
+
 // Générique : jours d'un ensemble de codes équipe/équipe2 pour une année donnée
 // (réutilisé pour la numérotation RU/RQ/RP+RPP dans le planning perso, 04/08 —
 // même principe que getCongesBrutsAnnee).
@@ -6626,20 +6646,28 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
   const curMonth=_monthDate.getMonth();
   const monthDates=useMemo(()=>getMonthDates(curYear,curMonth),[curYear,curMonth]);
   const firstDay=useMemo(()=>firstDayOfMonth(curYear,curMonth),[curYear,curMonth]);
-  // Numérotation des congés (Phase 2 refonte Congés, 15/07) : 1er congé posé
-  // dans l'année civile = n°1, le suivant n°2, etc. — recalculé à la volée à
-  // chaque rendu (jamais stocké), donc toute modification (ajout/retrait
-  // d'un jour n'importe où dans l'année) renumérote automatiquement tout ce
-  // qui suit. Volontairement basé sur le calendrier civil de la case
-  // affichée (getCongesBrutsAnnee), pas sur le total "Pris" du tableau de
-  // bord (qui lui tient compte des reports A+1) : la case appartient à
-  // l'année où elle est physiquement affichée.
-  const congeNumeros=useMemo(()=>{
-    const jours=getCongesBrutsAnnee(agent,schedule,curYear).sort();
+  // Numérotation des congés (Phase 2 refonte Congés, 15/07 — étendue le 06/08
+  // pour inclure les congés "Demandés" dans la MÊME série cumulative que les
+  // congés accordés) : 1er congé de l'année (accordé OU demandé) = n°1, le
+  // suivant n°2, etc., tous triés ensemble par date chronologique — recalculé
+  // à la volée à chaque rendu (jamais stocké). Olivier a confirmé
+  // explicitement vouloir un recalcul complet à chaque changement, même si un
+  // jour demandé plus tôt dans l'année décale le numéro de jours déjà
+  // accordés plus tard ("le tout est de savoir où on en est"). Un jour
+  // demandé affiche son numéro entre parenthèses (voir ZONE 1 plus bas) ; un
+  // jour accordé garde le MÊME numéro sans parenthèses dès qu'il bascule
+  // (aucune renumérotation à la transition, la série est déjà unique).
+  // Volontairement basé sur le calendrier civil de la case affichée (comme
+  // avant), pas sur le total "Pris" du tableau de bord (qui tient compte des
+  // reports A+1).
+  const congeToutNumeros=useMemo(()=>{
+    const accordes=getCongesBrutsAnnee(agent,schedule,curYear).map(d=>({date:d,statut:"accorde"}));
+    const demandes=getCongesDemandeesAnnee(agent,agentProfiles,schedule,curYear).map(d=>({date:d,statut:"demande"}));
+    const combine=[...accordes,...demandes].sort((a,b)=>a.date<b.date?-1:1);
     const m={};
-    jours.forEach((d,i)=>{ m[d]=i+1; });
+    combine.forEach((it,i)=>{ m[it.date]={numero:i+1,statut:it.statut}; });
     return m;
-  },[agent,schedule,curYear]);
+  },[agent,schedule,agentProfiles,curYear]);
   // Numérotation RU et RQ (04/08, même principe que les congés ci-dessus) :
   // chaque code est numéroté séparément (1er RU de l'année = n°1, etc. ; RQ a
   // sa propre numérotation indépendante), sur toutes les occurrences.
@@ -6871,6 +6899,22 @@ justifyContent: "flex-start",
                 <span style={{display:"inline-flex",alignItems:"center",gap:4}}>✊ {en.greve}</span>
                 {greveNumeros[en.greve]?.[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{greveNumeros[en.greve][dk]}</span>}
               </div>}
+              {/* Congé demandé (06/08) : seul statut Demandé/Refusé/Accordé qui
+                  peut s'afficher A CÔTÉ d'une case déjà remplie (contrairement
+                  à Accordé, qui écrit directement CA et occupe toute la case,
+                  et à Refusé, jamais affiché ici — juste un suivi dans le
+                  popup Congés). Numéro entre parenthèses : même série
+                  cumulative que les congés accordés (congeToutNumeros
+                  ci-dessus), ne change pas quand le jour bascule en accordé. */}
+              {isOwnProfile&&congeToutNumeros[dk]?.statut==="demande"&&<div style={{
+                background:"transparent", border:`1.5px dashed ${getColor("CA")}`, color:getColor("CA"),
+                borderRadius:5, padding:"2px 6px",
+                fontSize:10, fontWeight:700,
+                display:"inline-flex", alignItems:"center", gap:4,
+                alignSelf:"flex-start",
+              }}>
+                ⏳ (n°{congeToutNumeros[dk].numero})
+              </div>}
               {isOwnProfile&&en?.notePerso&&!code&&<div style={{
                 background:getColor("NOTE"), color:"#fff",
                 borderRadius:5, padding:"2px 5px",
@@ -6892,7 +6936,7 @@ justifyContent: "flex-start",
                 <span lang="fr" style={CODES_FETES[code]||code==="CA"||code==="CP"
                   ? {fontSize:14,fontWeight:800,display:"block",whiteSpace:"nowrap"}
                   : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):(code==="CA"||code==="CP")?code:avecCesure(EQ_COLORS[code]?.label||code)}</span>
-                {(code==="CA"||code==="CP")&&congeNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeNumeros[dk]}</span>}
+                {(code==="CA"||code==="CP")&&congeToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeToutNumeros[dk].numero}</span>}
                 {code==="RU"&&ruNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{ruNumeros[dk]}</span>}
                 {code==="RQ"&&rqNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rqNumeros[dk]}</span>}
                 {code==="RP"&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rpNumeros[dk]}</span>}
