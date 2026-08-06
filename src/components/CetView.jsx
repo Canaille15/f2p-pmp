@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import api from "../api/client";
 
 // ─── CET (Compte Épargne Temps) ─────────────────────────────────────────────
 // Module volontairement isolé du reste de l'appli (même principe que
@@ -20,6 +21,12 @@ import { useState, useMemo } from "react";
 // cycle demande/accord ni lien avec un compteur source (même principe que
 // le "+ Ajuster le solde" déjà utilisé pour TC/RN/TY) — exclu du cap
 // d'épargne annuel et de l'abondement (voir accorderDemande/ajusterSolde).
+// Phase 3 (06/08) : Monétisation (type "monetisation", débit, sans effet
+// planning) et Utilisation en temps (type "utilisation", débit, période
+// Du/Au) — à l'accord d'une utilisation, écrit le code "CET" dans le
+// planning perso pour chaque jour de la période (voir EQUIPES dans
+// App.jsx), avec le même garde-fou d'écrasement que VT/TC (bloque si un
+// jour de la période contient déjà autre chose).
 
 // Constantes réglementaires — jamais en dur dans la logique de calcul, pour
 // pouvoir les ajuster sans toucher au reste du fichier.
@@ -189,7 +196,34 @@ function YearSwitcherMini({ year, availableYears, onChange }) {
 const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
 const labelSource = (code) => SOURCES_EPARGNE.find(s => s.code === code)?.label || code;
 
-export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }) {
+// Libellé générique pour un mouvement de n'importe quel type — utilisé dans
+// les listes Demandées/Accordées/Refusées, qui mélangent épargne, abondement,
+// ajustement, monétisation et utilisation.
+const labelMouvement = (m) => {
+  if (m.type === "abondement") return "🎁 Abondement";
+  if (m.type === "ajustement") return `✏️ Ajustement (${m.sens === "debit" ? "−" : "+"})`;
+  if (m.type === "monetisation") return "💶 Monétisation";
+  if (m.type === "utilisation") return "📅 Utilisation en temps";
+  return labelSource(m.source);
+};
+
+// Liste des jours (ISO) entre deux dates incluses — utilisée pour écrire/
+// retirer chaque jour d'une période "utilisation en temps" dans le planning
+// perso, même principe que le calcul de nbJours de la Demande de congés.
+function joursEntreDates(debut, fin) {
+  const jours = [];
+  if (!debut || !fin) return jours;
+  let d = new Date(debut + "T12:00:00");
+  const f = new Date(fin + "T12:00:00");
+  while (d <= f) {
+    jours.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 1);
+  }
+  return jours;
+}
+
+export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }) {
+  const agCp = agent?.immatriculation || agent?.cp || agent?.id;
   const data = useMemo(() => computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
 
   const [source, setSource] = useState("RQ");
@@ -202,6 +236,14 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
   const [ajustSousCompte, setAjustSousCompte] = useState("courant");
   const [ajustJours, setAjustJours] = useState("1");
   const [ajustNeg, setAjustNeg] = useState(false);
+  const [monetSousCompte, setMonetSousCompte] = useState("courant");
+  const [monetJours, setMonetJours] = useState("1");
+  const [monetErr, setMonetErr] = useState("");
+  const [utilSousCompte, setUtilSousCompte] = useState("courant");
+  const [utilDebut, setUtilDebut] = useState("");
+  const [utilFin, setUtilFin] = useState("");
+  const [utilErr, setUtilErr] = useState("");
+  const [accordErr, setAccordErr] = useState("");
 
   const besoinValeur = source === "RN" || source === "TC" || source === "TY";
 
@@ -237,46 +279,148 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
 
   const trouverMouvement = (sc, id) => (agentProfiles?.[agent.id]?.cetLedger?.[sc] || []).find(m => m.id === id);
 
-  // Accorder : déduit le compteur source (RN/TC/TY via une écriture négative
-  // dans leur ledger existant, RQ n'a rien à écrire — voir
-  // getCetTransfereJours, recalcul à la volée) et déclenche l'abondement
-  // automatique si c'est le tout premier mouvement accordé de l'année civile
-  // (tous sous-comptes confondus, texte réglementaire fourni par Olivier).
+  // Écrit/retire le code "CET" dans le planning perso pour chaque jour d'une
+  // période d'utilisation en temps — même principe que ecrireVTDansPlanning/
+  // annulerAccordDuPlanning (VtDashboardModal, App.jsx) : spread de l'entrée
+  // existante (préserve nuit/note perso), un appel réseau par jour.
+  const ecrireUtilisationDansPlanning = (debut, fin) => {
+    joursEntreDates(debut, fin).forEach(d => {
+      const key = `${agCp}-${d}`;
+      const entryExistante = schedule[key] || {};
+      const fullEntry = { ...entryExistante, equipe: "CET", prive: true };
+      setSchedule(prev => ({ ...prev, [key]: fullEntry }));
+      api.planning.saveEntry(agCp, d, fullEntry).catch(e => console.error("Erreur sauvegarde CET dans planning:", e));
+    });
+  };
+  const retirerUtilisationDuPlanning = (debut, fin) => {
+    joursEntreDates(debut, fin).forEach(d => {
+      const key = `${agCp}-${d}`;
+      const entryExistante = schedule[key];
+      if (!entryExistante || entryExistante.equipe !== "CET") return;
+      const { equipe, ...reste } = entryExistante;
+      const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
+      if (videTotal) {
+        setSchedule(prev => { const n = { ...prev }; delete n[key]; return n; });
+        api.planning.deleteEntry(agCp, d).catch(e => console.error("Erreur suppression CET du planning:", e));
+      } else {
+        const fullEntry = { ...reste, equipe: null };
+        setSchedule(prev => ({ ...prev, [key]: fullEntry }));
+        api.planning.saveEntry(agCp, d, fullEntry).catch(e => console.error("Erreur suppression CET du planning:", e));
+      }
+    });
+  };
+
+  // Accorder : branche selon le type de mouvement.
+  // - epargne : déduit le compteur source (RN/TC/TY via une écriture
+  //   négative dans leur ledger existant, RQ n'a rien à écrire — voir
+  //   getCetTransfereJours) et déclenche l'abondement automatique si c'est
+  //   le tout premier mouvement épargne accordé de l'année civile.
+  // - monetisation : aucun effet ailleurs, juste un débit du solde CET.
+  // - utilisation : écrit "CET" dans le planning perso pour toute la
+  //   période — bloqué (garde-fou) si un jour de la période contient déjà
+  //   autre chose, message affiché via accordErr sans rien modifier.
   const accorderDemande = (sc, id) => {
+    setAccordErr("");
+    const mouvement = trouverMouvement(sc, id);
+    if (!mouvement) return;
+
+    if (mouvement.type === "utilisation" && mouvement.dateDebut && mouvement.dateFin) {
+      const occupe = joursEntreDates(mouvement.dateDebut, mouvement.dateFin).find(d => {
+        const v = schedule[`${agCp}-${d}`];
+        return v?.equipe && v.equipe !== "CET";
+      });
+      if (occupe) {
+        setAccordErr(`Le ${fmtDate(occupe)} contient déjà quelque chose dans ton planning perso. Modifie ou efface ce jour d'abord.`);
+        return;
+      }
+    }
+
     const today = new Date().toISOString().slice(0, 10);
     setAgentProfiles(prev => {
       const profil = prev[agent.id] || {};
       const ledger = profil.cetLedger || { courant: [], finActivite: [] };
-      const mouvement = (ledger[sc] || []).find(m => m.id === id);
-      if (!mouvement) return prev;
+      const mv = (ledger[sc] || []).find(m => m.id === id);
+      if (!mv) return prev;
 
       // L'abondement ne se déclenche que sur une vraie épargne accordée —
-      // un ajustement manuel (solde de départ, voir ajusterSolde) n'est pas
-      // une épargne au sens réglementaire et ne doit ni déclencher
-      // l'abondement lui-même, ni empêcher qu'une épargne ultérieure le
-      // déclenche dans l'année.
-      const dejaAccordeCetteAnnee = SOUS_COMPTES.some(s =>
-        (ledger[s.key] || []).some(m => m.statut === "accorde" && m.annee === mouvement.annee && m.type === "epargne")
+      // un ajustement manuel, une monétisation ou une utilisation ne sont
+      // pas des épargnes au sens réglementaire et ne doivent ni déclencher
+      // l'abondement, ni empêcher qu'une épargne ultérieure le déclenche.
+      const dejaAccordeCetteAnnee = mv.type === "epargne" && SOUS_COMPTES.some(s =>
+        (ledger[s.key] || []).some(m => m.statut === "accorde" && m.annee === mv.annee && m.type === "epargne")
       );
 
       const nextLedger = { ...ledger };
       nextLedger[sc] = (ledger[sc] || []).map(m => m.id === id ? { ...m, statut: "accorde", dateAccord: today } : m);
-      if (!dejaAccordeCetteAnnee) {
+      if (mv.type === "epargne" && !dejaAccordeCetteAnnee) {
         nextLedger[sc] = [...nextLedger[sc], {
-          id: `abond-${mouvement.id}`, type: "abondement", source: null, jours: 1,
+          id: `abond-${mv.id}`, type: "abondement", source: null, jours: 1,
           valeurMinutes: null, sens: "credit", statut: "accorde",
-          dateDemande: today, dateAccord: today, dateRefus: null, annee: mouvement.annee,
+          dateDemande: today, dateAccord: today, dateRefus: null, annee: mv.annee,
         }];
       }
 
       const next = { ...profil, cetLedger: nextLedger };
-      const ledgerKey = LEDGER_KEY_BY_SOURCE[mouvement.source];
-      if (ledgerKey && mouvement.valeurMinutes) {
-        const entry = { id: `cet-${mouvement.id}`, mois: today.slice(0, 7), deltaMinutes: -mouvement.valeurMinutes, saisiLe: today, cetSousCompte: sc };
-        next[ledgerKey] = [...(profil[ledgerKey] || []), entry];
+      if (mv.type === "epargne") {
+        const ledgerKey = LEDGER_KEY_BY_SOURCE[mv.source];
+        if (ledgerKey && mv.valeurMinutes) {
+          const entry = { id: `cet-${mv.id}`, mois: today.slice(0, 7), deltaMinutes: -mv.valeurMinutes, saisiLe: today, cetSousCompte: sc };
+          next[ledgerKey] = [...(profil[ledgerKey] || []), entry];
+        }
       }
       return { ...prev, [agent.id]: next };
     });
+
+    if (mouvement.type === "utilisation" && mouvement.dateDebut && mouvement.dateFin) {
+      ecrireUtilisationDansPlanning(mouvement.dateDebut, mouvement.dateFin);
+    }
+  };
+
+  // Nouvelle demande de monétisation (Phase 3, 06/08) : débit du solde CET,
+  // aucun lien avec un compteur source ni le planning perso.
+  const ajouterMonetisationDemande = () => {
+    setMonetErr("");
+    const j = parseInt(monetJours, 10) || 0;
+    if (j <= 0) { setMonetErr("Indique un nombre de jours valide."); return; }
+    const compte = data.comptes.find(c => c.key === monetSousCompte);
+    if (compte && j > compte.solde) { setMonetErr(`Solde insuffisant sur ${compte.label} (${compte.solde}j disponibles).`); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    const mouvement = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      type: "monetisation", source: null, jours: j, valeurMinutes: null,
+      sens: "debit", statut: "demande", dateDemande: today, dateAccord: null, dateRefus: null, annee: year,
+    };
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      return { ...prev, [agent.id]: { ...profil, cetLedger: { ...ledger, [monetSousCompte]: [...(ledger[monetSousCompte] || []), mouvement] } } };
+    });
+    setMonetJours("1");
+  };
+
+  // Nouvelle demande d'utilisation en temps (Phase 3, 06/08) : débit du
+  // solde CET, période Du/Au — le planning perso n'est écrit qu'à l'accord
+  // (voir accorderDemande), jamais à la demande.
+  const ajouterUtilisationDemande = () => {
+    setUtilErr("");
+    if (!utilDebut || !utilFin) { setUtilErr("Choisis une date de début et de fin."); return; }
+    const j = joursEntreDates(utilDebut, utilFin).length;
+    if (j <= 0) { setUtilErr("La période n'est pas valide."); return; }
+    const compte = data.comptes.find(c => c.key === utilSousCompte);
+    if (compte && j > compte.solde) { setUtilErr(`Solde insuffisant sur ${compte.label} (${compte.solde}j disponibles).`); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    const mouvement = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      type: "utilisation", source: null, jours: j, valeurMinutes: null,
+      dateDebut: utilDebut, dateFin: utilFin,
+      sens: "debit", statut: "demande", dateDemande: today, dateAccord: null, dateRefus: null, annee: year,
+    };
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      return { ...prev, [agent.id]: { ...profil, cetLedger: { ...ledger, [utilSousCompte]: [...(ledger[utilSousCompte] || []), mouvement] } } };
+    });
+    setUtilDebut(""); setUtilFin("");
   };
 
   // Ajustement manuel du solde (06/08, demandé par Olivier — "quasiment
@@ -311,12 +455,16 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
 
   // Retirer une demande en attente (jamais rien écrit ailleurs, rien à
   // défaire). Annuler un mouvement déjà accordé retire aussi l'écriture
-  // correspondante du ledger source (RN/TC/TY) — l'abondement éventuellement
-  // déclenché par ce mouvement n'est volontairement pas retiré automatiquement
-  // (même logique que "Annuler" sur Congés/VT : pas de restauration en
-  // cascade, l'agent ajuste manuellement si besoin).
+  // correspondante du ledger source (RN/TC/TY) ou du planning perso
+  // (utilisation) — l'abondement éventuellement déclenché par ce mouvement
+  // n'est volontairement pas retiré automatiquement (même logique que
+  // "Annuler" sur Congés/VT : pas de restauration en cascade, l'agent
+  // ajuste manuellement si besoin).
   const retirerMouvement = (sc, id) => {
     const mouvement = trouverMouvement(sc, id);
+    if (mouvement?.type === "utilisation" && mouvement.statut === "accorde" && mouvement.dateDebut && mouvement.dateFin) {
+      retirerUtilisationDuPlanning(mouvement.dateDebut, mouvement.dateFin);
+    }
     setAgentProfiles(prev => {
       const profil = prev[agent.id] || {};
       const ledger = profil.cetLedger || { courant: [], finActivite: [] };
@@ -451,15 +599,79 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
             {besoinValeur && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6 }}>Valeur libre — indique combien d'heures/minutes ce jour représente pour toi dans ton compteur {source}, déduites au moment de l'accord.</div>}
           </div>
 
-          {/* Demandées */}
+          {/* 💶 Nouvelle monétisation (Phase 3, 06/08) — débit du solde CET,
+              éligibilité (jours épargnés l'année précédente) rappelée dans
+              la notice, non bloquée ici (même philosophie que le cap
+              d'épargne : informer plutôt que bloquer). */}
+          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>💶 Nouvelle monétisation</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>Seuls les jours épargnés l'année précédente sont normalement éligibles (voir notice) — vérifie avant d'envoyer ta demande.</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {SOUS_COMPTES.map(sc => (
+                <button key={sc.key} onClick={() => setMonetSousCompte(sc.key)} style={{
+                  flex: 1, background: monetSousCompte === sc.key ? "#5b21b6" : "#faf5ff",
+                  color: monetSousCompte === sc.key ? "#fff" : "#5b21b6",
+                  border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                }}>{sc.icone} {sc.label}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input type="number" min="1" value={monetJours} onChange={e => setMonetJours(e.target.value)}
+                style={{ width: 64, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>jour{parseInt(monetJours, 10) > 1 ? "s" : ""}</span>
+              <button onClick={ajouterMonetisationDemande} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>+ Ajouter la demande</button>
+            </div>
+            {monetErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginTop: 6 }}>{monetErr}</div>}
+          </div>
+
+          {/* 📅 Nouvelle utilisation en temps (Phase 3, 06/08) — période Du/Au,
+              écrit "CET" dans le planning perso à l'accord (jamais à la
+              demande), débite le solde CET du nombre de jours de la période. */}
+          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>📅 Nouvelle utilisation en temps</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>Le compte courant est normalement dispo par blocs de 5 à 20 jours, le compte fin d'activité seulement à l'approche de la retraite ou pour un évènement familial (voir notice) — vérifie avant d'envoyer ta demande.</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {SOUS_COMPTES.map(sc => (
+                <button key={sc.key} onClick={() => setUtilSousCompte(sc.key)} style={{
+                  flex: 1, background: utilSousCompte === sc.key ? "#5b21b6" : "#faf5ff",
+                  color: utilSousCompte === sc.key ? "#fff" : "#5b21b6",
+                  border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                }}>{sc.icone} {sc.label}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ flex: "1 1 120px" }}>
+                <div style={{ fontSize: 9, fontWeight: 600, color: "#94a3b8", marginBottom: 2 }}>Du</div>
+                <input type="date" value={utilDebut} onChange={e => setUtilDebut(e.target.value)}
+                  style={{ width: "100%", padding: "7px 9px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 12 }} />
+              </div>
+              <div style={{ flex: "1 1 120px" }}>
+                <div style={{ fontSize: 9, fontWeight: 600, color: "#94a3b8", marginBottom: 2 }}>Au</div>
+                <input type="date" value={utilFin} onChange={e => setUtilFin(e.target.value)}
+                  style={{ width: "100%", padding: "7px 9px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 12 }} />
+              </div>
+              <button onClick={ajouterUtilisationDemande} style={{ alignSelf: "flex-end", background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>+ Ajouter la demande</button>
+            </div>
+            {utilDebut && utilFin && joursEntreDates(utilDebut, utilFin).length > 0 && (
+              <div style={{ fontSize: 10, color: "#7c3aed", fontWeight: 600, marginTop: 6 }}>{joursEntreDates(utilDebut, utilFin).length} jour{joursEntreDates(utilDebut, utilFin).length > 1 ? "s" : ""}</div>
+            )}
+            {utilErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginTop: 6 }}>{utilErr}</div>}
+          </div>
+
+          {/* Demandées — regroupe épargne/monétisation/utilisation, toutes
+              statut "demande" (voir computeDashboardCet, générique par
+              statut). */}
           <div>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>⏳ Demandées ({data.demandesEnAttente.length})</div>
+            {accordErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginBottom: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px" }}>{accordErr}</div>}
             {data.demandesEnAttente.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune demande en attente.</div> :
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {data.demandesEnAttente.map(m => (
                   <div key={m.id} style={{ border: "1px solid #e2e8f0", borderRadius: 9, padding: "9px 11px", display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelSource(m.source)} — {m.jours}j</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <button onClick={() => accorderDemande(m.sousCompte, m.id)} style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>✓ Accorder</button>
                         <button onClick={() => refuserDemande(m.sousCompte, m.id)} style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>✕ Refuser</button>
@@ -469,6 +681,7 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
                     <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
                       {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.icone} {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.label}
                       {m.valeurMinutes ? ` · ${Math.floor(m.valeurMinutes / 60)}h${String(m.valeurMinutes % 60).padStart(2, "0")} à déduire` : ""}
+                      {m.type === "utilisation" && m.dateDebut && m.dateFin ? ` · du ${fmtDate(m.dateDebut)} au ${fmtDate(m.dateFin)}` : ""}
                       {` · Demandé le ${fmtDate(m.dateDemande)}`}
                     </div>
                   </div>
@@ -476,19 +689,38 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
               </div>}
           </div>
 
-          {/* Épargnées (accordées) */}
+          {/* Épargnées (crédit accordé) */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✅ Épargnées ({data.mouvementsAccordes.length})</div>
-            {data.mouvementsAccordes.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✅ Épargnées ({data.mouvementsAccordes.filter(m => m.sens === "credit").length})</div>
+            {data.mouvementsAccordes.filter(m => m.sens === "credit").length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {data.mouvementsAccordes.map(m => (
+                {data.mouvementsAccordes.filter(m => m.sens === "credit").map(m => (
                   <div key={m.id} style={{ border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <div>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>
-                        {m.type === "abondement" ? "🎁 Abondement" : m.type === "ajustement" ? `✏️ Ajustement (${m.sens === "debit" ? "−" : "+"})` : labelSource(m.source)} — {m.jours}j
-                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
                       <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
                         {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.icone} {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.label} · Accordé le {fmtDate(m.dateAccord)}
+                      </div>
+                    </div>
+                    <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
+                  </div>
+                ))}
+              </div>}
+          </div>
+
+          {/* Sorties (débit accordé : monétisation + utilisation) */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>📤 Sorties — monétisées / utilisées ({data.mouvementsAccordes.filter(m => m.sens === "debit").length})</div>
+            {data.mouvementsAccordes.filter(m => m.sens === "debit").length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {data.mouvementsAccordes.filter(m => m.sens === "debit").map(m => (
+                  <div key={m.id} style={{ border: "1px solid #ede9fe", background: "#faf5ff", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
+                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
+                        {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.icone} {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.label}
+                        {m.type === "utilisation" && m.dateDebut && m.dateFin ? ` · du ${fmtDate(m.dateDebut)} au ${fmtDate(m.dateFin)}` : ""}
+                        {` · Accordé le ${fmtDate(m.dateAccord)}`}
                       </div>
                     </div>
                     <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
@@ -504,7 +736,7 @@ export function CetDashboardModal({ agent, agentProfiles, setAgentProfiles, year
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {data.mouvementsRefuses.map(m => (
                   <div key={m.id} style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelSource(m.source)} — {m.jours}j</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
                     <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>🗑 Retirer</button>
                   </div>
                 ))}

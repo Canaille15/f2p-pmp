@@ -284,6 +284,10 @@ const EQUIPES = [
   { code:"FOR",  label:"Formation",  heures:"",            color:"#b45309", textColor:"#fff", dot:"#fef9c3", prive:false, compteur:"FOR",     bg:"#b45309" },
   { code:"DISPO",label:"Dispo",      heures:"",            color:"#059669", textColor:"#fff", dot:"#d1fae5", prive:false, compteur:"DISPO",   bg:"#059669" },
   { code:"VM",   label:"VM",         heures:"",            color:"#6b7280", textColor:"#fff", dot:"#f3f4f6", prive:true,  compteur:"ABS",     bg:"#6b7280" },
+  // CET (06/08) : jour d'utilisation en temps du Compte Épargne Temps, écrit
+  // dans le planning perso à l'accord d'un mouvement "utilisation" (voir
+  // CetView.jsx) — même principe que VT, compteur générique "ABS".
+  { code:"CET",  label:"CET",        heures:"",            color:"#7c3aed", textColor:"#fff", dot:"#ede9fe", prive:true,  compteur:"ABS",     bg:"#7c3aed" },
   ...Object.keys(CODES_FETES).map(k=>({ code:k, label:k, heures:"", color:"#ec4899", textColor:"#fff", dot:"#fce7f3", prive:true, compteur:"FETE", bg:"#ec4899" })),
 ];
 const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
@@ -5113,7 +5117,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         <VtDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowVtDash(false)}/>
       )}
       {showCetDash&&(
-        <CetDashboardModal agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCetDash(false)}/>
+        <CetDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCetDash(false)}/>
       )}
       {showPauseFigeeDash&&(
         <PauseFigeeDashboardModal agent={agent} schedule={schedule} pausesData={pausesData} loading={pausesLoading} loadError={pausesError} recharger={rechargerPauses} tcData={tcData} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowPauseFigeeDash(false)}/>
