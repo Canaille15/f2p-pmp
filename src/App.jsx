@@ -2746,6 +2746,10 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
   // groupRefusEnPeriodes : aucun changement du modèle de données stocké.
   const refusData = useMemo(()=>computeRefusConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const periodesRefus = useMemo(()=>groupRefusEnPeriodes(refusData.refus), [refusData.refus]);
+  // Tri mensuel (06/08) : Demandées et Refusées regroupées par mois pour la
+  // lisibilité — purement visuel, aucun changement de calcul ni de donnée.
+  const demandesParMois = useMemo(()=>groupParMois(data.demandes, e=>e.date), [data.demandes]);
+  const periodesRefusParMois = useMemo(()=>groupParMois(periodesRefus, p=>p.debut), [periodesRefus]);
   const [showAjoutRefus, setShowAjoutRefus] = useState(false);
   const [refusDateDebut, setRefusDateDebut] = useState("");
   const [refusDateFin, setRefusDateFin] = useState("");
@@ -3127,20 +3131,34 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
           <div>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>⏳ Demandées ({data.demandes.length})</div>
             {data.demandes.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune demande en attente.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                {data.demandes.map(e=>(
-                  <div key={e.date} style={{border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                      <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
-                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                        <button onClick={()=>accorderDemande(e.date)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✓ Accorder</button>
-                        <button onClick={()=>refuserDemande(e.date)} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✕ Refuser</button>
-                        <button onClick={()=>retirerDemande(e.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {demandesParMois.map(({mois,items})=>{
+                  const moisNum = parseInt(mois.slice(5,7),10)-1;
+                  const anneeMois = mois.slice(0,4);
+                  const horsAnnee = anneeMois!==String(year);
+                  return (
+                    <div key={mois}>
+                      <div style={{fontSize:11,fontWeight:800,color:"#a16207",marginBottom:6,textTransform:"uppercase",letterSpacing:.3}}>
+                        {MOIS_L[moisNum]}{horsAnnee?` ${anneeMois}`:""} · {items.length}j
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                        {items.map(e=>(
+                          <div key={e.date} style={{border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",display:"flex",flexDirection:"column",gap:6}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                              <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtDate(e.date)}</span>
+                              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                <button onClick={()=>accorderDemande(e.date)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✓ Accorder</button>
+                                <button onClick={()=>refuserDemande(e.date)} style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>✕ Refuser</button>
+                                <button onClick={()=>retirerDemande(e.date)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
+                              </div>
+                            </div>
+                            {e.dateDemande && <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>Demandé le {fmtDate(e.dateDemande)}</div>}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    {e.dateDemande && <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>Demandé le {fmtDate(e.dateDemande)}</div>}
-                  </div>
-                ))}
+                  );
+                })}
               </div>}
           </div>
 
@@ -3183,52 +3201,67 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
             </div>
 
             {periodesRefus.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                {periodesRefus.map(p=>{
-                  const isMulti = p.jours.length>1;
-                  const key = p.debut;
-                  const ouverte = !!periodesOuvertes[key];
-                  const badgeStyle = p.talonResume==="recu" ? {color:"#166534",background:"#dcfce7"}
-                    : p.talonResume==="mixte" ? {color:"#92400e",background:"#fef3c7"}
-                    : {color:"#64748b",background:"#f1f5f9"};
-                  const badgeLabel = p.talonResume==="recu" ? "✓ Talon reçu"
-                    : p.talonResume==="mixte" ? `Talon ${p.recus}/${p.jours.length} reçus`
-                    : "Talon non demandé";
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {periodesRefusParMois.map(({mois,items})=>{
+                  const moisNum = parseInt(mois.slice(5,7),10)-1;
+                  const anneeMois = mois.slice(0,4);
+                  const horsAnnee = anneeMois!==String(year);
+                  const joursDuMois = items.reduce((s,p)=>s+p.jours.length,0);
                   return (
-                    <div key={key} style={{border:"1px solid #fecaca",background:"#fef2f2",borderRadius:9,padding:"9px 11px"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                        <div>
-                          <div style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtPeriodeLabel(p)}</div>
-                          <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>{p.jours.length} jour{p.jours.length>1?"s":""} refusé{p.jours.length>1?"s":""}</div>
-                        </div>
-                        <span style={{fontSize:10,fontWeight:700,borderRadius:6,padding:"3px 8px",...badgeStyle}}>{badgeLabel}</span>
+                    <div key={mois}>
+                      <div style={{fontSize:11,fontWeight:800,color:"#991b1b",marginBottom:6,textTransform:"uppercase",letterSpacing:.3}}>
+                        {MOIS_L[moisNum]}{horsAnnee?` ${anneeMois}`:""} · {joursDuMois}j
                       </div>
-                      <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap",alignItems:"center"}}>
-                        {isMulti && p.sansStatut>0 &&
-                          <button onClick={()=>demanderTalonPeriode(p.jours)} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>
-                            📋 Demander le talon{p.talonResume==="mixte"?" restant":""}
-                          </button>}
-                        {isMulti &&
-                          <button onClick={()=>setPeriodesOuvertes(prev=>({...prev,[key]:!ouverte}))} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:10,fontWeight:700,textDecoration:"underline"}}>
-                            {ouverte?"▴ Réduire":"▾ Détailler jour par jour"}
-                          </button>}
-                        <button onClick={()=>retirerRefus(p.jours.map(j=>j.date))} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:10,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
-                      </div>
-                      {!isMulti && (
-                        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",borderTop:"1px dashed #fecaca",marginTop:8,paddingTop:8}}>
-                          {renderTalonBtns(p.jours[0])}
-                        </div>
-                      )}
-                      {ouverte && isMulti && (
-                        <div style={{marginTop:9,paddingTop:9,borderTop:"1px dashed #fecaca",display:"flex",flexDirection:"column",gap:7}}>
-                          {p.jours.map(j=>(
-                            <div key={j.date} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                              <span style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{fmtDate(j.date)}</span>
-                              <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>{renderTalonBtns(j)}</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                        {items.map(p=>{
+                          const isMulti = p.jours.length>1;
+                          const key = p.debut;
+                          const ouverte = !!periodesOuvertes[key];
+                          const badgeStyle = p.talonResume==="recu" ? {color:"#166534",background:"#dcfce7"}
+                            : p.talonResume==="mixte" ? {color:"#92400e",background:"#fef3c7"}
+                            : {color:"#64748b",background:"#f1f5f9"};
+                          const badgeLabel = p.talonResume==="recu" ? "✓ Talon reçu"
+                            : p.talonResume==="mixte" ? `Talon ${p.recus}/${p.jours.length} reçus`
+                            : "Talon non demandé";
+                          return (
+                            <div key={key} style={{border:"1px solid #fecaca",background:"#fef2f2",borderRadius:9,padding:"9px 11px"}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                                <div>
+                                  <div style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{fmtPeriodeLabel(p)}</div>
+                                  <div style={{fontSize:10,color:"#64748b",fontWeight:600}}>{p.jours.length} jour{p.jours.length>1?"s":""} refusé{p.jours.length>1?"s":""}</div>
+                                </div>
+                                <span style={{fontSize:10,fontWeight:700,borderRadius:6,padding:"3px 8px",...badgeStyle}}>{badgeLabel}</span>
+                              </div>
+                              <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap",alignItems:"center"}}>
+                                {isMulti && p.sansStatut>0 &&
+                                  <button onClick={()=>demanderTalonPeriode(p.jours)} style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,padding:"4px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>
+                                    📋 Demander le talon{p.talonResume==="mixte"?" restant":""}
+                                  </button>}
+                                {isMulti &&
+                                  <button onClick={()=>setPeriodesOuvertes(prev=>({...prev,[key]:!ouverte}))} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:10,fontWeight:700,textDecoration:"underline"}}>
+                                    {ouverte?"▴ Réduire":"▾ Détailler jour par jour"}
+                                  </button>}
+                                <button onClick={()=>retirerRefus(p.jours.map(j=>j.date))} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:10,fontWeight:700,textDecoration:"underline"}}>🗑 Retirer</button>
+                              </div>
+                              {!isMulti && (
+                                <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",borderTop:"1px dashed #fecaca",marginTop:8,paddingTop:8}}>
+                                  {renderTalonBtns(p.jours[0])}
+                                </div>
+                              )}
+                              {ouverte && isMulti && (
+                                <div style={{marginTop:9,paddingTop:9,borderTop:"1px dashed #fecaca",display:"flex",flexDirection:"column",gap:7}}>
+                                  {p.jours.map(j=>(
+                                    <div key={j.date} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                      <span style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{fmtDate(j.date)}</span>
+                                      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>{renderTalonBtns(j)}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -3304,6 +3337,20 @@ function computeRefusConges(agent, schedule, agentProfiles, year){
     parMois[mois].push(r);
   });
   return { refus, parMois, total: refus.length, sansTalon: refus.filter(r=>!r.talonStatut).length };
+}
+
+// Regroupe une liste d'items par mois (tri mensuel, 06/08 — demande d'Olivier
+// pour la clarte des listes Demandees/Refusees) — purement un regroupement
+// d'affichage, aucun changement de la donnee sous-jacente. getDate extrait la
+// date ISO (YYYY-MM-DD) de chaque item (le champ differe selon la liste : .date
+// pour une demande, .debut pour une periode de refus deja regroupee).
+function groupParMois(items, getDate){
+  const map = {};
+  items.forEach(it=>{
+    const mois = getDate(it).slice(0,7);
+    (map[mois]=map[mois]||[]).push(it);
+  });
+  return Object.keys(map).sort().map(mois=>({mois, items:map[mois]}));
 }
 
 // Regroupe les jours refuses consecutifs (calendrier) en periodes pour
