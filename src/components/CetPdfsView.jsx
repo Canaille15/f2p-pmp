@@ -4,19 +4,37 @@ import { PDFDocument } from "pdf-lib";
 // ─── CET Phase 5 (07/08) : génération des PDF officiels CET ───────────────
 // Contrairement à "Demande de congés" (GA_demande_autorisation_absence.pdf,
 // un scan sans champs — DemandeCongesView.jsx dessine le texte à des
-// coordonnées fixes), les 5 imprimés CET fournis par Olivier sont de vrais
+// coordonnées fixes), les imprimés CET fournis par Olivier sont de vrais
 // formulaires PDF avec des champs remplissables (AcroForm) — on les remplit
 // donc directement par nom de champ (pdf-lib form.getTextField/getRadioGroup),
 // puis on aplatit (form.flatten()) pour livrer un PDF final non modifiable,
 // comme un vrai document généré. Vue isolée, indépendante du ledger CET
 // (CetView.jsx) — un pur générateur de document, même principe que
 // DemandeCongesView.jsx n'écrit jamais dans congesDemandes.
+//
+// 5e et 6e imprimés ajoutés le 07/08 (utilisation compte courant + transfert
+// de jours courant→fin d'activité) — Olivier les avait oubliés lors de l'envoi
+// initial du 06/08 ; les 4 premiers imprimés déjà livrés ont été reconfirmés
+// identiques (checksum) aux versions renvoyées, aucun changement nécessaire.
 
 const TYPES = [
   { k: "epargne", label: "Demande d'épargne sur le CET (hors congés annuels)" },
   { k: "intention", label: "Intention d'épargne de congés annuels" },
   { k: "utilisation", label: "Demande d'utilisation en temps — sous-compte fin d'activité" },
   { k: "monetisation", label: "Demande de monétisation — sous-compte fin d'activité" },
+  { k: "utilisationCourant", label: "Demande d'utilisation en temps — sous-compte courant" },
+  { k: "transfert", label: "Demande de transfert de jours (courant → fin d'activité)" },
+];
+
+// Sous-compte courant : le nombre de jours doit être compris entre 5 et 20
+// (règle du formulaire officiel), réparti en 3 paliers avec des délais de
+// prévenance différents — chaque palier a sa propre paire de champs sur le
+// PDF (nombre de jours + date de la demande), un seul palier est rempli par
+// génération (celui qui correspond au nombre de jours saisi par l'agent).
+const PALIERS_UTIL_COURANT = [
+  { min: 5, max: 9, radio: "de 5 à 9", suffixJours: "de 5 à 9 jours", suffixDate: "de 5 à 9 jours", delai: "1 mois avant le 1er jour" },
+  { min: 10, max: 15, radio: "de 10 à 15", suffixJours: "de 10 à 15 jours", suffixDate: "de 10 à 15 jours", delai: "2 mois avant le 1er jour" },
+  { min: 16, max: 20, radio: "de 16 à 20", suffixJours: "de 16 à 20 jours", suffixDate: "de 16 à 20 jours", delai: "4 mois avant le 1er jour" },
 ];
 
 const SOUS_COMPTES = [
@@ -102,6 +120,27 @@ async function genererMonetisationFinActivite({ nom, prenom, cp, jours }) {
   return finaliser(doc, form);
 }
 
+async function genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire }) {
+  const { doc, form } = await chargerFormulaire("/CET_utilisation_courant.pdf");
+  remplirIdentite(form, { nom, prenom, cp });
+  const palier = PALIERS_UTIL_COURANT.find(p => Number(jours) >= p.min && Number(jours) <= p.max);
+  if (palier) {
+    try { form.getRadioGroup("durée jours").select(palier.radio); } catch (e) {}
+    try { form.getTextField(`Nombre de jours issus du CET entre 5 et 20${palier.suffixJours}`).setText(String(jours)); } catch (e) {}
+    try { form.getTextField(`Date de la demande${palier.suffixDate}`).setText(dateAuj()); } catch (e) {}
+  }
+  try { form.getRadioGroup("demande complémentaire").select(demandeComplementaire ? "oui" : "non"); } catch (e) {}
+  return finaliser(doc, form);
+}
+
+async function genererTransfertJours({ nom, prenom, cp, jours }) {
+  const { doc, form } = await chargerFormulaire("/CET_transfert_jours.pdf");
+  remplirIdentite(form, { nom, prenom, cp });
+  try { form.getTextField("nombre de jours transférer").setText(String(jours)); } catch (e) {}
+  try { form.getTextField("Date de la demande").setText(dateAuj()); } catch (e) {}
+  return finaliser(doc, form);
+}
+
 function messageEmail({ type, prenom, nom, jours, source, sousCompte }) {
   const sousCompteLabel = SOUS_COMPTES.find(s => s.k === sousCompte)?.label?.toLowerCase() || "";
   let corps = "";
@@ -114,6 +153,10 @@ function messageEmail({ type, prenom, nom, jours, source, sousCompte }) {
     corps = `Ci-joint ma demande d'utilisation en temps des jours du sous-compte de fin d'activité : ${jours} jour(s).`;
   } else if (type === "monetisation") {
     corps = `Ci-joint ma demande de monétisation des jours du sous-compte de fin d'activité : ${jours} jour(s).`;
+  } else if (type === "utilisationCourant") {
+    corps = `Ci-joint ma demande d'utilisation en temps des jours du sous-compte courant : ${jours} jour(s).`;
+  } else if (type === "transfert") {
+    corps = `Ci-joint ma demande de transfert de jours du sous-compte courant vers le sous-compte de fin d'activité : ${jours} jour(s).`;
   }
   return `Bonjour,
 
@@ -128,19 +171,22 @@ export default function CetPdfsView({ currentAgent }) {
   const [source, setSource] = useState(SOURCES_EPARGNE_HC[0].code);
   const [sousCompte, setSousCompte] = useState(SOUS_COMPTES[0].k);
   const [jours, setJours] = useState("");
+  const [demandeComplementaire, setDemandeComplementaire] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [messageCopie, setMessageCopie] = useState(false);
   const [messageSurligne, setMessageSurligne] = useState(false);
   const emailCardRef = useRef(null);
 
-  const changerType = (k) => { setType(k); setJours(""); setErr(null); };
+  const changerType = (k) => { setType(k); setJours(""); setDemandeComplementaire(false); setErr(null); };
 
   const nom = currentAgent?.nom || "";
   const prenom = currentAgent?.prenom || "";
   const cp = currentAgent?.cp || currentAgent?.id || "";
 
-  const joursValides = jours !== "" && Number(jours) > 0;
+  const joursValides = type === "utilisationCourant"
+    ? jours !== "" && Number(jours) >= 5 && Number(jours) <= 20
+    : jours !== "" && Number(jours) > 0;
   const messageGenere = messageEmail({ type, prenom, nom, jours, source, sousCompte });
 
   const copierMessage = () => {
@@ -152,7 +198,10 @@ export default function CetPdfsView({ currentAgent }) {
 
   const generer = async () => {
     setErr(null);
-    if (!joursValides) { setErr("Indique un nombre de jours valide."); return; }
+    if (!joursValides) {
+      setErr(type === "utilisationCourant" ? "Indique un nombre de jours entre 5 et 20 (règle de cet imprimé)." : "Indique un nombre de jours valide.");
+      return;
+    }
     setBusy(true);
     try {
       let bytes, nomFichier;
@@ -166,9 +215,15 @@ export default function CetPdfsView({ currentAgent }) {
       } else if (type === "utilisation") {
         bytes = await genererUtilisationFinActivite({ nom, prenom, cp, jours });
         nomFichier = `CET utilisation fin activite du ${dateNom}.pdf`;
-      } else {
+      } else if (type === "monetisation") {
         bytes = await genererMonetisationFinActivite({ nom, prenom, cp, jours });
         nomFichier = `CET monetisation fin activite du ${dateNom}.pdf`;
+      } else if (type === "utilisationCourant") {
+        bytes = await genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire });
+        nomFichier = `CET utilisation courant du ${dateNom}.pdf`;
+      } else {
+        bytes = await genererTransfertJours({ nom, prenom, cp, jours });
+        nomFichier = `CET transfert jours du ${dateNom}.pdf`;
       }
       const blob = new Blob([bytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
@@ -244,9 +299,33 @@ export default function CetPdfsView({ currentAgent }) {
               {type === "intention" && "Nombre de congés à épargner"}
               {type === "utilisation" && "Nombre de jours à utiliser (congé fin d'activité)"}
               {type === "monetisation" && "Nombre de jours à monétiser"}
+              {type === "utilisationCourant" && "Nombre de jours à utiliser (entre 5 et 20)"}
+              {type === "transfert" && "Nombre de jours à transférer (courant → fin d'activité)"}
             </label>
-            <input type="number" min="0" step="1" value={jours} onChange={e => setJours(e.target.value)} style={champStyle} placeholder="ex : 2" />
+            <input
+              type="number" min={type === "utilisationCourant" ? 5 : 0} max={type === "utilisationCourant" ? 20 : undefined}
+              step="1" value={jours} onChange={e => setJours(e.target.value)} style={champStyle}
+              placeholder={type === "utilisationCourant" ? "ex : 12" : "ex : 2"}
+            />
+            {type === "utilisationCourant" && jours !== "" && (
+              (() => {
+                const palier = PALIERS_UTIL_COURANT.find(p => Number(jours) >= p.min && Number(jours) <= p.max);
+                return palier
+                  ? <div style={{ fontSize: 11.5, color: "#5b21b6", marginTop: 5, fontWeight: 600 }}>Délai de prévenance : {palier.delai}</div>
+                  : <div style={{ fontSize: 11.5, color: "#991b1b", marginTop: 5, fontWeight: 600 }}>⚠️ Cet imprimé n'accepte qu'un nombre de jours entre 5 et 20</div>;
+              })()
+            )}
           </div>
+
+          {type === "utilisationCourant" && (
+            <div>
+              <label style={labelStyle}>Demande complémentaire de jours d'absence</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setDemandeComplementaire(false)} style={{ ...pillStyle(!demandeComplementaire), flex: 1, textAlign: "center" }}>Non</button>
+                <button onClick={() => setDemandeComplementaire(true)} style={{ ...pillStyle(demandeComplementaire), flex: 1, textAlign: "center" }}>Oui</button>
+              </div>
+            </div>
+          )}
 
           {err && <div style={{ fontSize: 13, fontWeight: 600, color: "#991b1b" }}>{err}</div>}
 
