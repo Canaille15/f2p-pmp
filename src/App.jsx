@@ -4751,25 +4751,11 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           <span style={{fontSize:13,fontWeight:800,color:"#fff",letterSpacing:-.2}}>
             {selectedYear} - Tableau de bords
           </span>
-
-          {/* Résumé rapide quand fermé */}
-          {!ouvert&&<div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {[
-              {k:"travail", label:"Trav."},
-              {k:"RP",      label:"RP"},
-              {k:"FETE",    label:"Fête"},
-              {k:"conges",  label:"CA"},
-            ].map(({k,label})=>{
-              const v = k==="conges" ? congesData.solde : k==="RP" ? rpData.total : val(k);
-              if(!v) return null;
-              return <span key={k} style={{
-                fontSize:10,fontWeight:700,color:"#fff",
-                background:"rgba(255,255,255,.18)",
-                borderRadius:6,padding:"1px 8px",
-              }}>{label} {v}</span>;
-            })}
-          </div>}
         </div>
+
+        {/* Sélecteur d'année, visible uniquement replié → déplié (demandé par
+            Olivier le 06/08, remplace l'ancien résumé de compteurs replié) */}
+        {ouvert&&<YearSwitcher year={selectedYear} availableYears={availableYears} onChange={setSelectedYear}/>}
 
         <span style={{fontSize:13,color:"rgba(255,255,255,.8)",fontWeight:700,
           transform:ouvert?"rotate(0)":"rotate(-90deg)",
