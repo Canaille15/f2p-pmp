@@ -2774,7 +2774,7 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   };
 }
 
-function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }){
+function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose, cetTransfere }){
   const data = useMemo(()=>computeDashboardConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const [entitlementInput, setEntitlementInput] = useState(String(data.entitlement));
   const [reportDate, setReportDate] = useState("");
@@ -3078,15 +3078,26 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
               <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris</div>
               <div style={{fontSize:20,fontWeight:900,color:"#a16207"}}>{data.pris}</div>
             </div>
-            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${data.solde<5?"#fca5a5":"#e2e8f0"}`}}>
-              <div style={{fontSize:11,fontWeight:700,color:data.solde<5?"#dc2626":"#334155"}}>Restant</div>
-              <div style={{fontSize:20,fontWeight:900,color:data.solde<5?"#dc2626":"#16a34a"}}>{data.solde}</div>
+            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${(data.solde-(cetTransfere?.total||0))<5?"#fca5a5":"#e2e8f0"}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:(data.solde-(cetTransfere?.total||0))<5?"#dc2626":"#334155"}}>Restant</div>
+              <div style={{fontSize:20,fontWeight:900,color:(data.solde-(cetTransfere?.total||0))<5?"#dc2626":"#16a34a"}}>{data.solde-(cetTransfere?.total||0)}</div>
             </div>
             <div style={{flex:1,background:refusData.total>0?"#fef2f2":"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${refusData.total>0?"#fecaca":"#e2e8f0"}`}}>
               <div style={{fontSize:11,fontWeight:700,color:refusData.total>0?"#991b1b":"#334155"}}>Refusés</div>
               <div style={{fontSize:20,fontWeight:900,color:refusData.total>0?"#dc2626":"#94a3b8"}}>{refusData.total}</div>
             </div>
           </div>
+
+          {/* Récap CET (Phase 4, 06/08) : jours de Congés transférés au CET —
+              jamais écrit dans le planning perso, purement un rappel (voir
+              CetView.jsx, getCetTransfereJours). */}
+          {cetTransfere && cetTransfere.total>0 && (
+            <div style={{fontSize:11,fontWeight:600,color:"#5b21b6",background:"#faf5ff",border:"1px solid #e9d5ff",borderRadius:8,padding:"8px 10px"}}>
+              🏦 {cetTransfere.total} jour{cetTransfere.total>1?"s":""} transféré{cetTransfere.total>1?"s":""} au CET
+              {cetTransfere.parSousCompte.courant>0 && ` — Compte courant : ${cetTransfere.parSousCompte.courant}j`}
+              {cetTransfere.parSousCompte.finActivite>0 && ` — Compte fin d'activité : ${cetTransfere.parSousCompte.finActivite}j`}
+            </div>
+          )}
 
           {/* Solde théorique (06/08) : projection "si toutes les demandes en
               attente sont accordées" — visible uniquement s'il y a des
@@ -4913,6 +4924,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const cetTransfereRN = useMemo(()=>getCetTransfereJours(agentProfiles, agent?.id, year, "RN"), [agentProfiles, agent?.id, year]);
   const cetTransfereTY = useMemo(()=>getCetTransfereJours(agentProfiles, agent?.id, year, "TY"), [agentProfiles, agent?.id, year]);
   const cetTransfereTC = useMemo(()=>getCetTransfereJours(agentProfiles, agent?.id, year, "TC"), [agentProfiles, agent?.id, year]);
+  // Congés (Phase 4, 06/08) : même principe que RQ — jours-based, aucun
+  // ledger à écrire, juste soustrait à l'affichage (carte + CongesDashboardModal).
+  const cetTransfereCA = useMemo(()=>getCetTransfereJours(agentProfiles, agent?.id, year, "CA"), [agentProfiles, agent?.id, year]);
   const CET_TRANSFERE_BY_KEY = {RQ:cetTransfereRQ, RN:cetTransfereRN, TY:cetTransfereTY, TC:cetTransfereTC};
 
   // Pause Figée (17/07) : données chargées ici (pas dans la modale) pour être
@@ -4945,7 +4959,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const moisEnCoursLabel = new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
 
   const CARDS = [
-    {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:solde<5},
+    {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:(solde-cetTransfereCA.total)<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
     {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Pris au 31/12"},
     {key:"RU",      label:"RU",              color:"#d97706", subtitle:"Pris au 31/12"},
@@ -5022,7 +5036,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       {/* Grille compteurs */}
       {(()=>{
         const renderCard = (card) => {
-          const v = card.key==="conges" ? congesData.solde
+          const v = card.key==="conges" ? congesData.solde - cetTransfereCA.total
             : card.key==="VT" ? vtData.pris
             : card.key==="CET" ? cetData.soldeTotal
             : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
@@ -5103,7 +5117,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         <TravailDashboardModal agent={agent} schedule={schedule} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowTravailDash(false)}/>
       )}
       {showCongesDash&&(
-        <CongesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCongesDash(false)}/>
+        <CongesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCongesDash(false)} cetTransfere={cetTransfereCA}/>
       )}
       {openDetailKey&&DETAIL_CONFIG[openDetailKey]&&(
         <CompteurDetailModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}

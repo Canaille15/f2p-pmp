@@ -42,15 +42,17 @@ export const SOUS_COMPTES = [
 // Sources d'épargne éligibles (confirmées par Olivier le 06/08) — RS et RG
 // exclus (aucun compteur correspondant dans l'appli). "Médaille" est une
 // source propre au module CET, sans compteur dédié ailleurs dans l'appli.
+// Congés (Phase 4) : même principe que RQ (déjà en jours, aucune valeur h/min
+// à saisir) — la déduction se fait sur le "Restant" de CongesDashboardModal,
+// jamais dans le planning perso (voir getCetTransfereJours dans App.jsx).
 export const SOURCES_EPARGNE = [
+  { code: "CA", label: "Congés annuels", detail: "à partir du 21e jour épargné (20 jours doivent rester pris dans l'année) — voir notice" },
   { code: "RQ", label: "RQ (repos supplémentaires)", detail: "articles 32-I, 38-5 et 47 du RH0077" },
   { code: "RN", label: "RN (repos compensateur de nuit)" },
   { code: "TC", label: "TC (temps compensé mensuel)" },
   { code: "TY", label: "TY (temps compensé semestriel)" },
   { code: "MEDAILLE", label: "Congé médaille d'honneur des Chemins de Fer", detail: "article 8 chapitre 10 du Statut — saisie libre, propre au CET, ne déduit aucun autre compteur" },
 ];
-// Congés (CA) reste hors de cette liste en Phase 2 — cycle d'épargne à part
-// (intention → confirmation manuelle par l'agent), prévu en Phase 5.
 
 // RQ est déjà en jours (aucune conversion) — seuls RN/TC/TY ont un ledger en
 // heures/minutes à débiter. Médaille ne débite jamais rien (source propre au
