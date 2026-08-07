@@ -51,6 +51,7 @@ export const SOURCES_EPARGNE = [
   { code: "RN", label: "RN (repos compensateur de nuit)" },
   { code: "TC", label: "TC (temps compensé mensuel)" },
   { code: "TY", label: "TY (temps compensé semestriel)" },
+  { code: "RCF", label: "RCF (repos compensateur de fêtes)", detail: "saisie libre, propre au CET, ne déduit aucun autre compteur" },
   { code: "MEDAILLE", label: "Congé médaille d'honneur des Chemins de Fer", detail: "article 8 chapitre 10 du Statut — saisie libre, propre au CET, ne déduit aucun autre compteur" },
 ];
 
@@ -236,6 +237,101 @@ function joursEntreDates(debut, fin) {
   return jours;
 }
 
+// Crée une demande d'épargne (statut "demande", à accorder depuis le module
+// CET) pour une source donnée — logique partagée entre "+ Nouvelle épargne"
+// (CetDashboardModal) et EpargneCetWidget (07/08, widget réutilisable posé
+// dans les panneaux Congés/RQ/RN/TY/TC pour épargner directement depuis leur
+// propre compteur, sans repasser par le module CET). N'écrit jamais rien
+// d'autre tant que la demande n'est pas accordée, même principe que le reste
+// du cycle Demandé→Accordé/Refusé.
+export function ajouterEpargneDemande(setAgentProfiles, agentId, { source, sousCompte, jours, valeurMinutes, annee }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const mouvement = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    type: "epargne", source, jours,
+    valeurMinutes: valeurMinutes ?? null,
+    sens: "credit", statut: "demande",
+    dateDemande: today, dateAccord: null, dateRefus: null, annee,
+  };
+  setAgentProfiles(prev => {
+    const profil = prev[agentId] || {};
+    const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+    return { ...prev, [agentId]: { ...profil, cetLedger: { ...ledger, [sousCompte]: [...(ledger[sousCompte] || []), mouvement] } } };
+  });
+}
+
+// Widget compact "🏦 Épargner au CET" (07/08, demandé par Olivier — "il faut
+// que l'on puisse mettre a jour chaque tableaux en precisant que ce jour a
+// ete epargne dans le cet") — posable dans n'importe quel panneau source
+// (Congés, RQ, RN, TY, TC) pour créer une demande d'épargne directement
+// depuis ce panneau, sans repasser par le module CET. Repliable par défaut
+// (pas de clutter dans des modales déjà denses), n'écrit que dans cetLedger
+// via ajouterEpargneDemande — ne touche jamais aux fonctions de calcul du
+// compteur source (computeCompteurAvecDetail, computeDashboardConges, etc.),
+// exactement comme le reste du module CET.
+export function EpargneCetWidget({ agent, agentProfiles, setAgentProfiles, source, sourceLabel, year, besoinValeur }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [sousCompte, setSousCompte] = useState("courant");
+  const [jours, setJours] = useState("1");
+  const [valH, setValH] = useState("0");
+  const [valM, setValM] = useState("0");
+  const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
+  const data = useMemo(() => computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
+
+  const ajouter = () => {
+    setErr(""); setInfo("");
+    const j = parseInt(jours, 10) || 0;
+    if (j <= 0) { setErr("Indique un nombre de jours valide."); return; }
+    const hh = parseInt(valH, 10) || 0, mm = parseInt(valM, 10) || 0;
+    if (besoinValeur && hh === 0 && mm === 0) { setErr("Indique la valeur en heures/minutes à déduire."); return; }
+    ajouterEpargneDemande(setAgentProfiles, agent.id, { source, sousCompte, jours: j, valeurMinutes: besoinValeur ? (hh * 60 + mm) : null, annee: year });
+    const projete = data.totalAccordeAnneeHorsAbondement + j;
+    setInfo(projete > CAP_EPARGNE_AN
+      ? `⚠️ Demande ajoutée — cap de ${CAP_EPARGNE_AN}j/an (tous compteurs confondus) dépassé (${projete}j). À accorder depuis "🏦 CET".`
+      : `Demande ajoutée — à accorder depuis "🏦 CET".`);
+    setJours("1"); setValH("0"); setValM("0");
+  };
+
+  return (
+    <div style={{ border: "1px solid #e9d5ff", background: "#faf5ff", borderRadius: 10, padding: "10px 12px" }}>
+      <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 800, color: "#5b21b6", display: "flex", alignItems: "center", gap: 6 }}>
+        {ouvert ? "▴" : "▾"} 🏦 Épargner {sourceLabel || source} au CET
+      </button>
+      {ouvert && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {SOUS_COMPTES.map(sc => (
+              <button key={sc.key} onClick={() => setSousCompte(sc.key)} style={{
+                flex: 1, background: sousCompte === sc.key ? "#5b21b6" : "#fff",
+                color: sousCompte === sc.key ? "#fff" : "#5b21b6",
+                border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
+                fontSize: 11, fontWeight: 700, cursor: "pointer",
+              }}>{sc.icone} {sc.label}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <input type="number" min="1" value={jours} onChange={e => setJours(e.target.value)}
+              style={{ width: 56, textAlign: "center", padding: "6px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 13, fontWeight: 700 }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#334155" }}>jour{parseInt(jours, 10) > 1 ? "s" : ""}</span>
+            {besoinValeur && (<>
+              <input type="number" min="0" value={valH} onChange={e => setValH(e.target.value)}
+                style={{ width: 44, textAlign: "center", padding: "6px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 13, fontWeight: 700 }} />
+              <span style={{ fontSize: 11, color: "#334155" }}>h</span>
+              <input type="number" min="0" max="59" value={valM} onChange={e => setValM(e.target.value)}
+                style={{ width: 44, textAlign: "center", padding: "6px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 13, fontWeight: 700 }} />
+              <span style={{ fontSize: 11, color: "#334155" }}>min à déduire</span>
+            </>)}
+            <button onClick={ajouter} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>+ Épargner</button>
+          </div>
+          {err && <div style={{ fontSize: 10.5, fontWeight: 600, color: "#dc2626" }}>{err}</div>}
+          {info && <div style={{ fontSize: 10.5, fontWeight: 600, color: "#166534" }}>{info}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }) {
   const agCp = agent?.immatriculation || agent?.cp || agent?.id;
   const data = useMemo(() => computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
@@ -247,9 +343,9 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
   const [valM, setValM] = useState("0");
   const [ajoutErr, setAjoutErr] = useState("");
   const [ajoutInfo, setAjoutInfo] = useState("");
-  const [ajustSousCompte, setAjustSousCompte] = useState("courant");
-  const [ajustJours, setAjustJours] = useState("1");
-  const [ajustNeg, setAjustNeg] = useState(false);
+  const [editSousCompte, setEditSousCompte] = useState(null);
+  const [editJours, setEditJours] = useState("1");
+  const [editNeg, setEditNeg] = useState(false);
   const [monetSousCompte, setMonetSousCompte] = useState("courant");
   const [monetJours, setMonetJours] = useState("1");
   const [monetErr, setMonetErr] = useState("");
@@ -258,7 +354,6 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
   const [utilFin, setUtilFin] = useState("");
   const [utilErr, setUtilErr] = useState("");
   const [accordErr, setAccordErr] = useState("");
-  const ajusterRef = useRef(null);
 
   const besoinValeur = source === "RN" || source === "TC" || source === "TY";
 
@@ -270,19 +365,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
     if (j <= 0) { setAjoutErr("Indique un nombre de jours valide."); return; }
     const hh = parseInt(valH, 10) || 0, mm = parseInt(valM, 10) || 0;
     if (besoinValeur && hh === 0 && mm === 0) { setAjoutErr("Indique la valeur en heures/minutes à déduire du compteur source pour ce jour."); return; }
-    const today = new Date().toISOString().slice(0, 10);
-    const mouvement = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      type: "epargne", source, jours: j,
-      valeurMinutes: besoinValeur ? (hh * 60 + mm) : null,
-      sens: "credit", statut: "demande",
-      dateDemande: today, dateAccord: null, dateRefus: null, annee: year,
-    };
-    setAgentProfiles(prev => {
-      const profil = prev[agent.id] || {};
-      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
-      return { ...prev, [agent.id]: { ...profil, cetLedger: { ...ledger, [sousCompte]: [...(ledger[sousCompte] || []), mouvement] } } };
-    });
+    ajouterEpargneDemande(setAgentProfiles, agent.id, { source, sousCompte, jours: j, valeurMinutes: besoinValeur ? (hh * 60 + mm) : null, annee: year });
     const projete = data.totalAccordeAnneeHorsAbondement + j;
     if (projete > CAP_EPARGNE_AN) {
       setAjoutInfo(`⚠️ Demande ajoutée — attention, en comptant cette demande le total épargné cette année (${projete}j) dépasserait le cap réglementaire de ${CAP_EPARGNE_AN}j/an.`);
@@ -518,77 +601,74 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
             Compte Épargne Temps — 2 sous-comptes distincts, chacun avec son propre plafond.
           </div>
 
-          {/* Les 2 sous-comptes côte à côte — cliquables (07/08, demandé par
-              Olivier) : amènent directement à "✏️ Ajuster le solde" avec le
-              bon sous-compte pré-sélectionné, plutôt que de forcer l'agent à
-              chercher/re-sélectionner plus bas dans une modale déjà longue. */}
+          {/* Les 2 sous-comptes côte à côte — le chiffre lui-même est
+              cliquable (07/08, retour d'Olivier : l'ancienne section "✏️
+              Ajuster le solde" séparée plus bas dans la modale était "fouilli
+              [...] pas intuitif") : un clic ouvre directement, sous la carte
+              concernée, un mini-formulaire d'ajustement + sur-abondement —
+              plus besoin de re-sélectionner le sous-compte, c'est celui sur
+              lequel on vient de cliquer. */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {data.comptes.map(c => (
-              <button key={c.key} onClick={() => { setAjustSousCompte(c.key); ajusterRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} style={{
-                background: "#faf5ff", borderRadius: 12, border: "1.5px solid #e9d5ff", padding: "12px 10px", textAlign: "center", cursor: "pointer", font: "inherit",
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#5b21b6" }}>{c.icone} {c.label}</div>
-                <div style={{ fontSize: 28, fontWeight: 900, color: "#5b21b6", lineHeight: 1, marginTop: 6 }}>{c.solde}</div>
-                <div style={{ fontSize: 9, color: "#7c3aed", marginTop: 2 }}>jour{c.solde > 1 ? "s" : ""} épargné{c.solde > 1 ? "s" : ""}</div>
-                <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 6 }}>Plafond : {c.plafond}j</div>
-                {c.enAttente.length > 0 && (
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#a16207", marginTop: 5 }}>⏳ {c.enAttente.length} en attente</div>
-                )}
-              </button>
-            ))}
+            {data.comptes.map(c => {
+              const editing = editSousCompte === c.key;
+              return (
+                <div key={c.key} style={{ background: "#faf5ff", borderRadius: 12, border: editing ? "1.5px solid #5b21b6" : "1.5px solid #e9d5ff", padding: "12px 10px", textAlign: "center" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#5b21b6" }}>{c.icone} {c.label}</div>
+                  <button
+                    onClick={() => { setEditSousCompte(v => v === c.key ? null : c.key); setEditJours("1"); setEditNeg(false); }}
+                    title="Cliquer pour ajuster le solde"
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 6px", borderRadius: 8, font: "inherit", width: "100%" }}
+                  >
+                    <div style={{ fontSize: 28, fontWeight: 900, color: "#5b21b6", lineHeight: 1, marginTop: 6 }}>{c.solde}</div>
+                  </button>
+                  <div style={{ fontSize: 9, color: "#7c3aed", marginTop: 2 }}>jour{c.solde > 1 ? "s" : ""} épargné{c.solde > 1 ? "s" : ""}</div>
+                  <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 6 }}>Plafond : {c.plafond}j</div>
+                  {c.enAttente.length > 0 && (
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "#a16207", marginTop: 5 }}>⏳ {c.enAttente.length} en attente</div>
+                  )}
+
+                  {editing && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed #e9d5ff", display: "flex", flexDirection: "column", gap: 7 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <button onClick={() => setEditNeg(n => !n)} style={{
+                          border: "1.5px solid #cbd5e1", borderRadius: 7, padding: "5px 9px", cursor: "pointer",
+                          background: editNeg ? "#fee2e2" : "#dcfce7", color: editNeg ? "#dc2626" : "#16a34a", fontWeight: 800, fontSize: 12,
+                        }}>{editNeg ? "−" : "+"}</button>
+                        <input type="number" min="0" value={editJours} onChange={e => setEditJours(e.target.value)}
+                          style={{ width: 48, textAlign: "center", padding: "5px 4px", border: "1.5px solid #e9d5ff", borderRadius: 7, fontSize: 13, fontWeight: 700 }} />
+                        <span style={{ fontSize: 10, color: "#334155" }}>j</span>
+                      </div>
+                      <button onClick={() => {
+                        const n = parseInt(editJours, 10) || 0;
+                        if (n <= 0) return;
+                        ajusterSolde(c.key, editNeg ? -n : n);
+                        setEditSousCompte(null);
+                      }} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 7, padding: "6px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Valider l'ajustement</button>
+                      {/* 🎁 Sur-abondement : même mouvement qu'un ajustement
+                          (hors cap, hors éligibilité à l'abondement — voir le
+                          filtre type==="epargne" du cap et de l'abondement
+                          automatique, qui l'exclut naturellement comme il
+                          excluait déjà "ajustement"), tagué différemment pour
+                          rester traçable dans l'historique. Toujours un
+                          crédit, jamais négatif (bouton indépendant du +/-). */}
+                      <button onClick={() => {
+                        const n = parseInt(editJours, 10) || 0;
+                        if (n <= 0) return;
+                        ajusterSolde(c.key, n, "surAbondement");
+                        setEditSousCompte(null);
+                      }} style={{ background: "#fff7ed", color: "#c2410c", border: "1.5px solid #fed7aa", borderRadius: 7, padding: "6px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>🎁 Sur-abondement</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 9.5, color: "#94a3b8", textAlign: "center", marginTop: -6 }}>
+            ✏️ Clique sur un solde pour l'ajuster (jours déjà acquis, correction...) ou activer un sur-abondement.
           </div>
 
           <div style={{ fontSize: 10.5, color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 10px" }}>
             Cap d'épargne : {CAP_EPARGNE_AN} jours par année civile (hors abondement), tous sous-comptes confondus — {data.totalAccordeAnneeHorsAbondement}j déjà épargnés cette année. Le premier jour épargné dans l'année est abondé à 100% par l'entreprise.
-          </div>
-
-          {/* ✏️ Ajuster le solde (06/08, demandé par Olivier — "quasiment
-              tout le monde a deja des jours") : effectif immédiatement, pour
-              déclarer un solde de départ ou corriger si besoin — jamais
-              compté dans le cap d'épargne ni dans l'abondement. */}
-          <div ref={ajusterRef} style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✏️ Ajuster le solde</div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>Pour déclarer des jours déjà acquis avant ce module, ou corriger le solde si besoin — n'affecte ni le cap d'épargne annuel ni l'abondement.</div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-              {SOUS_COMPTES.map(sc => (
-                <button key={sc.key} onClick={() => setAjustSousCompte(sc.key)} style={{
-                  flex: 1, background: ajustSousCompte === sc.key ? "#5b21b6" : "#faf5ff",
-                  color: ajustSousCompte === sc.key ? "#fff" : "#5b21b6",
-                  border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
-                  fontSize: 11, fontWeight: 700, cursor: "pointer",
-                }}>{sc.icone} {sc.label}</button>
-              ))}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <button onClick={() => setAjustNeg(n => !n)} style={{
-                border: "1.5px solid #cbd5e1", borderRadius: 8, padding: "7px 10px", cursor: "pointer",
-                background: ajustNeg ? "#fee2e2" : "#dcfce7", color: ajustNeg ? "#dc2626" : "#16a34a", fontWeight: 800, fontSize: 13,
-              }}>{ajustNeg ? "−" : "+"}</button>
-              <input type="number" min="0" value={ajustJours} onChange={e => setAjustJours(e.target.value)}
-                style={{ width: 64, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>jour{parseInt(ajustJours, 10) > 1 ? "s" : ""}</span>
-              <button onClick={() => {
-                const n = parseInt(ajustJours, 10) || 0;
-                if (n <= 0) return;
-                ajusterSolde(ajustSousCompte, ajustNeg ? -n : n);
-                setAjustJours("1"); setAjustNeg(false);
-              }} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Ajouter</button>
-            </div>
-            {/* 🎁 Sur-abondement (07/08, demandé par Olivier) : même mouvement
-                qu'un ajustement (immédiat, hors cap, hors éligibilité à
-                l'abondement — voir le filtre `type==="epargne"` du cap et de
-                l'abondement automatique, qui exclut naturellement ce type
-                comme il excluait déjà "ajustement"), simplement tagué
-                différemment pour rester traçable dans l'historique
-                (labelMouvement). Toujours un crédit (jamais négatif). */}
-            <div style={{ marginTop: 8 }}>
-              <button onClick={() => {
-                const n = parseInt(ajustJours, 10) || 0;
-                if (n <= 0) return;
-                ajusterSolde(ajustSousCompte, n, "surAbondement");
-                setAjustJours("1"); setAjustNeg(false);
-              }} style={{ background: "#fff7ed", color: "#c2410c", border: "1.5px solid #fed7aa", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🎁 Activer un sur-abondement ({ajustJours || 0}j sur {SOUS_COMPTES.find(s => s.key === ajustSousCompte)?.label.toLowerCase()})</button>
-            </div>
           </div>
 
           {/* + Nouvelle épargne (Phase 2, 06/08) */}

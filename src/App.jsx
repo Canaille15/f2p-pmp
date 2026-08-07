@@ -5,7 +5,7 @@ import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
 import DayEditPopup from "./components/DayEditPopup";
 import DemandeCongesView from "./components/DemandeCongesView";
-import { CetDashboardModal, computeDashboardCet, getCetTransfereJours } from "./components/CetView";
+import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget } from "./components/CetView";
 import CetPdfsView from "./components/CetPdfsView";
 
 
@@ -3100,6 +3100,10 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
             </div>
           )}
 
+          {/* Épargner directement au CET depuis Congés (07/08, demandé par
+              Olivier) — widget partagé, voir CetView.jsx EpargneCetWidget. */}
+          <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source="CA" sourceLabel="mes congés" year={year} besoinValeur={false}/>
+
           {/* Solde théorique (06/08) : projection "si toutes les demandes en
               attente sont accordées" — visible uniquement s'il y a des
               demandes en cours, jamais affecté par les refus. */}
@@ -4103,6 +4107,10 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
             </div>
           )}
 
+          {/* Épargner directement au CET depuis TC (07/08, demandé par
+              Olivier) — widget partagé, voir CetView.jsx EpargneCetWidget. */}
+          <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source="TC" sourceLabel="mon TC" year={year} besoinValeur={true}/>
+
           {/* Journal d'ajustements manuels — remplace l'ancien "solde de
               départ" : modulable à tout moment, pas de remise à zéro. */}
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
@@ -4225,18 +4233,18 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
 const DETAIL_CONFIG = {
   RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:"rpAcquis", rollingAcquis:false, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
   RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
-  RQ: { codes:["RQ"], reportKey:null, acquisKey:"rqAcquis", rollingAcquis:true, label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
+  RQ: { codes:["RQ"], reportKey:null, acquisKey:"rqAcquis", rollingAcquis:true, label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309", cetSource:"RQ", cetBesoinValeur:false },
   // RN et TY (17/07, re-précisé le même jour) : le compteur "acquis" en JOURS
   // est retiré (acquisKey/rollingAcquis) au profit d'un solde en HEURES/MINUTES
   // suivi en continu (ledgerKey → computeLedgerSolde), saisi manuellement par
   // l'agent, sans lien automatique avec les jours détectés dans le planning
   // perso — voir CLAUDE.md. Le compteur de jours (codes ci-dessous) reste,
   // purement informatif désormais.
-  RN: { codes:["RN"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"rnLedger", label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca" },
+  RN: { codes:["RN"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"rnLedger", label:"RN", icon:"🔵", gradientFrom:"#4338ca", gradientTo:"#3730a3", bgLight:"#eef2ff", borderLight:"#c7d2fe", accentDark:"#3730a3", accentColor:"#4338ca", cetSource:"RN", cetBesoinValeur:true },
   // TC (17/07) : sorti de ce mécanisme générique — devient un solde en heures/
   // minutes plafonné, alimenté par les pauses figées validées, avec sa propre
   // logique (computeDashboardTC/TcDashboardModal). Voir CLAUDE.md.
-  TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7" },
+  TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7", cetSource:"TY", cetBesoinValeur:true },
   MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
   // Formation (17/07, demandé par Olivier) : même principe que Maladie — pure
   // consultation (pas d'acquis, pas de report), archive A+1 + 2 ans, détail
@@ -4332,7 +4340,7 @@ function YearSwitcher({ year, availableYears, onChange }){
   );
 }
 
-function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere }){
+function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur }){
   const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis]);
   const ledgerData = useMemo(()=> ledgerKey ? computeLedgerSolde(agentProfiles, agent?.id, ledgerKey) : null, [agentProfiles, agent?.id, ledgerKey]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
@@ -4509,6 +4517,13 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
               {cetTransfere.parSousCompte.courant>0 && ` — Compte courant : ${cetTransfere.parSousCompte.courant}j`}
               {cetTransfere.parSousCompte.finActivite>0 && ` — Compte fin d'activité : ${cetTransfere.parSousCompte.finActivite}j`}
             </div>
+          )}
+
+          {/* Épargner directement au CET depuis ce compteur (07/08, demandé
+              par Olivier) — uniquement pour RQ/RN/TY (voir cetSource dans
+              DETAIL_CONFIG), widget partagé — voir CetView.jsx EpargneCetWidget. */}
+          {cetSource && (
+            <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source={cetSource} sourceLabel={label} year={year} besoinValeur={!!cetBesoinValeur}/>
           )}
 
           <div style={{background:bgLight,border:`1.5px solid ${borderLight}`,borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -5989,6 +6004,11 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
           {lignes.length===0 && fetesReportN1.length===0 && (
             <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucune fête à afficher.</div>
           )}
+
+          {/* Épargner directement au CET depuis Fêtes (07/08, demandé par
+              Olivier — RCF, repos compensateur de fêtes) — widget partagé,
+              voir CetView.jsx EpargneCetWidget. */}
+          <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source="RCF" sourceLabel="mes fêtes (RCF)" year={year} besoinValeur={false}/>
 
           {renderGroupe("À traiter", "⚠️", groupeATraiter, groupeStyle.aTraiter)}
           {renderGroupe("Réglées", "✅", groupeReglees, groupeStyle.reglees)}
