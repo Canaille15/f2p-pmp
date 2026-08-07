@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import api from "../api/client";
 
 // ─── CET (Compte Épargne Temps) ─────────────────────────────────────────────
@@ -155,6 +155,17 @@ export function computeDashboardCet(agentProfiles, agentId, year) {
 
 function NoticeSection() {
   const [ouvert, setOuvert] = useState(false);
+  const contentRef = useRef(null);
+  // Sur mobile, la notice est tout en bas d'une modale déjà longue —
+  // basculer `ouvert` révèle du contenu hors de l'écran sans qu'aucun scroll
+  // automatique ne l'amène en vue, donnant l'impression que "ça ne s'ouvre
+  // pas" alors que le contenu est bien là, juste invisible sans scroll manuel
+  // (signalé par Olivier, 07/08). useEffect (pas un simple callback dans le
+  // onClick) car le contenu n'existe dans le DOM qu'après le rendu déclenché
+  // par le nouvel état — la ref n'est attachée qu'à ce moment-là.
+  useEffect(() => {
+    if (ouvert) contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [ouvert]);
   return (
     <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
       <button onClick={() => setOuvert(v => !v)} style={{
@@ -164,7 +175,7 @@ function NoticeSection() {
         {ouvert ? "▴" : "▾"} 📖 Notice — ce qu'il faut savoir sur le CET
       </button>
       {ouvert && (
-        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div ref={contentRef} style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 12 }}>
           {NOTICE_CET.map(section => (
             <div key={section.titre} style={{ background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: 10, padding: "10px 12px" }}>
               <div style={{ fontSize: 12, fontWeight: 800, color: "#5b21b6", marginBottom: 5 }}>{section.titre}</div>
@@ -204,6 +215,7 @@ const labelSource = (code) => SOURCES_EPARGNE.find(s => s.code === code)?.label 
 const labelMouvement = (m) => {
   if (m.type === "abondement") return "🎁 Abondement";
   if (m.type === "ajustement") return `✏️ Ajustement (${m.sens === "debit" ? "−" : "+"})`;
+  if (m.type === "surAbondement") return "🎁 Sur-abondement";
   if (m.type === "monetisation") return "💶 Monétisation";
   if (m.type === "utilisation") return "📅 Utilisation en temps";
   return labelSource(m.source);
@@ -246,6 +258,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
   const [utilFin, setUtilFin] = useState("");
   const [utilErr, setUtilErr] = useState("");
   const [accordErr, setAccordErr] = useState("");
+  const ajusterRef = useRef(null);
 
   const besoinValeur = source === "RN" || source === "TC" || source === "TY";
 
@@ -430,12 +443,12 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
   // cycle demande/accord (comme le "+ Ajuster le solde" déjà utilisé pour
   // TC/RN/TY), aucun lien avec un compteur source, jamais compté dans le
   // cap d'épargne ni dans l'éligibilité à l'abondement (voir plus haut).
-  const ajusterSolde = (sc, deltaJours) => {
+  const ajusterSolde = (sc, deltaJours, type = "ajustement") => {
     if (!deltaJours) return;
     const today = new Date().toISOString().slice(0, 10);
     const mouvement = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      type: "ajustement", source: null, jours: Math.abs(deltaJours),
+      type, source: null, jours: Math.abs(deltaJours),
       valeurMinutes: null, sens: deltaJours < 0 ? "debit" : "credit", statut: "accorde",
       dateDemande: today, dateAccord: today, dateRefus: null, annee: year,
     };
@@ -505,10 +518,15 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
             Compte Épargne Temps — 2 sous-comptes distincts, chacun avec son propre plafond.
           </div>
 
-          {/* Les 2 sous-comptes côte à côte */}
+          {/* Les 2 sous-comptes côte à côte — cliquables (07/08, demandé par
+              Olivier) : amènent directement à "✏️ Ajuster le solde" avec le
+              bon sous-compte pré-sélectionné, plutôt que de forcer l'agent à
+              chercher/re-sélectionner plus bas dans une modale déjà longue. */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {data.comptes.map(c => (
-              <div key={c.key} style={{ background: "#faf5ff", borderRadius: 12, border: "1.5px solid #e9d5ff", padding: "12px 10px", textAlign: "center" }}>
+              <button key={c.key} onClick={() => { setAjustSousCompte(c.key); ajusterRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }} style={{
+                background: "#faf5ff", borderRadius: 12, border: "1.5px solid #e9d5ff", padding: "12px 10px", textAlign: "center", cursor: "pointer", font: "inherit",
+              }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#5b21b6" }}>{c.icone} {c.label}</div>
                 <div style={{ fontSize: 28, fontWeight: 900, color: "#5b21b6", lineHeight: 1, marginTop: 6 }}>{c.solde}</div>
                 <div style={{ fontSize: 9, color: "#7c3aed", marginTop: 2 }}>jour{c.solde > 1 ? "s" : ""} épargné{c.solde > 1 ? "s" : ""}</div>
@@ -516,7 +534,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                 {c.enAttente.length > 0 && (
                   <div style={{ fontSize: 9, fontWeight: 700, color: "#a16207", marginTop: 5 }}>⏳ {c.enAttente.length} en attente</div>
                 )}
-              </div>
+              </button>
             ))}
           </div>
 
@@ -528,7 +546,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
               tout le monde a deja des jours") : effectif immédiatement, pour
               déclarer un solde de départ ou corriger si besoin — jamais
               compté dans le cap d'épargne ni dans l'abondement. */}
-          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+          <div ref={ajusterRef} style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✏️ Ajuster le solde</div>
             <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>Pour déclarer des jours déjà acquis avant ce module, ou corriger le solde si besoin — n'affecte ni le cap d'épargne annuel ni l'abondement.</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
@@ -541,7 +559,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                 }}>{sc.icone} {sc.label}</button>
               ))}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <button onClick={() => setAjustNeg(n => !n)} style={{
                 border: "1.5px solid #cbd5e1", borderRadius: 8, padding: "7px 10px", cursor: "pointer",
                 background: ajustNeg ? "#fee2e2" : "#dcfce7", color: ajustNeg ? "#dc2626" : "#16a34a", fontWeight: 800, fontSize: 13,
@@ -555,6 +573,21 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                 ajusterSolde(ajustSousCompte, ajustNeg ? -n : n);
                 setAjustJours("1"); setAjustNeg(false);
               }} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>Ajouter</button>
+            </div>
+            {/* 🎁 Sur-abondement (07/08, demandé par Olivier) : même mouvement
+                qu'un ajustement (immédiat, hors cap, hors éligibilité à
+                l'abondement — voir le filtre `type==="epargne"` du cap et de
+                l'abondement automatique, qui exclut naturellement ce type
+                comme il excluait déjà "ajustement"), simplement tagué
+                différemment pour rester traçable dans l'historique
+                (labelMouvement). Toujours un crédit (jamais négatif). */}
+            <div style={{ marginTop: 8 }}>
+              <button onClick={() => {
+                const n = parseInt(ajustJours, 10) || 0;
+                if (n <= 0) return;
+                ajusterSolde(ajustSousCompte, n, "surAbondement");
+                setAjustJours("1"); setAjustNeg(false);
+              }} style={{ background: "#fff7ed", color: "#c2410c", border: "1.5px solid #fed7aa", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>🎁 Activer un sur-abondement ({ajustJours || 0}j sur {SOUS_COMPTES.find(s => s.key === ajustSousCompte)?.label.toLowerCase()})</button>
             </div>
           </div>
 
