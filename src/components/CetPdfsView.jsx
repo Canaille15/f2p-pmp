@@ -31,8 +31,8 @@ import { PDFDocument, PDFName } from "pdf-lib";
 // rendu visuel de chaque case cochée est conservé.
 
 const TYPES = [
-  { k: "epargne", label: "Demande d'épargne sur le CET (hors congés annuels)" },
   { k: "intention", label: "Intention d'épargne de congés annuels" },
+  { k: "epargne", label: "Demande d'épargne sur le CET (hors congés annuels)" },
   { k: "utilisationCourant", label: "Demande d'utilisation en temps — sous-compte courant" },
   { k: "utilisation", label: "Demande d'utilisation en temps — sous-compte fin d'activité" },
   { k: "monetisation", label: "Demande de monétisation — sous-compte fin d'activité" },
