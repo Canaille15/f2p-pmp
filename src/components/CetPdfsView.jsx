@@ -33,9 +33,9 @@ import { PDFDocument, PDFName } from "pdf-lib";
 const TYPES = [
   { k: "epargne", label: "Demande d'épargne sur le CET (hors congés annuels)" },
   { k: "intention", label: "Intention d'épargne de congés annuels" },
+  { k: "utilisationCourant", label: "Demande d'utilisation en temps — sous-compte courant" },
   { k: "utilisation", label: "Demande d'utilisation en temps — sous-compte fin d'activité" },
   { k: "monetisation", label: "Demande de monétisation — sous-compte fin d'activité" },
-  { k: "utilisationCourant", label: "Demande d'utilisation en temps — sous-compte courant" },
   { k: "transfert", label: "Demande de transfert de jours (courant → fin d'activité)" },
 ];
 
