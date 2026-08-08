@@ -542,6 +542,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
   const [utilFin, setUtilFin] = useState("");
   const [utilErr, setUtilErr] = useState("");
   const [accordErr, setAccordErr] = useState("");
+  const [deplaceErr, setDeplaceErr] = useState("");
   const [ajustementsOuvert, setAjustementsOuvert] = useState(false);
 
   const besoinValeur = source === "RN" || source === "TC" || source === "TY";
@@ -669,7 +670,17 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
       const nextLedger = { ...ledger };
       nextLedger[sc] = (ledger[sc] || []).map(m => m.id === id ? { ...m, statut: "accorde", dateAccord: today } : m);
       if (mv.type === "epargne" && !dejaAccordeCetteAnnee) {
-        nextLedger[sc] = [...nextLedger[sc], {
+        // Destination de l'abondement (08/08, précisé par Olivier : "de base
+        // il va dans le courant et si c'est plein dans fin d'activité") —
+        // toujours "Compte courant" par défaut, quel que soit le sous-compte
+        // choisi pour l'épargne qui l'a déclenché, sauf si ça dépasserait son
+        // plafond (20j) : bascule alors sur "Compte fin d'activité" (250j,
+        // repli quasiment toujours possible). Déplaçable ensuite à la main
+        // via "↔ Déplacer" sur la ligne (voir plus bas).
+        const courantCompte = SOUS_COMPTES.find(s => s.key === "courant");
+        const soldeCourantApres = (nextLedger.courant || []).filter(m => m.statut === "accorde").reduce((s, m) => s + (m.sens === "debit" ? -m.jours : m.jours), 0);
+        const scAbondement = (soldeCourantApres + 1 > courantCompte.plafond) ? "finActivite" : "courant";
+        nextLedger[scAbondement] = [...(nextLedger[scAbondement] || []), {
           id: `abond-${mv.id}`, type: "abondement", source: null, jours: 1,
           valeurMinutes: null, sens: "credit", statut: "accorde",
           dateDemande: today, dateAccord: today, dateRefus: null, annee: mv.annee,
@@ -805,6 +816,36 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
         next.fetesTracking = { ...tracking, [mouvement.feteAnnee]: yearTracking };
       }
       return { ...prev, [agent.id]: next };
+    });
+  };
+
+  // Déplacer un mouvement accordé (typiquement un abondement) vers l'autre
+  // sous-compte (08/08, demandé par Olivier : "il faudrait pouvoir deplacer
+  // l'abondement vers un ou l'autres des sous comptes") — refusé si ça ferait
+  // dépasser le plafond du sous-compte de destination, message explicite.
+  const deplacerMouvement = (sc, id) => {
+    setDeplaceErr("");
+    const mouvement = trouverMouvement(sc, id);
+    if (!mouvement) return;
+    const destKey = SOUS_COMPTES.find(s => s.key !== sc)?.key;
+    const dest = SOUS_COMPTES.find(s => s.key === destKey);
+    const disponible = joursDisponiblesSousCompte(data, destKey);
+    if (mouvement.jours > disponible) {
+      setDeplaceErr(`⚠️ ${dest.label} est déjà à son plafond (${dest.plafond - disponible}j/${dest.plafond}j) — impossible d'y déplacer ce mouvement.`);
+      return;
+    }
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      return {
+        ...prev, [agent.id]: {
+          ...profil, cetLedger: {
+            ...ledger,
+            [sc]: (ledger[sc] || []).filter(m => m.id !== id),
+            [destKey]: [...(ledger[destKey] || []), mouvement],
+          },
+        },
+      };
     });
   };
 
@@ -1104,7 +1145,14 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                                   <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
                                   <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>Accordé le {fmtDate(m.dateAccord)}</div>
                                 </div>
-                                <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
+                                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                  {/* Déplacer un sous-compte vers l'autre (08/08, demandé
+                                      par Olivier — surtout utile pour un abondement placé
+                                      automatiquement, mais fonctionne sur n'importe quel
+                                      mouvement accordé). */}
+                                  <button onClick={() => deplacerMouvement(m.sousCompte, m.id)} title={`Déplacer vers ${SOUS_COMPTES.find(s => s.key !== m.sousCompte)?.label}`} style={{ background: "none", border: "none", color: "#5b21b6", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>↔ Déplacer</button>
+                                  <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1112,6 +1160,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                       );
                     })}
                   </div>}
+                {deplaceErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginTop: 8 }}>{deplaceErr}</div>}
               </>);
             })()}
           </div>
