@@ -4835,6 +4835,14 @@ function BilanGlobalModal({agent, schedule, agentProfiles, setAgentProfiles, pau
 }
 
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
+// Ordre par défaut des cases compteurs, réorganisable par agent (08/08,
+// demandé par Olivier — glisser-déposer, ordre mémorisé par agent même s'il
+// change d'avis ensuite). "TC" n'est volontairement PAS une unité déplaçable
+// à part : elle est toujours rendue collée à "PF" (paire côte à côte déjà
+// établie le 17/07, voir plus bas dans renderCard) — seule la position de
+// "PF" compte, TC suit automatiquement où qu'elle aille.
+const COMPTEUR_CARD_KEYS = ["conges","travail","RP","RU","RQ","FETE","RN","PF","TY","VT","CET","FOR","MA"];
+
 function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
   // Année et état ouvert/fermé mémorisés (localStorage) : on reste sur ce qui
@@ -5010,6 +5018,53 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const [showBilanGlobal, setShowBilanGlobal] = useState(false);
   const [openDetailKey, setOpenDetailKey] = useState(null); // RP/RU/RQ/RN/TY/MA/FOR
 
+  // Réorganisation des cases par glisser-déposer (08/08, demandé par Olivier)
+  // — ordre mémorisé par agent (agentProfiles[id].compteursOrdre), jamais
+  // perdu même après plusieurs changements. La liste sauvegardée est
+  // "nettoyée" à chaque lecture : une clé obsolète (compteur supprimé depuis)
+  // est ignorée, une clé manquante (nouveau compteur ajouté depuis) est
+  // ajoutée en fin de liste — jamais besoin de migration.
+  const savedOrdre = agentProfiles?.[agent?.id]?.compteursOrdre;
+  const orderedKeys = (Array.isArray(savedOrdre) && savedOrdre.length > 0)
+    ? [...savedOrdre.filter(k => COMPTEUR_CARD_KEYS.includes(k)), ...COMPTEUR_CARD_KEYS.filter(k => !savedOrdre.includes(k))]
+    : COMPTEUR_CARD_KEYS;
+
+  const [reorderMode, setReorderMode] = useState(false);
+  const [dragKey, setDragKey] = useState(null);
+  const [overKey, setOverKey] = useState(null);
+
+  const commitOrdre = (keys) => {
+    setAgentProfiles(prev => ({ ...prev, [agent.id]: { ...(prev[agent.id] || {}), compteursOrdre: keys } }));
+  };
+  const reinitialiserOrdre = () => commitOrdre(null);
+
+  const onCardPointerDown = (key) => (e) => {
+    if (!reorderMode) return;
+    e.preventDefault();
+    setDragKey(key);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+  };
+  const onGridPointerMove = (e) => {
+    if (!dragKey) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const target = el?.closest?.("[data-reorder-key]");
+    const k = target?.getAttribute("data-reorder-key");
+    if (k && k !== overKey) setOverKey(k);
+  };
+  const onGridPointerUp = () => {
+    if (dragKey && overKey && dragKey !== overKey) {
+      const next = orderedKeys.slice();
+      const from = next.indexOf(dragKey);
+      const to = next.indexOf(overKey);
+      if (from !== -1 && to !== -1) {
+        next.splice(from, 1);
+        next.splice(to, 0, dragKey);
+        commitOrdre(next);
+      }
+    }
+    setDragKey(null); setOverKey(null);
+  };
+
   return(
     <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid #e2e8f0",
       overflow:"hidden",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
@@ -5049,6 +5104,19 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
           <span style={{fontSize:9,color:"#94a3b8"}}>⚠️ Selon planning saisi</span>
           <div style={{flex:1}}/>
+          {reorderMode&&savedOrdre&&(
+            <button onClick={e=>{e.stopPropagation();reinitialiserOrdre();}}
+              style={{background:"#fff",color:"#64748b",border:"1.5px solid #cbd5e1",
+                borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>
+              ↺ Réinitialiser l'ordre
+            </button>
+          )}
+          <button onClick={e=>{e.stopPropagation();setReorderMode(r=>!r);}}
+            style={{background:reorderMode?"#16a34a":"#0f4c81",color:"#fff",
+              border:"none",borderRadius:8,padding:"5px 10px",
+              cursor:"pointer",fontSize:11,fontWeight:700}}>
+            {reorderMode?"✓ Terminé":"🔀 Réorganiser"}
+          </button>
           <button onClick={e=>{e.stopPropagation();setShowBilanGlobal(true);}}
             style={{background:"#0f4c81",color:"#fff",
               border:"none",borderRadius:8,padding:"5px 10px",
@@ -5056,6 +5124,12 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
             🧮 Bilan Global
           </button>
         </div>
+        {reorderMode&&(
+          <div style={{fontSize:10,color:"#5b21b6",background:"#faf5ff",border:"1px solid #e9d5ff",
+            borderRadius:8,padding:"6px 10px",marginBottom:10}}>
+            🔀 Maintiens une case puis fais-la glisser vers sa nouvelle place — ton ordre est mémorisé automatiquement.
+          </div>
+        )}
 
       {/* Grille compteurs */}
       {(()=>{
@@ -5079,10 +5153,10 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           const isPfCard = card.key==="PF";
           const isTcCard = card.key==="TC";
           const isDetailCard = !!DETAIL_CONFIG[card.key];
-          const isClickable = isTravailCard || isCongesCard || isFetesCard || isVtCard || isCetCard || isPfCard || isTcCard || isDetailCard;
+          const isClickable = !reorderMode && (isTravailCard || isCongesCard || isFetesCard || isVtCard || isCetCard || isPfCard || isTcCard || isDetailCard);
           return(
             <div key={card.key}
-              onClick={isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isCetCard ? ()=>setShowCetDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
+              onClick={!isClickable ? undefined : isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isCetCard ? ()=>setShowCetDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
@@ -5104,6 +5178,28 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           );
         };
 
+        // Enveloppe une unité déplaçable (une case seule, ou la paire PF+TC)
+        // avec les gestionnaires pointer (souris ET tactile — Pointer Events
+        // unifie les deux, contrairement au drag-and-drop HTML5 natif qui ne
+        // fonctionne pas sur mobile) et le retour visuel pendant le glisser.
+        const wrapDraggable = (unitKey, content, extraStyle) => (
+          <div key={unitKey} data-reorder-key={unitKey}
+            onPointerDown={onCardPointerDown(unitKey)}
+            style={{
+              position:"relative", minWidth:0, ...extraStyle,
+              opacity: dragKey===unitKey ? .4 : 1,
+              outline: reorderMode && overKey===unitKey && dragKey!==unitKey ? "2.5px dashed #5b21b6" : "none",
+              outlineOffset: 2, borderRadius:12,
+              cursor: reorderMode ? (dragKey===unitKey?"grabbing":"grab") : "default",
+              touchAction: reorderMode ? "none" : "auto",
+            }}>
+            {reorderMode && (
+              <div style={{position:"absolute",top:6,right:8,fontSize:12,color:"#94a3b8",zIndex:1,pointerEvents:"none"}}>⠿⠿</div>
+            )}
+            {content}
+          </div>
+        );
+
         // Pause Figée + TC toujours côte à côte, sur mobile comme sur ordi,
         // avec EXACTEMENT le même format que les autres cartes. Une largeur
         // fixe en pixels (essai précédent) ne peut pas correspondre à la
@@ -5117,19 +5213,26 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         // d'une carte normale, quelle que soit la largeur d'écran, sans
         // media query — comportement natif de CSS Grid.
         const tcCard = CARDS.find(c=>c.key==="TC");
+        // Ordre choisi par l'agent (08/08) — "TC" n'apparaît jamais dans
+        // orderedKeys (voir COMPTEUR_CARD_KEYS), sa position suit toujours
+        // "PF" automatiquement, glisser-déposer inclus (on déplace la paire
+        // entière en une fois, jamais TC seule).
         return(
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
-            {CARDS.map(card=>{
-              if(card.key==="TC") return null;
-              if(card.key==="PF"){
-                return(
-                  <div key="pf-tc-pair" style={{gridColumn:"span 2",display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minWidth:0}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}
+            onPointerMove={onGridPointerMove} onPointerUp={onGridPointerUp} onPointerCancel={onGridPointerUp}>
+            {orderedKeys.map(key=>{
+              const card = CARDS.find(c=>c.key===key);
+              if(!card) return null;
+              if(key==="PF"){
+                return wrapDraggable("PF",
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minWidth:0}}>
                     <div style={{minWidth:0}}>{renderCard(card)}</div>
                     {tcCard&&<div style={{minWidth:0}}>{renderCard(tcCard)}</div>}
-                  </div>
+                  </div>,
+                  {gridColumn:"span 2"}
                 );
               }
-              return renderCard(card);
+              return wrapDraggable(key, renderCard(card));
             })}
           </div>
         );
