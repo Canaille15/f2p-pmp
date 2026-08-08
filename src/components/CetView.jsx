@@ -242,6 +242,18 @@ function YearSwitcherMini({ year, availableYears, onChange }) {
 const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
 const labelSource = (code) => SOURCES_EPARGNE.find(s => s.code === code)?.label || code;
 
+// Ordre de tri par catégorie pour les listes "Demandées"/"Épargnées" (08/08,
+// demandé par Olivier en remplacement du tableau récapitulatif jugé trop
+// chargé — "j'aurais prefere le tri directement dans les demandés et
+// épargnées [...] un tri avec les conges en 1er puis, RQ, RN, TC, TY, RCF").
+// Un mouvement sans source connue (abondement, source:null) est classé en
+// dernier plutôt que de casser le tri.
+const ORDRE_CATEGORIES = ["CA", "RQ", "RN", "TC", "TY", "RCF", "MEDAILLE"];
+const parCategorie = (mouvements) => {
+  const rang = (m) => { const i = ORDRE_CATEGORIES.indexOf(m.source); return i === -1 ? ORDRE_CATEGORIES.length : i; };
+  return [...(mouvements || [])].sort((a, b) => rang(a) - rang(b));
+};
+
 // Libellé générique pour un mouvement de n'importe quel type — utilisé dans
 // les listes Demandées/Accordées/Refusées, qui mélangent épargne, abondement,
 // ajustement, monétisation et utilisation.
@@ -510,30 +522,6 @@ export function EpargneFetesCetWidget({ agent, agentProfiles, setAgentProfiles, 
 export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose, feteOptions }) {
   const agCp = agent?.immatriculation || agent?.cp || agent?.id;
   const data = useMemo(() => computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
-
-  // Récapitulatif par catégorie et par sous-compte (08/08, demandé par
-  // Olivier : "tu met ensemble les jours demandés et epargné par categorie
-  // [...] et par compteur pour chaque année") — jours demandés (statut
-  // "demande") ET épargnés (statut "accorde") comptés ensemble, par source
-  // réglementaire (CA/RQ/RN/TC/TY/RCF...) et par sous-compte, pour l'année
-  // consultée. N'inclut que les crédits (sens "credit") liés à une vraie
-  // source — jamais l'abondement/ajustement (source:null) ni les sorties
-  // (monétisation/utilisation), qui ne sont pas des "catégories" d'épargne.
-  const recapCategories = useMemo(() => {
-    return SOURCES_EPARGNE.map(s => {
-      const parSousCompte = {};
-      let total = 0;
-      SOUS_COMPTES.forEach(sc => {
-        const jours = (data.ledger[sc.key] || [])
-          .filter(m => m?.source === s.code && m.annee === year && m.sens === "credit" && (m.statut === "demande" || m.statut === "accorde"))
-          .reduce((acc, m) => acc + (m.jours || 0), 0);
-        parSousCompte[sc.key] = jours;
-        total += jours;
-      });
-      return { ...s, parSousCompte, total };
-    }).filter(r => r.total > 0);
-  }, [data, year]);
-  const [recapOuvert, setRecapOuvert] = useState(true);
 
   const [source, setSource] = useState("RQ");
   const [sousCompte, setSousCompte] = useState("courant");
@@ -916,42 +904,6 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
             Cap d'épargne : {CAP_EPARGNE_AN} jours par année civile (hors abondement), tous sous-comptes confondus — {data.totalAccordeAnneeHorsAbondement}j déjà épargnés cette année. Le premier jour épargné dans l'année est abondé à 100% par l'entreprise.
           </div>
 
-          {/* Récapitulatif par catégorie et par sous-compte (08/08) — jours
-              demandés ET épargnés comptés ensemble, par source, pour l'année
-              consultée. */}
-          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
-            <button onClick={() => setRecapOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 800, color: "#5b21b6", display: "flex", alignItems: "center", gap: 6 }}>
-              {recapOuvert ? "▴" : "▾"} 📊 Récapitulatif par catégorie {year}
-            </button>
-            {recapOuvert && (
-              recapCategories.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic", marginTop: 8 }}>Aucun jour demandé ni épargné pour {year}.</div> :
-                <div style={{ marginTop: 8, overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1.5px solid #e2e8f0" }}>
-                        <th style={{ textAlign: "left", padding: "4px 6px", color: "#64748b", fontWeight: 700 }}>Catégorie</th>
-                        {SOUS_COMPTES.map(sc => (
-                          <th key={sc.key} style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 700, whiteSpace: "nowrap" }}>{sc.icone} {sc.label}</th>
-                        ))}
-                        <th style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 700 }}>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recapCategories.map(r => (
-                        <tr key={r.code} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                          <td style={{ padding: "5px 6px", fontWeight: 700, color: "#1e293b" }}>{r.code === "MEDAILLE" ? "🎖️ Médaille" : r.label}</td>
-                          {SOUS_COMPTES.map(sc => (
-                            <td key={sc.key} style={{ textAlign: "right", padding: "5px 6px", color: r.parSousCompte[sc.key] > 0 ? "#1e293b" : "#cbd5e1" }}>{r.parSousCompte[sc.key] || 0}j</td>
-                          ))}
-                          <td style={{ textAlign: "right", padding: "5px 6px", fontWeight: 800, color: "#5b21b6" }}>{r.total}j</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-            )}
-          </div>
-
           {/* + Nouvelle épargne (Phase 2, 06/08) */}
           <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>+ Nouvelle épargne</div>
@@ -1087,7 +1039,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
             {accordErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginBottom: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px" }}>{accordErr}</div>}
             {data.demandesEnAttente.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune demande en attente.</div> :
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {data.demandesEnAttente.map(m => (
+                {parCategorie(data.demandesEnAttente).map(m => (
                   <div key={m.id} style={{ border: "1px solid #e2e8f0", borderRadius: 9, padding: "9px 11px", display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
@@ -1115,7 +1067,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
               ajouté automatiquement. */}
           <div>
             {(() => {
-              const credites = data.mouvementsAccordes.filter(m => m.sens === "credit");
+              const credites = parCategorie(data.mouvementsAccordes.filter(m => m.sens === "credit"));
               const jAbondement = credites.filter(m => m.type === "abondement").reduce((s, m) => s + (m.jours || 0), 0);
               // Le sur-abondement vit désormais dans "✏️ Ajustements manuels"
               // (jamais filtré par année, voir plus bas) — recompté ici sur
@@ -1124,16 +1076,14 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
               const mentions = [];
               if (jAbondement > 0) mentions.push(`dont ${jAbondement}j d'abondement`);
               if (jSurAbondement > 0) mentions.push(`${jSurAbondement}j de sur-abondement`);
-              return (
+              return (<>
                 <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>
                   ✅ Épargnées {year} ({credites.length}){mentions.length > 0 ? ` — ${mentions.join(", ")}` : ""}
                 </div>
-              );
-            })()}
-            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8, marginTop: -4 }}>Le solde ci-dessus reste cumulé sur toutes les années — seule cette liste change avec l'année sélectionnée en haut.</div>
-            {data.mouvementsAccordes.filter(m => m.sens === "credit").length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {data.mouvementsAccordes.filter(m => m.sens === "credit").map(m => (
+                <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8, marginTop: -4 }}>Le solde ci-dessus reste cumulé sur toutes les années — seule cette liste change avec l'année sélectionnée en haut.</div>
+                {credites.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {credites.map(m => (
                   <div key={m.id} style={{ border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <div>
                       <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
@@ -1143,8 +1093,10 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                     </div>
                     <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
                   </div>
-                ))}
-              </div>}
+                    ))}
+                  </div>}
+              </>);
+            })()}
           </div>
 
           {/* Sorties (débit accordé : monétisation + utilisation) */}
