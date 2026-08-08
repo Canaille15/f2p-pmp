@@ -4682,6 +4682,12 @@ function BilanGlobalModal({agent, schedule, agentProfiles, setAgentProfiles, pau
   const rnLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agKey, "rnLedger"), [agentProfiles, agKey]);
   const tyLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agKey, "tyLedger"), [agentProfiles, agKey]);
   const bilanHeures = useMemo(()=>computeBilanGlobalHeures(tcData, rnLedgerData, tyLedgerData), [tcData, rnLedgerData, tyLedgerData]);
+  // Rappel CET (08/08, demandé par Olivier) — volontairement à part du
+  // total ci-dessus : ce sont des jours déjà épargnés, pas forcément à
+  // prendre dans l'année, mais toujours à la disposition de l'agent. Le
+  // solde CET est cumulatif (jamais remis à zéro), donc jamais mélangé au
+  // calcul "Restant au 31/12" des autres compteurs.
+  const cetData = useMemo(()=>computeDashboardCet(agentProfiles, agKey, year), [agentProfiles, agKey, year]);
 
   // Durée de référence d'une journée pour le calculateur jours⇄heures —
   // mémorisée par agent (indépendante de l'année, comme le solde ledger
@@ -4827,6 +4833,26 @@ function BilanGlobalModal({agent, schedule, agentProfiles, setAgentProfiles, pau
                 Tout compris (jours + heures converties) : <b style={{fontSize:15}}>{totalGlobalJoursEquivalents} j</b>
               </div>
             )}
+          </div>
+
+          {/* ── Rappel CET (à part, demandé par Olivier) ── */}
+          <div style={{background:"#faf5ff",border:"1.5px dashed #c4b5fd",borderRadius:12,padding:"14px 16px"}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#5b21b6",marginBottom:6}}>🏦 Compte Épargne Temps (CET)</div>
+            <div style={{fontSize:10,color:"#64748b",marginBottom:10,lineHeight:1.5}}>
+              Volontairement à part du total ci-dessus : ce sont des jours déjà épargnés, pas forcément à prendre dans l'année — mais qui restent à ta disposition.
+            </div>
+            <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+              <div>
+                <div style={{fontSize:22,fontWeight:900,color:"#5b21b6"}}>{cetData.soldeTotal} j</div>
+                <div style={{fontSize:10,color:"#64748b"}}>Solde CET total</div>
+              </div>
+              {cetData.comptes.map(c=>(
+                <div key={c.key}>
+                  <div style={{fontSize:16,fontWeight:800,color:"#7c3aed"}}>{c.solde} j</div>
+                  <div style={{fontSize:10,color:"#64748b"}}>{c.icone} {c.label} (plafond {c.plafond}j)</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
