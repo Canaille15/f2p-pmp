@@ -5017,6 +5017,14 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // celui d'aujourd'hui, pas un solde figé de fin d'année).
   const moisEnCoursLabel = new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
 
+  // Module VT masquable (09/08, demandé par Olivier — "c'est pour les agent
+  // à temps partiel. pas utile de l'avoir en permanence pour ceux qui n'y
+  // sont pas [...] le compteur VT doit etre presenté par defaut") — réglé
+  // dans "Mon profil" (ProfilPersoView), persisté par agent
+  // (agentProfiles[id].vtModuleActif). Absent/undefined = actif (défaut).
+  // Purement visuel ("meme masqué tout ce qui est dedans est comptabilisé")
+  // : ne touche à aucun calcul, seulement à la présence de la carte ici.
+  const vtActif = agentProfiles?.[agentIdPauses]?.vtModuleActif !== false;
   const CARDS = [
     {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:(solde-cetTransfereCA.total)<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
@@ -5028,7 +5036,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
     {key:"TC",      label:"TC",              color:"#0284c7", subtitle: tcData.solde>=TC_PLAFOND_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tcData.solde>=TC_PLAFOND_MIN},
     {key:"TY",      label:"TY",              color:"#0284c7", subtitle:`Solde — ${moisEnCoursLabel}`},
-    {key:"VT",      label:"VT",              color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2},
+    ...(vtActif ? [{key:"VT", label:"VT",    color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2}] : []),
     {key:"CET",     label:"CET",             color:"#7c3aed", subtitle:"Compte épargne temps"},
     {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation dans l'année"},
     {key:"MA",      label:"Maladie",         color:"#dc2626", subtitle:"Jours maladie dans l'année"},
@@ -8384,7 +8392,7 @@ function EchangesView({agents,currentAgent}){
   </div>);
 }
 
-function ProfilPersoView({currentAgent,onPartageChange}){
+function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentProfiles}){
   const [pinActuel,setPinActuel]=useState("");
   const [pinNouveau,setPinNouveau]=useState("");
   const [pinConfirme,setPinConfirme]=useState("");
@@ -8393,6 +8401,14 @@ function ProfilPersoView({currentAgent,onPartageChange}){
   const [partageActif,setPartageActif]=useState(!!currentAgent?.partage_previsionnel);
   const [partageBusy,setPartageBusy]=useState(false);
   const [partageMsg,setPartageMsg]=useState(null);
+  // Module VT (09/08, demandé par Olivier) : masquable pour les agents à
+  // temps plein qui ne l'utilisent pas. Actif par défaut (absent/undefined
+  // = actif) — purement visuel, voir DashboardCompteurs.
+  const vtActif=agentProfiles?.[currentAgent?.id]?.vtModuleActif!==false;
+  const toggleVtModule=()=>{
+    const nouvel=!vtActif;
+    setAgentProfiles(prev=>({...prev,[currentAgent.id]:{...(prev[currentAgent.id]||{}),vtModuleActif:nouvel}}));
+  };
   const [email,setEmail]=useState("");
   const [telephone,setTelephone]=useState("");
   const [fonction,setFonction]=useState("");
@@ -8543,6 +8559,19 @@ function ProfilPersoView({currentAgent,onPartageChange}){
       {partageMsg&&<div style={{marginTop:10,padding:"8px 10px",borderRadius:8,fontSize:13,fontWeight:600,
         background:partageMsg.type==="success"?"#d1fae5":"#fee2e2",
         color:partageMsg.type==="success"?"#065f46":"#991b1b"}}>{partageMsg.text}</div>}
+    </div>
+    <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>🕒 Module VT (temps partiel)</div>
+      <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>Pour les agents à temps partiel — affiche ou masque la case VT dans tes compteurs. Actif par défaut. Purement visuel : si tu la masques, tes données VT déjà enregistrées restent comptabilisées normalement.</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#334155"}}>Afficher la case VT</div>
+        <button onClick={toggleVtModule}
+          style={{width:48,height:28,borderRadius:14,border:"none",cursor:"pointer",
+          background:vtActif?"#0C447C":"#e2e8f0",position:"relative",transition:"background .15s"}}>
+          <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",position:"absolute",top:3,
+            left:vtActif?23:3,transition:"left .15s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+        </button>
+      </div>
     </div>
   </div>);
 }
@@ -10430,7 +10459,7 @@ export default function App(){
   {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
   {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent}/>}
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent}/>}
-      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
+      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
     </div>
