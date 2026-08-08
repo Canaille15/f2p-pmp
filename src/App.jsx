@@ -5719,7 +5719,14 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
 
   // Carte détaillée d'une fête, réutilisée pour l'année en cours (year) et le report N-1 (yearMoins1)
   const renderFeteCard = (l, targetYear) => {
-    const s = statutStyle[l.statut]||statutStyle.futur;
+    // Une fête épargnée au CET prime toujours sur son statut réglementaire
+    // habituel (déjà vrai pour le badge, voir plus bas) — le fond de la
+    // carte doit suivre pareil (08/08, demandé par Olivier : "le fonds
+    // devrait passé en vert comme les autres traité, ca semble plus
+    // coherent") : sans ça, une fête encore "en attente" au moment où elle a
+    // été épargnée gardait un fond ambre malgré le badge violet "Épargnée
+    // CET", ce qui donnait une carte à l'aspect contradictoire.
+    const s = l.override?.epargneCet ? statutStyle.prise : (statutStyle[l.statut]||statutStyle.futur);
     const editKey = `${targetYear}:${l.code}`;
     const isEditing = editingCode===editKey;
     const motifVisible = motifOuvert===editKey;
