@@ -4230,6 +4230,58 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
 //     restant en fin d'année A devient automatiquement l'acquis de départ de
 //     l'année A+1, sauf si l'agent le corrige manuellement pour cette année.
 // Maladie n'a ni l'un ni l'autre (jamais accumulée) — juste consultation.
+// Notice "Les arrêts maladie" (09/08, texte fourni verbatim par Olivier, à
+// reprendre tel quel sans reformulation — même principe que NOTICE_CET :
+// "pas d'interprétation, tu restes fidèle au règlement"). Affichée en bas
+// du module Maladie uniquement (voir DETAIL_CONFIG.MA.notice ci-dessous).
+const NOTICE_MALADIE = [
+  {
+    titre: "Les arrêts maladie",
+    texte: `L'agent en arrêt de travail ou hospitalisé a l'obligation d'aviser son manager, sa CPS ou l'astreinte (en dehors des horaires d'ouverture de la CPS) le plus rapidement possible. A cette occasion, les éléments nécessaires au contrôle doivent être communiqués.`,
+  },
+  {
+    titre: "Vos démarches",
+    texte: `L'arrêt de travail est composé de trois volets :
+• Lorsqu'ils ne sont pas télétransmis, les volets n° 1 et 2 sont adressés au service médical de la CPR par courrier postal sous 48h.
+  Adresse pour les agents relevant du régime spécial :
+  CPRPF
+  17 avenue Général Leclerc
+  13347 MARSEILLE CEDEX 20
+  Adresse pour les agents relevant du régime général :
+  CPRPF
+  C908
+  17 avenue Général Leclerc
+  13936 MARSEILLE CEDEX 20
+• Le volet n° 3 à adresser à sa CPS. Lorsque la télétransmission n'est pas possible, seul le CERFA original est accepté.
+A compter du 1er juillet 2025, un nouveau CERFA sécurisé est édité sous format papier. Les anciens modèles ne sont plus acceptés depuis le 1er septembre 2025.`,
+  },
+  {
+    titre: "La téléconsultation",
+    texte: `Un arrêt de travail prescrit ou renouvelé en téléconsultation ne peut excéder 3 jours. Si la durée est supérieure, il ne sera pas indemnisé, sauf cas particulier (arrêt prescrit par le médecin traitant ou son remplaçant par exemple).`,
+  },
+  {
+    titre: "Les horaires de sortie",
+    texte: `Votre médecin doit indiquer sur votre avis d'arrêt de travail si vous êtes autorisé ou non à quitter votre domicile durant votre arrêt de travail maladie. La CPR peut contrôler votre présence à votre domicile pendant toute la durée de l'arrêt, y compris le weekend et les jours fériés.
+Vos obligations dépendent des informations mentionnées par votre médecin sur votre arrêt de travail :
+• Vous n'êtes pas autorisé à sortir de votre domicile parce que votre état de santé ne le permet pas ;
+• Vous êtes autorisé à sortir, mais vous devez être présent à votre domicile de 9 h à 11 h et de 14 h à 16 h. Vous pouvez sortir sur ces plages horaires uniquement pour des soins ou des examens médicaux, y compris le samedi, le dimanche et les jours fériés ;
+• Vous êtes autorisé à sortir sans restriction. Pour ce cas de figure, la décision doit être justifiée par votre médecin sur le volet 1 de l'avis d'arrêt de travail.`,
+  },
+  {
+    titre: "La visite de contrôle",
+    texte: `La CPR peut effectuer des contrôles à votre domicile ou vous convoquer auprès du service médical. Vos indemnités journalières peuvent être réduites voire supprimées si :
+• Vous refusez le contrôle ou si vous ne vous rendez pas à la convocation ;
+• Votre arrêt de travail n'est pas ou plus médicalement justifié au moment du contrôle ;
+• Vous exercez une activité non autorisée par votre médecin ;
+• Vous ne respectez pas les heures de sortie autorisée ou vous quittez votre lieu de résidence sans l'accord préalable de la CPR.`,
+  },
+  {
+    titre: "La prolongation d'arrêt de travail",
+    texte: `La prolongation doit être établie avant la fin de votre arrêt de travail. Attention, elle doit être prescrite par le médecin qui a établi votre arrêt de travail initial ou votre médecin traitant.
+La prolongation de l'arrêt de travail par un autre professionnel de santé est exceptionnellement autorisée dans certains cas particuliers (prescription par le remplaçant du médecin traitant ou de celui qui a rédigé l'arrêt initial, prescription par le médecin qui vous suit lors d'une hospitalisation…).`,
+  },
+];
+
 const DETAIL_CONFIG = {
   RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:"rpAcquis", rollingAcquis:false, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
   RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
@@ -4245,7 +4297,7 @@ const DETAIL_CONFIG = {
   // minutes plafonné, alimenté par les pauses figées validées, avec sa propre
   // logique (computeDashboardTC/TcDashboardModal). Voir CLAUDE.md.
   TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7", cetSource:"TY", cetBesoinValeur:true },
-  MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626" },
+  MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626", notice:NOTICE_MALADIE },
   // Formation (17/07, demandé par Olivier) : même principe que Maladie — pure
   // consultation (pas d'acquis, pas de report), archive A+1 + 2 ans, détail
   // mensuel des dates. Version 1 volontairement minimale — à compléter plus
@@ -4340,7 +4392,35 @@ function YearSwitcher({ year, availableYears, onChange }){
   );
 }
 
-function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur }){
+// Notice réglementaire repliable, générique — même principe que NoticeSection
+// dans CetView.jsx (scrollIntoView à l'ouverture, sinon le contenu révélé
+// peut rester hors écran en bas d'une modale déjà longue sur mobile).
+// N'apparaît que si le compteur fournit un tableau `sections` (voir
+// DETAIL_CONFIG.MA.notice) — les autres compteurs n'en ont pas.
+function NoticeSection({ sections, accentDark, bgLight, borderLight }){
+  const [ouvert, setOuvert] = useState(false);
+  const contentRef = useRef(null);
+  useEffect(()=>{ if(ouvert) contentRef.current?.scrollIntoView({behavior:"smooth",block:"start"}); },[ouvert]);
+  return (
+    <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+      <button onClick={()=>setOuvert(v=>!v)} style={{background:"none",border:"none",color:accentDark,cursor:"pointer",fontSize:12,fontWeight:800,padding:0,display:"flex",alignItems:"center",gap:6}}>
+        {ouvert?"▴":"▾"} 📖 Notice — ce qu'il faut savoir
+      </button>
+      {ouvert && (
+        <div ref={contentRef} style={{marginTop:10,display:"flex",flexDirection:"column",gap:12}}>
+          {sections.map(section=>(
+            <div key={section.titre} style={{background:bgLight,border:`1px solid ${borderLight}`,borderRadius:10,padding:"10px 12px"}}>
+              <div style={{fontSize:12,fontWeight:800,color:accentDark,marginBottom:5}}>{section.titre}</div>
+              <div style={{fontSize:11.5,color:"#334155",whiteSpace:"pre-line",lineHeight:1.5}}>{section.texte}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur, notice }){
   const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis]);
   const ledgerData = useMemo(()=> ledgerKey ? computeLedgerSolde(agentProfiles, agent?.id, ledgerKey) : null, [agentProfiles, agent?.id, ledgerKey]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
@@ -4611,6 +4691,8 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
               {reportErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{reportErr}</div>}
             </div>
           )}
+
+          {notice && <NoticeSection sections={notice} accentDark={accentDark} bgLight={bgLight} borderLight={borderLight}/>}
         </div>
       </div>
     </div>
