@@ -156,10 +156,23 @@ export function computeDashboardCet(agentProfiles, agentId, year) {
   // solde total ci-dessus reste calculé sur `comptes[].accordes`, JAMAIS
   // filtré — c'est un compte épargne temps, cumulatif par nature, changer
   // d'année ne doit jamais faire bouger le solde, seulement la liste.
+  //
+  // Les "ajustement"/"surAbondement" (08/08, 2e retour d'Olivier : "je vois
+  // encore l'ajustement du compte courant sur 2027. et celui de l'autre sous
+  // compte sur 2026 [...] je voulis ne plus voir ça sans cesse d'année en
+  // année") ne sont PAS une épargne réglementaire datée — c'est une
+  // déclaration ponctuelle de solde de départ, sans rapport avec l'année où
+  // elle a été saisie. Le filtre par année les faisait quand même réapparaître
+  // indéfiniment sur LEUR année de saisie à chaque fois qu'on la reconsulte —
+  // exactement le clutter dénoncé. Sortis de `mouvementsAccordes` (donc du
+  // filtre par année) vers une liste séparée, jamais filtrée, affichée dans
+  // une section dédiée repliée par défaut (voir CetDashboardModal).
+  const isAjustement = m => m.type === "ajustement" || m.type === "surAbondement";
   const demandesEnAttente = comptes.flatMap(c => c.enAttente.filter(m => m.annee === year).map(m => ({ ...m, sousCompte: c.key })));
-  const mouvementsAccordes = comptes.flatMap(c => c.accordes.filter(m => m.annee === year).map(m => ({ ...m, sousCompte: c.key })));
+  const mouvementsAccordes = comptes.flatMap(c => c.accordes.filter(m => !isAjustement(m) && m.annee === year).map(m => ({ ...m, sousCompte: c.key })));
+  const mouvementsAjustements = comptes.flatMap(c => c.accordes.filter(isAjustement).map(m => ({ ...m, sousCompte: c.key })));
   const mouvementsRefuses = comptes.flatMap(c => c.refusees.filter(m => m.annee === year).map(m => ({ ...m, sousCompte: c.key })));
-  return { comptes, soldeTotal, ledger, demandesEnAttente, mouvementsAccordes, mouvementsRefuses, totalAccordeAnneeHorsAbondement };
+  return { comptes, soldeTotal, ledger, demandesEnAttente, mouvementsAccordes, mouvementsAjustements, mouvementsRefuses, totalAccordeAnneeHorsAbondement };
 }
 
 function NoticeSection() {
@@ -471,6 +484,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
   const [utilFin, setUtilFin] = useState("");
   const [utilErr, setUtilErr] = useState("");
   const [accordErr, setAccordErr] = useState("");
+  const [ajustementsOuvert, setAjustementsOuvert] = useState(false);
 
   const besoinValeur = source === "RN" || source === "TC" || source === "TY";
 
@@ -977,6 +991,33 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                   </div>
                 ))}
               </div>}
+          </div>
+
+          {/* Ajustements manuels — solde de départ / corrections (08/08) :
+              pas une épargne datée, jamais filtrés par année (voir
+              computeDashboardCet), repliés par défaut pour ne pas polluer la
+              lecture du panneau tant qu'on ne va pas volontairement les
+              consulter. */}
+          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
+            <button onClick={() => setAjustementsOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 800, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+              {ajustementsOuvert ? "▴" : "▾"} ✏️ Ajustements manuels ({data.mouvementsAjustements.length})
+            </button>
+            {ajustementsOuvert && (
+              data.mouvementsAjustements.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic", marginTop: 8 }}>Aucun.</div> :
+                <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 8 }}>
+                  {data.mouvementsAjustements.map(m => (
+                    <div key={m.id} style={{ border: "1px solid #e2e8f0", background: "#f8fafc", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <div>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
+                        <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
+                          {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.icone} {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.label} · {fmtDate(m.dateAccord)}
+                        </div>
+                      </div>
+                      <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
+                    </div>
+                  ))}
+                </div>
+            )}
           </div>
 
           {/* Refusées */}
