@@ -5,7 +5,7 @@ import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
 import DayEditPopup from "./components/DayEditPopup";
 import DemandeCongesView from "./components/DemandeCongesView";
-import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget } from "./components/CetView";
+import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget, EpargneFetesCetWidget } from "./components/CetView";
 import CetPdfsView from "./components/CetPdfsView";
 
 
@@ -4641,8 +4641,8 @@ function computeBilanGlobalJours(agent, schedule, agentProfiles, year, dateProje
   // Fêtes). Pas de projection "avant une date choisie" pour Fêtes : ça ne
   // correspond à rien de calculable de la même façon qu'un solde de jours qui
   // s'épuise au fil de l'année — colonne affichée à "—" pour cette ligne.
-  const feteReglees = (fetesInfo.lignes||[]).filter(l=>l && (l.statut==="prise"||l.statut==="payee"||l.statut==="payee_auto"));
-  const feteATraiter = (fetesInfo.lignes||[]).filter(l=>l && (l.statut==="attente"||l.statut==="perdue_probable"));
+  const feteReglees = (fetesInfo.lignes||[]).filter(l=>l && (l.override?.epargneCet || l.statut==="prise"||l.statut==="payee"||l.statut==="payee_auto"));
+  const feteATraiter = (fetesInfo.lignes||[]).filter(l=>l && !l.override?.epargneCet && (l.statut==="attente"||l.statut==="perdue_probable"));
 
   const projeter = (data) => dateProjection
     ? (data.acquis ?? data.entitlement ?? 0) - (data.tousJours||[]).filter(d=>d<=dateProjection).length
@@ -4922,7 +4922,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // pour la cloche sur la carte — évite d'ouvrir la fenêtre juste pour savoir
   // si quelque chose demande une action.
   const fetesInfo = useMemo(()=>computeFetesLignes(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
-  const nbFetesATraiter = fetesInfo.lignes.filter(l=>l.statut==="attente"||l.statut==="perdue_probable").length;
+  const nbFetesATraiter = fetesInfo.lignes.filter(l=>!l.override?.epargneCet && (l.statut==="attente"||l.statut==="perdue_probable")).length;
 
   // VT (temps partiel) : même principe que Congés (carte reflète le même total
   // que le tableau de bord dédié), avec en plus le workflow Demandé→Accordé→Pris.
@@ -5504,6 +5504,15 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
     [agent, schedule, agentProfiles, year]
   );
 
+  // Fêtes sélectionnables pour l'épargne CET (07/08) : ni perdues, ni déjà
+  // épargnées — l'année en cours ET le report N-1 (chaque fête garde sa
+  // propre année, voir EpargneFetesCetWidget dans CetView.jsx).
+  const feteOptions = useMemo(() => {
+    const fromLignes = lignes.filter(l=>l.statut!=="perdue" && !l.override?.epargneCet).map(l=>({code:l.code, label:l.label, annee:year}));
+    const fromReport = fetesReportN1.filter(l=>l.statut!=="perdue" && !l.override?.epargneCet).map(l=>({code:l.code, label:l.label, annee:yearMoins1}));
+    return [...fromLignes, ...fromReport];
+  }, [lignes, fetesReportN1, year, yearMoins1]);
+
   const setFetesDataYear = (targetYear, updater) => {
     setAgentProfiles(prev=>{
       const curr = prev[agent.id]?.fetesTracking?.[targetYear] || {};
@@ -5640,10 +5649,13 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
 
   // Regroupement par priorité — plus intuitif qu'une liste chronologique :
   // ce qui nécessite une action d'abord, ce qui est réglé en dernier.
-  const groupeATraiter = lignes.filter(l=>l.statut==="attente"||l.statut==="perdue_probable");
-  const groupePerdues  = lignes.filter(l=>l.statut==="perdue");
-  const groupeReglees  = lignes.filter(l=>l.statut==="prise"||l.statut==="payee"||l.statut==="payee_auto");
-  const groupeAVenir   = lignes.filter(l=>l.statut==="futur");
+  // Une fête épargnée au CET (07/08, override.epargneCet) compte comme
+  // réglée quel que soit son statut réglementaire sous-jacent (celui-ci
+  // n'est jamais modifié par l'épargne — voir EpargneFetesCetWidget).
+  const groupeATraiter = lignes.filter(l=>!l.override?.epargneCet && (l.statut==="attente"||l.statut==="perdue_probable"));
+  const groupePerdues  = lignes.filter(l=>!l.override?.epargneCet && l.statut==="perdue");
+  const groupeReglees  = lignes.filter(l=>l.override?.epargneCet || l.statut==="prise"||l.statut==="payee"||l.statut==="payee_auto");
+  const groupeAVenir   = lignes.filter(l=>!l.override?.epargneCet && l.statut==="futur");
 
   // Couleurs par statut — contraste fort partout (pas de gris clair sur clair)
   const statutStyle = {
@@ -5719,15 +5731,17 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
               <div style={{fontSize:11,color:"#059669",fontWeight:800,marginTop:3,whiteSpace:"normal"}}>⏩ Anticipé demandé</div>}
           </div>
 
-          {/* Statut badge */}
+          {/* Statut badge — une fête épargnée au CET (07/08) prime toujours
+              sur le badge réglementaire habituel, quel que soit l.statut. */}
           <span style={{
-            background:s.badge,color:s.badgeTc,
+            background:l.override?.epargneCet?"#ede9fe":s.badge,
+            color:l.override?.epargneCet?"#5b21b6":s.badgeTc,
             borderRadius:20,padding:"5px 12px",
             fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
           }}>
-            {s.icon} {s.label}
-            {l.statut==="payee"&&` ${MOIS_NOMS[l.moisPaye-1]}`}
-            {l.statut==="payee_auto"&&` ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==year?` ${l.anneePaye}`:""}`}
+            {l.override?.epargneCet ? "🏦 Épargnée CET" : <>{s.icon} {s.label}</>}
+            {l.statut==="payee"&&!l.override?.epargneCet&&` ${MOIS_NOMS[l.moisPaye-1]}`}
+            {l.statut==="payee_auto"&&!l.override?.epargneCet&&` ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==year?` ${l.anneePaye}`:""}`}
           </span>
         </div>
 
@@ -5758,7 +5772,12 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
             </div>
           ):(
             <div style={{flex:1,fontSize:12}}>
-              {priseLe
+              {l.override?.epargneCet
+                ? <span style={{color:"#5b21b6",fontWeight:700}}>
+                    🏦 Épargnée au CET — {l.override.epargneCet.sousCompte==="courant"?"Compte courant":"Compte fin d'activité"}
+                    <span style={{color:"#94a3b8",fontWeight:500,fontSize:11,marginLeft:6}}>(annuler depuis 🏦 CET)</span>
+                  </span>
+              : priseLe
                 ? <span style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                     <span style={{color:"#16a34a",fontWeight:700}}>{priseLe}</span>
                     {canEdit&&<button onClick={()=>setManualDate(l.code,"",targetYear)}
@@ -6006,9 +6025,17 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
           )}
 
           {/* Épargner directement au CET depuis Fêtes (07/08, demandé par
-              Olivier — RCF, repos compensateur de fêtes) — widget partagé,
-              voir CetView.jsx EpargneCetWidget. */}
-          <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source="RCF" sourceLabel="mes fêtes (RCF)" year={year} besoinValeur={false}/>
+              Olivier — RCF, repos compensateur de fêtes). Contrairement aux
+              autres compteurs, on ne saisit pas un simple nombre de jours :
+              l'agent choisit précisément QUELLE fête est épargnée (suivi fin
+              demandé) — widget dédié, voir CetView.jsx EpargneFetesCetWidget.
+              feteOptions inclut l'année en cours ET le report N-1 (chaque
+              fête garde sa propre année, celle qui compte pour l'affichage
+              "🏦 Épargnée au CET" dans les deux vues) — exclut les fêtes déjà
+              épargnées et celles perdues (non éligibles, demandé par Olivier
+              : "lorsqu'une fête est dans les fete perdu [...] elle ne peut
+              pas etre mise en epargne"). */}
+          <EpargneFetesCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={year} fetes={feteOptions}/>
 
           {renderGroupe("À traiter", "⚠️", groupeATraiter, groupeStyle.aTraiter)}
           {renderGroupe("Réglées", "✅", groupeReglees, groupeStyle.reglees)}
@@ -6713,7 +6740,9 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
     const { lignes: lignesFete } = computeFetesLignes(agent, schedule, agentProfiles, yr);
     const map = {};
     lignesFete.forEach(l=>{
-      if(l.priseLe && l.priseLe !== dayPopup.dk){
+      if(l.override?.epargneCet){
+        map[l.code] = `${l.code} (${l.label}) a déjà été épargnée au CET. Va dans Compteurs → CET pour l'annuler d'abord si tu veux la reprendre autrement.`;
+      } else if(l.priseLe && l.priseLe !== dayPopup.dk){
         map[l.code] = `${l.code} (${l.label}) est déjà prise le ${new Date(l.priseLe+"T12:00:00").toLocaleDateString("fr-FR")}. Va dans Compteurs → Fêtes pour l'annuler d'abord si tu veux la déplacer.`;
       } else if(!l.priseLe && (l.statut==="payee"||l.statut==="payee_auto")){
         map[l.code] = `${l.code} (${l.label}) a déjà été enregistrée comme payée (${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==yr?` ${l.anneePaye}`:""}). Va dans Compteurs → Fêtes pour la mettre à jour si ce n'est pas correct.`;

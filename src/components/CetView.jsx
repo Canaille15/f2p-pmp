@@ -219,6 +219,7 @@ const labelMouvement = (m) => {
   if (m.type === "surAbondement") return "🎁 Sur-abondement";
   if (m.type === "monetisation") return "💶 Monétisation";
   if (m.type === "utilisation") return "📅 Utilisation en temps";
+  if (m.feteCode) return `🩷 ${m.feteCode} (RCF)`;
   return labelSource(m.source);
 };
 
@@ -324,6 +325,102 @@ export function EpargneCetWidget({ agent, agentProfiles, setAgentProfiles, sourc
             </>)}
             <button onClick={ajouter} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>+ Épargner</button>
           </div>
+          {err && <div style={{ fontSize: 10.5, fontWeight: 600, color: "#dc2626" }}>{err}</div>}
+          {info && <div style={{ fontSize: 10.5, fontWeight: 600, color: "#166534" }}>{info}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Variante du widget ci-dessus, propre aux Fêtes (07/08, demandé par Olivier
+// — "il faut pouvoir selectionner la fete epargné; vu que l'on fait un suivi
+// precis"). Au lieu d'un simple nombre de jours, l'agent choisit PRÉCISÉMENT
+// quelle(s) fête(s) sont épargnées au CET (source RCF) — une ligne par fête
+// sélectionnable, jamais un total générique. `fetes` est fourni par
+// FetesDashboardModal, déjà filtré aux fêtes éligibles (ni perdues, ni déjà
+// épargnées) — inclut aussi bien les fêtes de l'année en cours que celles du
+// report N-1 (chacune porte sa propre `annee`, celle de la fête elle-même,
+// pas celle du modal ouvert — indispensable pour que le marquage reste
+// cohérent qu'on le fasse depuis la vue de l'année N ou celle de N+1).
+// Écrit à la fois dans cetLedger (comme EpargneCetWidget) ET dans
+// fetesTracking[annee][code].epargneCet (lu par computeFetesLignes via
+// `override`, jamais modifié — l'affichage prime juste sur le statut
+// réglementaire habituel, voir renderFeteCard/groupeReglees dans App.jsx).
+export function EpargneFetesCetWidget({ agent, agentProfiles, setAgentProfiles, fetes, year }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [selection, setSelection] = useState({});
+  const [sousCompte, setSousCompte] = useState("courant");
+  const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
+  const data = useMemo(() => computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
+
+  const cle = (f) => `${f.annee}-${f.code}`;
+  const toggle = (f) => setSelection(prev => ({ ...prev, [cle(f)]: !prev[cle(f)] }));
+
+  const epargner = () => {
+    setErr(""); setInfo("");
+    const choisies = (fetes || []).filter(f => selection[cle(f)]);
+    if (choisies.length === 0) { setErr("Sélectionne au moins une fête à épargner."); return; }
+    const today = new Date().toISOString().slice(0, 10);
+    setAgentProfiles(prev => {
+      const profil = prev[agent.id] || {};
+      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+      const nextSc = [...(ledger[sousCompte] || [])];
+      const fetesTracking = { ...(profil.fetesTracking || {}) };
+      choisies.forEach(f => {
+        nextSc.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${f.code}`,
+          type: "epargne", source: "RCF", jours: 1, valeurMinutes: null,
+          sens: "credit", statut: "demande",
+          dateDemande: today, dateAccord: null, dateRefus: null, annee: year,
+          feteCode: f.code, feteAnnee: f.annee,
+        });
+        const yearTracking = { ...(fetesTracking[f.annee] || {}) };
+        const codeTracking = { ...(yearTracking[f.code] || {}) };
+        codeTracking.epargneCet = { sousCompte, date: today };
+        yearTracking[f.code] = codeTracking;
+        fetesTracking[f.annee] = yearTracking;
+      });
+      return { ...prev, [agent.id]: { ...profil, cetLedger: { ...ledger, [sousCompte]: nextSc }, fetesTracking } };
+    });
+    const projete = data.totalAccordeAnneeHorsAbondement + choisies.length;
+    setInfo(projete > CAP_EPARGNE_AN
+      ? `⚠️ ${choisies.length} fête(s) ajoutée(s) — cap de ${CAP_EPARGNE_AN}j/an (tous compteurs confondus) dépassé (${projete}j). À accorder depuis "🏦 CET".`
+      : `${choisies.length} fête(s) ajoutée(s) — à accorder depuis "🏦 CET".`);
+    setSelection({});
+  };
+
+  return (
+    <div style={{ border: "1px solid #e9d5ff", background: "#faf5ff", borderRadius: 10, padding: "10px 12px" }}>
+      <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 800, color: "#5b21b6", display: "flex", alignItems: "center", gap: 6 }}>
+        {ouvert ? "▴" : "▾"} 🏦 Épargner une fête (RCF) au CET
+      </button>
+      {ouvert && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+          {(!fetes || fetes.length === 0) ? (
+            <div style={{ fontSize: 10.5, color: "#94a3b8", fontStyle: "italic" }}>Aucune fête disponible à épargner (perdues et déjà épargnées exclues).</div>
+          ) : (<>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {fetes.map(f => (
+                <label key={cle(f)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: "#1e293b", cursor: "pointer" }}>
+                  <input type="checkbox" checked={!!selection[cle(f)]} onChange={() => toggle(f)} />
+                  {f.code} — {f.label}{f.annee !== year ? ` (${f.annee})` : ""}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {SOUS_COMPTES.map(sc => (
+                <button key={sc.key} onClick={() => setSousCompte(sc.key)} style={{
+                  flex: 1, background: sousCompte === sc.key ? "#5b21b6" : "#fff",
+                  color: sousCompte === sc.key ? "#fff" : "#5b21b6",
+                  border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
+                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                }}>{sc.icone} {sc.label}</button>
+              ))}
+            </div>
+            <button onClick={epargner} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>+ Épargner la sélection</button>
+          </>)}
           {err && <div style={{ fontSize: 10.5, fontWeight: 600, color: "#dc2626" }}>{err}</div>}
           {info && <div style={{ fontSize: 10.5, fontWeight: 600, color: "#166534" }}>{info}</div>}
         </div>
@@ -557,7 +654,14 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
   // (utilisation) — l'abondement éventuellement déclenché par ce mouvement
   // n'est volontairement pas retiré automatiquement (même logique que
   // "Annuler" sur Congés/VT : pas de restauration en cascade, l'agent
-  // ajuste manuellement si besoin).
+  // ajuste manuellement si besoin). Un mouvement issu d'EpargneFetesCetWidget
+  // (feteCode/feteAnnee, 07/08) efface aussi le marquage epargneCet
+  // correspondant dans fetesTracking — sinon la fête resterait affichée
+  // "🏦 Épargnée au CET" (App.jsx, renderFeteCard) alors que le mouvement lui-
+  // même a disparu. `null` explicite (pas `delete`) : le backend fusionne
+  // donnees_json via JSON_MERGE_PATCH, une clé simplement absente du patch
+  // n'est jamais supprimée côté serveur (piège déjà rencontré plusieurs fois
+  // sur ce projet, voir CLAUDE.md).
   const retirerMouvement = (sc, id) => {
     const mouvement = trouverMouvement(sc, id);
     if (mouvement?.type === "utilisation" && mouvement.statut === "accorde" && mouvement.dateDebut && mouvement.dateFin) {
@@ -570,6 +674,14 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
       const ledgerKey = mouvement && LEDGER_KEY_BY_SOURCE[mouvement.source];
       if (ledgerKey && mouvement?.statut === "accorde") {
         next[ledgerKey] = (profil[ledgerKey] || []).filter(e => e.id !== `cet-${id}`);
+      }
+      if (mouvement?.feteCode && mouvement?.feteAnnee) {
+        const tracking = profil.fetesTracking || {};
+        const yearTracking = { ...(tracking[mouvement.feteAnnee] || {}) };
+        const codeTracking = { ...(yearTracking[mouvement.feteCode] || {}) };
+        codeTracking.epargneCet = null;
+        yearTracking[mouvement.feteCode] = codeTracking;
+        next.fetesTracking = { ...tracking, [mouvement.feteAnnee]: yearTracking };
       }
       return { ...prev, [agent.id]: next };
     });
