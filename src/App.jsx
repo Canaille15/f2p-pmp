@@ -4863,11 +4863,12 @@ function BilanGlobalModal({agent, schedule, agentProfiles, setAgentProfiles, pau
 // ─── TABLEAU DE BORD COMPTEURS ───────────────────────────────────────────────
 // Ordre par défaut des cases compteurs, réorganisable par agent (08/08,
 // demandé par Olivier — glisser-déposer, ordre mémorisé par agent même s'il
-// change d'avis ensuite). "TC" n'est volontairement PAS une unité déplaçable
-// à part : elle est toujours rendue collée à "PF" (paire côte à côte déjà
-// établie le 17/07, voir plus bas dans renderCard) — seule la position de
-// "PF" compte, TC suit automatiquement où qu'elle aille.
-const COMPTEUR_CARD_KEYS = ["conges","travail","RP","RU","RQ","FETE","RN","PF","TY","VT","CET","FOR","MA"];
+// change d'avis ensuite). "PF" et "TC" étaient forcées côte à côte (17/07) —
+// dissocié le 08/08 sur demande explicite d'Olivier : "comme on peut
+// réorganiser comme on veut, tu peux les dissocier pour les déplacer
+// individuellement" — chacune est désormais une unité déplaçable à part
+// entière, comme n'importe quelle autre carte.
+const COMPTEUR_CARD_KEYS = ["conges","travail","RP","RU","RQ","FETE","RN","PF","TC","TY","VT","CET","FOR","MA"];
 
 function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
   const currentYear = new Date().getFullYear();
@@ -5226,38 +5227,20 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           </div>
         );
 
-        // Pause Figée + TC toujours côte à côte, sur mobile comme sur ordi,
-        // avec EXACTEMENT le même format que les autres cartes. Une largeur
-        // fixe en pixels (essai précédent) ne peut pas correspondre à la
-        // largeur réelle des cartes voisines : elles sont en 1fr dans la
-        // grille auto-fill, donc plus larges que 130px dès que l'écran a de
-        // la place — d'où une carte PF visiblement plus petite que ses
-        // voisines et un texte TC cramponné/coupé sur deux lignes. Corrigé
-        // en faisant de la paire un item de grille qui span exactement 2
-        // colonnes (gridColumn:"span 2") avec 2 sous-colonnes 1fr à
-        // l'intérieur : chaque moitié fait alors très exactement la largeur
-        // d'une carte normale, quelle que soit la largeur d'écran, sans
-        // media query — comportement natif de CSS Grid.
-        const tcCard = CARDS.find(c=>c.key==="TC");
-        // Ordre choisi par l'agent (08/08) — "TC" n'apparaît jamais dans
-        // orderedKeys (voir COMPTEUR_CARD_KEYS), sa position suit toujours
-        // "PF" automatiquement, glisser-déposer inclus (on déplace la paire
-        // entière en une fois, jamais TC seule).
+        // Pause Figée et TC dissociées (08/08, demandé par Olivier — "tu peux
+        // les dissocier pour les déplacer individuellement" maintenant que le
+        // panneau est réorganisable) : chacune est une carte normale comme
+        // les autres, plus de bloc à 2 colonnes forcé. L'ancien bug de
+        // largeur (17/07 : une carte à largeur fixe en pixels ne
+        // correspondait pas à la largeur réelle des voisines en 1fr) ne
+        // s'applique plus ici — chaque carte est un enfant ordinaire de la
+        // grille auto-fill, dimensionné exactement comme toutes les autres.
         return(
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}
             onPointerMove={onGridPointerMove} onPointerUp={onGridPointerUp} onPointerCancel={onGridPointerUp}>
             {orderedKeys.map(key=>{
               const card = CARDS.find(c=>c.key===key);
               if(!card) return null;
-              if(key==="PF"){
-                return wrapDraggable("PF",
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minWidth:0}}>
-                    <div style={{minWidth:0}}>{renderCard(card)}</div>
-                    {tcCard&&<div style={{minWidth:0}}>{renderCard(tcCard)}</div>}
-                  </div>,
-                  {gridColumn:"span 2"}
-                );
-              }
               return wrapDraggable(key, renderCard(card));
             })}
           </div>
