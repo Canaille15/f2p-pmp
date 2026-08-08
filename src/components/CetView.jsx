@@ -356,11 +356,12 @@ export function EpargneFetesCetWidget({ agent, agentProfiles, setAgentProfiles, 
   const data = useMemo(() => computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
 
   const cle = (f) => `${f.annee}-${f.code}`;
-  const toggle = (f) => setSelection(prev => ({ ...prev, [cle(f)]: !prev[cle(f)] }));
+  const toggle = (f) => { if (f.disabled) return; setSelection(prev => ({ ...prev, [cle(f)]: !prev[cle(f)] })); };
+  const selectionnables = (fetes || []).filter(f => !f.disabled);
 
   const epargner = () => {
     setErr(""); setInfo("");
-    const choisies = (fetes || []).filter(f => selection[cle(f)]);
+    const choisies = (fetes || []).filter(f => !f.disabled && selection[cle(f)]);
     if (choisies.length === 0) { setErr("Sélectionne au moins une fête à épargner."); return; }
     const today = new Date().toISOString().slice(0, 10);
     setAgentProfiles(prev => {
@@ -399,27 +400,38 @@ export function EpargneFetesCetWidget({ agent, agentProfiles, setAgentProfiles, 
       {ouvert && (
         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
           {(!fetes || fetes.length === 0) ? (
-            <div style={{ fontSize: 10.5, color: "#94a3b8", fontStyle: "italic" }}>Aucune fête disponible à épargner (perdues et déjà épargnées exclues).</div>
+            <div style={{ fontSize: 10.5, color: "#94a3b8", fontStyle: "italic" }}>Aucune fête connue pour l'instant.</div>
           ) : (<>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {fetes.map(f => (
-                <label key={cle(f)} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: "#1e293b", cursor: "pointer" }}>
-                  <input type="checkbox" checked={!!selection[cle(f)]} onChange={() => toggle(f)} />
-                  {f.code} — {f.label}{f.annee !== year ? ` (${f.annee})` : ""}
+                <label key={cle(f)} style={{
+                  display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600,
+                  color: f.disabled ? "#94a3b8" : "#1e293b",
+                  cursor: f.disabled ? "default" : "pointer",
+                }}>
+                  <input type="checkbox" checked={!!selection[cle(f)]} disabled={f.disabled} onChange={() => toggle(f)} />
+                  <span style={{ textDecoration: f.disabled ? "line-through" : "none" }}>
+                    {f.code} — {f.label}{f.annee !== year ? ` (${f.annee})` : ""}
+                  </span>
+                  {f.disabled && <span style={{ fontSize: 10.5, fontWeight: 700, color: "#94a3b8", textDecoration: "none" }}>{f.reason}</span>}
                 </label>
               ))}
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              {SOUS_COMPTES.map(sc => (
-                <button key={sc.key} onClick={() => setSousCompte(sc.key)} style={{
-                  flex: 1, background: sousCompte === sc.key ? "#5b21b6" : "#fff",
-                  color: sousCompte === sc.key ? "#fff" : "#5b21b6",
-                  border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
-                  fontSize: 11, fontWeight: 700, cursor: "pointer",
-                }}>{sc.icone} {sc.label}</button>
-              ))}
-            </div>
-            <button onClick={epargner} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>+ Épargner la sélection</button>
+            {selectionnables.length === 0 ? (
+              <div style={{ fontSize: 10.5, color: "#94a3b8", fontStyle: "italic" }}>Aucune fête disponible à épargner (toutes déjà réglées ou perdues).</div>
+            ) : (<>
+              <div style={{ display: "flex", gap: 6 }}>
+                {SOUS_COMPTES.map(sc => (
+                  <button key={sc.key} onClick={() => setSousCompte(sc.key)} style={{
+                    flex: 1, background: sousCompte === sc.key ? "#5b21b6" : "#fff",
+                    color: sousCompte === sc.key ? "#fff" : "#5b21b6",
+                    border: "1.5px solid #e9d5ff", borderRadius: 8, padding: "6px 8px",
+                    fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  }}>{sc.icone} {sc.label}</button>
+                ))}
+              </div>
+              <button onClick={epargner} style={{ background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>+ Épargner la sélection</button>
+            </>)}
           </>)}
           {err && <div style={{ fontSize: 10.5, fontWeight: 600, color: "#dc2626" }}>{err}</div>}
           {info && <div style={{ fontSize: 10.5, fontWeight: 600, color: "#166534" }}>{info}</div>}

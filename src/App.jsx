@@ -5504,12 +5504,30 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
     [agent, schedule, agentProfiles, year]
   );
 
-  // Fêtes sélectionnables pour l'épargne CET (07/08) : ni perdues, ni déjà
-  // épargnées — l'année en cours ET le report N-1 (chaque fête garde sa
-  // propre année, voir EpargneFetesCetWidget dans CetView.jsx).
+  // Fêtes proposées à l'épargne CET (08/08) : la liste complète est affichée
+  // (année en cours + report N-1), mais les fêtes déjà réglées d'une façon ou
+  // d'une autre (perdue, prise, payée, déjà épargnée) sont marquées non
+  // sélectionnables avec le motif affiché à côté — plutôt que simplement
+  // absentes, pour qu'Olivier comprenne pourquoi il ne peut pas les cocher
+  // (signalé : la F3 "Prise" restait sélectionnable, seule "perdue" était
+  // exclue). Voir EpargneFetesCetWidget dans CetView.jsx.
   const feteOptions = useMemo(() => {
-    const fromLignes = lignes.filter(l=>l.statut!=="perdue" && !l.override?.epargneCet).map(l=>({code:l.code, label:l.label, annee:year}));
-    const fromReport = fetesReportN1.filter(l=>l.statut!=="perdue" && !l.override?.epargneCet).map(l=>({code:l.code, label:l.label, annee:yearMoins1}));
+    const buildOption = (l, anneeVal) => {
+      let disabled = false, reason = "";
+      if(l.override?.epargneCet){
+        disabled = true; reason = "🏦 Déjà épargnée au CET";
+      } else if(l.statut==="perdue"){
+        disabled = true; reason = l.estDimanche ? "❌ Perdue (dimanche)" : "❌ Perdue";
+      } else if(l.statut==="prise"){
+        const d = l.priseLe ? new Date(l.priseLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"}) : "";
+        disabled = true; reason = `✅ Prise${d?` le ${d}`:""}`;
+      } else if(l.statut==="payee" || l.statut==="payee_auto"){
+        disabled = true; reason = `💶 Payée ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==anneeVal?` ${l.anneePaye}`:""}`;
+      }
+      return {code:l.code, label:l.label, annee:anneeVal, disabled, reason};
+    };
+    const fromLignes = lignes.map(l=>buildOption(l, year));
+    const fromReport = fetesReportN1.map(l=>buildOption(l, yearMoins1));
     return [...fromLignes, ...fromReport];
   }, [lignes, fetesReportN1, year, yearMoins1]);
 
