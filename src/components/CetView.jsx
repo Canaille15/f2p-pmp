@@ -1081,19 +1081,36 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                   ✅ Épargnées {year} ({credites.length}){mentions.length > 0 ? ` — ${mentions.join(", ")}` : ""}
                 </div>
                 <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8, marginTop: -4 }}>Le solde ci-dessus reste cumulé sur toutes les années — seule cette liste change avec l'année sélectionnée en haut.</div>
+                {/* Regroupées par sous-compte (08/08, demandé par Olivier :
+                    "une separation aussi avec le compte courant et compte fin
+                    d'activite dans les epargnés et tu met a coté le nombre
+                    total par sous compte. et tu garde le global dans la
+                    ligne epargné") — le total global reste sur la ligne
+                    "✅ Épargnées" ci-dessus, chaque groupe affiche son propre
+                    total à côté de son titre. Un sous-compte sans mouvement
+                    n'affiche aucun groupe, pour rester lisible. */}
                 {credites.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
-                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    {credites.map(m => (
-                  <div key={m.id} style={{ border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <div>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
-                      <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>
-                        {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.icone} {SOUS_COMPTES.find(s => s.key === m.sousCompte)?.label} · Accordé le {fmtDate(m.dateAccord)}
-                      </div>
-                    </div>
-                    <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
-                  </div>
-                    ))}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {SOUS_COMPTES.map(sc => {
+                      const groupe = credites.filter(m => m.sousCompte === sc.key);
+                      if (groupe.length === 0) return null;
+                      return (
+                        <div key={sc.key}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: "#5b21b6", marginBottom: 6 }}>{sc.icone} {sc.label} ({groupe.length})</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                            {groupe.map(m => (
+                              <div key={m.id} style={{ border: "1px solid #dcfce7", background: "#f0fdf4", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <div>
+                                  <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{labelMouvement(m)} — {m.jours}j</span>
+                                  <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600 }}>Accordé le {fmtDate(m.dateAccord)}</div>
+                                </div>
+                                <button onClick={() => retirerMouvement(m.sousCompte, m.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 11, fontWeight: 700, textDecoration: "underline" }}>✕ Annuler</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>}
               </>);
             })()}
