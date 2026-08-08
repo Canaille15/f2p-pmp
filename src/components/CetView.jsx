@@ -79,6 +79,17 @@ export function getCetTransfereJours(agentProfiles, agentId, year, source) {
   return { total, parSousCompte };
 }
 
+// Places disponibles avant plafond sur un sous-compte, à partir du solde déjà
+// calculé par computeDashboardCet (08/08, demandé par Olivier : "le plafond
+// du compte courant peut depaser les 20 jours [...] il faut bloquer") — le
+// solde étant cumulatif (jamais remis à zéro), c'est la seule vraie mesure de
+// "combien reste-t-il de place", peu importe l'année consultée.
+export function joursDisponiblesSousCompte(data, sousCompteKey) {
+  const compte = data?.comptes?.find(c => c.key === sousCompteKey);
+  if (!compte) return Infinity;
+  return compte.plafond - compte.solde;
+}
+
 // Notice réglementaire — texte verbatim (fourni par Olivier le 06/08, issu
 // des formulaires officiels RH0930). Ne jamais reformuler le contenu, seule
 // la présentation (mise en page, regroupement) peut être adaptée.
@@ -282,6 +293,39 @@ export function ajouterEpargneDemande(setAgentProfiles, agentId, { source, sousC
   });
 }
 
+// Crée une demande d'épargne RCF liée à une fête PRÉCISE (jours:1, tagué
+// feteCode/feteAnnee) et marque simultanément fetesTracking[...].epargneCet
+// — logique partagée entre EpargneFetesCetWidget (panneau Fêtes) et le
+// sélecteur de fête du formulaire "+ Nouvelle épargne" du panneau CET
+// lui-même (08/08, demandé par Olivier : "depuis le CET, si je veux ajouté
+// il faut que je puisse choisir la fete [...] lorsque je valide une fete
+// epargné depuis le cet, le compteur du sous compte evolue. mais dans le
+// panneau des fetes il se passe rien" — la version précédente du formulaire
+// CET créait une épargne RCF générique, sans feteCode, donc sans jamais
+// toucher fetesTracking). Extrait pour ne pas dupliquer cette écriture à 2
+// endroits.
+export function ajouterEpargneFete(setAgentProfiles, agentId, { feteCode, feteAnnee, sousCompte, annee }) {
+  const today = new Date().toISOString().slice(0, 10);
+  setAgentProfiles(prev => {
+    const profil = prev[agentId] || {};
+    const ledger = profil.cetLedger || { courant: [], finActivite: [] };
+    const nextSc = [...(ledger[sousCompte] || []), {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${feteCode}`,
+      type: "epargne", source: "RCF", jours: 1, valeurMinutes: null,
+      sens: "credit", statut: "demande",
+      dateDemande: today, dateAccord: null, dateRefus: null, annee,
+      feteCode, feteAnnee,
+    }];
+    const fetesTracking = { ...(profil.fetesTracking || {}) };
+    const yearTracking = { ...(fetesTracking[feteAnnee] || {}) };
+    const codeTracking = { ...(yearTracking[feteCode] || {}) };
+    codeTracking.epargneCet = { sousCompte, date: today };
+    yearTracking[feteCode] = codeTracking;
+    fetesTracking[feteAnnee] = yearTracking;
+    return { ...prev, [agentId]: { ...profil, cetLedger: { ...ledger, [sousCompte]: nextSc }, fetesTracking } };
+  });
+}
+
 // Widget compact "🏦 Épargner au CET" (07/08, demandé par Olivier — "il faut
 // que l'on puisse mettre a jour chaque tableaux en precisant que ce jour a
 // ete epargne dans le cet") — posable dans n'importe quel panneau source
@@ -307,6 +351,16 @@ export function EpargneCetWidget({ agent, agentProfiles, setAgentProfiles, sourc
     if (j <= 0) { setErr("Indique un nombre de jours valide."); return; }
     const hh = parseInt(valH, 10) || 0, mm = parseInt(valM, 10) || 0;
     if (besoinValeur && hh === 0 && mm === 0) { setErr("Indique la valeur en heures/minutes à déduire."); return; }
+    // Plafond du sous-compte visé (08/08, demandé par Olivier — "il faut
+    // bloquer en donnant un message sur le motif et proposer d'epargner vers
+    // l'autre sous compte").
+    const disponible = joursDisponiblesSousCompte(data, sousCompte);
+    if (j > disponible) {
+      const sc = SOUS_COMPTES.find(s => s.key === sousCompte);
+      const autre = SOUS_COMPTES.find(s => s.key !== sousCompte);
+      setErr(`⚠️ ${sc.label} est à ${sc.plafond - disponible}j/${sc.plafond}j — cette demande (${j}j) dépasserait le plafond. Choisis "${autre.label}", ou réduis le nombre de jours.`);
+      return;
+    }
     ajouterEpargneDemande(setAgentProfiles, agent.id, { source, sousCompte, jours: j, valeurMinutes: besoinValeur ? (hh * 60 + mm) : null, annee: year });
     const projete = data.totalAccordeAnneeHorsAbondement + j;
     setInfo(projete > CAP_EPARGNE_AN
@@ -384,27 +438,18 @@ export function EpargneFetesCetWidget({ agent, agentProfiles, setAgentProfiles, 
     setErr(""); setInfo("");
     const choisies = (fetes || []).filter(f => !f.disabled && selection[cle(f)]);
     if (choisies.length === 0) { setErr("Sélectionne au moins une fête à épargner."); return; }
-    const today = new Date().toISOString().slice(0, 10);
-    setAgentProfiles(prev => {
-      const profil = prev[agent.id] || {};
-      const ledger = profil.cetLedger || { courant: [], finActivite: [] };
-      const nextSc = [...(ledger[sousCompte] || [])];
-      const fetesTracking = { ...(profil.fetesTracking || {}) };
-      choisies.forEach(f => {
-        nextSc.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${f.code}`,
-          type: "epargne", source: "RCF", jours: 1, valeurMinutes: null,
-          sens: "credit", statut: "demande",
-          dateDemande: today, dateAccord: null, dateRefus: null, annee: year,
-          feteCode: f.code, feteAnnee: f.annee,
-        });
-        const yearTracking = { ...(fetesTracking[f.annee] || {}) };
-        const codeTracking = { ...(yearTracking[f.code] || {}) };
-        codeTracking.epargneCet = { sousCompte, date: today };
-        yearTracking[f.code] = codeTracking;
-        fetesTracking[f.annee] = yearTracking;
-      });
-      return { ...prev, [agent.id]: { ...profil, cetLedger: { ...ledger, [sousCompte]: nextSc }, fetesTracking } };
+    // Plafond du sous-compte visé (08/08, demandé par Olivier) — vérifié
+    // avant tout ajout, jamais partiel (soit toute la sélection rentre, soit
+    // rien n'est ajouté, pour ne pas créer une sélection à moitié traitée).
+    const disponible = joursDisponiblesSousCompte(data, sousCompte);
+    if (choisies.length > disponible) {
+      const sc = SOUS_COMPTES.find(s => s.key === sousCompte);
+      const autre = SOUS_COMPTES.find(s => s.key !== sousCompte);
+      setErr(`⚠️ ${sc.label} est à ${sc.plafond - disponible}j/${sc.plafond}j — cette sélection (${choisies.length}j) dépasserait le plafond. Choisis "${autre.label}", ou réduis la sélection.`);
+      return;
+    }
+    choisies.forEach(f => {
+      ajouterEpargneFete(setAgentProfiles, agent.id, { feteCode: f.code, feteAnnee: f.annee, sousCompte, annee: year });
     });
     const projete = data.totalAccordeAnneeHorsAbondement + choisies.length;
     setInfo(projete > CAP_EPARGNE_AN
@@ -462,13 +507,38 @@ export function EpargneFetesCetWidget({ agent, agentProfiles, setAgentProfiles, 
   );
 }
 
-export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose }) {
+export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose, feteOptions }) {
   const agCp = agent?.immatriculation || agent?.cp || agent?.id;
   const data = useMemo(() => computeDashboardCet(agentProfiles, agent?.id, year), [agentProfiles, agent?.id, year]);
+
+  // Récapitulatif par catégorie et par sous-compte (08/08, demandé par
+  // Olivier : "tu met ensemble les jours demandés et epargné par categorie
+  // [...] et par compteur pour chaque année") — jours demandés (statut
+  // "demande") ET épargnés (statut "accorde") comptés ensemble, par source
+  // réglementaire (CA/RQ/RN/TC/TY/RCF...) et par sous-compte, pour l'année
+  // consultée. N'inclut que les crédits (sens "credit") liés à une vraie
+  // source — jamais l'abondement/ajustement (source:null) ni les sorties
+  // (monétisation/utilisation), qui ne sont pas des "catégories" d'épargne.
+  const recapCategories = useMemo(() => {
+    return SOURCES_EPARGNE.map(s => {
+      const parSousCompte = {};
+      let total = 0;
+      SOUS_COMPTES.forEach(sc => {
+        const jours = (data.ledger[sc.key] || [])
+          .filter(m => m?.source === s.code && m.annee === year && m.sens === "credit" && (m.statut === "demande" || m.statut === "accorde"))
+          .reduce((acc, m) => acc + (m.jours || 0), 0);
+        parSousCompte[sc.key] = jours;
+        total += jours;
+      });
+      return { ...s, parSousCompte, total };
+    }).filter(r => r.total > 0);
+  }, [data, year]);
+  const [recapOuvert, setRecapOuvert] = useState(true);
 
   const [source, setSource] = useState("RQ");
   const [sousCompte, setSousCompte] = useState("courant");
   const [jours, setJours] = useState("1");
+  const [feteChoisie, setFeteChoisie] = useState("");
   const [valH, setValH] = useState("0");
   const [valM, setValM] = useState("0");
   const [ajoutErr, setAjoutErr] = useState("");
@@ -487,11 +557,40 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
   const [ajustementsOuvert, setAjustementsOuvert] = useState(false);
 
   const besoinValeur = source === "RN" || source === "TC" || source === "TY";
+  const estRCF = source === "RCF";
+  // Fêtes réellement sélectionnables (ni perdues, ni prises/payées, ni déjà
+  // épargnées — voir computeFeteOptionsCet dans App.jsx).
+  const fetesSelectionnables = (feteOptions || []).filter(f => !f.disabled);
 
   // Nouvelle demande d'épargne (06/08) : n'écrit rien dans le compteur source
-  // tant que non accordée — même principe que Congés/VT.
+  // tant que non accordée — même principe que Congés/VT. Cas RCF (08/08,
+  // demandé par Olivier) : plus un simple nombre de jours en vrac — l'agent
+  // choisit PRÉCISÉMENT quelle fête, exactement comme le widget dédié du
+  // panneau Fêtes (EpargneFetesCetWidget) — sinon le compteur du sous-compte
+  // évoluait mais aucune fête n'était jamais marquée "épargnée" dans le
+  // panneau Fêtes lui-même.
   const ajouterDemande = () => {
     setAjoutErr(""); setAjoutInfo("");
+    // Plafond du sous-compte visé, commun aux deux branches (08/08).
+    const jPlafond = estRCF ? 1 : (parseInt(jours, 10) || 0);
+    const disponible = joursDisponiblesSousCompte(data, sousCompte);
+    if (jPlafond > disponible) {
+      const sc = SOUS_COMPTES.find(s => s.key === sousCompte);
+      const autre = SOUS_COMPTES.find(s => s.key !== sousCompte);
+      setAjoutErr(`⚠️ ${sc.label} est à ${sc.plafond - disponible}j/${sc.plafond}j — cette demande dépasserait le plafond. Choisis "${autre.label}", ou réduis le nombre de jours.`);
+      return;
+    }
+    if (estRCF) {
+      const f = fetesSelectionnables.find(x => `${x.annee}-${x.code}` === feteChoisie);
+      if (!f) { setAjoutErr("Choisis une fête à épargner."); return; }
+      ajouterEpargneFete(setAgentProfiles, agent.id, { feteCode: f.code, feteAnnee: f.annee, sousCompte, annee: year });
+      setFeteChoisie("");
+      const projete = data.totalAccordeAnneeHorsAbondement + 1;
+      setAjoutInfo(projete > CAP_EPARGNE_AN
+        ? `⚠️ Demande ajoutée — attention, en comptant cette demande le total épargné cette année (${projete}j) dépasserait le cap réglementaire de ${CAP_EPARGNE_AN}j/an.`
+        : "Demande ajoutée.");
+      return;
+    }
     const j = parseInt(jours, 10) || 0;
     if (j <= 0) { setAjoutErr("Indique un nombre de jours valide."); return; }
     const hh = parseInt(valH, 10) || 0, mm = parseInt(valM, 10) || 0;
@@ -817,6 +916,42 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
             Cap d'épargne : {CAP_EPARGNE_AN} jours par année civile (hors abondement), tous sous-comptes confondus — {data.totalAccordeAnneeHorsAbondement}j déjà épargnés cette année. Le premier jour épargné dans l'année est abondé à 100% par l'entreprise.
           </div>
 
+          {/* Récapitulatif par catégorie et par sous-compte (08/08) — jours
+              demandés ET épargnés comptés ensemble, par source, pour l'année
+              consultée. */}
+          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
+            <button onClick={() => setRecapOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 800, color: "#5b21b6", display: "flex", alignItems: "center", gap: 6 }}>
+              {recapOuvert ? "▴" : "▾"} 📊 Récapitulatif par catégorie {year}
+            </button>
+            {recapOuvert && (
+              recapCategories.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic", marginTop: 8 }}>Aucun jour demandé ni épargné pour {year}.</div> :
+                <div style={{ marginTop: 8, overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1.5px solid #e2e8f0" }}>
+                        <th style={{ textAlign: "left", padding: "4px 6px", color: "#64748b", fontWeight: 700 }}>Catégorie</th>
+                        {SOUS_COMPTES.map(sc => (
+                          <th key={sc.key} style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 700, whiteSpace: "nowrap" }}>{sc.icone} {sc.label}</th>
+                        ))}
+                        <th style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 700 }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recapCategories.map(r => (
+                        <tr key={r.code} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "5px 6px", fontWeight: 700, color: "#1e293b" }}>{r.code === "MEDAILLE" ? "🎖️ Médaille" : r.label}</td>
+                          {SOUS_COMPTES.map(sc => (
+                            <td key={sc.key} style={{ textAlign: "right", padding: "5px 6px", color: r.parSousCompte[sc.key] > 0 ? "#1e293b" : "#cbd5e1" }}>{r.parSousCompte[sc.key] || 0}j</td>
+                          ))}
+                          <td style={{ textAlign: "right", padding: "5px 6px", fontWeight: 800, color: "#5b21b6" }}>{r.total}j</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+            )}
+          </div>
+
           {/* + Nouvelle épargne (Phase 2, 06/08) */}
           <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>+ Nouvelle épargne</div>
@@ -840,20 +975,41 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                 }}>{sc.icone} {sc.label}</button>
               ))}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <input type="number" min="1" value={jours} onChange={e => setJours(e.target.value)}
-                style={{ width: 56, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>jour{parseInt(jours, 10) > 1 ? "s" : ""}</span>
-              {besoinValeur && (<>
-                <span style={{ fontSize: 10, color: "#94a3b8" }}>· déduire</span>
-                <input type="number" min="0" value={valH} onChange={e => setValH(e.target.value)}
-                  style={{ width: 48, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>h</span>
-                <input type="number" min="0" max="59" value={valM} onChange={e => setValM(e.target.value)}
-                  style={{ width: 48, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>min de {source}</span>
-              </>)}
-            </div>
+            {/* RCF (08/08, demandé par Olivier) : plus un simple nombre de
+                jours en vrac — sélection PRÉCISE de la fête épargnée, même
+                principe que EpargneFetesCetWidget (panneau Fêtes). Sans ça,
+                le solde du sous-compte évoluait mais aucune fête n'était
+                jamais marquée "épargnée" dans le panneau Fêtes lui-même. */}
+            {estRCF ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {fetesSelectionnables.length === 0 ? (
+                  <div style={{ fontSize: 10.5, color: "#94a3b8", fontStyle: "italic" }}>Aucune fête disponible à épargner pour l'instant (voir 🩷 Fêtes).</div>
+                ) : (
+                  <select value={feteChoisie} onChange={e => setFeteChoisie(e.target.value)}
+                    style={{ padding: "7px 9px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 13, fontWeight: 600 }}>
+                    <option value="">— Choisir une fête —</option>
+                    {fetesSelectionnables.map(f => (
+                      <option key={`${f.annee}-${f.code}`} value={`${f.annee}-${f.code}`}>{f.code} — {f.label}{f.annee !== year ? ` (${f.annee})` : ""}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <input type="number" min="1" value={jours} onChange={e => setJours(e.target.value)}
+                  style={{ width: 56, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>jour{parseInt(jours, 10) > 1 ? "s" : ""}</span>
+                {besoinValeur && (<>
+                  <span style={{ fontSize: 10, color: "#94a3b8" }}>· déduire</span>
+                  <input type="number" min="0" value={valH} onChange={e => setValH(e.target.value)}
+                    style={{ width: 48, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>h</span>
+                  <input type="number" min="0" max="59" value={valM} onChange={e => setValM(e.target.value)}
+                    style={{ width: 48, textAlign: "center", padding: "7px 4px", border: "1.5px solid #e9d5ff", borderRadius: 8, fontSize: 14, fontWeight: 700 }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>min de {source}</span>
+                </>)}
+              </div>
+            )}
             <button onClick={ajouterDemande} style={{ marginTop: 8, background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>+ Ajouter la demande</button>
             {ajoutErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginTop: 6 }}>{ajoutErr}</div>}
             {ajoutInfo && <div style={{ fontSize: 11, fontWeight: 600, color: "#166534", marginTop: 6 }}>{ajoutInfo}</div>}
@@ -952,9 +1108,28 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
               </div>}
           </div>
 
-          {/* Épargnées (crédit accordé) */}
+          {/* Épargnées (crédit accordé) — mention du nombre de jours
+              d'abondement (ou sur-abondement) inclus dans le total, quand il
+              y en a (08/08, demandé par Olivier), pour distinguer d'un coup
+              d'œil ce qui vient d'une vraie épargne de ce que l'entreprise a
+              ajouté automatiquement. */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✅ Épargnées {year} ({data.mouvementsAccordes.filter(m => m.sens === "credit").length})</div>
+            {(() => {
+              const credites = data.mouvementsAccordes.filter(m => m.sens === "credit");
+              const jAbondement = credites.filter(m => m.type === "abondement").reduce((s, m) => s + (m.jours || 0), 0);
+              // Le sur-abondement vit désormais dans "✏️ Ajustements manuels"
+              // (jamais filtré par année, voir plus bas) — recompté ici sur
+              // l'année consultée uniquement, pour la mention sur cette ligne.
+              const jSurAbondement = data.mouvementsAjustements.filter(m => m.type === "surAbondement" && m.annee === year).reduce((s, m) => s + (m.jours || 0), 0);
+              const mentions = [];
+              if (jAbondement > 0) mentions.push(`dont ${jAbondement}j d'abondement`);
+              if (jSurAbondement > 0) mentions.push(`${jSurAbondement}j de sur-abondement`);
+              return (
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>
+                  ✅ Épargnées {year} ({credites.length}){mentions.length > 0 ? ` — ${mentions.join(", ")}` : ""}
+                </div>
+              );
+            })()}
             <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8, marginTop: -4 }}>Le solde ci-dessus reste cumulé sur toutes les années — seule cette liste change avec l'année sélectionnée en haut.</div>
             {data.mouvementsAccordes.filter(m => m.sens === "credit").length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>

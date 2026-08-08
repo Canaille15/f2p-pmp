@@ -4943,6 +4943,14 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // Congés (Phase 4, 06/08) : même principe que RQ — jours-based, aucun
   // ledger à écrire, juste soustrait à l'affichage (carte + CongesDashboardModal).
   const cetTransfereCA = useMemo(()=>getCetTransfereJours(agentProfiles, agent?.id, year, "CA"), [agentProfiles, agent?.id, year]);
+  // Fêtes proposables au formulaire "+ Nouvelle épargne" du panneau CET
+  // lui-même (08/08, source RCF) — même liste/mêmes motifs que le widget
+  // dédié du panneau Fêtes (computeFeteOptionsCet, partagée pour ne pas
+  // dupliquer la logique disabled/reason à 2 endroits).
+  const cetFeteOptions = useMemo(
+    () => computeFeteOptionsCet(agent, schedule, agentProfiles, year),
+    [agent, schedule, agentProfiles, year]
+  );
   const CET_TRANSFERE_BY_KEY = {RQ:cetTransfereRQ, RN:cetTransfereRN, TY:cetTransfereTY, TC:cetTransfereTC};
 
   // Pause Figée (17/07) : données chargées ici (pas dans la modale) pour être
@@ -5147,7 +5155,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         <VtDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowVtDash(false)}/>
       )}
       {showCetDash&&(
-        <CetDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCetDash(false)}/>
+        <CetDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCetDash(false)} feteOptions={cetFeteOptions}/>
       )}
       {showPauseFigeeDash&&(
         <PauseFigeeDashboardModal agent={agent} schedule={schedule} pausesData={pausesData} loading={pausesLoading} loadError={pausesError} recharger={rechargerPauses} tcData={tcData} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowPauseFigeeDash(false)}/>
@@ -5491,6 +5499,33 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
   return { lignes, fetesReportN1, yearMoins1 };
 }
 
+// Liste des fêtes proposables à l'épargne CET (année en cours + report N-1),
+// chacune avec un motif de non-sélection calculé (perdue/prise/payée/déjà
+// épargnée) — extrait de FetesDashboardModal (08/08) pour être réutilisable
+// aussi depuis le formulaire générique du panneau CET lui-même (source RCF),
+// voir PersonalView plus bas. Logique inchangée, juste sortie en fonction
+// autonome pour éviter de la dupliquer à 2 endroits.
+function computeFeteOptionsCet(agent, schedule, agentProfiles, year){
+  const { lignes, fetesReportN1, yearMoins1 } = computeFetesLignes(agent, schedule, agentProfiles, year);
+  const buildOption = (l, anneeVal) => {
+    let disabled = false, reason = "";
+    if(l.override?.epargneCet){
+      disabled = true; reason = "🏦 Déjà épargnée au CET";
+    } else if(l.statut==="perdue"){
+      disabled = true; reason = l.estDimanche ? "❌ Perdue (dimanche)" : "❌ Perdue";
+    } else if(l.statut==="prise"){
+      const d = l.priseLe ? new Date(l.priseLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"}) : "";
+      disabled = true; reason = `✅ Prise${d?` le ${d}`:""}`;
+    } else if(l.statut==="payee" || l.statut==="payee_auto"){
+      disabled = true; reason = `💶 Payée ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==anneeVal?` ${l.anneePaye}`:""}`;
+    }
+    return {code:l.code, label:l.label, annee:anneeVal, disabled, reason};
+  };
+  const fromLignes = lignes.map(l=>buildOption(l, year));
+  const fromReport = fetesReportN1.map(l=>buildOption(l, yearMoins1));
+  return [...fromLignes, ...fromReport];
+}
+
 // ─── MODALE FÊTES LÉGALES ─────────────────────────────────────────────────────
 // Remplace l'ancien panneau toujours visible sous les compteurs (12/07,
 // demandé par Olivier) : la carte "Fêtes" du panneau compteurs ouvre
@@ -5511,25 +5546,10 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
   // absentes, pour qu'Olivier comprenne pourquoi il ne peut pas les cocher
   // (signalé : la F3 "Prise" restait sélectionnable, seule "perdue" était
   // exclue). Voir EpargneFetesCetWidget dans CetView.jsx.
-  const feteOptions = useMemo(() => {
-    const buildOption = (l, anneeVal) => {
-      let disabled = false, reason = "";
-      if(l.override?.epargneCet){
-        disabled = true; reason = "🏦 Déjà épargnée au CET";
-      } else if(l.statut==="perdue"){
-        disabled = true; reason = l.estDimanche ? "❌ Perdue (dimanche)" : "❌ Perdue";
-      } else if(l.statut==="prise"){
-        const d = l.priseLe ? new Date(l.priseLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"}) : "";
-        disabled = true; reason = `✅ Prise${d?` le ${d}`:""}`;
-      } else if(l.statut==="payee" || l.statut==="payee_auto"){
-        disabled = true; reason = `💶 Payée ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==anneeVal?` ${l.anneePaye}`:""}`;
-      }
-      return {code:l.code, label:l.label, annee:anneeVal, disabled, reason};
-    };
-    const fromLignes = lignes.map(l=>buildOption(l, year));
-    const fromReport = fetesReportN1.map(l=>buildOption(l, yearMoins1));
-    return [...fromLignes, ...fromReport];
-  }, [lignes, fetesReportN1, year, yearMoins1]);
+  const feteOptions = useMemo(
+    () => computeFeteOptionsCet(agent, schedule, agentProfiles, year),
+    [agent, schedule, agentProfiles, year]
+  );
 
   const setFetesDataYear = (targetYear, updater) => {
     setAgentProfiles(prev=>{
