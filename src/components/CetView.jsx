@@ -148,9 +148,17 @@ export function computeDashboardCet(agentProfiles, agentId, year) {
     return { ...sc, solde, mouvements, enAttente, accordes, refusees };
   });
   const soldeTotal = comptes.reduce((s, c) => s + c.solde, 0);
-  const demandesEnAttente = comptes.flatMap(c => c.enAttente.map(m => ({ ...m, sousCompte: c.key })));
-  const mouvementsAccordes = comptes.flatMap(c => c.accordes.map(m => ({ ...m, sousCompte: c.key })));
-  const mouvementsRefuses = comptes.flatMap(c => c.refusees.map(m => ({ ...m, sousCompte: c.key })));
+  // Listes affichées filtrées sur l'année consultée (08/08, demandé par
+  // Olivier : "on les garde sans cesse [...] dans 10 ans ça va rester [...]
+  // ça gêne la lecture du panneau") — même convention que tous les autres
+  // compteurs de l'appli (RQ/RN/TY/Congés/Fêtes...), qui scopent déjà leur
+  // détail par année via le YearSwitcher, seul CET l'ignorait jusqu'ici. Le
+  // solde total ci-dessus reste calculé sur `comptes[].accordes`, JAMAIS
+  // filtré — c'est un compte épargne temps, cumulatif par nature, changer
+  // d'année ne doit jamais faire bouger le solde, seulement la liste.
+  const demandesEnAttente = comptes.flatMap(c => c.enAttente.filter(m => m.annee === year).map(m => ({ ...m, sousCompte: c.key })));
+  const mouvementsAccordes = comptes.flatMap(c => c.accordes.filter(m => m.annee === year).map(m => ({ ...m, sousCompte: c.key })));
+  const mouvementsRefuses = comptes.flatMap(c => c.refusees.filter(m => m.annee === year).map(m => ({ ...m, sousCompte: c.key })));
   return { comptes, soldeTotal, ledger, demandesEnAttente, mouvementsAccordes, mouvementsRefuses, totalAccordeAnneeHorsAbondement };
 }
 
@@ -901,9 +909,11 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
 
           {/* Demandées — regroupe épargne/monétisation/utilisation, toutes
               statut "demande" (voir computeDashboardCet, générique par
-              statut). */}
+              statut). Filtré sur l'année consultée depuis le 08/08 (voir note
+              plus bas) — change d'année en haut pour retrouver une demande
+              faite une autre année. */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>⏳ Demandées ({data.demandesEnAttente.length})</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>⏳ Demandées {year} ({data.demandesEnAttente.length})</div>
             {accordErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginBottom: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px" }}>{accordErr}</div>}
             {data.demandesEnAttente.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune demande en attente.</div> :
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -930,7 +940,8 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
 
           {/* Épargnées (crédit accordé) */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✅ Épargnées ({data.mouvementsAccordes.filter(m => m.sens === "credit").length})</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>✅ Épargnées {year} ({data.mouvementsAccordes.filter(m => m.sens === "credit").length})</div>
+            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8, marginTop: -4 }}>Le solde ci-dessus reste cumulé sur toutes les années — seule cette liste change avec l'année sélectionnée en haut.</div>
             {data.mouvementsAccordes.filter(m => m.sens === "credit").length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {data.mouvementsAccordes.filter(m => m.sens === "credit").map(m => (
@@ -949,7 +960,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
 
           {/* Sorties (débit accordé : monétisation + utilisation) */}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>📤 Sorties — monétisées / utilisées ({data.mouvementsAccordes.filter(m => m.sens === "debit").length})</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>📤 Sorties {year} — monétisées / utilisées ({data.mouvementsAccordes.filter(m => m.sens === "debit").length})</div>
             {data.mouvementsAccordes.filter(m => m.sens === "debit").length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {data.mouvementsAccordes.filter(m => m.sens === "debit").map(m => (
@@ -971,7 +982,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
           {/* Refusées */}
           {data.mouvementsRefuses.length > 0 && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>❌ Refusées ({data.mouvementsRefuses.length})</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>❌ Refusées {year} ({data.mouvementsRefuses.length})</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {data.mouvementsRefuses.map(m => (
                   <div key={m.id} style={{ border: "1px solid #fecaca", background: "#fef2f2", borderRadius: 9, padding: "9px 11px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
