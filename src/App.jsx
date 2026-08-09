@@ -4291,7 +4291,12 @@ La prolongation de l'arrêt de travail par un autre professionnel de santé est 
 // module VT (VtDashboardModal) — voir NoticeSection ci-dessus, qui sait
 // rendre soit du texte (`texte`), soit un tableau (`table`), selon ce qui
 // est fourni par la section.
-const NOTICE_VT_TABLE_HEADERS = ["Taux","Journées de travail","Repos périodiques et repos supplémentaires","Congés","Journées chômées supplémentaires (VT)"];
+// Colonnes courtes pour tenir sur un écran étroit sans scroll horizontal
+// (Olivier, 09/08 : "reduire la largeurs des colonne pour ne pas avoir a
+// depalacer le tableaux de gauche a droite") — libellé complet gardé en
+// infobulle (title) sur l'en-tête pour ne rien perdre de l'information.
+const NOTICE_VT_TABLE_HEADERS = ["Taux","Travail","Repos","Congés","VT"];
+const NOTICE_VT_TABLE_HEADERS_FULL = ["Taux","Journées de travail","Repos périodiques et repos supplémentaires","Congés","Journées chômées supplémentaires (VT)"];
 const NOTICE_VT = [
   {
     titre: "Annexe 1A : Accord Collectif sur le travail à temps partiel - RH00662",
@@ -4299,7 +4304,7 @@ const NOTICE_VT = [
   },
   {
     titre: "Sédentaires 132 repos",
-    table: { headers: NOTICE_VT_TABLE_HEADERS, rows: [
+    table: { headers: NOTICE_VT_TABLE_HEADERS, headersFull: NOTICE_VT_TABLE_HEADERS_FULL, rows: [
       ["Temps complet","195","132","28",""],
       ["91,40%","178","132","26","19"],
       ["89,17%","174","132","25","24"],
@@ -4317,7 +4322,7 @@ const NOTICE_VT = [
   },
   {
     titre: "Réserve 125 repos",
-    table: { headers: NOTICE_VT_TABLE_HEADERS, rows: [
+    table: { headers: NOTICE_VT_TABLE_HEADERS, headersFull: NOTICE_VT_TABLE_HEADERS_FULL, rows: [
       ["Temps complet","202","125","28",""],
       ["91,40%","184","125","26","20"],
       ["89,13%","180","125","25","25"],
@@ -4335,7 +4340,7 @@ const NOTICE_VT = [
   },
   {
     titre: "Sédentaires 122 repos",
-    table: { headers: NOTICE_VT_TABLE_HEADERS, rows: [
+    table: { headers: NOTICE_VT_TABLE_HEADERS, headersFull: NOTICE_VT_TABLE_HEADERS_FULL, rows: [
       ["Temps complet","205","122","28",""],
       ["91,40%","187","122","26","20"],
       ["89,27%","183","122","25","25"],
@@ -4484,12 +4489,21 @@ function NoticeSection({ sections, accentDark, bgLight, borderLight }){
               <div style={{fontSize:12,fontWeight:800,color:accentDark,marginBottom:5}}>{section.titre}</div>
               {section.texte && <div style={{fontSize:11.5,color:"#334155",whiteSpace:"pre-line",lineHeight:1.5}}>{section.texte}</div>}
               {section.table && (
+                // Colonnes serrées + libellés courts (09/08, demandé par Olivier :
+                // "reduire la largeurs des colonne pour ne pas avoir a depalacer le
+                // tableaux de gauche a droite") — tableLayout:"fixed" force les 5
+                // colonnes à se partager toute la largeur disponible (jamais de
+                // scroll), whiteSpace:"normal" laisse "Temps complet" et les
+                // en-têtes complets (en infobulle) passer à la ligne plutôt que
+                // pousser le tableau plus large que l'écran. overflowX:"auto"
+                // gardé en filet de sécurité pur (jamais déclenché en pratique).
                 <div style={{overflowX:"auto",marginTop:section.texte?8:0}}>
-                  <table style={{borderCollapse:"collapse",width:"100%",minWidth:420,fontSize:11}}>
+                  <table style={{borderCollapse:"collapse",width:"100%",tableLayout:"fixed",fontSize:9.5}}>
                     <thead>
                       <tr>
                         {section.table.headers.map((h,i)=>(
-                          <th key={i} style={{border:`1px solid ${borderLight}`,padding:"5px 7px",background:"#fff",color:accentDark,fontWeight:800,textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
+                          <th key={i} title={section.table.headersFull?.[i]||h}
+                            style={{border:`1px solid ${borderLight}`,padding:"3px 2px",background:"#fff",color:accentDark,fontWeight:800,textAlign:"center",whiteSpace:"normal",wordBreak:"break-word",lineHeight:1.15}}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -4497,7 +4511,7 @@ function NoticeSection({ sections, accentDark, bgLight, borderLight }){
                       {section.table.rows.map((row,ri)=>(
                         <tr key={ri} style={row[0]==="Temps complet"?{fontWeight:800,background:"#fff"}:undefined}>
                           {row.map((cell,ci)=>(
-                            <td key={ci} style={{border:`1px solid ${borderLight}`,padding:"5px 7px",color:"#334155",whiteSpace:"nowrap"}}>{cell}</td>
+                            <td key={ci} style={{border:`1px solid ${borderLight}`,padding:"3px 2px",color:"#334155",whiteSpace:"normal",wordBreak:"break-word",textAlign:"center"}}>{cell}</td>
                           ))}
                         </tr>
                       ))}
