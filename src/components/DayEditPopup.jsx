@@ -169,6 +169,12 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const [showGreve, setShowGreve] = useState(false);
   const toggleGreve = (code) => { setGreve(prev => prev === code ? null : code); setShowGreve(false); };
 
+  // Formation AFO / auto-declaree (09/08) : meme principe que greve —
+  // independant de type1/typeN, coexiste avec n'importe quelle journee.
+  // Ecrite automatiquement par le module Formation (jamais depuis ce popup),
+  // seul le retrait (decliner une session) se fait ici.
+  const [formation, setFormation] = useState(entry?.formation || null);
+
   // Congés Demandé/Refusé (06/08) : contrairement à "Accordé" (type1="CA",
   // écrit directement dans la case comme avant), Demandé/Refusé n'écrivent
   // JAMAIS dans le planning perso — c'est un suivi indépendant qui alimente
@@ -262,6 +268,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
       finNuit:    finNuit,
       notePerso:  notePerso || null,   // indépendant, disponible sur tout type de jour, sauvegardé tel quel
       greve:      greve || null,       // indépendant, se combine avec n'importe quelle journée (comme finNuit)
+      formation:  formation || null,   // indépendant, retiré ici uniquement (jamais ajouté depuis ce popup)
     };
     onSave(newEntry);
     if (congeStatut !== congeStatutInitial && onCongeStatutChange) {
@@ -346,6 +353,15 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   ✊ {GREVE.find(g=>g.code===greve)?.label||greve}
                 </span>
               )}
+              {formation && (
+                <span style={{
+                  background:"#b45309", color:"#fff",
+                  fontSize:10, fontWeight:700,
+                  padding:"2px 7px", borderRadius:5,
+                }}>
+                  🎓 {formation}
+                </span>
+              )}
               {congeStatut && (
                 <span style={{
                   background: congeStatut==="demande" ? "#92400e" : "#991b1b",
@@ -364,7 +380,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   {vtStatut==="demande" ? "⏳ VT demandé" : "✕ VT refusé"}
                 </span>
               )}
-              {!finNuit && !type1 && !typeN && !notePerso && !greve && !congeStatut && !vtStatut && (
+              {!finNuit && !type1 && !typeN && !notePerso && !greve && !formation && !congeStatut && !vtStatut && (
                 <span style={{color:"#475569",fontSize:10}}>case vide</span>
               )}
             </div>
@@ -542,6 +558,25 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     <span style={{fontSize:9,opacity:.8}}>{g.label}</span>
                   </button>
                 ))}
+              </div>
+            )}
+            {/* Formation (09/08) : jamais ajoutee depuis ce popup (ecrite par
+                le module Formation au lancement d'une session AFO, ou par une
+                auto-declaration) — seul le retrait est possible ici, qui
+                decline la participation. Aucun bouton "ajouter" volontaire :
+                le formulaire de declaration vit dans "Mes formations". */}
+            {formation && (
+              <div style={{marginTop:10, padding:"8px 10px", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8}}>
+                <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:8}}>
+                  <span style={{fontSize:12, fontWeight:700, color:"#78350f"}}>🎓 {formation}</span>
+                  <button onClick={() => setFormation(null)} style={{
+                    background:"#fff", border:"1px solid #fde68a", borderRadius:6,
+                    padding:"3px 8px", cursor:"pointer", fontSize:11, fontWeight:700, color:"#92400e",
+                  }}>✕ Retirer</button>
+                </div>
+                <div style={{fontSize:10, color:"#92400e", marginTop:5}}>
+                  Tu valides ta présence à cette formation en libérant le reste de cette journée (efface ta journée habituelle ci-dessus). Si tu ne peux pas y participer, clique "Retirer" — l'organisateur en sera informé.
+                </div>
               </div>
             )}
             {showConges && (

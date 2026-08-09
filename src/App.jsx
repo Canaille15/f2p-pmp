@@ -1251,7 +1251,7 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
   // Formation — pave unique : badge generique FOR + tous les postes-formation (K-PAR, K-PRCI, F-PRCI...)
   const enFormation=agents.filter(a=>{
     const en=schedule[`${a.id}-${dateKey}`];
-    return en&&(en.equipe==="FOR"||jsCodesFormationPostes.has(en.jsCode));
+    return en&&(en.equipe==="FOR"||jsCodesFormationPostes.has(en.jsCode)||(en.formation&&!en.equipe));
   });
   if(enFormation.length>0){
     diversRows.push({poste:{jsCode:"FOR",label:"Formation",subtitle:""},jsCode:"FOR",agents:enFormation,famille:null,isFormation:true,maxSlots:99});
@@ -2473,6 +2473,13 @@ function computeDashboardTravail(agent, schedule, year){
     } else {
       traiter(val?.equipe, val?.jsCode, dk);
       traiter(val?.equipe2, val?.jsCode2, dk);
+    }
+    // Formation (09/08) : periode independante (val.formation) — meme regle
+    // que dans DashboardCompteurs.computed : compte comme Formation
+    // uniquement une fois la journee principale liberee (equipe vide),
+    // jamais en plus d'une journee deja comptee via equipe/equipe2.
+    if(val?.formation && !val?.equipe){
+      traiter("FOR", null, dk);
     }
   });
 
@@ -5113,6 +5120,16 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         tally(val?.equipe);
         tally(val?.equipe2);
       }
+      // Formation (09/08) : periode independante (val.formation), separee de
+      // equipe/equipe2 — ne compte comme jour travaille + n'alimente le
+      // compteur Formation QUE si l'agent a libere sa journee principale
+      // (equipe vide), signe qu'il a valide sa participation. Tant que le
+      // badge "Formation" coexiste avec une journee non tranchee, ce jour
+      // continue de compter normalement sous son code d'origine (equipe),
+      // jamais compte deux fois.
+      if(val?.formation && !val?.equipe){
+        tally("FOR");
+      }
     });
     return c;
   },[agent,schedule,year]);
@@ -7501,6 +7518,21 @@ justifyContent: "flex-start",
                 <span style={{display:"inline-flex",alignItems:"center",gap:4}}>✊ {en.greve}</span>
                 {greveNumeros[en.greve]?.[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{greveNumeros[en.greve][dk]}</span>}
               </div>}
+              {/* Formation (09/08) : meme principe que greve — periode
+                  independante, toujours ajoutee EN PLUS du contenu existant
+                  du jour (jamais bloquee par un jour deja occupe). L'agent
+                  valide sa participation en liberant le reste de la journee,
+                  ou retire ce badge (popup) pour decliner. */}
+              {isOwnProfile&&en?.formation&&<div style={{
+                background:getColor("FOR"), color:getTc("FOR"),
+                borderRadius:5, padding:"2px 6px",
+                fontSize:10, fontWeight:700,
+                display:"flex", flexDirection:"column",
+                alignSelf:"flex-start",
+              }}>
+                <span style={{display:"inline-flex",alignItems:"center",gap:4}}>🎓 Formation</span>
+                <span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>{en.formation}</span>
+              </div>}
               {/* Congé demandé (06/08) : seul statut Demandé/Refusé/Accordé qui
                   peut s'afficher A CÔTÉ d'une case déjà remplie (contrairement
                   à Accordé, qui écrit directement CA et occupe toute la case,
@@ -7665,12 +7697,13 @@ justifyContent: "flex-start",
           finNuit:  newEntry.finNuit !== undefined ? newEntry.finNuit : (prevEntry.finNuit||false),
           notePerso: newEntry.notePerso !== undefined ? (newEntry.notePerso||null) : (prevEntry.notePerso||null),
           greve:    newEntry.greve !== undefined ? (newEntry.greve||null) : (prevEntry.greve||null),
+          formation: newEntry.formation !== undefined ? (newEntry.formation||null) : (prevEntry.formation||null),
           impressionAt: null,
         };
         // Sauvegarder localement
         setDayPopup(null);
-        // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit, pas de note, pas de greve) : supprimer la case
-        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit || fullEntry.notePerso || fullEntry.greve);
+        // Si tout vide (pas d'equipe, pas de nuit, pas de finNuit, pas de note, pas de greve, pas de formation) : supprimer la case
+        const hasContent = !!(fullEntry.equipe || fullEntry.equipe2 || fullEntry.finNuit || fullEntry.notePerso || fullEntry.greve || fullEntry.formation);
         if(!hasContent) {
           setSchedule(prev=>{const n={...prev};delete n[agCp+'-'+dk];return n;});
           try { await api.planning.deleteEntry(agCp, dk); } catch(e){}
@@ -7702,7 +7735,7 @@ justifyContent: "flex-start",
           // atteint le serveur, decouverts seulement en comparant avec l'ordi.
           setSchedule(prev=>{
             const n={...prev};
-            const hadPrev = prevEntry && (prevEntry.equipe||prevEntry.equipe2||prevEntry.finNuit||prevEntry.notePerso||prevEntry.greve);
+            const hadPrev = prevEntry && (prevEntry.equipe||prevEntry.equipe2||prevEntry.finNuit||prevEntry.notePerso||prevEntry.greve||prevEntry.formation);
             if(hadPrev) n[agCp+'-'+dk]=prevEntry; else delete n[agCp+'-'+dk];
             return n;
           });
@@ -7745,7 +7778,7 @@ justifyContent: "flex-start",
           // Meme principe que onSave : annuler l'effacement optimiste plutot
           // que de laisser une case vide/modifiee alors que rien n'a ete
           // confirme cote serveur.
-          const hadPrev = entry && (entry.equipe||entry.equipe2||entry.finNuit||entry.notePerso||entry.greve);
+          const hadPrev = entry && (entry.equipe||entry.equipe2||entry.finNuit||entry.notePerso||entry.greve||entry.formation);
           setSchedule(prev=>{
             const n={...prev};
             if(hadPrev) n[agCp+'-'+dk]=entry; else delete n[agCp+'-'+dk];

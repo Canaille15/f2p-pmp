@@ -260,7 +260,12 @@ export const planning = {
       // p1/p2 ci-dessous pour ne jamais etre confondue avec l'equipe du jour
       // ou la nuit (sinon un jour "greve seule" ferait passer equipe='DA').
       const pGreve = periodes.find(p => p.note === 'greve');
-      const periodesJour = periodes.filter(p => p.note !== 'greve');
+      // Formation (09/08) : meme principe que greve — periode independante
+      // (note='formation'), toujours ajoutee EN PLUS du contenu existant du
+      // jour (jamais bloquee par un jour deja occupe), portant l'intitule
+      // dans code_poste (comme un vrai poste montre son libelle en sous-titre).
+      const pFormation = periodes.find(p => p.note === 'formation');
+      const periodesJour = periodes.filter(p => p.note !== 'greve' && p.note !== 'formation');
       const p1 = periodesJour.find(p => p.note !== 'debut_nuit') || periodesJour[0] || {code_equipe:null, note:'note_seule', prive:true};
       const p2 = periodesJour.find(p => p.note === 'debut_nuit');
       const horaires = p1.heure_debut ? (p1.heure_debut.slice(0,5).replace(':','h')+'–'+(p1.heure_fin||'').slice(0,5).replace(':','h')) : null;
@@ -285,6 +290,7 @@ export const planning = {
         finNuit:  isFinNuit,
         notePerso: p1.note_perso || null,
         greve:    pGreve ? pGreve.code_equipe : null,
+        formation: pFormation ? (pFormation.code_poste || 'Formation') : null,
         impressionAt: null,
       };
     });
@@ -374,6 +380,21 @@ result[`${row.agent_id || agentId}-${date}`] = {
         heure_fin: null,
         prive: true,
         note: 'greve',
+      });
+    }
+    // Formation (09/08) : periode independante supplementaire, comme greve —
+    // toujours re-ecrite si toujours presente dans l'etat local (DayEditPopup),
+    // sinon disparait au prochain save (c'est ainsi que l'agent "retire" une
+    // formation pour decliner sa participation a une session AFO).
+    if (entry.formation) {
+      periodes.push({
+        ordre: periodes.length + 1,
+        code_equipe: 'FOR',
+        code_poste: entry.formation.slice(0, 100),
+        heure_debut: null,
+        heure_fin: null,
+        prive: false,
+        note: 'formation',
       });
     }
     return apiFetch(`/planning/${agentId}/${date}`, {

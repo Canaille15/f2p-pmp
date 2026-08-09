@@ -81,7 +81,7 @@ export default function FormationView({ currentAgent, currentUser, agents, agent
       {tab === "mes" && (
         <MesFormationsTab agentId={agentId} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
       )}
-      {tab === "gestion" && isAfo && <GestionTab agents={agents} refreshProfil={refreshProfil} />}
+      {tab === "gestion" && isAfo && <GestionTab agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} />}
       {tab === "stats" && isAfo && <StatsTab />}
     </div>
   );
@@ -253,7 +253,7 @@ function DeclarerFormationForm({ onCancel, onSaved }) {
 
 // ─── GESTION (AFO) ──────────────────────────────────────────────────────────
 
-function GestionTab({ agents, refreshProfil }) {
+function GestionTab({ agents, refreshProfil, refreshSchedule }) {
   const [sub, setSub] = useState("catalogue");
   const [catalogue, setCatalogue] = useState([]);
   const [loadingCat, setLoadingCat] = useState(true);
@@ -275,7 +275,7 @@ function GestionTab({ agents, refreshProfil }) {
         ))}
       </div>
       {sub === "catalogue" && <CatalogueSection catalogue={catalogue} loading={loadingCat} onChange={chargerCatalogue} />}
-      {sub === "sessions" && <SessionsSection catalogue={catalogue} agents={agents} refreshProfil={refreshProfil} />}
+      {sub === "sessions" && <SessionsSection catalogue={catalogue} agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} />}
     </div>
   );
 }
@@ -376,7 +376,7 @@ function CatalogueForm({ initial, onCancel, onSaved }) {
   );
 }
 
-function SessionsSection({ catalogue, agents, refreshProfil }) {
+function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -416,7 +416,7 @@ function SessionsSection({ catalogue, agents, refreshProfil }) {
         </div>
       )}
 
-      {openId && <SessionDetailModal sessionId={openId} agents={agents} onClose={() => setOpenId(null)} onChanged={charger} refreshProfil={refreshProfil} />}
+      {openId && <SessionDetailModal sessionId={openId} agents={agents} onClose={() => setOpenId(null)} onChanged={charger} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} />}
     </div>
   );
 }
@@ -501,7 +501,7 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
   );
 }
 
-function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProfil }) {
+function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProfil, refreshSchedule }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -518,19 +518,16 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
   async function lancer() {
     setErr("");
     try {
-      const res = await api.formation.lancerSession(sessionId, msg);
-      if (res.bloques?.length) {
-        setErr(`⚠️ ${res.bloques.length} agent(s) non ajouté(s) automatiquement (jour déjà occupé) : ${res.bloques.map(b => `${b.prenom} ${b.nom} (${b.code_existant})`).join(", ")} — à coordonner directement avec eux.`);
-      }
-      charger(); onChanged(); refreshProfil?.();
+      await api.formation.lancerSession(sessionId, msg);
+      charger(); onChanged(); refreshProfil?.(); refreshSchedule?.();
     } catch (e) { setErr(e.message || "Erreur"); }
   }
   async function retirerParticipant(cp) {
-    try { await api.formation.removeParticipant(sessionId, cp); charger(); onChanged(); refreshProfil?.(); } catch (e) { setErr(e.message || "Erreur"); }
+    try { await api.formation.removeParticipant(sessionId, cp); charger(); onChanged(); refreshProfil?.(); refreshSchedule?.(); } catch (e) { setErr(e.message || "Erreur"); }
   }
   async function ajouterParticipant() {
     if (!addParticipantCp) return;
-    try { await api.formation.addParticipant(sessionId, addParticipantCp); setAddParticipantCp(""); charger(); onChanged(); refreshProfil?.(); } catch (e) { setErr(e.message || "Erreur"); }
+    try { await api.formation.addParticipant(sessionId, addParticipantCp); setAddParticipantCp(""); charger(); onChanged(); refreshProfil?.(); refreshSchedule?.(); } catch (e) { setErr(e.message || "Erreur"); }
   }
   async function retirerFormateur(cp) {
     try { await api.formation.removeFormateur(sessionId, cp); charger(); } catch (e) { setErr(e.message || "Erreur"); }
@@ -541,7 +538,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
   }
   async function supprimer() {
     if (!window.confirm("Supprimer définitivement cette session ? Cette action est irréversible.")) return;
-    try { await api.formation.deleteSession(sessionId); onChanged(); refreshProfil?.(); onClose(); } catch (e) { setErr(e.message || "Erreur"); }
+    try { await api.formation.deleteSession(sessionId); onChanged(); refreshProfil?.(); refreshSchedule?.(); onClose(); } catch (e) { setErr(e.message || "Erreur"); }
   }
 
   const afos = agents.filter(a => a.is_afo && !data?.formateurs.some(f => f.cp === a.id));
@@ -595,7 +592,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                   <div key={p.cp_agent} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "4px 8px", borderRadius: 6, background: data.session.statut === "lancee" && !p.toujours_present ? "#fef2f2" : "#f8fafc" }}>
                     <span style={{ textDecoration: data.session.statut === "lancee" && !p.toujours_present ? "line-through" : "none", color: data.session.statut === "lancee" && !p.toujours_present ? "#b91c1c" : "#1e293b" }}>
                       {p.prenom} {p.nom}
-                      {data.session.statut === "lancee" && !p.toujours_present && <span style={{ marginLeft: 6, fontWeight: 700 }}>⚠️ planning modifié — à vérifier autrement</span>}
+                      {data.session.statut === "lancee" && !p.toujours_present && <span style={{ marginLeft: 6, fontWeight: 700 }}>⚠️ a retiré la formation de son planning</span>}
                     </span>
                     <button onClick={() => retirerParticipant(p.cp_agent)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>✕</button>
                   </div>
@@ -615,7 +612,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                   <div style={labelStyle}>Message de lancement (optionnel)</div>
                   <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", marginBottom: 10 }} placeholder="Visible par les participants lors du lancement" />
                   <button onClick={lancer} style={{ ...btnPrimary(NAVY), width: "100%" }}>🚀 Lancer la session</button>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>Écrit "FOR" dans le planning perso de chaque participant (sauf jour déjà occupé) et les prévient.</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>Ajoute "🎓 Formation" en plus du contenu déjà présent dans le planning de chaque participant (rien n'est jamais écrasé) et les prévient. Chaque agent valide sa venue en libérant sa journée depuis son planning perso.</div>
                 </>
               )}
             </>

@@ -2,26 +2,20 @@ const pool = require('../config/db');
 
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers d'écriture/lecture du planning perso (partagés par lancerSession,
-// addParticipant et l'auto-déclaration) — jamais d'écrasement : un jour
-// n'est touché que s'il est réellement vide (aucune ligne planning_periode).
+// addParticipant et l'auto-déclaration).
+//
+// 10/08 (retour d'Olivier après un premier essai bloquant) : la formation
+// n'écrase JAMAIS plus rien, mais ne bloque plus non plus si le jour est
+// déjà occupé — elle est toujours ajoutée comme une période INDÉPENDANTE
+// supplémentaire (même principe que "Grève" DA/DB/DC, note='formation',
+// jamais dans la période principale equipe/equipe2 — voir client.js
+// getSchedule/saveEntry). L'agent voit alors DEUX éléments dans sa case :
+// sa journée existante ET le badge "🎓 Formation". Il valide sa présence en
+// libérant sa journée (efface l'autre contenu), ou décline en retirant le
+// badge Formation depuis DayEditPopup — jamais de conflit "bloqué" côté AFO.
 // ─────────────────────────────────────────────────────────────────────────
 
-async function joursOccupe(conn, cp_agent, date_jour) {
-  const [rows] = await conn.query(
-    `SELECT pp.code_equipe
-     FROM planning_jour pj
-     LEFT JOIN planning_periode pp ON pp.planning_jour_id = pj.id
-     WHERE pj.cp_agent = ? AND pj.date_jour = ?`,
-    [cp_agent, date_jour]
-  );
-  if (!rows.length) return null; // aucune ligne planning_jour -> vide
-  const codes = rows.map(r => r.code_equipe).filter(Boolean);
-  return codes.length ? codes : null; // ligne planning_jour existante mais sans periode -> vide
-}
-
-async function essayerEcrireFor(conn, cp_agent, date_jour, note) {
-  const occupe = await joursOccupe(conn, cp_agent, date_jour);
-  if (occupe) return { ok: false, code_existant: occupe.join('+') };
+async function ecrireFor(conn, cp_agent, date_jour, intitule) {
   await conn.query(
     `INSERT INTO planning_jour (cp_agent, date_jour, source) VALUES (?,?,'manuel')
      ON DUPLICATE KEY UPDATE modifie_le = NOW()`,
@@ -30,31 +24,35 @@ async function essayerEcrireFor(conn, cp_agent, date_jour, note) {
   const [[jour]] = await conn.query(
     'SELECT id FROM planning_jour WHERE cp_agent=? AND date_jour=?', [cp_agent, date_jour]
   );
-  await conn.query(
-    `INSERT INTO planning_periode (planning_jour_id, ordre, code_equipe, prive, note)
-     VALUES (?, 1, 'FOR', 0, ?)`,
-    [jour.id, note || null]
+  // Ne pas dupliquer si une periode formation existe deja pour ce jour
+  // (ex: addParticipant appele deux fois, ou deja inscrit).
+  const [existant] = await conn.query(
+    `SELECT id FROM planning_periode WHERE planning_jour_id=? AND note='formation'`, [jour.id]
   );
-  return { ok: true };
+  if (existant.length) return { ok: true, deja: true };
+  const [[{ maxOrdre }]] = await conn.query(
+    `SELECT COALESCE(MAX(ordre), 0) AS maxOrdre FROM planning_periode WHERE planning_jour_id=?`, [jour.id]
+  );
+  await conn.query(
+    `INSERT INTO planning_periode (planning_jour_id, ordre, code_equipe, code_poste, prive, note)
+     VALUES (?, ?, 'FOR', ?, 0, 'formation')`,
+    [jour.id, maxOrdre + 1, (intitule || '').slice(0, 100) || null]
+  );
+  return { ok: true, deja: false };
 }
 
-// Retire l'ecriture FOR faite pour cette formation, mais UNIQUEMENT si le
-// jour contient encore exactement ce qu'on y avait mis (une seule periode,
-// code FOR) — si l'agent a modifie/complete le jour depuis, on ne touche a
-// rien (meme principe que "Annuler" sur VT/CET).
-async function essayerEffacerForSiIntact(conn, cp_agent, date_jour) {
-  const [rows] = await conn.query(
-    `SELECT pp.id, pp.code_equipe
-     FROM planning_jour pj
-     JOIN planning_periode pp ON pp.planning_jour_id = pj.id
-     WHERE pj.cp_agent = ? AND pj.date_jour = ?`,
-    [cp_agent, date_jour]
-  );
-  if (rows.length === 1 && rows[0].code_equipe === 'FOR') {
-    await conn.query('DELETE FROM planning_jour WHERE cp_agent=? AND date_jour=?', [cp_agent, date_jour]);
-    return true;
-  }
-  return false;
+// Retire UNIQUEMENT la periode formation (note='formation'), jamais le reste
+// du jour — si l'agent avait deja libere sa journee (plus aucune autre
+// periode), le planning_jour vide est nettoye au passage.
+async function effacerPeriodeFormation(conn, cp_agent, date_jour) {
+  const [[jour]] = await conn.query('SELECT id FROM planning_jour WHERE cp_agent=? AND date_jour=?', [cp_agent, date_jour]);
+  if (!jour) return false;
+  const [rows] = await conn.query(`SELECT id FROM planning_periode WHERE planning_jour_id=? AND note='formation'`, [jour.id]);
+  if (!rows.length) return false;
+  for (const r of rows) await conn.query('DELETE FROM planning_periode WHERE id=?', [r.id]);
+  const [[{ n }]] = await conn.query('SELECT COUNT(*) AS n FROM planning_periode WHERE planning_jour_id=?', [jour.id]);
+  if (n === 0) await conn.query('DELETE FROM planning_jour WHERE id=?', [jour.id]);
+  return true;
 }
 
 async function materialiserNotification(conn, cp_agent, notif) {
@@ -271,25 +269,21 @@ async function addParticipant(req, res) {
     if (!session) { await conn.rollback(); return res.status(404).json({ error: 'Session introuvable' }); }
     await conn.query('INSERT INTO formation_enrollment (session_id, cp_agent, inscrit_par) VALUES (?,?,?)', [id, cp_agent, req.agent.cp]);
 
-    let ecrit = null;
     // Si la session a deja ete lancee, ce nouveau participant doit recevoir
     // le meme traitement immediatement (ecriture planning + notification) —
     // sinon il n'aurait ni FOR dans son planning, ni signal de nouveaute.
     if (session.statut === 'lancee') {
       const [[cat]] = await conn.query('SELECT intitule FROM formation_catalogue WHERE id=?', [session.catalogue_id]);
-      const resultat = await essayerEcrireFor(conn, cp_agent, session.date_session, `Formation : ${cat.intitule}`);
-      ecrit = resultat.ok;
-      if (resultat.ok) {
-        await materialiserNotification(conn, cp_agent, {
-          enrollmentId: `${id}-${cp_agent}`, sessionId: Number(id),
-          titre: `🎓 Nouvelle formation : ${cat.intitule}`,
-          dateSession: session.date_session, lieu: session.lieu,
-          message: session.message_lancement || null, acquitte: false,
-        });
-      }
+      await ecrireFor(conn, cp_agent, session.date_session, cat.intitule);
+      await materialiserNotification(conn, cp_agent, {
+        enrollmentId: `${id}-${cp_agent}`, sessionId: Number(id),
+        titre: `🎓 Nouvelle formation : ${cat.intitule}`,
+        dateSession: session.date_session, lieu: session.lieu,
+        message: session.message_lancement || null, acquitte: false,
+      });
     }
     await conn.commit();
-    res.status(201).json({ message: 'Participant ajouté', ecrit });
+    res.status(201).json({ message: 'Participant ajouté' });
   } catch (e) {
     await conn.rollback();
     if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Déjà inscrit à cette session' });
@@ -304,10 +298,9 @@ async function removeParticipant(req, res) {
     await conn.beginTransaction();
     const [[session]] = await conn.query('SELECT date_session FROM formation_session WHERE id=?', [id]);
     if (!session) { await conn.rollback(); return res.status(404).json({ error: 'Session introuvable' }); }
-    // Nettoyer le planning seulement si le jour contient encore exactement
-    // ce qui a ete ecrit pour cette formation (meme principe que "Annuler"
-    // sur VT/CET) — jamais si l'agent a modifie/complete le jour depuis.
-    await essayerEffacerForSiIntact(conn, cp, session.date_session);
+    // Retire uniquement la periode formation independante (note='formation')
+    // — ne touche jamais au reste du jour, quel qu'il soit.
+    await effacerPeriodeFormation(conn, cp, session.date_session);
     await conn.query('DELETE FROM formation_enrollment WHERE session_id=? AND cp_agent=?', [id, cp]);
     await conn.commit();
     res.json({ message: 'Participant retiré' });
@@ -331,7 +324,7 @@ async function deleteSession(req, res) {
     if (!session) { await conn.rollback(); return res.status(404).json({ error: 'Session introuvable' }); }
     const [participants] = await conn.query('SELECT cp_agent FROM formation_enrollment WHERE session_id=?', [id]);
     for (const p of participants) {
-      await essayerEffacerForSiIntact(conn, p.cp_agent, session.date_session);
+      await effacerPeriodeFormation(conn, p.cp_agent, session.date_session);
     }
     await conn.query('DELETE FROM formation_session WHERE id=?', [id]);
     await conn.commit();
@@ -363,20 +356,16 @@ async function lancerSession(req, res) {
        JOIN agent a ON a.cp = fe.cp_agent WHERE fe.session_id=?`, [id]
     );
 
-    const succes = [], bloques = [];
+    const succes = [];
     for (const agent of enrollments) {
-      const resultat = await essayerEcrireFor(conn, agent.cp_agent, session.date_session, `Formation : ${session.intitule}`);
-      if (resultat.ok) {
-        succes.push({ cp_agent: agent.cp_agent, nom: agent.nom, prenom: agent.prenom });
-        await materialiserNotification(conn, agent.cp_agent, {
-          enrollmentId: `${id}-${agent.cp_agent}`, sessionId: Number(id),
-          titre: `🎓 Nouvelle formation : ${session.intitule}`,
-          dateSession: session.date_session, lieu: session.lieu,
-          message: message ?? session.message_lancement ?? null, acquitte: false,
-        });
-      } else {
-        bloques.push({ cp_agent: agent.cp_agent, nom: agent.nom, prenom: agent.prenom, code_existant: resultat.code_existant });
-      }
+      await ecrireFor(conn, agent.cp_agent, session.date_session, session.intitule);
+      succes.push({ cp_agent: agent.cp_agent, nom: agent.nom, prenom: agent.prenom });
+      await materialiserNotification(conn, agent.cp_agent, {
+        enrollmentId: `${id}-${agent.cp_agent}`, sessionId: Number(id),
+        titre: `🎓 Nouvelle formation : ${session.intitule}`,
+        dateSession: session.date_session, lieu: session.lieu,
+        message: message ?? session.message_lancement ?? null, acquitte: false,
+      });
     }
 
     const fields = [`statut = 'lancee'`, `lancee_le = NOW()`];
@@ -386,7 +375,7 @@ async function lancerSession(req, res) {
     await conn.query(`UPDATE formation_session SET ${fields.join(', ')} WHERE id = ?`, values);
 
     await conn.commit();
-    res.json({ message: 'Session lancée', succes, bloques });
+    res.json({ message: 'Session lancée', succes });
   } catch (e) {
     await conn.rollback();
     console.error(e); res.status(500).json({ error: 'Erreur serveur' });
@@ -423,11 +412,7 @@ async function declarerFormationPerso(req, res) {
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    const resultat = await essayerEcrireFor(conn, req.agent.cp, date, `Formation : ${intitule}`);
-    if (!resultat.ok) {
-      await conn.rollback();
-      return res.status(400).json({ error: `Le ${date} contient déjà "${resultat.code_existant}" dans ton planning perso. Modifie ou efface ce jour d'abord.` });
-    }
+    await ecrireFor(conn, req.agent.cp, date, intitule);
     const [[row]] = await conn.query('SELECT donnees_json FROM profil_agent WHERE cp_agent=?', [req.agent.cp]);
     const existant = row?.donnees_json ? (typeof row.donnees_json === 'string' ? JSON.parse(row.donnees_json) : row.donnees_json) : {};
     const liste = Array.isArray(existant.formationsPersoDeclarees) ? existant.formationsPersoDeclarees : [];
