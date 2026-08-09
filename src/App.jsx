@@ -3970,6 +3970,8 @@ function VtDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
             </div>
             {reportErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{reportErr}</div>}
           </div>
+
+          <NoticeSection sections={NOTICE_VT} accentDark="#92400e" bgLight="#fffbeb" borderLight="#fde68a"/>
         </div>
       </div>
     </div>
@@ -4282,6 +4284,75 @@ La prolongation de l'arrêt de travail par un autre professionnel de santé est 
   },
 ];
 
+// Notice VT (09/08, texte + 3 tableaux fournis verbatim par Olivier — "Annexe
+// 1A : Accord Collectif sur le travail à temps partiel - RH00662"). Ordre
+// des tableaux explicitement demandé : Sédentaires 132 repos, puis Réserve
+// 125 repos, puis Sédentaires 122 repos en dernier. Affichée en bas du
+// module VT (VtDashboardModal) — voir NoticeSection ci-dessus, qui sait
+// rendre soit du texte (`texte`), soit un tableau (`table`), selon ce qui
+// est fourni par la section.
+const NOTICE_VT_TABLE_HEADERS = ["Taux","Journées de travail","Repos périodiques et repos supplémentaires","Congés","Journées chômées supplémentaires (VT)"];
+const NOTICE_VT = [
+  {
+    titre: "Annexe 1A : Accord Collectif sur le travail à temps partiel - RH00662",
+    texte: `Annexe 1A : TRAVAIL A TEMPS PARTIEL – Formules classiques`,
+  },
+  {
+    titre: "Sédentaires 132 repos",
+    table: { headers: NOTICE_VT_TABLE_HEADERS, rows: [
+      ["Temps complet","195","132","28",""],
+      ["91,40%","178","132","26","19"],
+      ["89,17%","174","132","25","24"],
+      ["85,65%","167","132","24","32"],
+      ["80,00%","156","132","23","44"],
+      ["74,89%","146","132","21","56"],
+      ["71,30%","139","132","20","64"],
+      ["67,71%","132","132","19","72"],
+      ["64,13%","125","132","18","80"],
+      ["60,54%","118","132","17","88"],
+      ["56,95%","111","132","16","96"],
+      ["53,36%","104","132","15","104"],
+      ["50,00%","97","132","14","112"],
+    ]},
+  },
+  {
+    titre: "Réserve 125 repos",
+    table: { headers: NOTICE_VT_TABLE_HEADERS, rows: [
+      ["Temps complet","202","125","28",""],
+      ["91,40%","184","125","26","20"],
+      ["89,13%","180","125","25","25"],
+      ["85,65%","173","125","24","33"],
+      ["80,00%","161","125","23","46"],
+      ["74,78%","151","125","21","58"],
+      ["71,30%","144","125","20","66"],
+      ["67,83%","137","125","19","74"],
+      ["64,35%","130","125","18","82"],
+      ["60,87%","123","125","17","90"],
+      ["56,96%","115","125","16","99"],
+      ["53,48%","108","125","15","107"],
+      ["50,00%","101","125","14","115"],
+    ]},
+  },
+  {
+    titre: "Sédentaires 122 repos",
+    table: { headers: NOTICE_VT_TABLE_HEADERS, rows: [
+      ["Temps complet","205","122","28",""],
+      ["91,40%","187","122","26","20"],
+      ["89,27%","183","122","25","25"],
+      ["85,41%","175","122","24","34"],
+      ["80,00%","164","122","23","46"],
+      ["75,11%","154","122","21","58"],
+      ["71,24%","146","122","20","67"],
+      ["67,81%","139","122","19","75"],
+      ["64,38%","132","122","18","83"],
+      ["60,52%","124","122","17","92"],
+      ["57,08%","117","122","16","100"],
+      ["53,65%","110","122","15","108"],
+      ["50,00%","102","122","14","117"],
+    ]},
+  },
+];
+
 const DETAIL_CONFIG = {
   RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:"rpAcquis", rollingAcquis:false, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
   RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
@@ -4411,7 +4482,29 @@ function NoticeSection({ sections, accentDark, bgLight, borderLight }){
           {sections.map(section=>(
             <div key={section.titre} style={{background:bgLight,border:`1px solid ${borderLight}`,borderRadius:10,padding:"10px 12px"}}>
               <div style={{fontSize:12,fontWeight:800,color:accentDark,marginBottom:5}}>{section.titre}</div>
-              <div style={{fontSize:11.5,color:"#334155",whiteSpace:"pre-line",lineHeight:1.5}}>{section.texte}</div>
+              {section.texte && <div style={{fontSize:11.5,color:"#334155",whiteSpace:"pre-line",lineHeight:1.5}}>{section.texte}</div>}
+              {section.table && (
+                <div style={{overflowX:"auto",marginTop:section.texte?8:0}}>
+                  <table style={{borderCollapse:"collapse",width:"100%",minWidth:420,fontSize:11}}>
+                    <thead>
+                      <tr>
+                        {section.table.headers.map((h,i)=>(
+                          <th key={i} style={{border:`1px solid ${borderLight}`,padding:"5px 7px",background:"#fff",color:accentDark,fontWeight:800,textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {section.table.rows.map((row,ri)=>(
+                        <tr key={ri} style={row[0]==="Temps complet"?{fontWeight:800,background:"#fff"}:undefined}>
+                          {row.map((cell,ci)=>(
+                            <td key={ci} style={{border:`1px solid ${borderLight}`,padding:"5px 7px",color:"#334155",whiteSpace:"nowrap"}}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           ))}
         </div>
