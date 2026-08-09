@@ -596,6 +596,7 @@ export const formation = {
 
   // Vue agent (self)
   getMesSessions: () => apiFetch('/formation/mes-sessions'),
+  getProposees: (date) => apiFetch(`/formation/proposees/${date}`),
   declarerPerso: (data) => apiFetch('/formation/perso', { method: 'POST', body: JSON.stringify(data) }),
 
   // Stats AFO

@@ -88,6 +88,22 @@ function ChoixLibre({ options, choix, onChoix, autre, onAutre, famille }) {
 
 const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 };
+// 10/08 (Olivier, sur mobile) : le gris clair habituel (#64748b/#94a3b8) est
+// trop peu contrasté pour lire les noms de formateur/participants — texte
+// plus foncé + plus gras réservé à ces lignes-là.
+const rosterStyle = { fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 4, lineHeight: 1.4 };
+function RosterLignes({ session, agentId }) {
+  const autres = agentId ? session.participants.filter(p => p.cp !== agentId) : session.participants;
+  return (
+    <>
+      <div style={rosterStyle}>👨‍🏫 {session.formateurs.length ? session.formateurs.map(f => `${f.prenom} ${f.nom}`).join(", ") : "aucun formateur renseigné"}</div>
+      <div style={rosterStyle}>
+        👥 {autres.length ? autres.map(p => `${p.prenom} ${p.nom}`).join(", ") : "aucun autre participant"}
+        {agentId && session.participants.some(p => p.cp === agentId) ? " (+ toi)" : ""}
+      </div>
+    </>
+  );
+}
 const btnPrimary = (fam) => ({ background: fam.from, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700 });
 const btnSecondary = { background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600 };
 
@@ -169,8 +185,17 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
     [sessions]
   );
 
+  // 10/08 (Olivier) : une session Terminée que l'agent a déclinée (retiré la
+  // formation de son planning après coup) disparaît de son archive perso —
+  // il ne l'a en réalité jamais suivie. Tant que la date n'est pas passée,
+  // elle reste affichée normalement (rien à juger avant coup). Recalculé à
+  // la lecture (toujours_present vient du planning réel), jamais stocké —
+  // s'il se réinscrit (voir picker dans DayEditPopup), elle réapparaît.
   const items = useMemo(() => {
-    const a = sessions.filter(s => s.est_participant).map(s => ({ source: "afo", key: `afo-${s.id}`, date: s.date_session, ...s }));
+    const a = sessions
+      .filter(s => s.est_participant)
+      .filter(s => !(displayStatut(s) === "terminee" && !s.toujours_present))
+      .map(s => ({ source: "afo", key: `afo-${s.id}`, date: s.date_session, ...s }));
     const b = perso.map(p => ({ source: "perso", key: `perso-${p.id}`, date: p.date, ...p }));
     return [...a, ...b].sort((x, y) => (y.date || "").localeCompare(x.date || ""));
   }, [sessions, perso]);
@@ -199,6 +224,7 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
                 <div>
                   <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
                   <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
+                  <RosterLignes session={s} agentId={agentId} />
                 </div>
                 <StatutBadge session={s} />
               </div>
@@ -239,14 +265,7 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
                 </div>
                 <StatutBadge session={it} />
               </div>
-              <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
-                👨‍🏫 {it.formateurs.length ? it.formateurs.map(f => `${f.prenom} ${f.nom}`).join(", ") : "aucun formateur renseigné"}
-              </div>
-              {it.participants.filter(p => p.cp !== agentId).length > 0 && (
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
-                  👥 Avec toi : {it.participants.filter(p => p.cp !== agentId).map(p => `${p.prenom} ${p.nom}`).join(", ")}
-                </div>
-              )}
+              <RosterLignes session={it} agentId={agentId} />
               {it.message_lancement && (
                 <div style={{ marginTop: 8, fontSize: 12, color: "#78350f", background: AMBRE.bgLight, border: `1px solid ${AMBRE.borderLight}`, borderRadius: 8, padding: "8px 10px" }}>
                   💬 {it.message_lancement}
@@ -507,6 +526,7 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule, pe
               <div>
                 <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
                 <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
+                <RosterLignes session={s} />
               </div>
               <StatutBadge session={s} />
             </div>

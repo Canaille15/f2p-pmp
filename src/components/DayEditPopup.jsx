@@ -7,8 +7,8 @@
 //   - Pas de grisage, pas de blocage
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useMemo } from "react";
-import { convertirCodePosteVersJsCode } from "../api/client";
+import { useState, useMemo, useEffect } from "react";
+import api, { convertirCodePosteVersJsCode } from "../api/client";
 
 const CODES_REPOS = [
   { code:"RP",  label:"RP",        color:"#16a34a" },
@@ -174,6 +174,21 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   // Ecrite automatiquement par le module Formation (jamais depuis ce popup),
   // seul le retrait (decliner une session) se fait ici.
   const [formation, setFormation] = useState(entry?.formation || null);
+
+  // Restaurer une participation declinee (10/08, Olivier) : si l'agent a
+  // retire une formation (ou n'a jamais eu de FOR ce jour-la) mais reste
+  // inscrit a une session LANCEE ce jour precis, on lui propose de la
+  // re-choisir ici — plutot qu'un simple bouton "annuler le retrait" qui
+  // ne saurait pas quoi faire si plusieurs formations sont proposees le
+  // meme jour. Requete legere, refaite si "formation" repasse a null (ex:
+  // apres un clic sur "Retirer" dans la meme session de popup).
+  const [formationsProposees, setFormationsProposees] = useState([]);
+  useEffect(() => {
+    if (formation) return;
+    let cancelled = false;
+    api.formation.getProposees(date).then(rows => { if (!cancelled) setFormationsProposees(rows || []); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [date, formation]);
 
   // Congés Demandé/Refusé (06/08) : contrairement à "Accordé" (type1="CA",
   // écrit directement dans la case comme avant), Demandé/Refusé n'écrivent
@@ -560,11 +575,12 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 ))}
               </div>
             )}
-            {/* Formation (09/08) : jamais ajoutee depuis ce popup (ecrite par
-                le module Formation au lancement d'une session AFO, ou par une
-                auto-declaration) — seul le retrait est possible ici, qui
-                decline la participation. Aucun bouton "ajouter" volontaire :
-                le formulaire de declaration vit dans "Mes formations". */}
+            {/* Formation (09/08) : jamais ajoutee directement depuis ce popup
+                — ecrite automatiquement par le module Formation au lancement
+                d'une session AFO, ou par une auto-declaration ("Mes
+                formations"). Depuis ce popup, seuls le retrait (decliner) et
+                la restauration via le picker ci-dessous (10/08) sont
+                possibles. */}
             {formation && (
               <div style={{marginTop:10, padding:"8px 10px", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8}}>
                 <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:8}}>
@@ -576,6 +592,27 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 </div>
                 <div style={{fontSize:10, color:"#92400e", marginTop:5}}>
                   Tu valides ta présence à cette formation en libérant le reste de cette journée (efface ta journée habituelle ci-dessus). Si tu ne peux pas y participer, clique "Retirer" — l'organisateur en sera informé.
+                </div>
+              </div>
+            )}
+            {/* Restaurer une participation (10/08) : n'apparaît que s'il
+                existe une ou plusieurs sessions LANCEES ce jour précis où
+                l'agent reste inscrit (même s'il avait décliné) — il choisit
+                laquelle il rejoint, ce qui réécrit "formation" comme si la
+                session venait tout juste d'être lancée pour lui. */}
+            {!formation && formationsProposees.length > 0 && (
+              <div style={{marginTop:10, padding:"8px 10px", background:"#fffbeb", border:"1px solid #fde68a", borderRadius:8}}>
+                <div style={{fontSize:12, fontWeight:700, color:"#78350f", marginBottom:6}}>🎓 Formation(s) proposée(s) ce jour</div>
+                <div style={{display:"flex", flexWrap:"wrap", gap:5}}>
+                  {formationsProposees.map(f => (
+                    <button key={f.id} onClick={() => setFormation(f.intitule)} style={{
+                      background:"#fff", border:"1px solid #fde68a", borderRadius:6,
+                      padding:"5px 10px", cursor:"pointer", fontSize:11, fontWeight:700, color:"#92400e",
+                    }}>{f.intitule}</button>
+                  ))}
+                </div>
+                <div style={{fontSize:10, color:"#92400e", marginTop:5}}>
+                  Choisis la formation que tu vas suivre pour reprendre ta participation — enregistre ensuite en libérant le reste de cette journée.
                 </div>
               </div>
             )}

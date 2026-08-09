@@ -34,6 +34,14 @@ export const PLAFOND_COURANT = 20;
 export const PLAFOND_FIN_ACTIVITE = 250;
 export const CAP_EPARGNE_AN = 10; // jours/an, hors abondement, tous sous-comptes confondus
 
+// 10/08 (Olivier, sur mobile) : les sections du panneau CET n'étaient
+// séparées que par un simple filet gris (borderTop) ou pas du tout —
+// "il faut bien séparer les section, ca manque aussi de contraste". Chaque
+// grande section (Nouvelle épargne, Demandées, Épargnées...) est désormais
+// une vraie carte (fond + bordure + coins arrondis), plus lisible qu'un
+// simple flux de texte empilé sur un fond blanc uniforme.
+const SECTION_CARD = { background: "#fbfaff", border: "1.5px solid #ede9fe", borderRadius: 12, padding: "12px 14px" };
+
 export const SOUS_COMPTES = [
   { key: "courant", label: "Compte courant", icone: "💼", plafond: PLAFOND_COURANT },
   { key: "finActivite", label: "Compte fin d'activité", icone: "🏁", plafond: PLAFOND_FIN_ACTIVITE },
@@ -200,7 +208,7 @@ function NoticeSection() {
     if (ouvert) contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [ouvert]);
   return (
-    <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+    <div style={SECTION_CARD}>
       <button onClick={() => setOuvert(v => !v)} style={{
         background: "none", border: "none", color: "#5b21b6", cursor: "pointer",
         fontSize: 12, fontWeight: 800, padding: 0, display: "flex", alignItems: "center", gap: 6,
@@ -937,7 +945,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
               );
             })}
           </div>
-          <div style={{ fontSize: 9.5, color: "#94a3b8", textAlign: "center", marginTop: -6 }}>
+          <div style={{ fontSize: 10, color: "#475569", textAlign: "center", marginTop: -6 }}>
             ✏️ Clique sur un solde pour l'ajuster (jours déjà acquis, correction...) ou activer un sur-abondement.
           </div>
 
@@ -946,7 +954,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
           </div>
 
           {/* + Nouvelle épargne (Phase 2, 06/08) */}
-          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+          <div style={SECTION_CARD}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>+ Nouvelle épargne</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
               {SOURCES_EPARGNE.map(s => (
@@ -1006,16 +1014,16 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
             <button onClick={ajouterDemande} style={{ marginTop: 8, background: "#5b21b6", color: "#fff", border: "none", borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>+ Ajouter la demande</button>
             {ajoutErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginTop: 6 }}>{ajoutErr}</div>}
             {ajoutInfo && <div style={{ fontSize: 11, fontWeight: 600, color: "#166534", marginTop: 6 }}>{ajoutInfo}</div>}
-            {besoinValeur && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6 }}>Valeur libre — indique combien d'heures/minutes ce jour représente pour toi dans ton compteur {source}, déduites au moment de l'accord.</div>}
+            {besoinValeur && <div style={{ fontSize: 10.5, color: "#475569", marginTop: 6 }}>Valeur libre — indique combien d'heures/minutes ce jour représente pour toi dans ton compteur {source}, déduites au moment de l'accord.</div>}
           </div>
 
           {/* 💶 Nouvelle monétisation (Phase 3, 06/08) — débit du solde CET,
               éligibilité (jours épargnés l'année précédente) rappelée dans
               la notice, non bloquée ici (même philosophie que le cap
               d'épargne : informer plutôt que bloquer). */}
-          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+          <div style={SECTION_CARD}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>💶 Nouvelle monétisation</div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>Seuls les jours épargnés l'année précédente sont normalement éligibles (voir notice) — vérifie avant d'envoyer ta demande.</div>
+            <div style={{ fontSize: 10.5, color: "#475569", marginBottom: 8 }}>Seuls les jours épargnés l'année précédente sont normalement éligibles (voir notice) — vérifie avant d'envoyer ta demande.</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
               {SOUS_COMPTES.map(sc => (
                 <button key={sc.key} onClick={() => setMonetSousCompte(sc.key)} style={{
@@ -1038,9 +1046,9 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
           {/* 📅 Nouvelle utilisation en temps (Phase 3, 06/08) — période Du/Au,
               écrit "CET" dans le planning perso à l'accord (jamais à la
               demande), débite le solde CET du nombre de jours de la période. */}
-          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+          <div style={SECTION_CARD}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>📅 Nouvelle utilisation en temps</div>
-            <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8 }}>Le compte courant est normalement dispo par blocs de 5 à 20 jours, le compte fin d'activité seulement à l'approche de la retraite ou pour un évènement familial (voir notice) — vérifie avant d'envoyer ta demande.</div>
+            <div style={{ fontSize: 10.5, color: "#475569", marginBottom: 8 }}>Le compte courant est normalement dispo par blocs de 5 à 20 jours, le compte fin d'activité seulement à l'approche de la retraite ou pour un évènement familial (voir notice) — vérifie avant d'envoyer ta demande.</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
               {SOUS_COMPTES.map(sc => (
                 <button key={sc.key} onClick={() => setUtilSousCompte(sc.key)} style={{
@@ -1075,7 +1083,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
               statut). Filtré sur l'année consultée depuis le 08/08 (voir note
               plus bas) — change d'année en haut pour retrouver une demande
               faite une autre année. */}
-          <div>
+          <div style={SECTION_CARD}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>⏳ Demandées {year} ({data.demandesEnAttente.length})</div>
             {accordErr && <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626", marginBottom: 8, background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px" }}>{accordErr}</div>}
             {data.demandesEnAttente.length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune demande en attente.</div> :
@@ -1106,7 +1114,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
               y en a (08/08, demandé par Olivier), pour distinguer d'un coup
               d'œil ce qui vient d'une vraie épargne de ce que l'entreprise a
               ajouté automatiquement. */}
-          <div>
+          <div style={SECTION_CARD}>
             {(() => {
               const credites = parCategorie(data.mouvementsAccordes.filter(m => m.sens === "credit"));
               const jAbondement = credites.filter(m => m.type === "abondement").reduce((s, m) => s + (m.jours || 0), 0);
@@ -1121,7 +1129,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
                 <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>
                   ✅ Épargnées {year} ({credites.length}){mentions.length > 0 ? ` — ${mentions.join(", ")}` : ""}
                 </div>
-                <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 8, marginTop: -4 }}>Le solde ci-dessus reste cumulé sur toutes les années — seule cette liste change avec l'année sélectionnée en haut.</div>
+                <div style={{ fontSize: 10.5, color: "#475569", marginBottom: 8, marginTop: -4 }}>Le solde ci-dessus reste cumulé sur toutes les années — seule cette liste change avec l'année sélectionnée en haut.</div>
                 {/* Regroupées par sous-compte (08/08, demandé par Olivier :
                     "une separation aussi avec le compte courant et compte fin
                     d'activite dans les epargnés et tu met a coté le nombre
@@ -1166,7 +1174,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
           </div>
 
           {/* Sorties (débit accordé : monétisation + utilisation) */}
-          <div>
+          <div style={SECTION_CARD}>
             <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>📤 Sorties {year} — monétisées / utilisées ({data.mouvementsAccordes.filter(m => m.sens === "debit").length})</div>
             {data.mouvementsAccordes.filter(m => m.sens === "debit").length === 0 ? <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>Aucune.</div> :
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -1191,8 +1199,8 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
               computeDashboardCet), repliés par défaut pour ne pas polluer la
               lecture du panneau tant qu'on ne va pas volontairement les
               consulter. */}
-          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
-            <button onClick={() => setAjustementsOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 800, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={SECTION_CARD}>
+            <button onClick={() => setAjustementsOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 800, color: "#334155", display: "flex", alignItems: "center", gap: 6 }}>
               {ajustementsOuvert ? "▴" : "▾"} ✏️ Ajustements manuels ({data.mouvementsAjustements.length})
             </button>
             {ajustementsOuvert && (
@@ -1215,7 +1223,7 @@ export function CetDashboardModal({ agent, schedule, setSchedule, agentProfiles,
 
           {/* Refusées */}
           {data.mouvementsRefuses.length > 0 && (
-            <div>
+            <div style={SECTION_CARD}>
               <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>❌ Refusées {year} ({data.mouvementsRefuses.length})</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {data.mouvementsRefuses.map(m => (

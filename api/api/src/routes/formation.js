@@ -3,7 +3,7 @@ const {
   getCatalogue, createCatalogue, updateCatalogue, deleteCatalogue,
   getSessions, getSessionDetail, createSession, updateSession, deleteSession,
   addFormateur, removeFormateur, addParticipant, removeParticipant, lancerSession,
-  getMesSessions, declarerFormationPerso, getStats,
+  getMesSessions, getFormationsProposees, declarerFormationPerso, getStats,
 } = require('../controllers/formationController');
 const { authMiddleware, afoMiddleware } = require('../middleware/auth');
 
@@ -26,8 +26,9 @@ router.delete('/sessions/:id/participants/:cp', authMiddleware, afoMiddleware, r
 router.post('/sessions/:id/lancer',           authMiddleware, afoMiddleware, lancerSession);
 
 // Vue agent — archive personnelle, pas de restriction AFO (self uniquement, cp pris du token)
-router.get('/mes-sessions', authMiddleware, getMesSessions);
-router.post('/perso',       authMiddleware, declarerFormationPerso);
+router.get('/mes-sessions',        authMiddleware, getMesSessions);
+router.get('/proposees/:date',     authMiddleware, getFormationsProposees);
+router.post('/perso',              authMiddleware, declarerFormationPerso);
 
 // Stats — réservé aux AFO, tous à égalité (voir tous les AFO, pas seulement soi)
 router.get('/stats', authMiddleware, afoMiddleware, getStats);

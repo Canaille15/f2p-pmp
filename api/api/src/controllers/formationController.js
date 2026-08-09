@@ -134,17 +134,33 @@ async function deleteCatalogue(req, res) {
 // Sessions
 // ─────────────────────────────────────────────────────────────────────────
 
+// 10/08 : roster complet (formateurs+participants) ajoute a la liste, pour
+// qu'un AFO puisse lire les noms directement sans ouvrir chaque session
+// (Olivier : "il faut pour lire le nom du formateur et des participants").
 async function getSessions(req, res) {
   try {
     const [rows] = await pool.query(
       `SELECT fs.*, fc.intitule, fc.categorie,
-              (SELECT COUNT(*) FROM formation_enrollment fe WHERE fe.session_id = fs.id) AS nb_participants,
-              (SELECT GROUP_CONCAT(af.cp) FROM formation_session_formateur fsf JOIN agent af ON af.cp = fsf.cp_agent WHERE fsf.session_id = fs.id) AS formateurs_cp
+              (SELECT COUNT(*) FROM formation_enrollment fe WHERE fe.session_id = fs.id) AS nb_participants
        FROM formation_session fs
        JOIN formation_catalogue fc ON fc.id = fs.catalogue_id
        ORDER BY fs.date_session DESC`
     );
-    res.json(rows);
+    if (!rows.length) return res.json([]);
+    const ids = rows.map(r => r.id);
+    const [formateurs] = await pool.query(
+      `SELECT fsf.session_id, a.cp, a.nom, a.prenom FROM formation_session_formateur fsf
+       JOIN agent a ON a.cp = fsf.cp_agent WHERE fsf.session_id IN (?)`, [ids]
+    );
+    const [participants] = await pool.query(
+      `SELECT fe.session_id, a.cp, a.nom, a.prenom FROM formation_enrollment fe
+       JOIN agent a ON a.cp = fe.cp_agent WHERE fe.session_id IN (?)`, [ids]
+    );
+    res.json(rows.map(r => ({
+      ...r,
+      formateurs: formateurs.filter(f => f.session_id === r.id).map(f => ({ cp: f.cp, nom: f.nom, prenom: f.prenom })),
+      participants: participants.filter(p => p.session_id === r.id).map(p => ({ cp: p.cp, nom: p.nom, prenom: p.prenom })),
+    })));
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
@@ -399,7 +415,11 @@ async function getMesSessions(req, res) {
       `SELECT fs.id, fs.date_session, fs.lieu, fs.statut, fs.message_lancement,
               fc.intitule, fc.categorie,
               EXISTS(SELECT 1 FROM formation_enrollment fe2 WHERE fe2.session_id=fs.id AND fe2.cp_agent=?) AS est_participant,
-              EXISTS(SELECT 1 FROM formation_session_formateur fsf2 WHERE fsf2.session_id=fs.id AND fsf2.cp_agent=?) AS est_formateur
+              EXISTS(SELECT 1 FROM formation_session_formateur fsf2 WHERE fsf2.session_id=fs.id AND fsf2.cp_agent=?) AS est_formateur,
+              EXISTS(
+                SELECT 1 FROM planning_jour pj JOIN planning_periode pp ON pp.planning_jour_id=pj.id
+                WHERE pj.cp_agent=? AND pj.date_jour=fs.date_session AND pp.code_equipe='FOR'
+              ) AS toujours_present
        FROM formation_session fs
        JOIN formation_catalogue fc ON fc.id = fs.catalogue_id
        WHERE fs.id IN (
@@ -408,7 +428,7 @@ async function getMesSessions(req, res) {
          SELECT session_id FROM formation_session_formateur WHERE cp_agent=?
        )
        ORDER BY fs.date_session DESC`,
-      [req.agent.cp, req.agent.cp, req.agent.cp, req.agent.cp]
+      [req.agent.cp, req.agent.cp, req.agent.cp, req.agent.cp, req.agent.cp]
     );
     if (!rows.length) return res.json([]);
     const ids = rows.map(r => r.id);
@@ -424,9 +444,35 @@ async function getMesSessions(req, res) {
       ...r,
       est_participant: !!r.est_participant,
       est_formateur: !!r.est_formateur,
+      toujours_present: !!r.toujours_present,
       formateurs: formateurs.filter(f => f.session_id === r.id).map(f => ({ cp: f.cp, nom: f.nom, prenom: f.prenom })),
       participants: participants.filter(p => p.session_id === r.id).map(p => ({ cp: p.cp, nom: p.nom, prenom: p.prenom })),
     })));
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
+// GET /formation/proposees/:date — sessions LANCEES ce jour-la ou l'agent
+// connecte est inscrit, quel que soit son etat actuel (toujours_present ou
+// non) -- alimente le selecteur du popup de planning perso (DayEditPopup)
+// qui permet a un agent de RESTAURER sa participation apres l'avoir
+// retiree (10/08, Olivier : "si un agnent se remet en formation sur une
+// date il faut qu'il choisisse la formation [...] dans la pop up sur celle
+// proposee ce jour la"). Uniquement les sessions lancees : une session
+// encore "planifiee" n'a jamais rien ecrit dans le planning, rien a
+// restaurer.
+async function getFormationsProposees(req, res) {
+  const { date } = req.params;
+  try {
+    const [rows] = await pool.query(
+      `SELECT fs.id, fc.intitule, fs.lieu
+       FROM formation_enrollment fe
+       JOIN formation_session fs ON fs.id = fe.session_id
+       JOIN formation_catalogue fc ON fc.id = fs.catalogue_id
+       WHERE fe.cp_agent = ? AND fs.date_session = ? AND fs.statut = 'lancee'
+       ORDER BY fc.intitule`,
+      [req.agent.cp, date]
+    );
+    res.json(rows);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
@@ -476,11 +522,24 @@ async function getStats(req, res) {
        GROUP BY fc.id, fc.intitule, fc.categorie
        ORDER BY fc.categorie, fc.intitule`
     );
+    // 10/08 : un agent qui a decline (retire la formation de son planning)
+    // une session deja passee n'a en realite jamais suivi la formation --
+    // exclu du comptage "agents formes" (Olivier : "si un agent ne
+    // participe plus a la formation apres la date [...] ca met a jour les
+    // stats"). Une session encore a venir (ou pas encore lancee) reste
+    // comptee normalement -- l'assiduite ne peut se juger qu'apres coup.
+    const PRESENCE_REELLE = `(
+      fs.statut != 'lancee' OR fs.date_session >= CURDATE() OR EXISTS(
+        SELECT 1 FROM planning_jour pj JOIN planning_periode pp ON pp.planning_jour_id=pj.id
+        WHERE pj.cp_agent = fe.cp_agent AND pj.date_jour = fs.date_session AND pp.code_equipe='FOR'
+      )
+    )`;
     const [agentsParFormation] = await pool.query(
       `SELECT fs.catalogue_id, a.cp, a.nom, a.prenom
        FROM formation_enrollment fe
        JOIN formation_session fs ON fs.id = fe.session_id
        JOIN agent a ON a.cp = fe.cp_agent
+       WHERE ${PRESENCE_REELLE}
        GROUP BY fs.catalogue_id, a.cp, a.nom, a.prenom`
     );
     const parFormation = parFormationBase.map(f => ({
@@ -493,7 +552,8 @@ async function getStats(req, res) {
       `SELECT fc.categorie, YEAR(fs.date_session) AS annee, fe.cp_agent
        FROM formation_enrollment fe
        JOIN formation_session fs ON fs.id = fe.session_id
-       JOIN formation_catalogue fc ON fc.id = fs.catalogue_id`
+       JOIN formation_catalogue fc ON fc.id = fs.catalogue_id
+       WHERE ${PRESENCE_REELLE}`
     );
     const repartition = {};
     const cle = (annee, categorie) => `${annee}|${categorie}`;
@@ -529,7 +589,8 @@ async function getStats(req, res) {
        FROM formation_session_formateur fsf
        JOIN formation_session fs ON fs.id = fsf.session_id
        JOIN formation_catalogue fc ON fc.id = fs.catalogue_id
-       JOIN formation_enrollment fe ON fe.session_id = fs.id`
+       JOIN formation_enrollment fe ON fe.session_id = fs.id
+       WHERE ${PRESENCE_REELLE}`
     );
     const parAfo = afos.map(afo => {
       const mesSessions = sessionsFormateur.filter(s => s.cp_formateur === afo.cp);
@@ -557,5 +618,5 @@ module.exports = {
   getCatalogue, createCatalogue, updateCatalogue, deleteCatalogue,
   getSessions, getSessionDetail, createSession, updateSession, deleteSession,
   addFormateur, removeFormateur, addParticipant, removeParticipant, lancerSession,
-  getMesSessions, declarerFormationPerso, getStats,
+  getMesSessions, getFormationsProposees, declarerFormationPerso, getStats,
 };
