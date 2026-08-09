@@ -386,19 +386,47 @@ async function lancerSession(req, res) {
 // Vue agent — "Mes formations" (sessions AFO où l'agent connecté est inscrit)
 // ─────────────────────────────────────────────────────────────────────────
 
+// 10/08 : etend la vue "Mes formations" pour couvrir aussi bien les sessions
+// ou l'agent est inscrit (participant) que celles ou il intervient comme
+// formateur (AFO) -- un AFO n'a plus besoin d'aller fouiller "Gestion" pour
+// retrouver ses propres journees de formateur. Chaque ligne est taguee
+// est_participant/est_formateur (une session peut cumuler les deux), et
+// porte desormais le roster complet (formateurs+participants) pour que
+// "Mes formations" affiche qui anime/qui participe sans requete separee.
 async function getMesSessions(req, res) {
   try {
     const [rows] = await pool.query(
       `SELECT fs.id, fs.date_session, fs.lieu, fs.statut, fs.message_lancement,
-              fc.intitule, fc.categorie, fe.inscrit_le
-       FROM formation_enrollment fe
-       JOIN formation_session fs ON fs.id = fe.session_id
+              fc.intitule, fc.categorie,
+              EXISTS(SELECT 1 FROM formation_enrollment fe2 WHERE fe2.session_id=fs.id AND fe2.cp_agent=?) AS est_participant,
+              EXISTS(SELECT 1 FROM formation_session_formateur fsf2 WHERE fsf2.session_id=fs.id AND fsf2.cp_agent=?) AS est_formateur
+       FROM formation_session fs
        JOIN formation_catalogue fc ON fc.id = fs.catalogue_id
-       WHERE fe.cp_agent = ?
+       WHERE fs.id IN (
+         SELECT session_id FROM formation_enrollment WHERE cp_agent=?
+         UNION
+         SELECT session_id FROM formation_session_formateur WHERE cp_agent=?
+       )
        ORDER BY fs.date_session DESC`,
-      [req.agent.cp]
+      [req.agent.cp, req.agent.cp, req.agent.cp, req.agent.cp]
     );
-    res.json(rows);
+    if (!rows.length) return res.json([]);
+    const ids = rows.map(r => r.id);
+    const [formateurs] = await pool.query(
+      `SELECT fsf.session_id, a.cp, a.nom, a.prenom FROM formation_session_formateur fsf
+       JOIN agent a ON a.cp = fsf.cp_agent WHERE fsf.session_id IN (?)`, [ids]
+    );
+    const [participants] = await pool.query(
+      `SELECT fe.session_id, a.cp, a.nom, a.prenom FROM formation_enrollment fe
+       JOIN agent a ON a.cp = fe.cp_agent WHERE fe.session_id IN (?)`, [ids]
+    );
+    res.json(rows.map(r => ({
+      ...r,
+      est_participant: !!r.est_participant,
+      est_formateur: !!r.est_formateur,
+      formateurs: formateurs.filter(f => f.session_id === r.id).map(f => ({ cp: f.cp, nom: f.nom, prenom: f.prenom })),
+      participants: participants.filter(p => p.session_id === r.id).map(p => ({ cp: p.cp, nom: p.nom, prenom: p.prenom })),
+    })));
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 

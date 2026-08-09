@@ -21,6 +21,8 @@ const AMBRE = { from: "#b45309", to: "#92400e", bgLight: "#fffbeb", borderLight:
 const NAVY  = { from: "#0f4c81", to: "#1e3a5f", bgLight: "#eff6ff", borderLight: "#bfdbfe", accentDark: "#1e3a5f" };
 
 const CATEGORIES = ["PRCI", "PAR", "Divers"];
+const FORMAT_OPTIONS = ["Présentiel", "Distanciel", "Autre"];
+const LIEU_OPTIONS = ["PRCI", "PAR", "Autre"];
 
 const STATUT_SESSION = {
   planifiee: { label: "🗓️ Planifiée", bg: "#f1f5f9", color: "#475569" },
@@ -35,6 +37,55 @@ function fmtDate(iso) {
   return `${j}/${m}/${a}`;
 }
 
+// 10/08 : une session "Lancée" dont la date est deja passee reste "Lancée"
+// indefiniment en base (aucune transition automatique stockee) -- pour ne
+// jamais desynchroniser un champ derive, le statut affiche est recalcule a
+// la lecture (meme philosophie que le reste du projet : toujours calcule,
+// jamais stocke) plutot que d'ecrire "terminee" en base a un moment precis.
+function displayStatut(session) {
+  if (session?.statut === "lancee" && session.date_session && session.date_session.slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+    return "terminee";
+  }
+  return session?.statut;
+}
+
+function StatutBadge({ session, style }) {
+  const s = displayStatut(session);
+  return (
+    <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 8, padding: "3px 9px", ...(STATUT_SESSION[s] || {}), ...style }}>
+      {STATUT_SESSION[s]?.label || s}
+    </span>
+  );
+}
+
+// Sépare le choix "connu" (bouton) d'un texte libre pour Format/Lieu -- une
+// valeur deja en base qui ne correspond a aucun bouton connu est traitee
+// comme "Autre", pré-remplie avec son texte d'origine (rien n'est perdu).
+function splitChoixLibre(valeur, options) {
+  const v = (valeur || "").trim();
+  if (!v) return { choix: "", autre: "" };
+  const connu = options.find(o => o !== "Autre" && o.toLowerCase() === v.toLowerCase());
+  return connu ? { choix: connu, autre: "" } : { choix: "Autre", autre: v };
+}
+
+function ChoixLibre({ options, choix, onChoix, autre, onAutre, famille }) {
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {options.map(o => (
+          <button key={o} type="button" onClick={() => onChoix(o)}
+            style={{ padding: "7px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: choix === o ? famille.from : "#fff", color: choix === o ? "#fff" : "#64748b", boxShadow: choix === o ? "none" : "0 0 0 1.5px #e2e8f0 inset" }}>
+            {o}
+          </button>
+        ))}
+      </div>
+      {choix === "Autre" && (
+        <input value={autre} onChange={e => onAutre(e.target.value)} placeholder="Précise..." style={{ ...inputStyle, marginTop: 8 }} />
+      )}
+    </div>
+  );
+}
+
 const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 };
 const btnPrimary = (fam) => ({ background: fam.from, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700 });
@@ -46,6 +97,12 @@ export default function FormationView({ currentAgent, currentUser, agents, agent
   const agentId = currentAgent?.immatriculation || currentAgent?.cp || currentAgent?.id;
   const isAfo = currentUser?.isAfo || false;
   const [tab, setTab] = useState("mes");
+  // Permet a "Mes formations" d'ouvrir directement le detail d'une session
+  // (via SessionDetailModal, cote Gestion) sans faire chercher l'AFO dans la
+  // liste globale — demande explicite d'Olivier (10/08) : trop de sous-menus,
+  // trop dur de retrouver ses propres journees de formateur.
+  const [pendingSessionId, setPendingSessionId] = useState(null);
+  const goToSession = (id) => { setPendingSessionId(id); setTab("gestion"); };
 
   const tabs = [
     { k: "mes", label: "📖 Mes formations" },
@@ -79,9 +136,9 @@ export default function FormationView({ currentAgent, currentUser, agents, agent
       )}
 
       {tab === "mes" && (
-        <MesFormationsTab agentId={agentId} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
+        <MesFormationsTab agentId={agentId} isAfo={isAfo} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} onGoToSession={goToSession} />
       )}
-      {tab === "gestion" && isAfo && <GestionTab agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} />}
+      {tab === "gestion" && isAfo && <GestionTab agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
       {tab === "stats" && isAfo && <StatsTab />}
     </div>
   );
@@ -89,7 +146,7 @@ export default function FormationView({ currentAgent, currentUser, agents, agent
 
 // ─── MES FORMATIONS (tous les agents) ──────────────────────────────────────
 
-function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSchedule }) {
+function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, refreshSchedule, onGoToSession }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -105,8 +162,15 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
   const perso = agentProfiles[agentId]?.formationsPersoDeclarees || [];
   const notifications = agentProfiles[agentId]?.formationNotifications || [];
 
+  // Sessions ou l'agent enseigne (AFO) — mises en avant tout en haut, pour
+  // ne plus avoir a les chercher dans la liste globale de Gestion (AFO).
+  const sessionsFormateur = useMemo(
+    () => sessions.filter(s => s.est_formateur).sort((x, y) => (y.date_session || "").localeCompare(x.date_session || "")),
+    [sessions]
+  );
+
   const items = useMemo(() => {
-    const a = sessions.map(s => ({ source: "afo", key: `afo-${s.id}`, date: s.date_session, ...s }));
+    const a = sessions.filter(s => s.est_participant).map(s => ({ source: "afo", key: `afo-${s.id}`, date: s.date_session, ...s }));
     const b = perso.map(p => ({ source: "perso", key: `perso-${p.id}`, date: p.date, ...p }));
     return [...a, ...b].sort((x, y) => (y.date || "").localeCompare(x.date || ""));
   }, [sessions, perso]);
@@ -124,6 +188,24 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
   return (
     <div>
       {err && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 10 }}>⚠️ {err}</div>}
+
+      {isAfo && sessionsFormateur.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f", marginBottom: 8 }}>👨‍🏫 Tes sessions formateur</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {sessionsFormateur.map(s => (
+              <div key={s.id} onClick={() => onGoToSession(s.id)}
+                style={{ cursor: "pointer", background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
+                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
+                </div>
+                <StatutBadge session={s} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <button onClick={() => setShowDeclare(v => !v)} style={{ ...btnPrimary(AMBRE), marginBottom: 14 }}>
         {showDeclare ? "✕ Annuler" : "+ Déclarer une formation suivie"}
@@ -155,10 +237,16 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
                     📅 {fmtDate(it.date_session)} {it.lieu ? `· 📍 ${it.lieu}` : ""} · {it.categorie}
                   </div>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 8, padding: "3px 9px", ...(STATUT_SESSION[it.statut] || {}) }}>
-                  {STATUT_SESSION[it.statut]?.label || it.statut}
-                </span>
+                <StatutBadge session={it} />
               </div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
+                👨‍🏫 {it.formateurs.length ? it.formateurs.map(f => `${f.prenom} ${f.nom}`).join(", ") : "aucun formateur renseigné"}
+              </div>
+              {it.participants.filter(p => p.cp !== agentId).length > 0 && (
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                  👥 Avec toi : {it.participants.filter(p => p.cp !== agentId).map(p => `${p.prenom} ${p.nom}`).join(", ")}
+                </div>
+              )}
               {it.message_lancement && (
                 <div style={{ marginTop: 8, fontSize: 12, color: "#78350f", background: AMBRE.bgLight, border: `1px solid ${AMBRE.borderLight}`, borderRadius: 8, padding: "8px 10px" }}>
                   💬 {it.message_lancement}
@@ -253,7 +341,7 @@ function DeclarerFormationForm({ onCancel, onSaved }) {
 
 // ─── GESTION (AFO) ──────────────────────────────────────────────────────────
 
-function GestionTab({ agents, refreshProfil, refreshSchedule }) {
+function GestionTab({ agents, refreshProfil, refreshSchedule, pendingSessionId, onConsumePending }) {
   const [sub, setSub] = useState("catalogue");
   const [catalogue, setCatalogue] = useState([]);
   const [loadingCat, setLoadingCat] = useState(true);
@@ -263,6 +351,10 @@ function GestionTab({ agents, refreshProfil, refreshSchedule }) {
     api.formation.getCatalogue().then(rows => setCatalogue(rows || [])).catch(() => {}).finally(() => setLoadingCat(false));
   }, []);
   useEffect(() => { chargerCatalogue(); }, [chargerCatalogue]);
+  // Arrivee depuis "Mes formations" (👨‍🏫 Tes sessions formateur) : bascule
+  // automatiquement sur le sous-onglet Sessions, qui se charge d'ouvrir la
+  // session precise (voir SessionsSection).
+  useEffect(() => { if (pendingSessionId) setSub("sessions"); }, [pendingSessionId]);
 
   return (
     <div>
@@ -275,7 +367,7 @@ function GestionTab({ agents, refreshProfil, refreshSchedule }) {
         ))}
       </div>
       {sub === "catalogue" && <CatalogueSection catalogue={catalogue} loading={loadingCat} onChange={chargerCatalogue} />}
-      {sub === "sessions" && <SessionsSection catalogue={catalogue} agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} />}
+      {sub === "sessions" && <SessionsSection catalogue={catalogue} agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={onConsumePending} />}
     </div>
   );
 }
@@ -326,15 +418,19 @@ function CatalogueSection({ catalogue, loading, onChange }) {
 
 function CatalogueForm({ initial, onCancel, onSaved }) {
   const [form, setForm] = useState(initial || { categorie: "PRCI", intitule: "", description: "", duree: "", format: "", public_cible: "", prerequis: "", obligatoire: false });
+  const initialFormat = useMemo(() => splitChoixLibre(initial?.format, FORMAT_OPTIONS), [initial]);
+  const [formatChoix, setFormatChoix] = useState(initialFormat.choix);
+  const [formatAutre, setFormatAutre] = useState(initialFormat.autre);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function submit() {
     if (!form.intitule.trim()) return setErr("L'intitulé est obligatoire");
     setErr(""); setSaving(true);
+    const payload = { ...form, format: formatChoix === "Autre" ? formatAutre.trim() : formatChoix };
     try {
-      if (initial?.id) await api.formation.updateCatalogue(initial.id, form);
-      else await api.formation.createCatalogue(form);
+      if (initial?.id) await api.formation.updateCatalogue(initial.id, payload);
+      else await api.formation.createCatalogue(payload);
       onSaved();
     } catch (e) { setErr(e.message || "Erreur"); }
     setSaving(false);
@@ -356,9 +452,10 @@ function CatalogueForm({ initial, onCancel, onSaved }) {
         </div>
         <div><div style={labelStyle}>Intitulé</div><input value={form.intitule} onChange={e => setForm(p => ({ ...p, intitule: e.target.value }))} style={inputStyle} /></div>
         <div><div style={labelStyle}>Description</div><textarea value={form.description || ""} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <div style={{ flex: 1 }}><div style={labelStyle}>Durée</div><input value={form.duree || ""} onChange={e => setForm(p => ({ ...p, duree: e.target.value }))} placeholder="ex: 1 jour" style={inputStyle} /></div>
-          <div style={{ flex: 1 }}><div style={labelStyle}>Format</div><input value={form.format || ""} onChange={e => setForm(p => ({ ...p, format: e.target.value }))} placeholder="ex: présentiel" style={inputStyle} /></div>
+        <div><div style={labelStyle}>Durée</div><input value={form.duree || ""} onChange={e => setForm(p => ({ ...p, duree: e.target.value }))} placeholder="ex: 1 jour" style={inputStyle} /></div>
+        <div>
+          <div style={labelStyle}>Format</div>
+          <ChoixLibre options={FORMAT_OPTIONS} choix={formatChoix} onChoix={setFormatChoix} autre={formatAutre} onAutre={setFormatAutre} famille={NAVY} />
         </div>
         <div><div style={labelStyle}>Public cible</div><input value={form.public_cible || ""} onChange={e => setForm(p => ({ ...p, public_cible: e.target.value }))} style={inputStyle} /></div>
         <div><div style={labelStyle}>Prérequis</div><input value={form.prerequis || ""} onChange={e => setForm(p => ({ ...p, prerequis: e.target.value }))} style={inputStyle} /></div>
@@ -376,7 +473,7 @@ function CatalogueForm({ initial, onCancel, onSaved }) {
   );
 }
 
-function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule }) {
+function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule, pendingSessionId, onConsumePending }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -387,6 +484,9 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule }) 
     api.formation.getSessions().then(rows => setSessions(rows || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
   useEffect(() => { charger(); }, [charger]);
+  useEffect(() => {
+    if (pendingSessionId) { setOpenId(pendingSessionId); onConsumePending?.(); }
+  }, [pendingSessionId]); // eslint-disable-line
 
   return (
     <div>
@@ -408,9 +508,7 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule }) 
                 <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
                 <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 8, padding: "3px 9px", ...(STATUT_SESSION[s.statut] || {}) }}>
-                {STATUT_SESSION[s.statut]?.label || s.statut}
-              </span>
+              <StatutBadge session={s} />
             </div>
           ))}
         </div>
@@ -422,7 +520,9 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule }) 
 }
 
 function SessionForm({ catalogue, agents, onCancel, onSaved }) {
-  const [form, setForm] = useState({ catalogue_id: catalogue[0]?.id || "", date_session: "", lieu: "" });
+  const [form, setForm] = useState({ catalogue_id: catalogue[0]?.id || "", date_session: "" });
+  const [lieuChoix, setLieuChoix] = useState("PRCI");
+  const [lieuAutre, setLieuAutre] = useState("");
   const [formateurs, setFormateurs] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [search, setSearch] = useState("");
@@ -446,8 +546,9 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
     if (!form.catalogue_id) return setErr("Choisis une formation du catalogue");
     if (!form.date_session) return setErr("La date est obligatoire");
     setErr(""); setSaving(true);
+    const lieu = lieuChoix === "Autre" ? lieuAutre.trim() : lieuChoix;
     try {
-      await api.formation.createSession({ ...form, formateurs, participants });
+      await api.formation.createSession({ ...form, lieu, formateurs, participants });
       onSaved();
     } catch (e) { setErr(e.message || "Erreur"); }
     setSaving(false);
@@ -462,9 +563,10 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
             {catalogue.filter(c => c.statut !== "archive").map(c => <option key={c.id} value={c.id}>{c.categorie} — {c.intitule}</option>)}
           </select>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <div style={{ flex: 1 }}><div style={labelStyle}>Date</div><input type="date" value={form.date_session} onChange={e => setForm(p => ({ ...p, date_session: e.target.value }))} style={inputStyle} /></div>
-          <div style={{ flex: 1 }}><div style={labelStyle}>Lieu</div><input value={form.lieu} onChange={e => setForm(p => ({ ...p, lieu: e.target.value }))} style={inputStyle} /></div>
+        <div><div style={labelStyle}>Date</div><input type="date" value={form.date_session} onChange={e => setForm(p => ({ ...p, date_session: e.target.value }))} style={inputStyle} /></div>
+        <div>
+          <div style={labelStyle}>Lieu</div>
+          <ChoixLibre options={LIEU_OPTIONS} choix={lieuChoix} onChoix={setLieuChoix} autre={lieuAutre} onAutre={setLieuAutre} famille={NAVY} />
         </div>
         <div>
           <div style={labelStyle}>Formateurs (jusqu'à 3)</div>
@@ -561,9 +663,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
               {err && <div style={{ color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{err}</div>}
 
               <div style={{ marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 8, padding: "3px 9px", ...(STATUT_SESSION[data.session.statut] || {}) }}>
-                  {STATUT_SESSION[data.session.statut]?.label}
-                </span>
+                <StatutBadge session={data.session} />
                 <button onClick={supprimer} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 11, cursor: "pointer" }}>🗑 Supprimer la session</button>
               </div>
 
