@@ -7,6 +7,7 @@ import DayEditPopup from "./components/DayEditPopup";
 import DemandeCongesView from "./components/DemandeCongesView";
 import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget, EpargneFetesCetWidget } from "./components/CetView";
 import CetPdfsView from "./components/CetPdfsView";
+import SignaturePad from "./components/SignaturePad";
 
 
 // ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
@@ -8733,6 +8734,7 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
         </button>
       </div>
     </div>
+    <SignaturePad agent={currentAgent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}/>
   <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
       <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>Planning Previsionnel</div>
       <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>Partager mon planning personnel public (M/AM/N/J/JF/FOR/DISPO) avec mes collegues dans la vue Planning Previsionnel.</div>
@@ -10646,8 +10648,8 @@ export default function App(){
         onOpenEchanges={()=>setView("echanges")}/>}
       {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
   {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
-  {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent}/>}
-  {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent}/>}
+  {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
+  {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}

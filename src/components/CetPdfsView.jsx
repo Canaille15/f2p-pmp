@@ -120,14 +120,72 @@ async function chargerFormulaire(url) {
   return { doc, form: doc.getForm() };
 }
 
-async function finaliser(doc, form) {
+// Signature agent (09/08) — localise les zones où insérer la signature avant
+// aplatissement. Chaque imprimé CET a un champ AcroForm réel "Signature
+// électronique" (type /Sig, prévu pour une signature électronique certifiée
+// — hors de portée ici, on se contente de dessiner l'image PAR-DESSUS au
+// même endroit) mais certains imprimés le dupliquent (formulaire + copie
+// "Récépissé" en bas de page) et un seul (intention d'épargne de congés) a
+// EN PLUS un second champ homonyme qui appartient en réalité à une section
+// "Date de demande de MODIFICATION" bien différente, pas à l'identité de
+// l'agent — vérifié visuellement (rendu réel des 7 PDF, voir CLAUDE.md) avant
+// d'écrire cette règle : un champ signature n'est retenu QUE s'il se trouve
+// à moins de 50pt (verticalement, même page) d'un widget "Nom1" — la même
+// distance que dans TOUTES les vraies zones identité de ces imprimés (23 à
+// 32pt observés), très en dessous des ~80-100pt qui séparent la zone
+// "modification" du bloc identité le plus proche. Un imprimé sans aucun
+// champ signature (Demande d'utilisation en temps — sous-compte courant,
+// confirmé à l'oeil : aucune ligne "Signature" sur le PDF officiel) ne
+// renvoie simplement aucune zone, rien n'est dessiné.
+function trouverZonesSignature(doc, form) {
+  const pages = doc.getPages();
+  const nomWidgets = [];
+  try {
+    form.getField("Nom1").acroField.getWidgets().forEach(w => {
+      const rect = w.getRectangle();
+      const pageIdx = pages.findIndex(p => p.ref === w.P());
+      nomWidgets.push({ pageIdx, y: rect.y });
+    });
+  } catch (e) {}
+  const zones = [];
+  form.getFields().forEach(f => {
+    if (!f.getName().startsWith("Signature électronique")) return;
+    f.acroField.getWidgets().forEach(w => {
+      const rect = w.getRectangle();
+      const pageIdx = pages.findIndex(p => p.ref === w.P());
+      const proche = nomWidgets.some(n => n.pageIdx === pageIdx && Math.abs(n.y - rect.y) <= 50);
+      if (proche) zones.push({ pageIdx, rect });
+    });
+  });
+  return zones;
+}
+
+async function finaliser(doc, form, signatureDataUrl) {
+  const zones = signatureDataUrl ? trouverZonesSignature(doc, form) : [];
   try { form.flatten(); } catch (e) {}
+  if (signatureDataUrl && zones.length) {
+    try {
+      const sig = await doc.embedPng(signatureDataUrl);
+      const pages = doc.getPages();
+      zones.forEach(({ pageIdx, rect }) => {
+        const pad = 4;
+        const availW = rect.width - pad * 2, availH = rect.height - pad * 2;
+        const scale = Math.min(availW / sig.width, availH / sig.height, 1);
+        const w = sig.width * scale, h = sig.height * scale;
+        pages[pageIdx].drawImage(sig, {
+          x: rect.x + (rect.width - w) / 2,
+          y: rect.y + (rect.height - h) / 2,
+          width: w, height: h,
+        });
+      });
+    } catch (e) { console.error("Erreur insertion signature:", e); }
+  }
   return doc.save();
 }
 
 // lignes : [{ source, courant, finActivite }], déjà filtrées aux entrées
 // non-vides (au moins un des deux nombres > 0) par l'appelant.
-async function genererEpargneHorsConges({ nom, prenom, cp, lignes }) {
+async function genererEpargneHorsConges({ nom, prenom, cp, lignes, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_epargne_hors_conges.pdf");
   remplirIdentite(form, { nom, prenom, cp });
   const radiosACocher = new Set();
@@ -140,37 +198,37 @@ async function genererEpargneHorsConges({ nom, prenom, cp, lignes }) {
   }
   cocherPlusieurs(form, "types de jours", radiosACocher);
   try { form.getTextField("Date de la demande").setText(dateAuj()); } catch (e) {}
-  return finaliser(doc, form);
+  return finaliser(doc, form, signatureDataUrl);
 }
 
-async function genererIntentionConges({ nom, prenom, cp, joursCourant, joursFinActivite }) {
+async function genererIntentionConges({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_intention_epargne_conges.pdf");
   remplirIdentite(form, { nom, prenom, cp });
   if (joursCourant) { try { form.getTextField("Sous compte courantNombre de congés à épargner").setText(String(joursCourant)); } catch (e) {} }
   if (joursFinActivite) { try { form.getTextField("Sous compte fin dactivitéNombre de congés à épargner").setText(String(joursFinActivite)); } catch (e) {} }
   try { form.getTextField("Date de demande Row1").setText(dateAuj()); } catch (e) {}
-  return finaliser(doc, form);
+  return finaliser(doc, form, signatureDataUrl);
 }
 
-async function genererUtilisationFinActivite({ nom, prenom, cp, jours }) {
+async function genererUtilisationFinActivite({ nom, prenom, cp, jours, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_utilisation_fin_activite.pdf");
   remplirIdentite(form, { nom, prenom, cp });
   try { form.getRadioGroup("Forme d'absence").select("Congé fin activité"); } catch (e) {}
   try { form.getTextField("nombre jours congé").setText(String(jours)); } catch (e) {}
   try { form.getTextField("Date de la demande de lagent").setText(dateAuj()); } catch (e) {}
-  return finaliser(doc, form);
+  return finaliser(doc, form, signatureDataUrl);
 }
 
-async function genererMonetisationFinActivite({ nom, prenom, cp, jours, motif }) {
+async function genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_monetisation_fin_activite.pdf");
   remplirIdentite(form, { nom, prenom, cp });
   try { form.getTextField("Nombre de jours à monétiser").setText(String(jours)); } catch (e) {}
   try { form.getRadioGroup("motif choisi").select(motif); } catch (e) {}
   try { form.getTextField("Date de la demande").setText(dateAuj()); } catch (e) {}
-  return finaliser(doc, form);
+  return finaliser(doc, form, signatureDataUrl);
 }
 
-async function genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire }) {
+async function genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_utilisation_courant.pdf");
   remplirIdentite(form, { nom, prenom, cp });
   const palier = PALIERS_UTIL_COURANT.find(p => Number(jours) >= p.min && Number(jours) <= p.max);
@@ -180,15 +238,19 @@ async function genererUtilisationCourant({ nom, prenom, cp, jours, demandeComple
     try { form.getTextField(`Date de la demande${palier.suffixDate}`).setText(dateAuj()); } catch (e) {}
   }
   try { form.getRadioGroup("demande complémentaire").select(demandeComplementaire ? "oui" : "non"); } catch (e) {}
-  return finaliser(doc, form);
+  // Pas de champ "Signature électronique" sur cet imprimé officiel (vérifié
+  // visuellement, 09/08) — signatureDataUrl transmis quand même à finaliser
+  // pour rester cohérent avec les 5 autres, trouverZonesSignature() ne
+  // trouvera simplement aucune zone et rien ne sera dessiné.
+  return finaliser(doc, form, signatureDataUrl);
 }
 
-async function genererTransfertJours({ nom, prenom, cp, jours }) {
+async function genererTransfertJours({ nom, prenom, cp, jours, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_transfert_jours.pdf");
   remplirIdentite(form, { nom, prenom, cp });
   try { form.getTextField("nombre de jours transférer").setText(String(jours)); } catch (e) {}
   try { form.getTextField("Date de la demande").setText(dateAuj()); } catch (e) {}
-  return finaliser(doc, form);
+  return finaliser(doc, form, signatureDataUrl);
 }
 
 function messageEmail({ type, prenom, nom, jours, lignesEpargne, joursCourant, joursFinActivite, demandeComplementaire, motif }) {
@@ -238,7 +300,8 @@ Cordialement,
 ${prenom} ${nom}`;
 }
 
-export default function CetPdfsView({ currentAgent }) {
+export default function CetPdfsView({ currentAgent, agentProfiles }) {
+  const signatureDataUrl = agentProfiles?.[currentAgent?.id]?.signatureDataUrl || null;
   const [type, setType] = useState(TYPES[0].k);
   const [epargneLignes, setEpargneLignes] = useState(joursVides());
   const [joursCourant, setJoursCourant] = useState("");
@@ -303,22 +366,22 @@ export default function CetPdfsView({ currentAgent }) {
       let bytes, nomFichier;
       const dateNom = new Date().toISOString().slice(0, 10);
       if (type === "epargne") {
-        bytes = await genererEpargneHorsConges({ nom, prenom, cp, lignes: lignesEpargneValides });
+        bytes = await genererEpargneHorsConges({ nom, prenom, cp, lignes: lignesEpargneValides, signatureDataUrl });
         nomFichier = `CET epargne du ${dateNom}.pdf`;
       } else if (type === "intention") {
-        bytes = await genererIntentionConges({ nom, prenom, cp, joursCourant, joursFinActivite });
+        bytes = await genererIntentionConges({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl });
         nomFichier = `CET intention epargne conges du ${dateNom}.pdf`;
       } else if (type === "utilisation") {
-        bytes = await genererUtilisationFinActivite({ nom, prenom, cp, jours });
+        bytes = await genererUtilisationFinActivite({ nom, prenom, cp, jours, signatureDataUrl });
         nomFichier = `CET utilisation fin activite du ${dateNom}.pdf`;
       } else if (type === "monetisation") {
-        bytes = await genererMonetisationFinActivite({ nom, prenom, cp, jours, motif });
+        bytes = await genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, signatureDataUrl });
         nomFichier = `CET monetisation fin activite du ${dateNom}.pdf`;
       } else if (type === "utilisationCourant") {
-        bytes = await genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire });
+        bytes = await genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, signatureDataUrl });
         nomFichier = `CET utilisation courant du ${dateNom}.pdf`;
       } else {
-        bytes = await genererTransfertJours({ nom, prenom, cp, jours });
+        bytes = await genererTransfertJours({ nom, prenom, cp, jours, signatureDataUrl });
         nomFichier = `CET transfert jours du ${dateNom}.pdf`;
       }
       const blob = new Blob([bytes], { type: "application/pdf" });

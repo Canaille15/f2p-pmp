@@ -492,6 +492,7 @@ export const profil = {
       cetLedger:                extra.cetLedger               || { courant: [], finActivite: [] },
       compteursOrdre:           extra.compteursOrdre          || null,
       vtModuleActif:            extra.vtModuleActif           ?? null,
+      signatureDataUrl:         extra.signatureDataUrl        ?? null,
     };
   },
 
@@ -526,7 +527,7 @@ export const profil = {
       'tcReports','tyReports','rpAcquis','ruAcquis','rqAcquis','rnAcquis','tcAcquis','tyAcquis',
       'vtEntitlement','vtTracking','vtReports','congesDemandes','tcAjustementManuel',
       'tcLedger','tyLedger','rnLedger','bilanGlobalDureeJourMin','cetLedger','compteursOrdre',
-      'vtModuleActif',
+      'vtModuleActif','signatureDataUrl',
     ];
     const donnees_json = {};
     EXTRA_KEYS.forEach(k => { if (data[k] !== undefined) donnees_json[k] = data[k]; });

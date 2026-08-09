@@ -73,7 +73,13 @@ Cordialement,
 ${prenom} ${nom}`;
 }
 
-async function genererPdf({ nom, prenom, cp, grade, poste, etablissement, periodes }) {
+// Rectangle "Signature" validé visuellement (rendu réel du PDF officiel,
+// 09/08) sur la page 2 du document source (index 1, "pageForm") — coordonnées
+// natives du PDF, à faire passer par versX/versY/versTaille comme tous les
+// autres champs de cette page avant de dessiner.
+const RECT_SIGNATURE = { x: 547.927, y: 325.721, width: 94.721, height: 54.909 };
+
+async function genererPdf({ nom, prenom, cp, grade, poste, etablissement, periodes, signatureDataUrl }) {
   const existingBytes = await fetch("/GA_demande_autorisation_absence.pdf").then(r => r.arrayBuffer());
   const srcDoc = await PDFDocument.load(existingBytes);
   const outDoc = await PDFDocument.create();
@@ -140,12 +146,29 @@ async function genererPdf({ nom, prenom, cp, grade, poste, etablissement, period
     gauche(nbJours(p.debut, p.fin), r.jours, y, 9);
   });
 
+  // Signature agent (09/08, optionnelle) — insérée dans la case "Signature"
+  // du formulaire si l'agent en a enregistré une dans Mon profil. Aucune
+  // signature enregistrée = PDF généré exactement comme avant.
+  if (signatureDataUrl) {
+    try {
+      const sig = await outDoc.embedPng(signatureDataUrl);
+      const pad = 6;
+      const availW = RECT_SIGNATURE.width - pad * 2, availH = RECT_SIGNATURE.height - pad * 2;
+      const scale = Math.min(availW / sig.width, availH / sig.height, 1);
+      const w = sig.width * scale, h = sig.height * scale;
+      const x = RECT_SIGNATURE.x + (RECT_SIGNATURE.width - w) / 2;
+      const y = RECT_SIGNATURE.y + (RECT_SIGNATURE.height - h) / 2;
+      page1.drawImage(sig, { x: versX(x), y: versY(y), width: versTaille(w), height: versTaille(h) });
+    } catch (e) { console.error("Erreur insertion signature:", e); }
+  }
+
   fabriquerPageMiseEnPage(pageInstructions);
 
   return outDoc.save();
 }
 
-export default function DemandeCongesView({ currentAgent }) {
+export default function DemandeCongesView({ currentAgent, agentProfiles }) {
+  const signatureDataUrl = agentProfiles?.[currentAgent?.id]?.signatureDataUrl || null;
   const [poste, setPoste] = useState(OPTIONS_POSTE[0]);
   const [periodes, setPeriodes] = useState([{ debut: "", fin: "" }]);
   const [repartition, setRepartition] = useState(
@@ -201,6 +224,7 @@ export default function DemandeCongesView({ currentAgent }) {
         poste,
         etablissement: "EIC PSO",
         periodes: periodesValides,
+        signatureDataUrl,
       });
       const blob = new Blob([bytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
