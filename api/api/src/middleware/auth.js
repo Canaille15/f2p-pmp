@@ -17,17 +17,19 @@ async function authMiddleware(req, res, next) {
 
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    // is_admin est relu en base a chaque requete (pas depuis le JWT) : sinon
-    // une promotion/retrait admin ne prend effet qu'a la prochaine reconnexion
+    // is_admin et is_afo sont relus en base a chaque requete (pas depuis le JWT) :
+    // sinon une promotion/retrait ne prend effet qu'a la prochaine reconnexion
     // de l'agent concerne, jusqu'a expiration de son token (30j).
     const [rows] = await pool.query(
-      `SELECT s.id, au.is_admin
-       FROM session s JOIN auth au ON au.cp_agent = s.cp_agent
+      `SELECT s.id, au.is_admin, pa.is_afo
+       FROM session s
+       JOIN auth au ON au.cp_agent = s.cp_agent
+       LEFT JOIN profil_agent pa ON pa.cp_agent = s.cp_agent
        WHERE s.cp_agent = ? AND s.token_hash = ? AND s.expires_at > NOW()`,
       [payload.cp, tokenHash]
     );
     if (!rows.length) return res.status(401).json({ error: 'Session expirée' });
-    req.agent = { cp: payload.cp, is_admin: !!rows[0].is_admin };
+    req.agent = { cp: payload.cp, is_admin: !!rows[0].is_admin, is_afo: !!rows[0].is_afo };
     next();
   } catch (e) {
     // Erreur DB (ex: coupure de connexion Railway, ECONNRESET deja vu plusieurs
@@ -46,4 +48,10 @@ function adminMiddleware(req, res, next) {
   next();
 }
 
-module.exports = { authMiddleware, adminMiddleware };
+function afoMiddleware(req, res, next) {
+  if (!req.agent?.is_afo)
+    return res.status(403).json({ error: 'Accès formateur (AFO) requis' });
+  next();
+}
+
+module.exports = { authMiddleware, adminMiddleware, afoMiddleware };

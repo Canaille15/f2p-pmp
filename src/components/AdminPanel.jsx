@@ -22,6 +22,9 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   // Filtre "Réserve régionale" : orthogonal à famille (un réserviste garde sa
   // famille PRCI ou PAR de base, ce filtre s'ajoute plutôt qu'il ne remplace).
   const [reserveOnly, setReserveOnly] = useState(false);
+  // Filtre "Formateur AFO" : même principe que Réserve régionale, orthogonal
+  // à famille/réserve (un AFO garde sa famille PRCI/PAR de base).
+  const [afoOnly, setAfoOnly] = useState(false);
   const [modal, setModal]             = useState(null); // "create" | { type:"delete"|"reset", agent }
   const [msg, setMsg]                 = useState(null); // { type:"ok"|"err", text }
 
@@ -51,9 +54,11 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       a.cp?.toLowerCase().includes(q);
     const matchFamille = familleFilter === "TOUS" || a.famille === familleFilter;
     const matchReserve = !reserveOnly || a.is_reserve;
-    return matchSearch && matchFamille && matchReserve;
+    const matchAfo = !afoOnly || a.is_afo;
+    return matchSearch && matchFamille && matchReserve && matchAfo;
   });
   const nbReserve = agents.filter(a => a.is_reserve).length;
+  const nbAfo = agents.filter(a => a.is_afo).length;
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
   async function handleCreate(data) {
@@ -109,6 +114,16 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       onAgentsChanged?.();
     } catch (e) {
       afficherMsg("err", e.message || "Erreur modification réserve régionale");
+    }
+  }
+  async function handleToggleAfo(agent) {
+    try {
+      await api.agents.update(agent.cp, { is_afo: !agent.is_afo });
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} ${agent.is_afo ? "n'est plus" : "est maintenant"} formateur AFO`);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur modification statut AFO");
     }
   }
   async function handleResetPin(agent, newPin) {
@@ -181,6 +196,15 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                 color: reserveOnly ? "#fff" : "#64748b"
               }}>
               🔁 Réserve régionale ({nbReserve})
+            </button>
+            <button onClick={() => setAfoOnly(v => !v)}
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: afoOnly ? "#b45309" : "#f1f5f9",
+                color: afoOnly ? "#fff" : "#64748b"
+              }}>
+              🎓 Formateur AFO ({nbAfo})
             </button>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
@@ -272,6 +296,15 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                     borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
                   }}>
                   🔁 Réserve régionale{a.is_reserve ? " ✓" : ""}
+                </button>
+                <button onClick={() => handleToggleAfo(a)}
+                  style={{
+                    background: a.is_afo ? "#fef3c7" : "#f8fafc",
+                    color: a.is_afo ? "#b45309" : "#94a3b8",
+                    border: `1px solid ${a.is_afo ? "#fde68a" : "#e2e8f0"}`,
+                    borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                  }}>
+                  🎓 Formateur AFO{a.is_afo ? " ✓" : ""}
                 </button>
               </div>
 
@@ -380,7 +413,7 @@ function ModalCreer({ onConfirm, onClose }) {
 // ─── MODAL SUPPRIMER ─────────────────────────────────────────────────────────
 
 function ModalModifier({ agent, onConfirm, onClose }) {
-  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, telephone: "", email: "" });
+  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, is_afo: agent.is_afo || false, telephone: "", email: "" });
   const [nouveauCp, setNouveauCp] = useState(agent.cp || "");
   const [err, setErr] = useState("");
   const [coordLoading, setCoordLoading] = useState(true);
@@ -398,7 +431,7 @@ function ModalModifier({ agent, onConfirm, onClose }) {
     const cpChange = nouveauCp.trim().toUpperCase() !== agent.cp;
     if (cpChange && !window.confirm(`Changer le CP de ${agent.cp} vers ${nouveauCp.trim().toUpperCase()} ? Cette action met a jour toutes les donnees liees a cet agent.`)) return;
     setErr("");
-    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
+    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, is_afo: form.is_afo, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
   }
 
   return (
@@ -468,6 +501,18 @@ function ModalModifier({ agent, onConfirm, onClose }) {
               color: form.is_reserve ? "#fff" : "#64748b"
             }}>
             🔁 {form.is_reserve ? "Réserviste régional" : "Pas réserviste"}
+          </button>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Formateur AFO</div>
+          <button onClick={() => setForm(p => ({ ...p, is_afo: !p.is_afo }))}
+            style={{
+              width: "100%", padding: "8px", border: "none", borderRadius: 8, cursor: "pointer",
+              fontWeight: 700, fontSize: 13,
+              background: form.is_afo ? "#b45309" : "#f1f5f9",
+              color: form.is_afo ? "#fff" : "#64748b"
+            }}>
+            🎓 {form.is_afo ? "Formateur AFO" : "Pas formateur"}
           </button>
         </div>
         {err && <div style={{ color: "#dc2626", fontSize: 12, fontWeight: 600 }}>! {err}</div>}

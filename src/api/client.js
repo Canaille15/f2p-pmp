@@ -454,6 +454,7 @@ export const profil = {
       isAdmin:                  row.is_admin               || false,
       roulement:                row.roulement              || null,
       isReserve:                row.is_reserve             || false,
+      isAfo:                    row.is_afo                 || false,
       famillesHab:              row.familles_hab           || null,
       habilitations:            Array.isArray(hab) ? Object.fromEntries((hab||[]).map(h=>[h.code_poste,'HC'])) : (row.habilitations||{}),
       agentColors:              row.couleurs               || {},
@@ -493,6 +494,8 @@ export const profil = {
       compteursOrdre:           extra.compteursOrdre          || null,
       vtModuleActif:            extra.vtModuleActif           ?? null,
       signatureDataUrl:         extra.signatureDataUrl        ?? null,
+      formationsPersoDeclarees: extra.formationsPersoDeclarees|| [],
+      formationNotifications:   extra.formationNotifications  || [],
     };
   },
 
@@ -527,7 +530,7 @@ export const profil = {
       'tcReports','tyReports','rpAcquis','ruAcquis','rqAcquis','rnAcquis','tcAcquis','tyAcquis',
       'vtEntitlement','vtTracking','vtReports','congesDemandes','tcAjustementManuel',
       'tcLedger','tyLedger','rnLedger','bilanGlobalDureeJourMin','cetLedger','compteursOrdre',
-      'vtModuleActif','signatureDataUrl',
+      'vtModuleActif','signatureDataUrl','formationsPersoDeclarees','formationNotifications',
     ];
     const donnees_json = {};
     EXTRA_KEYS.forEach(k => { if (data[k] !== undefined) donnees_json[k] = data[k]; });
@@ -535,6 +538,7 @@ export const profil = {
     const body = {};
     if (data.roulement      !== undefined) body.roulement      = data.roulement;
     if (data.isReserve      !== undefined) body.is_reserve     = data.isReserve;
+    if (data.isAfo          !== undefined) body.is_afo         = data.isAfo;
     if (data.famillesHab    !== undefined) body.familles_hab   = data.famillesHab;
     if (data.habilitations  !== undefined) body.habilitations  = data.habilitations;
     if (data.agentColors    !== undefined) body.agent_colors   = data.agentColors;
@@ -546,6 +550,35 @@ export const profil = {
       body: JSON.stringify(body),
     });
   },
+};
+
+// ─── MODULE FORMATION ─────────────────────────────────────────────────────────
+
+export const formation = {
+  // Catalogue — lecture pour tous, écriture réservée aux AFO (backend gate)
+  getCatalogue: () => apiFetch('/formation/catalogue'),
+  createCatalogue: (data) => apiFetch('/formation/catalogue', { method: 'POST', body: JSON.stringify(data) }),
+  updateCatalogue: (id, data) => apiFetch(`/formation/catalogue/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCatalogue: (id) => apiFetch(`/formation/catalogue/${id}`, { method: 'DELETE' }),
+
+  // Sessions — réservé aux AFO
+  getSessions: () => apiFetch('/formation/sessions'),
+  getSessionDetail: (id) => apiFetch(`/formation/sessions/${id}`),
+  createSession: (data) => apiFetch('/formation/sessions', { method: 'POST', body: JSON.stringify(data) }),
+  updateSession: (id, data) => apiFetch(`/formation/sessions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSession: (id) => apiFetch(`/formation/sessions/${id}`, { method: 'DELETE' }),
+  addFormateur: (id, cp_agent) => apiFetch(`/formation/sessions/${id}/formateurs`, { method: 'POST', body: JSON.stringify({ cp_agent }) }),
+  removeFormateur: (id, cp) => apiFetch(`/formation/sessions/${id}/formateurs/${cp}`, { method: 'DELETE' }),
+  addParticipant: (id, cp_agent) => apiFetch(`/formation/sessions/${id}/participants`, { method: 'POST', body: JSON.stringify({ cp_agent }) }),
+  removeParticipant: (id, cp) => apiFetch(`/formation/sessions/${id}/participants/${cp}`, { method: 'DELETE' }),
+  lancerSession: (id, message) => apiFetch(`/formation/sessions/${id}/lancer`, { method: 'POST', body: JSON.stringify({ message }) }),
+
+  // Vue agent (self)
+  getMesSessions: () => apiFetch('/formation/mes-sessions'),
+  declarerPerso: (data) => apiFetch('/formation/perso', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Stats AFO
+  getStats: () => apiFetch('/formation/stats'),
 };
 
 // ─── MODULE CPS (planning officiel SNCF importé) ──────────────────────────────
@@ -859,6 +892,7 @@ const api = {
   previsionnelSignalements,
   journeeSpecialeNotes,
   annuaire,
+  formation,
 };
 
 export default api;

@@ -22,22 +22,33 @@ async function updateProfil(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { is_reserve, familles_hab, agent_colors, donnees_json } = req.body;
+  const { is_reserve, is_afo, familles_hab, agent_colors, donnees_json } = req.body;
+  // is_afo est reserve aux admins (contrairement a is_reserve, qui n'a
+  // historiquement aucun garde ici) : un agent ne peut jamais se l'attribuer
+  // lui-meme via cet endpoint self-service. shouldSetAfo pilote un IF(...)
+  // dans la clause ON DUPLICATE KEY UPDATE plutot que le COALESCE(VALUES(),...)
+  // habituel, car VALUES(is_afo) vaudrait 0 (jamais NULL) quand la requete
+  // ne le fournit pas, ce qui remettrait sinon la colonne a 0 a chaque
+  // sauvegarde de profil qui ne touche pas ce champ (ex: juste les couleurs).
+  const shouldSetAfo = req.agent.is_admin && is_afo !== undefined;
   try {
     await pool.query(
-      `INSERT INTO profil_agent (cp_agent, is_reserve, familles_hab, couleurs, donnees_json)
-       VALUES (?,?,?,?,?)
+      `INSERT INTO profil_agent (cp_agent, is_reserve, is_afo, familles_hab, couleurs, donnees_json)
+       VALUES (?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
          is_reserve   = COALESCE(VALUES(is_reserve),   is_reserve),
+         is_afo       = IF(?, VALUES(is_afo), is_afo),
          familles_hab = COALESCE(VALUES(familles_hab),  familles_hab),
          couleurs     = COALESCE(VALUES(couleurs),      couleurs),
          donnees_json = CASE WHEN VALUES(donnees_json) IS NULL THEN donnees_json
                               ELSE JSON_MERGE_PATCH(COALESCE(donnees_json,'{}'), VALUES(donnees_json)) END`,
       [cp,
        is_reserve !== undefined ? (is_reserve?1:0) : 0,
+       shouldSetAfo ? (is_afo?1:0) : 0,
        familles_hab || null,
        agent_colors !== undefined ? JSON.stringify(agent_colors) : null,
-       donnees_json !== undefined ? JSON.stringify(donnees_json) : null]
+       donnees_json !== undefined ? JSON.stringify(donnees_json) : null,
+       shouldSetAfo ? 1 : 0]
     );
     res.json({ message: 'Profil mis à jour' });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }

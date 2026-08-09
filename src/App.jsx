@@ -8,6 +8,7 @@ import DemandeCongesView from "./components/DemandeCongesView";
 import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget, EpargneFetesCetWidget } from "./components/CetView";
 import CetPdfsView from "./components/CetPdfsView";
 import SignaturePad from "./components/SignaturePad";
+import FormationView from "./components/FormationView";
 
 
 // ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
@@ -4377,9 +4378,10 @@ const DETAIL_CONFIG = {
   MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626", notice:NOTICE_MALADIE },
   // Formation (17/07, demandé par Olivier) : même principe que Maladie — pure
   // consultation (pas d'acquis, pas de report), archive A+1 + 2 ans, détail
-  // mensuel des dates. Version 1 volontairement minimale — à compléter plus
-  // tard une fois le "module Formation" plus large défini (voir CLAUDE.md).
-  FOR: { codes:["FOR"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Formation", icon:"📚", gradientFrom:"#b45309", gradientTo:"#92400e", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#78350f", accentColor:"#b45309" },
+  // mensuel des dates. Remplacé le 09/08 par le vrai Module Formation
+  // (src/components/FormationView.jsx, accès sidebar "🎓 Formation") — la
+  // carte "Formation" du panneau compteurs n'ouvre plus ce modal générique,
+  // voir DashboardCompteurs (onOpenFormation) plus bas.
 };
 
 // Jours correspondant à un ou plusieurs codes équipe pour une année, avec
@@ -5060,7 +5062,7 @@ function BilanGlobalModal({agent, schedule, agentProfiles, setAgentProfiles, pau
 // entière, comme n'importe quelle autre carte.
 const COMPTEUR_CARD_KEYS = ["conges","travail","RP","RU","RQ","FETE","RN","PF","TC","TY","VT","CET","FOR","MA"];
 
-function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin}){
+function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin, onOpenFormation}){
   const currentYear = new Date().getFullYear();
   // Année et état ouvert/fermé mémorisés (localStorage) : on reste sur ce qui
   // était consulté après une actualisation, plutôt que de revenir par défaut
@@ -5149,6 +5151,12 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   const fetesInfo = useMemo(()=>computeFetesLignes(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const nbFetesATraiter = fetesInfo.lignes.filter(l=>!l.override?.epargneCet && (l.statut==="attente"||l.statut==="perdue_probable")).length;
 
+  // Module Formation (09/08) : cloche sur la carte tant qu'une notification
+  // d'inscription AFO n'a pas été vue par l'agent (voir FormationView.jsx,
+  // materialisee cote backend au lancement d'une session).
+  const agKeyForm = agent?.immatriculation||agent?.cp||agent?.id;
+  const nbFormationsNonVues = (agentProfiles[agKeyForm]?.formationNotifications||[]).filter(n=>!n.acquitte).length;
+
   // VT (temps partiel) : même principe que Congés (carte reflète le même total
   // que le tableau de bord dédié), avec en plus le workflow Demandé→Accordé→Pris.
   const vtData = useMemo(()=>computeDashboardVT(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
@@ -5228,7 +5236,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"TY",      label:"TY",              color:"#0284c7", subtitle:`Solde — ${moisEnCoursLabel}`},
     ...(vtActif ? [{key:"VT", label:"VT",    color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2}] : []),
     {key:"CET",     label:"CET",             color:"#7c3aed", subtitle:"Compte épargne temps"},
-    {key:"FOR",     label:"Formation",       color:"#b45309", subtitle:"Jours formation dans l'année"},
+    {key:"FOR",     label:"Formation",       color:"#b45309", subtitle: nbFormationsNonVues>0 ? `🔔 ${nbFormationsNonVues} à voir` : "Jours formation dans l'année", alert: nbFormationsNonVues>0},
     {key:"MA",      label:"Maladie",         color:"#dc2626", subtitle:"Jours maladie dans l'année"},
   ];
 
@@ -5377,11 +5385,12 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           const isCetCard = card.key==="CET";
           const isPfCard = card.key==="PF";
           const isTcCard = card.key==="TC";
+          const isFormationCard = card.key==="FOR";
           const isDetailCard = !!DETAIL_CONFIG[card.key];
-          const isClickable = !reorderMode && (isTravailCard || isCongesCard || isFetesCard || isVtCard || isCetCard || isPfCard || isTcCard || isDetailCard);
+          const isClickable = !reorderMode && (isTravailCard || isCongesCard || isFetesCard || isVtCard || isCetCard || isPfCard || isTcCard || isFormationCard || isDetailCard);
           return(
             <div key={card.key}
-              onClick={!isClickable ? undefined : isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isCetCard ? ()=>setShowCetDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
+              onClick={!isClickable ? undefined : isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isCetCard ? ()=>setShowCetDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isFormationCard ? onOpenFormation : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
               background:"#fff",borderRadius:12,
               border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
@@ -7079,7 +7088,7 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   return result;
 }
 
-function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,onOpenEchanges}){
+function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,onOpenEchanges,onOpenFormation}){
   const [echangesDismissedCount,setEchangesDismissedCount]=usePersist("echangesDismissedCount",0);
   const [showHab,setShowHab]=useState(false);
   const [showHabRoul,setShowHabRoul]=useState(false);
@@ -7798,7 +7807,7 @@ justifyContent: "flex-start",
       onClose={()=>setShowHabRoul(false)}/>}
     {/* Tableau de bord compteurs */}
     {agent&&<DashboardCompteurs agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles}
-        isOwnProfile={isOwnProfile} isAdmin={isAdmin}/>}
+        isOwnProfile={isOwnProfile} isAdmin={isAdmin} onOpenFormation={onOpenFormation}/>}
   </div>);
 }
 
@@ -9889,7 +9898,7 @@ const handleLogin = async (pinOverride) => {
         if(rememberMe) localStorage.setItem(REMEMBER_CP_KEY, mat);
         else localStorage.removeItem(REMEMBER_CP_KEY);
       } catch {}
-      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
+      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo });
     } catch(e) {
       if(e.message?.includes("429") || e.message?.includes("Trop")) {
         setError("Trop de tentatives. Attendez quelques minutes.");
@@ -9913,7 +9922,7 @@ const handleLogin = async (pinOverride) => {
         if(rememberMe) localStorage.setItem(REMEMBER_CP_KEY, mat);
         else localStorage.removeItem(REMEMBER_CP_KEY);
       } catch {}
-      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin });
+      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo });
     } catch(e) {
       setError(e.message || "Erreur connexion");
     }
@@ -10088,14 +10097,20 @@ export default function App(){
         fam: r.famille||"PRCI",
         famille: r.famille||"PRCI",
         is_admin: !!r.is_admin,
+        is_afo: !!r.is_afo,
       }));
       setAgents(mapped);
-      // Synchroniser le statut admin de l'utilisateur connecte : une promotion/
-      // retrait fait par un autre admin ne doit pas attendre une reconnexion
-      // pour faire apparaitre/disparaitre l'onglet Admin du panneau lateral.
+      // Synchroniser le statut admin ET afo de l'utilisateur connecte : une
+      // promotion/retrait fait par un autre admin ne doit pas attendre une
+      // reconnexion pour faire apparaitre/disparaitre l'onglet Admin/le
+      // module Gestion Formation.
       const myId = currentUser?.agent?.immatriculation||currentUser?.agent?.cp||currentUser?.agent?.id;
       const me = mapped.find(a=>a.id===myId);
-      if(me) setCurrentUser(prev=>(prev&&prev.isAdmin!==me.is_admin)?{...prev,isAdmin:me.is_admin}:prev);
+      if(me) setCurrentUser(prev=>{
+        if(!prev) return prev;
+        if(prev.isAdmin===me.is_admin && prev.isAfo===me.is_afo) return prev;
+        return {...prev,isAdmin:me.is_admin,isAfo:me.is_afo};
+      });
     }).catch(e=>console.error("Erreur chargement agents:",e));
   };
   useEffect(()=>{
@@ -10142,6 +10157,7 @@ export default function App(){
   },[currentAgent]); // eslint-disable-line
   
   const isAdmin=currentUser?.isAdmin||false;
+  const isAfo=currentUser?.isAfo||false;
 
 
   const handleLogin=(user)=>{
@@ -10522,6 +10538,37 @@ export default function App(){
     setSchedule(prev=>{const next={...prev};const key=`${agentId}-${date}`;if(next[key])next[key]={...next[key],fetePaye:paye};return next;});
   };
 
+  const myAgentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
+  const nbFormationsNonVues = (agentProfiles[myAgentId]?.formationNotifications||[]).filter(n=>!n.acquitte).length;
+  // Rappele apres une action qui ecrit dans le planning d'un tiers ou du soi
+  // (Module Formation) — reutilise reconcileSchedule comme partout ailleurs.
+  const refreshMonSchedule = ()=>{
+    api.planning.getSchedule(myAgentId).then(entries=>{
+      if(entries) setSchedule(prev=>reconcileSchedule(prev, myAgentId, entries));
+    }).catch(()=>{});
+  };
+  // Idem pour le profil : le backend du module Formation peut ecrire
+  // directement dans profil_agent.donnees_json d'un agent (ex: notification
+  // d'inscription a une session AFO) sans passer par le flux normal
+  // agentProfiles -> api.profil.save() de cet agent. Si l'agent AFO est
+  // lui-meme participant, sa propre session reste avec un ancien instantane
+  // local tant qu'elle n'est pas rafraichie -- et le prochain autosave
+  // generique renverrait cet instantane perime, effacant l'ecriture backend
+  // (JSON_MERGE_PATCH remplace un tableau entier, pas de fusion element par
+  // element). Meme garde anti-course que handleFocus (comparaison de
+  // snapshot) pour ne pas ecraser un changement local plus recent.
+  const refreshMonProfil = ()=>{
+    const snapshotAvant = agentProfilesRef.current[myAgentId];
+    api.profil.get(myAgentId).then(profile=>{
+      if(!profile) return;
+      if(agentProfilesRef.current[myAgentId] !== snapshotAvant) return;
+      setAgentProfiles(prev=>({...prev,[myAgentId]:{
+        ...(prev[myAgentId]||{}),
+        ...profile,
+        habilitations: Array.isArray(profile.habilitations) ? Object.fromEntries((profile.habilitations||[]).map(h=>[h.code_poste,'HC'])) : (profile.habilitations||{}),
+      }}));
+    }).catch(()=>{});
+  };
 
   const VIEWS=[
     {k:"personal",l:"📊 Mon planning"},
@@ -10531,6 +10578,7 @@ export default function App(){
     {k:"annuaire",l:(<><svg width="15" height="15" viewBox="0 0 24 24" fill="#D22B2B" style={{verticalAlign:"-2px",marginRight:2}}><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.36 11.36 0 0 0 3.57.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.57 1 1 0 0 1-.24 1.01l-2.21 2.21z"/></svg> Annuaire</>)},
     {k:"conges",l:"🗓️ Demande de congés"},
     {k:"cetPdfs",l:"🏦 CET"},
+    {k:"formation",l:`🎓 Formation${nbFormationsNonVues>0?` 🔔${nbFormationsNonVues}`:""}`},
     {k:"profil",  l:"👤 Mon profil"},
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
@@ -10645,11 +10693,13 @@ export default function App(){
         isAdmin={isAdmin}
         currentUser={currentUser}
         echangesCount={echangesOuvertesCount}
-        onOpenEchanges={()=>setView("echanges")}/>}
+        onOpenEchanges={()=>setView("echanges")}
+        onOpenFormation={()=>setView("formation")}/>}
       {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
   {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
   {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
+  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} currentUser={currentUser} agents={agents} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} refreshProfil={refreshMonProfil}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
