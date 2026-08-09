@@ -523,13 +523,17 @@ async function getStats(req, res) {
        ORDER BY fc.categorie, fc.intitule`
     );
     // 10/08 : un agent qui a decline (retire la formation de son planning)
-    // une session deja passee n'a en realite jamais suivi la formation --
-    // exclu du comptage "agents formes" (Olivier : "si un agent ne
-    // participe plus a la formation apres la date [...] ca met a jour les
-    // stats"). Une session encore a venir (ou pas encore lancee) reste
-    // comptee normalement -- l'assiduite ne peut se juger qu'apres coup.
+    // une session lancee n'a en realite jamais suivi la formation -- exclu
+    // du comptage "agents formes" (Olivier : "si un agent ne participe plus
+    // a la formation [...] ca met a jour les stats"). Plus besoin d'attendre
+    // que la date soit passee (simplifie le 10/08 -- second retour d'Olivier
+    // : "c'est peu utile d'attendre la date, vu que l'agent peut se remettre
+    // sur une des formations prevue ce jour la") -- des qu'il decline, il
+    // n'est plus compte, meme si le jour meme n'est pas encore arrive ; des
+    // qu'il se reinscrit (voir picker DayEditPopup), il recompte aussitot.
+    // Une session pas encore lancee reste toujours comptee normalement.
     const PRESENCE_REELLE = `(
-      fs.statut != 'lancee' OR fs.date_session >= CURDATE() OR EXISTS(
+      fs.statut != 'lancee' OR EXISTS(
         SELECT 1 FROM planning_jour pj JOIN planning_periode pp ON pp.planning_jour_id=pj.id
         WHERE pj.cp_agent = fe.cp_agent AND pj.date_jour = fs.date_session AND pp.code_equipe='FOR'
       )

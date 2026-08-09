@@ -88,10 +88,11 @@ function ChoixLibre({ options, choix, onChoix, autre, onAutre, famille }) {
 
 const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" };
 const labelStyle = { fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 };
-// 10/08 (Olivier, sur mobile) : le gris clair habituel (#64748b/#94a3b8) est
-// trop peu contrasté pour lire les noms de formateur/participants — texte
-// plus foncé + plus gras réservé à ces lignes-là.
-const rosterStyle = { fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 4, lineHeight: 1.4 };
+// 10/08 (Olivier, sur mobile, signalé une 2e fois : "les nom des agents [...]
+// sont peu lisible [...] augmenter la police noire peut etre") : le gris
+// clair habituel (#64748b/#94a3b8) est trop peu contrasté pour lire des noms
+// — quasi noir + plus grand + plus gras, réservé à ces lignes-là.
+const rosterStyle = { fontSize: 13, color: "#1e293b", fontWeight: 700, marginTop: 4, lineHeight: 1.4 };
 function RosterLignes({ session, agentId }) {
   const autres = agentId ? session.participants.filter(p => p.cp !== agentId) : session.participants;
   return (
@@ -130,7 +131,7 @@ export default function FormationView({ currentAgent, currentUser, agents, agent
     <div style={{ padding: "12px", maxWidth: 1000, margin: "0 auto", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>🎓 Formation</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+        <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>
           {isAfo ? "Ton archive personnelle, et la gestion des formations en tant qu'AFO" : "Tes formations suivies"}
         </div>
       </div>
@@ -185,16 +186,20 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
     [sessions]
   );
 
-  // 10/08 (Olivier) : une session Terminée que l'agent a déclinée (retiré la
-  // formation de son planning après coup) disparaît de son archive perso —
-  // il ne l'a en réalité jamais suivie. Tant que la date n'est pas passée,
-  // elle reste affichée normalement (rien à juger avant coup). Recalculé à
-  // la lecture (toujours_present vient du planning réel), jamais stocké —
-  // s'il se réinscrit (voir picker dans DayEditPopup), elle réapparaît.
+  // 10/08 (Olivier, simplifié après un second retour — "c'est peu utile
+  // d'attendre la date, vu que l'agent peut se remettre sur une des
+  // formations prevue ce jour la") : une session LANCÉE que l'agent a
+  // déclinée (retiré la formation de son planning) disparaît de son archive
+  // perso immédiatement, sans attendre que la date soit passée — puisqu'il
+  // peut de toute façon la reprendre à tout moment via le picker
+  // "Formation(s) proposée(s) ce jour" dans DayEditPopup. Recalculé à la
+  // lecture (toujours_present vient du planning réel), jamais stocké — dès
+  // qu'il se réinscrit, elle réapparaît. Une session encore "planifiée"
+  // (jamais lancée, jamais rien écrit) n'est jamais concernée.
   const items = useMemo(() => {
     const a = sessions
       .filter(s => s.est_participant)
-      .filter(s => !(displayStatut(s) === "terminee" && !s.toujours_present))
+      .filter(s => !(s.statut === "lancee" && !s.toujours_present))
       .map(s => ({ source: "afo", key: `afo-${s.id}`, date: s.date_session, ...s }));
     const b = perso.map(p => ({ source: "perso", key: `perso-${p.id}`, date: p.date, ...p }));
     return [...a, ...b].sort((x, y) => (y.date || "").localeCompare(x.date || ""));
@@ -214,24 +219,37 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
     <div>
       {err && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 10 }}>⚠️ {err}</div>}
 
-      {isAfo && sessionsFormateur.length > 0 && (
+      {/* 10/08 (Olivier) : section toujours affichée pour un AFO, même sans
+          aucune session à enseigner — un état vide explicite "tranche" mieux
+          visuellement les deux rôles (formateur / participant) que de faire
+          disparaître le bloc entier, ce qui donnait l'impression que le
+          reste de la page (archive perso) était la seule chose qui existe. */}
+      {isAfo && (
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f", marginBottom: 8 }}>👨‍🏫 Tes sessions formateur</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {sessionsFormateur.map(s => (
-              <div key={s.id} onClick={() => onGoToSession(s.id)}
-                style={{ cursor: "pointer", background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
-                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
-                  <RosterLignes session={s} agentId={agentId} />
+          {sessionsFormateur.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: "#475569", fontStyle: "italic", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px" }}>
+              Aucune session en tant que formateur pour l'instant.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {sessionsFormateur.map(s => (
+                <div key={s.id} onClick={() => onGoToSession(s.id)}
+                  style={{ cursor: "pointer", background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
+                    <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
+                    <RosterLignes session={s} agentId={agentId} />
+                  </div>
+                  <StatutBadge session={s} />
                 </div>
-                <StatutBadge session={s} />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
+
+      {isAfo && <div style={{ fontSize: 13, fontWeight: 800, color: "#78350f", marginBottom: 8 }}>🧑‍🎓 Tes formations suivies</div>}
 
       <button onClick={() => setShowDeclare(v => !v)} style={{ ...btnPrimary(AMBRE), marginBottom: 14 }}>
         {showDeclare ? "✕ Annuler" : "+ Déclarer une formation suivie"}
@@ -259,7 +277,7 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                 <div>
                   <div style={{ fontWeight: 800, color: "#1e293b", fontSize: 14 }}>{it.intitule}</div>
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>
                     📅 {fmtDate(it.date_session)} {it.lieu ? `· 📍 ${it.lieu}` : ""} · {it.categorie}
                   </div>
                 </div>
@@ -287,7 +305,7 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                 <div>
                   <div style={{ fontWeight: 800, color: "#1e293b", fontSize: 14 }}>{it.intitule}</div>
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>
                     📅 {fmtDate(it.date)} {it.organisme ? `· ${it.organisme}` : ""}
                   </div>
                 </div>
@@ -415,7 +433,7 @@ function CatalogueSection({ catalogue, loading, onChange }) {
                 <div key={f.id} style={{ background: "#fff", border: `1.5px solid ${f.statut === "archive" ? "#e2e8f0" : NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", opacity: f.statut === "archive" ? 0.6 : 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <div>
                     <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{f.intitule}{f.obligatoire ? " ⭐" : ""}</div>
-                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{[f.duree, f.format, f.statut === "archive" ? "archivée" : null].filter(Boolean).join(" · ")}</div>
+                    <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>{[f.duree, f.format, f.statut === "archive" ? "archivée" : null].filter(Boolean).join(" · ")}</div>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => { setEdit(f); setShowForm(true); }} style={{ ...btnSecondary, padding: "6px 12px" }}>✏️</button>
@@ -525,7 +543,7 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule, pe
               style={{ cursor: "pointer", background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
+                <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
                 <RosterLignes session={s} />
               </div>
               <StatutBadge session={s} />
@@ -732,7 +750,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                   <div style={labelStyle}>Message de lancement (optionnel)</div>
                   <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", marginBottom: 10 }} placeholder="Visible par les participants lors du lancement" />
                   <button onClick={lancer} style={{ ...btnPrimary(NAVY), width: "100%" }}>🚀 Lancer la session</button>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>Ajoute "🎓 Formation" en plus du contenu déjà présent dans le planning de chaque participant (rien n'est jamais écrasé) et les prévient. Chaque agent valide sa venue en libérant sa journée depuis son planning perso.</div>
+                  <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>Ajoute "🎓 Formation" en plus du contenu déjà présent dans le planning de chaque participant (rien n'est jamais écrasé) et les prévient. Chaque agent valide sa venue en libérant sa journée depuis son planning perso.</div>
                 </>
               )}
             </>
@@ -762,9 +780,9 @@ function StatsTab() {
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
         {data.parFormation.map(f => (
           <div key={f.catalogue_id} style={{ background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{f.intitule} <span style={{ fontWeight: 500, color: "#94a3b8" }}>({f.categorie})</span></div>
-            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) suivi(s)</div>
-            {f.agents.length > 0 && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{f.agents.map(a => `${a.prenom} ${a.nom}`).join(", ")}</div>}
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{f.intitule} <span style={{ fontWeight: 500, color: "#64748b" }}>({f.categorie})</span></div>
+            <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) suivi(s)</div>
+            {f.agents.length > 0 && <div style={{ fontSize: 12.5, color: "#1e293b", fontWeight: 600, marginTop: 4 }}>{f.agents.map(a => `${a.prenom} ${a.nom}`).join(", ")}</div>}
           </div>
         ))}
         {data.parFormation.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucune donnée.</div>}
@@ -786,11 +804,11 @@ function StatsTab() {
         {data.parAfo.map(a => (
           <div key={a.cp} style={{ background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{a.prenom} {a.nom}</div>
-            <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 4 }}>
               {Object.keys(a.joursParAn).length === 0 ? "Aucune session animée" :
                 Object.entries(a.joursParAn).sort((x, y) => y[0] - x[0]).map(([an, n]) => `${an} : ${n} jour(s)`).join(" · ")}
             </div>
-            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{a.agentsFormesGlobal} agent(s) formé(s) au total</div>
+            <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>{a.agentsFormesGlobal} agent(s) formé(s) au total</div>
           </div>
         ))}
         {data.parAfo.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucun AFO pour l'instant.</div>}
