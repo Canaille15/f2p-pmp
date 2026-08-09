@@ -259,7 +259,12 @@ export default function SignaturePad({ agent, agentProfiles, setAgentProfiles })
                   border: "1.5px dashed #cbd5e1", background: "#f8fafc", cursor: "pointer", color: "#64748b", fontSize: 13, fontWeight: 600,
                 }}>
                   📷 Prendre ou choisir une photo de ta signature (sur papier blanc)
-                  <input type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={e => choisirPhoto(e.target.files?.[0])} />
+                  {/* Pas de `capture="environment"` : sur la plupart des navigateurs
+                      mobiles, cet attribut saute directement à l'appareil photo et
+                      empêche de choisir une photo déjà existante dans la galerie
+                      (signalé par Olivier, 09/08) — sans lui, le sélecteur natif
+                      propose bien les deux (prendre une photo OU en choisir une). */}
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={e => choisirPhoto(e.target.files?.[0])} />
                 </label>
               ) : (
                 <div>
