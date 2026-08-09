@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { PDFDocument, PDFName } from "pdf-lib";
+import { useState, useRef, useEffect } from "react";
+import { PDFDocument, PDFName, StandardFonts } from "pdf-lib";
 
 // ─── CET Phase 5 (07/08) : génération des PDF officiels CET ───────────────
 // Contrairement à "Demande de congés" (GA_demande_autorisation_absence.pdf,
@@ -54,6 +54,134 @@ const SOUS_COMPTES = [
   { k: "courant", label: "Compte courant" },
   { k: "finActivite", label: "Compte fin d'activité" },
 ];
+
+// "Demande d'utilisation en temps — sous-compte courant" (09/08, signalé par
+// Olivier : "Il manque : Demande d'absence au titre du CET / Dates : du : /
+// / au / /") — cette zone existe bien sur l'imprimé officiel mais N'EST PAS
+// un champ AcroForm remplissable (juste du texte + des barres "/" imprimées
+// sur la page, vérifié via l'extraction du flux texte du PDF) — contrairement
+// au reste du formulaire, il faut donc dessiner le texte à des coordonnées
+// fixes (même technique que DemandeCongesView.jsx), pas via form.getTextField.
+const RECT_DATES_UTIL_COURANT = {
+  y: 632,
+  du: { jour: [95, 116], mois: [124, 147], annee: [155, 198] },
+  au: { jour: [218, 239], mois: [247, 267], annee: [277, 318] },
+};
+
+function versDDMMYYYY(iso) {
+  if (!iso) return "";
+  const [a, m, j] = iso.split("-");
+  return `${j}/${m}/${a}`;
+}
+
+// Dessine une date (jj/mm/aaaa) répartie dans 3 zones séparées, chaque
+// segment centré dans son rectangle — pour s'insérer entre les barres "/"
+// déjà imprimées sur le PDF plutôt que de dessiner une seule chaîne "jj/mm/aaaa".
+function dessinerDateSegmentee(page, font, iso, rects, y) {
+  if (!iso) return;
+  const [aaaa, mm, jj] = iso.split("-");
+  const centrer = (texte, [x0, x1]) => {
+    const taille = 8;
+    const largeur = font.widthOfTextAtSize(texte, taille);
+    page.drawText(texte, { x: x0 + (x1 - x0 - largeur) / 2, y, size: taille, font });
+  };
+  centrer(jj, rects.jour); centrer(mm, rects.mois); centrer(aaaa, rects.annee);
+}
+
+// "RH0930 - Demande d'utilisation en temps des jours du sous-compte de fin
+// d'activité" (09/08, signalé par Olivier avec le texte exact des 3 options)
+// — "Forme de l'absence demandée" propose 3 formes bien distinctes sur
+// l'imprimé officiel, vérifiées champ par champ (pdf-lib, coordonnées croisées
+// avec le flux texte du PDF) :
+//  1. Congé de fin d'activité seul (déjà géré avant le 09/08)
+//  2. Activité à durée réduite (1/2/3 ans) qui solde directement le
+//     sous-compte
+//  3. Activité à durée réduite (1/2/3 ans) SUIVIE d'un congé de fin
+//     d'activité qui solde le sous-compte
+// Chaque forme a son propre champ "nombre de jours" et sa propre date "pour
+// aboutir le" sur le PDF (jamais partagés entre les 3), sauf la durée en
+// années (radio "1 an/2 ans/3 ans") qui n'existe que pour les formes 2 et 3.
+const FORMES_ABSENCE = [
+  { k: "congeFinActivite", label: "Congé de fin d'activité", radio: "Congé fin activité", champJours: "nombre jours congé", champDate: "Date fin d'activité", avecDuree: false },
+  { k: "activiteReduite", label: "Activité à durée réduite (soldant directement le sous-compte)", radio: "Activité durée réduite", champJours: "nombre jours activité réduite", champDate: "Date avant le", avecDuree: true, radioDuree: "activité réduite" },
+  { k: "activiteReduiteFin", label: "Activité à durée réduite, puis congé de fin d'activité", radio: "Activité durée réduite fin", champJours: "nombre jours activité réduite fin", champDate: "Date avant le 2", avecDuree: true, radioDuree: "activité réduite fin" },
+];
+const DUREES_ACTIVITE_REDUITE = ["1 an", "2 ans", "3 ans"];
+
+// Mode opératoire (09/08, demandé par Olivier : "il faut reprendre le mode
+// opératoire du PDF, la partie Modes opératoires Agents sédentaires
+// uniquement" — texte verbatim de chaque imprimé officiel, page 2, extrait
+// via pdfjs. Seule la section "Agents sédentaires" est reprise (celles
+// "Agents de conduite"/"Agents de train" qui suivent sur les mêmes pages ne
+// concernent pas ce métier, jamais copiées). CET_utilisation_courant.pdf n'a
+// pas de découpage par métier — c'est tout le "Mode opératoire" (tableau
+// Acteurs/Procédure) qui est repris tel quel.
+const MODE_OPERATOIRE = {
+  epargne: `1- L'agent remplit la demande d'épargne et l'envoie au gestionnaire. Si erreur sur le formulaire, le gestionnaire le retourne à l'agent.
+2- Le gestionnaire saisit la demande dans IDAP, la signe, et l'envoie au pôle RH pour classement dans le dossier de l'agent. Il transmet une copie du formulaire au hiérarchique et le récépissé à l'agent.
+3- Le hiérarchique envoie la copie du formulaire, après visa, au pôle RH pour classement dans le dossier de l'agent.
+
+Annulation
+4- Un des intervenants signale une anomalie.
+5- Le gestionnaire annule l'épargne (une seule annulation possible par acte de gestion), procède à la modification nécessaire, et envoie à l'agent et au hiérarchique une impression écran du nouvel état CET.
+Le pôle RH reçoit cette même impression écran accompagnée du justificatif d'annulation pour classement dans le dossier de l'agent.`,
+  intention: `1- L'agent remplit le formulaire d'intention et l'envoie au gestionnaire. Si erreur sur le formulaire, le gestionnaire le retourne à l'agent.
+2- Le gestionnaire conserve la demande.
+3- Le gestionnaire enregistre la demande de l'agent, envoie une copie du formulaire au hiérarchique et le récépissé à l'agent. Il conserve le formulaire jusqu'au 31/03/A+1.
+4- Le hiérarchique, après visa, envoie la copie du formulaire au pôle RH pour classement dans le dossier de l'agent.
+5- Le gestionnaire, avant le 31/03 de l'année A+1, vérifie le droit aux congés mis en intentions (si le droit à ces jours de congés n'est pas acquis, le gestionnaire corrige manuellement dans IDAP). Le gestionnaire, après confirmation automatique de l'intention au 31/03 de l'année A+1, envoie le formulaire au pôle RH pour classement dans le dossier de l'agent.
+6- Si l'agent demande à modifier ou supprimer ses intentions, il complète le récépissé et l'envoie au hiérarchique.
+7- Si le hiérarchique accepte la demande de l'agent, il vise le récépissé et l'envoie au gestionnaire. S'il refuse, il vise le récépissé, en remet une copie à l'agent et l'original au gestionnaire pour classement dans le dossier de l'agent.
+8- Le gestionnaire procède à la suppression ou la modification, envoie une copie du récépissé à l'agent et envoie l'original du récépissé au pôle RH pour classement dans le dossier de l'agent.`,
+  utilisation: `1- L'agent, aidé éventuellement de son gestionnaire, remplit le formulaire et l'envoie au hiérarchique en respectant les délais de prévenance. En cas d'erreur, le formulaire est retourné à l'agent.
+2- Le hiérarchique prend acte de la demande et transmet le formulaire au gestionnaire.
+3- Le gestionnaire vise le formulaire et l'envoie au pôle RH. Dans l'outil CET, il crée la convention en deux exemplaires originaux dans lesquels figure l'estimation automatique du nombre de jours à utiliser.
+4- Le gestionnaire transmet les deux exemplaires de la convention au pôle RH.
+5- Le pôle RH vise le formulaire, le classe dans le dossier de l'agent, et remet le récépissé à l'agent pour le convoquer à la signature de la convention.
+6- Le pôle RH signe la convention avec l'agent et remet un exemplaire à ce dernier. Il envoie un exemplaire de la convention au gestionnaire.
+7- Le gestionnaire valide la convention dans l'outil CET national.
+8- Le gestionnaire pose les codes absences (WF et/ou WR) dans IDAP.
+9- Le gestionnaire transmet la convention au pôle RH pour classement dans le dossier de l'agent.`,
+  monetisation: `1- L'agent remplit la demande de monétisation et l'envoie à son hiérarchique. En cas d'erreur, le formulaire est retourné à l'agent.
+2- Si le hiérarchique accepte la demande, il envoie le formulaire au gestionnaire CET. S'il refuse, il remet un récépissé à l'agent, et envoie le formulaire au pôle RH pour classement dans le dossier de l'agent.
+3- Le gestionnaire CET met à jour l'outil CET, vise le formulaire et l'envoie à l'Agence Paie et Famille.
+4- L'Agence Paie et Famille valorise les jours demandés et saisit l'unité d'œuvre et le montant à la rubrique 0831 dans IDAP. Il vise le formulaire, l'envoie au pôle RH pour classement dans le dossier de l'agent. Il remplit le récépissé et le remet à l'agent.
+
+Annulation
+5- Un des intervenants signale une anomalie.
+6- Le gestionnaire CET annule la demande dans l'outil CET (une seule annulation est possible par acte de gestion), procède à la modification nécessaire, et envoie à l'agent, au hiérarchique et à l'Agence Paie et Famille une impression écran du nouvel état CET. Le pôle RH reçoit cette même impression accompagnée du justificatif d'annulation pour classement dans le dossier de l'agent.
+7- L'Agence Paie et Famille paye ou reprend les indus.`,
+  transfert: `1- L'agent remplit la demande de transfert et la transmet au gestionnaire. Si erreur sur le formulaire, le gestionnaire le retourne à l'agent.
+2- Le gestionnaire met à jour les comptes du CET, complète et vise le formulaire, remet le récépissé à l'agent et envoie le formulaire au pôle RH pour classement dans le dossier de l'agent.
+
+Annulation
+3- Un des intervenants signale une anomalie.
+4- Le gestionnaire annule la demande de transfert (une seule annulation est possible par acte de gestion) procède à l'annulation. Il envoie à l'agent une impression écran du nouvel état CET de l'agent. Le pôle RH reçoit cette même impression écran accompagnée du justificatif de l'annulation pour classement dans le dossier de l'agent.`,
+  utilisationCourant: `Acteurs / Procédure
+
+Agent
+• Complète la demande (cadre grisé) de l'imprimé.
+• Attention : si le cadre (zone grisée) n'est pas complété, le récépissé ne sera pas remis à l'agent.
+• Si cette demande doit être complétée par des jours d'absences non issus du CET, joindre une demande réglementaire d'absence en complément.
+• Transmet à son hiérarchique ou personne chargée de sa programmation.
+
+Hiérarchique (DPX, CPS, Responsable de la production …)
+Prend la décision (cadre) :
+1) En relation avec le gestionnaire du CET pour vérification de l'acquisition des jours dans le sous-compte courant.
+2) Confirme ou modifie la demande (en complétant si nécessaire le cadre).
+3) En cas de refus, retourne à l'agent le récépissé pour une concertation.
+4) Transmet au gestionnaire du CET pour mise à jour du sous-compte courant.
+
+Gestionnaire du CET
+• Met à jour le sous-compte courant.
+• Garde une copie.
+• Transmet au gestionnaire d'utilisation.
+
+Gestionnaire d'utilisation
+• Confirme l'absence dans l'outil de gestion du personnel.
+• Remet le récépissé à l'agent.
+• A l'issue de l'année considérée, transmet au pôle RH pour archivage.`,
+};
 
 // Motifs de monétisation (imprimé "Demande de monétisation — sous-compte fin
 // d'activité") — texte verbatim de l'imprimé officiel, jamais reformulé.
@@ -210,11 +338,14 @@ async function genererIntentionConges({ nom, prenom, cp, joursCourant, joursFinA
   return finaliser(doc, form, signatureDataUrl);
 }
 
-async function genererUtilisationFinActivite({ nom, prenom, cp, jours, signatureDataUrl }) {
+async function genererUtilisationFinActivite({ nom, prenom, cp, jours, formeAbsence, dureeReduite, dateAboutir, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_utilisation_fin_activite.pdf");
   remplirIdentite(form, { nom, prenom, cp });
-  try { form.getRadioGroup("Forme d'absence").select("Congé fin activité"); } catch (e) {}
-  try { form.getTextField("nombre jours congé").setText(String(jours)); } catch (e) {}
+  const forme = FORMES_ABSENCE.find(f => f.k === formeAbsence) || FORMES_ABSENCE[0];
+  try { form.getRadioGroup("Forme d'absence").select(forme.radio); } catch (e) {}
+  if (forme.avecDuree) { try { form.getRadioGroup(forme.radioDuree).select(dureeReduite); } catch (e) {} }
+  try { form.getTextField(forme.champJours).setText(String(jours)); } catch (e) {}
+  try { form.getTextField(forme.champDate).setText(versDDMMYYYY(dateAboutir)); } catch (e) {}
   try { form.getTextField("Date de la demande de lagent").setText(dateAuj()); } catch (e) {}
   return finaliser(doc, form, signatureDataUrl);
 }
@@ -228,7 +359,7 @@ async function genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, s
   return finaliser(doc, form, signatureDataUrl);
 }
 
-async function genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, signatureDataUrl }) {
+async function genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, dateDebut, dateFin, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_utilisation_courant.pdf");
   remplirIdentite(form, { nom, prenom, cp });
   const palier = PALIERS_UTIL_COURANT.find(p => Number(jours) >= p.min && Number(jours) <= p.max);
@@ -238,6 +369,17 @@ async function genererUtilisationCourant({ nom, prenom, cp, jours, demandeComple
     try { form.getTextField(`Date de la demande${palier.suffixDate}`).setText(dateAuj()); } catch (e) {}
   }
   try { form.getRadioGroup("demande complémentaire").select(demandeComplementaire ? "oui" : "non"); } catch (e) {}
+  // "Demande d'absence au titre du CET / Dates : du .. au .." (09/08,
+  // signalé manquant par Olivier) — pas un champ AcroForm, dessiné à des
+  // coordonnées fixes directement sur la page (voir RECT_DATES_UTIL_COURANT).
+  if (dateDebut || dateFin) {
+    try {
+      const font = await doc.embedFont(StandardFonts.Helvetica);
+      const page = doc.getPages()[0];
+      dessinerDateSegmentee(page, font, dateDebut, RECT_DATES_UTIL_COURANT.du, RECT_DATES_UTIL_COURANT.y);
+      dessinerDateSegmentee(page, font, dateFin, RECT_DATES_UTIL_COURANT.au, RECT_DATES_UTIL_COURANT.y);
+    } catch (e) { console.error("Erreur insertion dates du/au:", e); }
+  }
   // Pas de champ "Signature électronique" sur cet imprimé officiel (vérifié
   // visuellement, 09/08) — signatureDataUrl transmis quand même à finaliser
   // pour rester cohérent avec les 5 autres, trouverZonesSignature() ne
@@ -253,7 +395,7 @@ async function genererTransfertJours({ nom, prenom, cp, jours, signatureDataUrl 
   return finaliser(doc, form, signatureDataUrl);
 }
 
-function messageEmail({ type, prenom, nom, jours, lignesEpargne, joursCourant, joursFinActivite, demandeComplementaire, motif }) {
+function messageEmail({ type, prenom, nom, jours, lignesEpargne, joursCourant, joursFinActivite, demandeComplementaire, motif, formeAbsence, dateDebut, dateFin, dateAboutir }) {
   let corps = "";
   if (type === "epargne") {
     const parts = lignesEpargne.map(l => {
@@ -270,15 +412,18 @@ function messageEmail({ type, prenom, nom, jours, lignesEpargne, joursCourant, j
     if (joursFinActivite) parts.push(`${joursFinActivite} jour(s) sur le compte fin d'activité`);
     corps = `Ci-joint mon intention d'épargne de congés annuels : ${parts.join(" et ")}.`;
   } else if (type === "utilisation") {
-    corps = `Ci-joint ma demande d'utilisation en temps des jours du sous-compte de fin d'activité : ${jours} jour(s).`;
+    const formeLabel = FORMES_ABSENCE.find(f => f.k === formeAbsence)?.label || "";
+    const dateTxt = dateAboutir ? `, pour aboutir le ${versDDMMYYYY(dateAboutir)}` : "";
+    corps = `Ci-joint ma demande d'utilisation en temps des jours du sous-compte de fin d'activité : ${jours} jour(s) (${formeLabel})${dateTxt}.`;
   } else if (type === "monetisation") {
     const motifLabel = MOTIFS_MONETISATION.find(m => m.code === motif)?.label || "";
     corps = `Ci-joint ma demande de monétisation des jours du sous-compte de fin d'activité : ${jours} jour(s), au titre de ${motifLabel}.`;
   } else if (type === "utilisationCourant") {
+    const periodeTxt = (dateDebut && dateFin) ? `, du ${versDDMMYYYY(dateDebut)} au ${versDDMMYYYY(dateFin)}` : "";
     if (demandeComplementaire) {
       return `Bonjour,
 
-Ci-joint ma demande d'utilisation en temps des jours du sous-compte courant : ${jours} jour(s).
+Ci-joint ma demande d'utilisation en temps des jours du sous-compte courant : ${jours} jour(s)${periodeTxt}.
 
 Je souhaite compléter par des jours d'absences non issus du CET.
 Ma demande réglementaire d'absence en complément est en pièce jointe.
@@ -288,7 +433,7 @@ Cordialement.
 
 ${prenom} ${nom}`;
     }
-    corps = `Ci-joint ma demande d'utilisation en temps des jours du sous-compte courant : ${jours} jour(s).`;
+    corps = `Ci-joint ma demande d'utilisation en temps des jours du sous-compte courant : ${jours} jour(s)${periodeTxt}.`;
   } else if (type === "transfert") {
     corps = `Ci-joint ma demande de transfert de jours du sous-compte courant vers le sous-compte de fin d'activité : ${jours} jour(s).`;
   }
@@ -300,6 +445,31 @@ Cordialement,
 ${prenom} ${nom}`;
 }
 
+// Notice repliable "Mode opératoire — Agents sédentaires" (09/08) — même
+// principe que les notices de App.jsx (repliée par défaut, scrollIntoView à
+// l'ouverture pour ne pas la laisser hors écran sur mobile) mais gardée
+// locale à ce fichier : CetPdfsView.jsx reste volontairement isolé du reste
+// de l'appli (aucun import croisé avec App.jsx/CetView.jsx), même principe
+// d'isolation que le composant lui-même.
+function NoticeModeOperatoire({ texte }) {
+  const [ouvert, setOuvert] = useState(false);
+  const contentRef = useRef(null);
+  useEffect(() => { if (ouvert) contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [ouvert]);
+  if (!texte) return null;
+  return (
+    <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+      <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", color: "#5b21b6", cursor: "pointer", fontSize: 12, fontWeight: 800, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+        {ouvert ? "▴" : "▾"} 📖 Mode opératoire — Agents sédentaires
+      </button>
+      {ouvert && (
+        <div ref={contentRef} style={{ marginTop: 10, background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: 10, padding: "10px 12px", fontSize: 11.5, color: "#334155", whiteSpace: "pre-line", lineHeight: 1.5 }}>
+          {texte}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CetPdfsView({ currentAgent, agentProfiles }) {
   const signatureDataUrl = agentProfiles?.[currentAgent?.id]?.signatureDataUrl || null;
   const [type, setType] = useState(TYPES[0].k);
@@ -309,6 +479,15 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
   const [jours, setJours] = useState("");
   const [demandeComplementaire, setDemandeComplementaire] = useState(false);
   const [motif, setMotif] = useState(MOTIFS_MONETISATION[0].code);
+  // "Forme de l'absence demandée" (imprimé fin d'activité, 09/08) — 3 formes
+  // distinctes, chacune avec sa propre durée réduite / jours / date sur le PDF.
+  const [formeAbsence, setFormeAbsence] = useState(FORMES_ABSENCE[0].k);
+  const [dureeReduite, setDureeReduite] = useState(DUREES_ACTIVITE_REDUITE[0]);
+  const [dateAboutir, setDateAboutir] = useState("");
+  // "Demande d'absence au titre du CET / Dates : du .. au .." (imprimé
+  // sous-compte courant, 09/08).
+  const [dateDebutUtil, setDateDebutUtil] = useState("");
+  const [dateFinUtil, setDateFinUtil] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [messageCopie, setMessageCopie] = useState(false);
@@ -319,6 +498,8 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
     setType(k); setJours(""); setDemandeComplementaire(false);
     setEpargneLignes(joursVides()); setJoursCourant(""); setJoursFinActivite("");
     setMotif(MOTIFS_MONETISATION[0].code); setErr(null);
+    setFormeAbsence(FORMES_ABSENCE[0].k); setDureeReduite(DUREES_ACTIVITE_REDUITE[0]); setDateAboutir("");
+    setDateDebutUtil(""); setDateFinUtil("");
   };
 
   const majEpargneLigne = (code, sc, val) => {
@@ -334,14 +515,16 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
     .filter(l => l.courant > 0 || l.finActivite > 0);
 
   const joursValides = type === "utilisationCourant"
-    ? jours !== "" && Number(jours) >= 5 && Number(jours) <= 20
+    ? jours !== "" && Number(jours) >= 5 && Number(jours) <= 20 && dateDebutUtil !== "" && dateFinUtil !== ""
     : type === "epargne"
     ? lignesEpargneValides.length > 0
     : type === "intention"
     ? (Number(joursCourant) || 0) > 0 || (Number(joursFinActivite) || 0) > 0
+    : type === "utilisation"
+    ? jours !== "" && Number(jours) > 0 && dateAboutir !== ""
     : jours !== "" && Number(jours) > 0;
 
-  const messageGenere = messageEmail({ type, prenom, nom, jours, lignesEpargne: lignesEpargneValides, joursCourant, joursFinActivite, demandeComplementaire, motif });
+  const messageGenere = messageEmail({ type, prenom, nom, jours, lignesEpargne: lignesEpargneValides, joursCourant, joursFinActivite, demandeComplementaire, motif, formeAbsence, dateDebut: dateDebutUtil, dateFin: dateFinUtil, dateAboutir });
 
   const copierMessage = () => {
     navigator.clipboard.writeText(messageGenere).then(() => {
@@ -354,9 +537,14 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
     setErr(null);
     if (!joursValides) {
       const messages = {
-        utilisationCourant: "Indique un nombre de jours entre 5 et 20 (règle de cet imprimé).",
+        utilisationCourant: (jours === "" || Number(jours) < 5 || Number(jours) > 20)
+          ? "Indique un nombre de jours entre 5 et 20 (règle de cet imprimé)."
+          : "Indique les dates de l'absence (du ... au ...).",
         epargne: "Indique au moins un nombre de jours (courant ou fin d'activité) pour un type de jours.",
         intention: "Indique au moins un nombre de congés (courant ou fin d'activité).",
+        utilisation: (jours === "" || Number(jours) <= 0)
+          ? "Indique un nombre de jours valide."
+          : "Indique la date visée pour le dernier jour d'activité.",
       };
       setErr(messages[type] || "Indique un nombre de jours valide.");
       return;
@@ -372,13 +560,13 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
         bytes = await genererIntentionConges({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl });
         nomFichier = `CET intention epargne conges du ${dateNom}.pdf`;
       } else if (type === "utilisation") {
-        bytes = await genererUtilisationFinActivite({ nom, prenom, cp, jours, signatureDataUrl });
+        bytes = await genererUtilisationFinActivite({ nom, prenom, cp, jours, formeAbsence, dureeReduite, dateAboutir, signatureDataUrl });
         nomFichier = `CET utilisation fin activite du ${dateNom}.pdf`;
       } else if (type === "monetisation") {
         bytes = await genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, signatureDataUrl });
         nomFichier = `CET monetisation fin activite du ${dateNom}.pdf`;
       } else if (type === "utilisationCourant") {
-        bytes = await genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, signatureDataUrl });
+        bytes = await genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, dateDebut: dateDebutUtil, dateFin: dateFinUtil, signatureDataUrl });
         nomFichier = `CET utilisation courant du ${dateNom}.pdf`;
       } else {
         bytes = await genererTransfertJours({ nom, prenom, cp, jours, signatureDataUrl });
@@ -483,10 +671,50 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
             </div>
           )}
 
-          {(type === "utilisation" || type === "monetisation" || type === "utilisationCourant" || type === "transfert") && (
+          {type === "utilisation" && (
+            <div>
+              <label style={labelStyle}>Forme de l'absence demandée</label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {FORMES_ABSENCE.map(f => (
+                  <button key={f.k} onClick={() => setFormeAbsence(f.k)} style={pillStyle(formeAbsence === f.k)}>{f.label}</button>
+                ))}
+              </div>
+
+              {(() => {
+                const forme = FORMES_ABSENCE.find(f => f.k === formeAbsence);
+                return (
+                  <>
+                    {forme?.avecDuree && (
+                      <div style={{ marginTop: 10 }}>
+                        <label style={labelStyle}>Durée de l'activité réduite</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {DUREES_ACTIVITE_REDUITE.map(d => (
+                            <button key={d} onClick={() => setDureeReduite(d)} style={{ ...pillStyle(dureeReduite === d), flex: 1, textAlign: "center" }}>{d}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ marginTop: 10 }}>
+                      <label style={labelStyle}>
+                        {formeAbsence === "congeFinActivite" && "Nombre de jours (sur-abondement compris)"}
+                        {formeAbsence === "activiteReduite" && "Nombre de jours soldant le sous-compte (sur-abondement compris)"}
+                        {formeAbsence === "activiteReduiteFin" && "Nombre de jours du congé de fin d'activité (sur-abondement compris)"}
+                      </label>
+                      <input type="number" min="0" step="1" value={jours} onChange={e => setJours(e.target.value)} style={champStyle} placeholder="ex : 2" />
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <label style={labelStyle}>Date visée pour le dernier jour d'activité dans l'entreprise</label>
+                      <input type="date" value={dateAboutir} onChange={e => setDateAboutir(e.target.value)} style={champStyle} />
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {(type === "monetisation" || type === "utilisationCourant" || type === "transfert") && (
             <div>
               <label style={labelStyle}>
-                {type === "utilisation" && "Nombre de jours à utiliser (congé fin d'activité)"}
                 {type === "monetisation" && "Nombre de jours à monétiser"}
                 {type === "utilisationCourant" && "Nombre de jours à utiliser (entre 5 et 20)"}
                 {type === "transfert" && "Nombre de jours à transférer (courant → fin d'activité)"}
@@ -504,6 +732,17 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
                     : <div style={{ fontSize: 11.5, color: "#991b1b", marginTop: 5, fontWeight: 600 }}>⚠️ Cet imprimé n'accepte qu'un nombre de jours entre 5 et 20</div>;
                 })()
               )}
+            </div>
+          )}
+
+          {type === "utilisationCourant" && (
+            <div>
+              <label style={labelStyle}>Demande d'absence au titre du CET — dates</label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input type="date" value={dateDebutUtil} onChange={e => setDateDebutUtil(e.target.value)} style={champStyle} />
+                <span style={{ color: "#94a3b8", fontSize: 12 }}>au</span>
+                <input type="date" value={dateFinUtil} onChange={e => setDateFinUtil(e.target.value)} style={champStyle} />
+              </div>
             </div>
           )}
 
@@ -529,6 +768,8 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
           <button onClick={generer} disabled={busy} style={{ padding: "13px 0", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: busy ? "wait" : "pointer", background: "#5b21b6", color: "#fff", marginTop: 8 }}>
             {busy ? "Génération…" : "📄 Générer le PDF"}
           </button>
+
+          <NoticeModeOperatoire texte={MODE_OPERATOIRE[type]} />
         </div>
       </div>
 
