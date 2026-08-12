@@ -804,13 +804,19 @@ function parseDeroulePrevisionnel(text) {
 
 function BulletinImportButton({ agentCp, onImported }) {
   const [busy, setBusy] = useState(false);
+  // justDone (10/08, demande par Olivier) : flash vert temporaire sur le
+  // bouton lui-meme des que l'import reussit, avant de revenir a son etat
+  // normal — distinct du badge detaille ci-dessous (result), qui lui reste
+  // affiche (il porte une vraie info : nb de jours importes/ignores).
+  const [justDone, setJustDone] = useState(false);
   const [result, setResult] = useState(null);
 
   const handleFile = async (e) => {
     const file = e.target.files[0]; if (!file) return;
-    setBusy(true); setResult(null);
+    setBusy(true); setResult(null); setJustDone(false);
     const reader = new FileReader();
     reader.onload = async () => {
+      let ok = false;
       try {
         const b64 = reader.result.split(",")[1];
         let text = "";
@@ -866,10 +872,12 @@ function BulletinImportButton({ agentCp, onImported }) {
         const postesLabels = [...new Set(allCodes.map(c => getPosteLabelFromCode(c)).filter(Boolean))];
         setResult({ nb: resp?.nb_appliques || 0, ignores: resp?.ignores || [], echecs, postesLabels });
         if (typeof onImported === "function") onImported();
+        ok = true;
       } catch (err) {
         setResult({ error: err.message });
       }
       setBusy(false);
+      if (ok) { setJustDone(true); setTimeout(() => setJustDone(false), 2500); }
     };
     reader.readAsDataURL(file);
   };
@@ -877,8 +885,8 @@ function BulletinImportButton({ agentCp, onImported }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, alignSelf: "flex-start", width: "fit-content" }}>
       <label style={{ cursor: "pointer", alignSelf: "flex-start" }}>
-        <div style={{ background: busy ? "#94a3b8" : "#0f4c81", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
-          {busy ? "⏳ Analyse…" : "📥 Importer bulletin de commande / roulement"}
+        <div style={{ background: busy ? "#dc2626" : justDone ? "#16a34a" : "#0f4c81", color: "#fff", borderRadius: 10, padding: "8px 12px", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 5, transition: "background .3s" }}>
+          {busy ? "⏳ Analyse…" : justDone ? "✅ Importé" : "📥 Importer bulletin de commande / roulement"}
         </div>
         <input type="file" accept=".pdf,image/*" onChange={handleFile} style={{ display: "none" }} disabled={busy} />
       </label>
@@ -1541,6 +1549,11 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
   const [search,setSearch]=useState("");
   const [uploading,setUploading]=useState(false);
   const [cpsResult,setCpsResult]=useState(null);
+  useEffect(()=>{
+    if(!cpsResult) return;
+    const t=setTimeout(()=>setCpsResult(null),4000);
+    return ()=>clearTimeout(t);
+  },[cpsResult]);
   const [dernierImport,setDernierImport]=useState(null);
   const chargerDernierImport=()=>{
     if(isPrevisionnel) return;
@@ -1839,7 +1852,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <div style={{fontSize:11,color:"#92400e",opacity:.85}}>Ça va remplacer le planning officiel partagé pour cette date. Vérifie que c'est le bon document avant de valider.</div>
       <div style={{display:"flex",gap:8}}>
         <button onClick={()=>setPendingImport(null)} disabled={savingImport} style={{padding:"8px 16px",background:"#fff",color:"#92400e",border:"1.5px solid #fbbf24",borderRadius:8,cursor:savingImport?"default":"pointer",fontSize:12,fontWeight:700}}>Annuler</button>
-        <button onClick={confirmerImport} disabled={savingImport} style={{padding:"8px 16px",background:savingImport?"#94a3b8":"#d97706",color:"#fff",border:"none",borderRadius:8,cursor:savingImport?"default":"pointer",fontSize:12,fontWeight:700}}>{savingImport?"⏳ Enregistrement...":"✓ Confirmer l'import"}</button>
+        <button onClick={confirmerImport} disabled={savingImport} style={{padding:"8px 16px",background:savingImport?"#dc2626":"#d97706",color:"#fff",border:"none",borderRadius:8,cursor:savingImport?"default":"pointer",fontSize:12,fontWeight:700,transition:"background .3s"}}>{savingImport?"⏳ Enregistrement...":"✓ Confirmer l'import"}</button>
       </div>
     </div>}
 
@@ -1847,7 +1860,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <input placeholder="🔍 Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}
         style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:13,flex:1,minWidth:140,outline:"none"}}/>
       {!isPrevisionnel&&<label style={{cursor:uploading?"default":"pointer",flexShrink:0}}>
-        <div style={{background:uploading?"#94a3b8":"#0f4c81",color:"#fff",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+        <div style={{background:uploading?"#dc2626":"#0f4c81",color:"#fff",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5,transition:"background .3s"}}>
           {uploading?"⏳...":"📥 Importer feuille de présence"}
         </div>
         <input type="file" accept=".pdf,image/*" onChange={handleCpsImport} style={{display:"none"}} disabled={uploading}/>
