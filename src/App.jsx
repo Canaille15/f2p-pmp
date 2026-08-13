@@ -3000,46 +3000,6 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
     }
   };
 
-  // Mini-calendrier "Ajouter en accordé" (13/08, demandé par Olivier — même
-  // widget que RP/Maladie, mais suit la règle DÉJÀ établie pour Accordé :
-  // écrase volontairement ce qu'il y avait (comme accorderDemande ci-dessus
-  // pour un seul jour) — jamais de blocage sur un jour "occupé" par un poste
-  // ou un repos, contrairement à RP/Maladie. Seuls les jours DÉJÀ accordés
-  // (CA/CP) sont grisés, pour ne pas réécrire inutilement ce qui l'est déjà.
-  const [miniMonthCA, setMiniMonthCA] = useState(()=>{
-    const now = new Date();
-    return now.getFullYear()===year ? `${year}-${String(now.getMonth()+1).padStart(2,"0")}` : `${year}-01`;
-  });
-  const [joursSelectCA, setJoursSelectCA] = useState([]);
-  const [selectOkCA, setSelectOkCA] = useState("");
-  const [miniYearCA, miniMonthNumCA] = miniMonthCA.split("-").map(Number);
-  const miniDaysInMonthCA = new Date(miniYearCA, miniMonthNumCA, 0).getDate();
-  const miniFirstDowCA = new Date(miniYearCA, miniMonthNumCA-1, 1).getDay();
-  const miniOffsetCA = miniFirstDowCA===0 ? 6 : miniFirstDowCA-1;
-  const changerMiniMoisCA = (delta) => {
-    let m = miniMonthNumCA + delta, y = miniYearCA;
-    if(m<1){ m=12; y--; } else if(m>12){ m=1; y++; }
-    setMiniMonthCA(`${y}-${String(m).padStart(2,"0")}`);
-  };
-  const toggleJourSelectCA = (dk, dejaAccorde) => {
-    if(dejaAccorde) return;
-    setSelectOkCA("");
-    setJoursSelectCA(prev=> prev.includes(dk) ? prev.filter(x=>x!==dk) : [...prev,dk].sort());
-  };
-  const ajouterSelectionCA = () => {
-    if(joursSelectCA.length===0) return;
-    joursSelectCA.forEach(dk=>{
-      const key = `${agCp}-${dk}`;
-      const entryExistante = schedule[key] || {};
-      const fullEntry = {...entryExistante, equipe:"CA", prive:true};
-      setSchedule(prev=>({...prev,[key]:fullEntry}));
-      api.planning.saveEntry(agCp, dk, fullEntry).catch(e=>console.error("Erreur sauvegarde congé accordé:", e));
-      retirerCongeTracking(dk);
-    });
-    setSelectOkCA(`${joursSelectCA.length} jour${joursSelectCA.length>1?"s":""} accordé${joursSelectCA.length>1?"s":""}, écrit${joursSelectCA.length>1?"s":""} dans le planning perso.`);
-    setJoursSelectCA([]);
-  };
-
   const ajouterReport = () => {
     setReportErr("");
     if(!reportDate) return;
@@ -3305,53 +3265,6 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
               <span style={{background:"#eab308",color:"#1e293b",border:"1.5px dashed #1e293b",borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:700,flexShrink:0}}>⏳ CA (n°X)</span>
               <span>= badge visible dans le planning tant que le congé n'est pas accordé.</span>
             </div>
-          </div>
-
-          {/* Ajouter directement en accordé, jours dispersés (13/08, "tente
-              le B" — même mini-calendrier que RP/Maladie, mais écrase
-              volontairement ce qu'il y avait, comme le bouton Accordé pour
-              un seul jour. Seuls les jours déjà accordés sont grisés. */}
-          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
-            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>+ Ajouter en accordé (jours dispersés)</div>
-            <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
-              Écrit CA directement et remplace ce qu'il y avait ce jour-là (poste, repos, demande...) — même règle que le bouton "✓ Accordé" pour un seul jour.
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <button onClick={()=>changerMiniMoisCA(-1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#a16207",padding:"2px 8px",fontWeight:700}}>‹</button>
-              <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{MOIS_L[miniMonthNumCA-1]} {miniYearCA}</span>
-              <button onClick={()=>changerMiniMoisCA(1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#a16207",padding:"2px 8px",fontWeight:700}}>›</button>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-              {["L","M","M","J","V","S","D"].map((j,i)=>(
-                <div key={i} style={{fontSize:9,fontWeight:700,color:"#94a3b8",textAlign:"center"}}>{j}</div>
-              ))}
-              {Array.from({length:miniOffsetCA}).map((_,i)=><div key={"o"+i}/>)}
-              {Array.from({length:miniDaysInMonthCA}).map((_,i)=>{
-                const day = i+1;
-                const dk = `${miniYearCA}-${String(miniMonthNumCA).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-                const v = schedule[`${agCp}-${dk}`];
-                const dejaAccorde = v?.equipe==="CA"||v?.equipe2==="CA"||v?.equipe==="CP"||v?.equipe2==="CP";
-                const isSel = joursSelectCA.includes(dk);
-                return (
-                  <button key={dk} onClick={()=>toggleJourSelectCA(dk,dejaAccorde)} disabled={dejaAccorde}
-                    style={{
-                      aspectRatio:"1", border:`1.5px solid ${isSel?"#a16207":dejaAccorde?"#e2e8f0":"#fde68a"}`,
-                      borderRadius:6, background:isSel?"#a16207":dejaAccorde?"#f1f5f9":"#fff",
-                      color:isSel?"#fff":dejaAccorde?"#cbd5e1":"#334155",
-                      fontSize:11, fontWeight:700, cursor:dejaAccorde?"default":"pointer",
-                      display:"flex", alignItems:"center", justifyContent:"center", padding:0,
-                    }}>
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8,gap:8}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#475569"}}>{joursSelectCA.length} jour{joursSelectCA.length>1?"s":""} sélectionné{joursSelectCA.length>1?"s":""}</span>
-              <button onClick={ajouterSelectionCA} disabled={joursSelectCA.length===0}
-                style={{background:joursSelectCA.length===0?"#cbd5e1":"#a16207",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:joursSelectCA.length===0?"default":"pointer",fontSize:12,fontWeight:700}}>+ Ajouter en accordé</button>
-            </div>
-            {selectOkCA && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {selectOkCA}</div>}
           </div>
 
           {/* Demandées */}
