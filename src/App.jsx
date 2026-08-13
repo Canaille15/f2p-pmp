@@ -2849,6 +2849,10 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
   const [reportDate, setReportDate] = useState("");
   const [reportErr, setReportErr] = useState("");
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
+  const [nouvelleDateDebut, setNouvelleDateDebut] = useState("");
+  const [nouvelleDateFin, setNouvelleDateFin] = useState("");
+  const [ajoutErr, setAjoutErr] = useState("");
+  const [ajoutInfo, setAjoutInfo] = useState("");
   // Suivi des refus fusionné dans ce popup (05/08, était un second popup
   // imbriqué avant — voir computeRefusConges plus bas pour le détail des
   // champs talon). Regroupement par période purement visuel, voir
@@ -2859,24 +2863,12 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
   // lisibilité — purement visuel, aucun changement de calcul ni de donnée.
   const demandesParMois = useMemo(()=>groupParMois(data.demandes, e=>e.date), [data.demandes]);
   const periodesRefusParMois = useMemo(()=>groupParMois(periodesRefus, p=>p.debut), [periodesRefus]);
+  const [showAjoutRefus, setShowAjoutRefus] = useState(false);
+  const [refusDateDebut, setRefusDateDebut] = useState("");
+  const [refusDateFin, setRefusDateFin] = useState("");
+  const [refusErr, setRefusErr] = useState("");
+  const [refusInfo, setRefusInfo] = useState("");
   const [periodesOuvertes, setPeriodesOuvertes] = useState({});
-  // Bloc unifié "+ Ajouter des jours" (13/08, refonte après "c'est trop
-  // charge, pas intuitif" — Olivier a demande un bouton unique pour choisir
-  // le statut [Demandé/Accordé/Refusé] puis sélectionner les jours dans UN
-  // SEUL calendrier, en série ou dispersé (cliquer des jours adjacents
-  // couvre déjà le cas "en série", pas besoin d'un Du/Au séparé). Remplace
-  // "+ Nouvelle demande" (Du/Au) ET "+ Nouveau refus (saisie directe)".
-  const [modeAjout, setModeAjout] = useState("demande");
-  const [miniMonthU, setMiniMonthU] = useState(()=>{
-    const now = new Date();
-    return now.getFullYear()===year ? `${year}-${String(now.getMonth()+1).padStart(2,"0")}` : `${year}-01`;
-  });
-  const [joursSelectU, setJoursSelectU] = useState([]);
-  const [ajoutMsg, setAjoutMsg] = useState("");
-  const [miniYearU, miniMonthNumU] = miniMonthU.split("-").map(Number);
-  const miniDaysInMonthU = new Date(miniYearU, miniMonthNumU, 0).getDate();
-  const miniFirstDowU = new Date(miniYearU, miniMonthNumU-1, 1).getDay();
-  const miniOffsetU = miniFirstDowU===0 ? 6 : miniFirstDowU-1;
   useEffect(()=>{ setEntitlementInput(String(data.entitlement)); },[data.entitlement]);
 
   const prisJusquA = useMemo(()=>data.tousJours.filter(d=>d<=dateSnapshot).length, [data.tousJours, dateSnapshot]);
@@ -2928,6 +2920,48 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
     });
   };
 
+  const listerDatesEntre = (debut, fin) => {
+    const dates = [];
+    let d = new Date(debut+"T12:00:00");
+    const dFin = new Date((fin||debut)+"T12:00:00");
+    while(d<=dFin){ dates.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+    return dates;
+  };
+
+  // Ajouter une demande (jour unique ou période) : n'écrit jamais dans le
+  // planning perso — c'est ce qui protège le planning contre tout risque de
+  // régression tant que rien n'est accordé. Les jours déjà pris ou déjà en
+  // attente sont silencieusement ignorés (pas de blocage sur toute la
+  // période : une demande de période peut légitimement chevaucher des jours
+  // déjà réglés autrement).
+  const ajouterDemande = () => {
+    setAjoutErr(""); setAjoutInfo("");
+    if(!nouvelleDateDebut) return;
+    if(nouvelleDateFin && nouvelleDateFin<nouvelleDateDebut){ setAjoutErr("La date de fin est avant la date de début."); return; }
+    const dates = listerDatesEntre(nouvelleDateDebut, nouvelleDateFin);
+    if(dates.length>62){ setAjoutErr("Période trop longue (62 jours maximum) — vérifie les dates."); return; }
+    const existants = agentProfiles[agent.id]?.congesDemandes || {};
+    let ajoutes=0, ignores=0;
+    const maj = {};
+    dates.forEach(d=>{
+      const v = schedule[`${agCp}-${d}`];
+      const dejaAccorde = v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
+      const dejaDemande = existants[d]?.statut==="demande";
+      if(dejaAccorde || dejaDemande){ ignores++; return; }
+      // jourEtaitVide capturé à la création : sert uniquement au détachement
+      // auto (Phase 3) — ne détacher que si le jour était vide à la demande,
+      // jamais s'il avait déjà un contenu légitime (cas normal).
+      const jourEtaitVide = !(v?.equipe || v?.equipe2);
+      maj[d] = {statut:"demande", dateDemande: today, jourEtaitVide};
+      ajoutes++;
+    });
+    if(ajoutes>0){
+      setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), ...maj}}}));
+    }
+    setNouvelleDateDebut(""); setNouvelleDateFin("");
+    setAjoutInfo(`${ajoutes} jour${ajoutes>1?"s":""} ajouté${ajoutes>1?"s":""} en demande${ignores>0?`, ${ignores} ignoré${ignores>1?"s":""} (déjà pris ou déjà en attente)`:""}.`);
+  };
+
   // Accorder : écrase directement le jour dans le planning perso (demandé
   // explicitement par Olivier — contrairement aux autres garde-fous de cette
   // session, ici on écrase volontairement ce qui pouvait déjà être prévu).
@@ -2945,49 +2979,6 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
   };
 
   const retirerDemande = (date) => retirerCongeTracking(date);
-
-  const changerMiniMoisU = (delta) => {
-    let m = miniMonthNumU + delta, y = miniYearU;
-    if(m<1){ m=12; y--; } else if(m>12){ m=1; y++; }
-    setMiniMonthU(`${y}-${String(m).padStart(2,"0")}`);
-  };
-  const changerModeAjout = (m) => { setModeAjout(m); setJoursSelectU([]); setAjoutMsg(""); };
-  const toggleJourSelectU = (dk, indispo) => {
-    if(indispo) return;
-    setAjoutMsg("");
-    setJoursSelectU(prev=> prev.includes(dk) ? prev.filter(x=>x!==dk) : [...prev,dk].sort());
-  };
-  // Un seul point d'écriture pour les 3 statuts — Accordé écrit dans le
-  // planning perso et écrase ce qu'il y avait (même règle établie que
-  // l'accord d'un seul jour) ; Demandé/Refusé n'écrivent jamais dans le
-  // planning, juste dans congesDemandes (même garde jourEtaitVide que le
-  // détachement auto, Phase 3).
-  const ajouterSelectionU = () => {
-    if(joursSelectU.length===0) return;
-    if(modeAjout==="accorde"){
-      joursSelectU.forEach(dk=>{
-        const key = `${agCp}-${dk}`;
-        const entryExistante = schedule[key] || {};
-        const fullEntry = {...entryExistante, equipe:"CA", prive:true};
-        setSchedule(prev=>({...prev,[key]:fullEntry}));
-        api.planning.saveEntry(agCp, dk, fullEntry).catch(e=>console.error("Erreur sauvegarde congé accordé:", e));
-        retirerCongeTracking(dk);
-      });
-      setAjoutMsg(`${joursSelectU.length} jour${joursSelectU.length>1?"s":""} accordé${joursSelectU.length>1?"s":""}, écrit${joursSelectU.length>1?"s":""} dans le planning perso.`);
-    } else {
-      const maj = {};
-      joursSelectU.forEach(dk=>{
-        const v = schedule[`${agCp}-${dk}`];
-        const jourEtaitVide = !(v?.equipe || v?.equipe2);
-        maj[dk] = modeAjout==="demande"
-          ? {statut:"demande", dateDemande: today, jourEtaitVide}
-          : {statut:"refuse", dateDemande:null, dateRefus: today, jourEtaitVide};
-      });
-      setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), ...maj}}}));
-      setAjoutMsg(`${joursSelectU.length} jour${joursSelectU.length>1?"s":""} ajouté${joursSelectU.length>1?"s":""} en ${modeAjout==="demande"?"demande":"refus"}.`);
-    }
-    setJoursSelectU([]);
-  };
 
   // Annuler un jour déjà accordé : vide simplement le jour dans le planning
   // (pas de restauration automatique de ce qu'il y avait avant — l'agent
@@ -3052,6 +3043,28 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
 
   // ── Suivi des refus (fusionné dans ce popup le 05/08, était un second
   // popup imbriqué avant) — voir computeRefusConges pour talonStatut/dates.
+  const ajouterRefus = () => {
+    setRefusErr(""); setRefusInfo("");
+    if(!refusDateDebut) return;
+    if(refusDateFin && refusDateFin<refusDateDebut){ setRefusErr("La date de fin est avant la date de début."); return; }
+    const dates = listerDatesEntre(refusDateDebut, refusDateFin);
+    if(dates.length>62){ setRefusErr("Période trop longue (62 jours maximum) — vérifie les dates."); return; }
+    const existants = agentProfiles[agent.id]?.congesDemandes || {};
+    let ajoutes=0, ignores=0;
+    const maj = {};
+    dates.forEach(d=>{
+      if(existants[d]){ ignores++; return; } // deja suivi (demande ou refuse)
+      const v = schedule[`${agCp}-${d}`];
+      maj[d] = {statut:"refuse", dateDemande:null, dateRefus:today, jourEtaitVide: !(v?.equipe || v?.equipe2)};
+      ajoutes++;
+    });
+    if(ajoutes>0){
+      setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), ...maj}}}));
+    }
+    setRefusDateDebut(""); setRefusDateFin("");
+    setRefusInfo(`${ajoutes} jour${ajoutes>1?"s":""} de refus ajouté${ajoutes>1?"s":""}${ignores>0?`, ${ignores} ignoré${ignores>1?"s":""} (déjà suivi)`:""}.`);
+  };
+
   const setTalon = (date, statut) => {
     setAgentProfiles(prev=>{
       const curr = prev[agent.id]?.congesDemandes?.[date] || {};
@@ -3229,80 +3242,26 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
             </div>
           )}
 
-          {/* Bloc unifié "+ Ajouter des jours" (13/08, refonte après "c'est
-              trop charge, pas intuitif" — Olivier a demande un bouton
-              unique pour choisir le statut [Demandé/Accordé/Refusé] puis
-              sélectionner les jours dans UN SEUL calendrier, en série ou
-              dispersé. Remplace "+ Nouvelle demande" (Du/Au) ET l'ancien
-              "+ Nouveau refus (saisie directe)" de la section Refusées. */}
+          {/* Nouvelle demande : jour unique ou période (date de fin optionnelle) */}
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
-            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>+ Ajouter des jours</div>
-            <div style={{display:"flex",gap:6,marginBottom:10}}>
-              {[
-                {key:"demande", label:"⏳ Demandé", color:"#eab308", text:"#78350f"},
-                {key:"accorde", label:"✓ Accordé", color:"#a16207", text:"#fff"},
-                {key:"refuse", label:"✕ Refusé", color:"#dc2626", text:"#fff"},
-              ].map(opt=>(
-                <button key={opt.key} onClick={()=>changerModeAjout(opt.key)}
-                  style={{flex:1,background:modeAjout===opt.key?opt.color:"#f1f5f9",color:modeAjout===opt.key?opt.text:"#64748b",border:"none",borderRadius:8,padding:"8px 4px",cursor:"pointer",fontSize:12,fontWeight:700}}>
-                  {opt.label}
-                </button>
-              ))}
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>+ Nouvelle demande</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <div style={{flex:"1 1 120px"}}>
+                <div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginBottom:2}}>Du</div>
+                <input type="date" value={nouvelleDateDebut} onChange={e=>{setNouvelleDateDebut(e.target.value);setAjoutErr("");setAjoutInfo("");}}
+                  style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              </div>
+              <div style={{flex:"1 1 120px"}}>
+                <div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginBottom:2}}>Au (optionnel)</div>
+                <input type="date" value={nouvelleDateFin} onChange={e=>{setNouvelleDateFin(e.target.value);setAjoutErr("");setAjoutInfo("");}}
+                  style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+              </div>
+              <button onClick={ajouterDemande} style={{alignSelf:"flex-end",background:"#a16207",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
             </div>
-            <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
-              {modeAjout==="accorde"
-                ? "Écrit CA directement et remplace ce qu'il y avait ce jour-là (poste, repos, demande...)."
-                : modeAjout==="demande"
-                ? "N'écrit rien dans le planning perso — la journée prévue reste affichée telle quelle, avec juste le badge ⏳ en plus."
-                : "N'écrit rien dans le planning perso — juste un suivi personnel (pour le talon de refus)."}
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <button onClick={()=>changerMiniMoisU(-1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#a16207",padding:"2px 8px",fontWeight:700}}>‹</button>
-              <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{MOIS_L[miniMonthNumU-1]} {miniYearU}</span>
-              <button onClick={()=>changerMiniMoisU(1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#a16207",padding:"2px 8px",fontWeight:700}}>›</button>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-              {["L","M","M","J","V","S","D"].map((j,i)=>(
-                <div key={i} style={{fontSize:9,fontWeight:700,color:"#94a3b8",textAlign:"center"}}>{j}</div>
-              ))}
-              {Array.from({length:miniOffsetU}).map((_,i)=><div key={"o"+i}/>)}
-              {Array.from({length:miniDaysInMonthU}).map((_,i)=>{
-                const day = i+1;
-                const dk = `${miniYearU}-${String(miniMonthNumU).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-                const v = schedule[`${agCp}-${dk}`];
-                const dejaAccorde = v?.equipe==="CA"||v?.equipe2==="CA"||v?.equipe==="CP"||v?.equipe2==="CP";
-                const tracking = agentProfiles?.[agent.id]?.congesDemandes?.[dk];
-                const dejaDemande = tracking?.statut==="demande";
-                const dejaRefuse = tracking?.statut==="refuse";
-                const indispo = modeAjout==="accorde" ? dejaAccorde : (dejaAccorde || dejaDemande || dejaRefuse);
-                const raison = dejaAccorde?"Déjà accordé":dejaDemande?"Déjà en demande":dejaRefuse?"Déjà refusé":undefined;
-                const isSel = joursSelectU.includes(dk);
-                const modeColor = modeAjout==="accorde" ? "#a16207" : modeAjout==="refuse" ? "#dc2626" : "#eab308";
-                const modeTextOnColor = modeAjout==="demande" ? "#78350f" : "#fff";
-                return (
-                  <button key={dk} onClick={()=>toggleJourSelectU(dk,indispo)} disabled={indispo}
-                    title={raison}
-                    style={{
-                      aspectRatio:"1", border:`1.5px solid ${isSel?modeColor:indispo?"#e2e8f0":"#fde68a"}`,
-                      borderRadius:6, background:isSel?modeColor:indispo?"#f1f5f9":"#fff",
-                      color:isSel?modeTextOnColor:indispo?"#cbd5e1":"#334155",
-                      fontSize:11, fontWeight:700, cursor:indispo?"default":"pointer",
-                      display:"flex", alignItems:"center", justifyContent:"center", padding:0,
-                    }}>
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8,gap:8}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#475569"}}>{joursSelectU.length} jour{joursSelectU.length>1?"s":""} sélectionné{joursSelectU.length>1?"s":""}</span>
-              <button onClick={ajouterSelectionU} disabled={joursSelectU.length===0}
-                style={{background:joursSelectU.length===0?"#cbd5e1":(modeAjout==="accorde"?"#a16207":modeAjout==="refuse"?"#dc2626":"#eab308"),color:modeAjout==="demande"&&joursSelectU.length>0?"#78350f":"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:joursSelectU.length===0?"default":"pointer",fontSize:12,fontWeight:700}}>
-                + Ajouter en {modeAjout==="accorde"?"accordé":modeAjout==="refuse"?"refus":"demande"}
-              </button>
-            </div>
-            {ajoutMsg && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {ajoutMsg}</div>}
-            <div style={{fontSize:10,color:"#94a3b8",marginTop:8,display:"flex",alignItems:"center",gap:6}}>
+            {ajoutErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{ajoutErr}</div>}
+            {ajoutInfo && <div style={{fontSize:11,fontWeight:600,color:"#166534",marginTop:6}}>{ajoutInfo}</div>}
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Laisse "Au" vide pour un seul jour. Un congé demandé n'apparaît pas dans le planning perso tant qu'il n'est pas accordé — la journée prévue reste affichée et comptée normalement.</div>
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:6,display:"flex",alignItems:"center",gap:6}}>
               <span style={{background:"#eab308",color:"#1e293b",border:"1.5px dashed #1e293b",borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:700,flexShrink:0}}>⏳ CA (n°X)</span>
               <span>= badge visible dans le planning tant que le congé n'est pas accordé.</span>
             </div>
@@ -3354,6 +3313,32 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
                 💡 Pense à demander ton talon de refus pour {refusData.sansTalon===1?"le jour refusé":`les ${refusData.sansTalon} jours refusés`} sans talon en cours.
               </div>
             )}
+
+            <div style={{marginBottom:10}}>
+              <button onClick={()=>setShowAjoutRefus(v=>!v)} style={{background:"none",border:"none",color:"#991b1b",cursor:"pointer",fontSize:11,fontWeight:700,padding:0,display:"flex",alignItems:"center",gap:4}}>
+                {showAjoutRefus?"▴":"▾"} + Nouveau refus (saisie directe)
+              </button>
+              {showAjoutRefus && (
+                <div style={{marginTop:8}}>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    <div style={{flex:"1 1 120px"}}>
+                      <div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginBottom:2}}>Du</div>
+                      <input type="date" value={refusDateDebut} onChange={e=>{setRefusDateDebut(e.target.value);setRefusErr("");setRefusInfo("");}}
+                        style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+                    </div>
+                    <div style={{flex:"1 1 120px"}}>
+                      <div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginBottom:2}}>Au (optionnel)</div>
+                      <input type="date" value={refusDateFin} onChange={e=>{setRefusDateFin(e.target.value);setRefusErr("");setRefusInfo("");}}
+                        style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+                    </div>
+                    <button onClick={ajouterRefus} style={{alignSelf:"flex-end",background:"#991b1b",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+                  </div>
+                  {refusErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{refusErr}</div>}
+                  {refusInfo && <div style={{fontSize:11,fontWeight:600,color:"#166534",marginTop:6}}>{refusInfo}</div>}
+                  <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Laisse "Au" vide pour un seul jour. N'écrit rien dans le planning perso — un refus est juste un suivi personnel.</div>
+                </div>
+              )}
+            </div>
 
             {periodesRefus.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune.</div> :
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
