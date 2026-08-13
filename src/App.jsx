@@ -7290,43 +7290,91 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
   // Volontairement basé sur le calendrier civil de la case affichée (comme
   // avant), pas sur le total "Pris" du tableau de bord (qui tient compte des
   // reports A+1).
+  // 13/08 (Olivier, "CA 22 (2026) s'il est placé en report sur 2027") : un
+  // jour physiquement daté sur curYear mais REPORTÉ (décompté du budget de
+  // l'année précédente via congesReports/rpReports/ruReports) ne doit plus
+  // occuper de rang dans la série locale de curYear — il n'entame pas son
+  // budget, "on garde les compteurs juste sur l'année A+1" (série locale
+  // correcte, non gonflée par un jour qui ne lui appartient pas). Réutilise
+  // computeCompteurAvecDetail (même logique que les tableaux de bord Congés/
+  // RP/RU : tousJours exclut déjà, pour l'année demandée, les jours
+  // revendiqués par l'année précédente) plutôt que de dupliquer ce calcul.
+  // Le jour reporté affiche à la place le numéro qu'il occupe réellement dans
+  // la série de l'année qui le revendique, avec cette année entre
+  // parenthèses pour lever l'ambiguïté — jamais un numéro "local" à curYear,
+  // qui donnerait à tort l'impression qu'il compte sur le budget de curYear.
   const congeToutNumeros=useMemo(()=>{
-    const accordes=getCongesBrutsAnnee(agent,schedule,curYear).map(d=>({date:d,statut:"accorde"}));
+    const localTousJours=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear,["CA","CP"],"congesReports",null,false).tousJours;
+    const accordes=localTousJours.map(d=>({date:d,statut:"accorde"}));
     const demandes=getCongesDemandeesAnnee(agent,agentProfiles,schedule,curYear).map(d=>({date:d,statut:"demande"}));
     const combine=[...accordes,...demandes].sort((a,b)=>a.date<b.date?-1:1);
     const m={};
     combine.forEach((it,i)=>{ m[it.date]={numero:i+1,statut:it.statut}; });
+    const reportsVersAnneePrec=agentProfiles?.[agent?.id]?.congesReports?.[curYear-1]||[];
+    if(reportsVersAnneePrec.length){
+      const prevTousJours=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear-1,["CA","CP"],"congesReports",null,false).tousJours;
+      reportsVersAnneePrec.forEach(d=>{
+        if(!d.startsWith(String(curYear))) return;
+        const idx=prevTousJours.indexOf(d);
+        if(idx>=0) m[d]={numero:idx+1,statut:"accorde",anneeReport:curYear-1};
+      });
+    }
     return m;
   },[agent,schedule,agentProfiles,curYear]);
-  // Numérotation RU et RQ (04/08, même principe que les congés ci-dessus) :
-  // chaque code est numéroté séparément (1er RU de l'année = n°1, etc. ; RQ a
-  // sa propre numérotation indépendante), sur toutes les occurrences.
-  const ruNumeros=useMemo(()=>{
-    const jours=getJoursCodesAnnee(agent,schedule,curYear,["RU"]).sort();
-    const m={};
-    jours.forEach((d,i)=>{ m[d]=i+1; });
-    return m;
-  },[agent,schedule,curYear]);
+  // Numérotation RQ (04/08) : pas de mécanisme de report par date pour ce
+  // compteur (solde roulant, voir DETAIL_CONFIG.RQ) — numéroté tel quel, sur
+  // toutes les occurrences, aucun cas de report à gérer ici.
   const rqNumeros=useMemo(()=>{
     const jours=getJoursCodesAnnee(agent,schedule,curYear,["RQ"]).sort();
     const m={};
     jours.forEach((d,i)=>{ m[d]=i+1; });
     return m;
   },[agent,schedule,curYear]);
-  // Numérotation RP+RPP (04/08, demandé par Olivier) : RP et RPP comptent
-  // ensemble dans une seule numérotation cumulative (comme le compteur), mais
-  // le numéro n'est affiché que sur le DERNIER RP ou RPP de chaque mois civil
-  // (ex: 7 RP + 3 RPP en janvier -> seul le dernier des deux affiche "n°10").
-  const rpNumeros=useMemo(()=>{
-    const jours=getJoursCodesAnnee(agent,schedule,curYear,["RP","RPP"]).sort();
+  // Numérotation RU (04/08, étendue le 13/08 pour le report — même principe
+  // exact que congeToutNumeros ci-dessus, RU ayant lui aussi un reportKey).
+  const ruNumeros=useMemo(()=>{
+    const localTousJours=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear,["RU"],"ruReports",null,false).tousJours;
     const m={};
-    jours.forEach((d,i)=>{
-      const mois=d.slice(0,7);
-      const moisSuivant=jours[i+1]?.slice(0,7);
-      if(mois!==moisSuivant) m[d]=i+1;
-    });
+    localTousJours.forEach((d,i)=>{ m[d]={numero:i+1}; });
+    const reportsVersAnneePrec=agentProfiles?.[agent?.id]?.ruReports?.[curYear-1]||[];
+    if(reportsVersAnneePrec.length){
+      const prevTousJours=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear-1,["RU"],"ruReports",null,false).tousJours;
+      reportsVersAnneePrec.forEach(d=>{
+        if(!d.startsWith(String(curYear))) return;
+        const idx=prevTousJours.indexOf(d);
+        if(idx>=0) m[d]={numero:idx+1,anneeReport:curYear-1};
+      });
+    }
     return m;
-  },[agent,schedule,curYear]);
+  },[agent,schedule,agentProfiles,curYear]);
+  // Numérotation RP+RPP (04/08, demandé par Olivier ; report ajouté le
+  // 13/08) : RP et RPP comptent ensemble dans une seule numérotation
+  // cumulative (comme le compteur), mais le numéro n'est affiché que sur le
+  // DERNIER RP ou RPP de chaque mois civil de la série LOCALE (ex: 7 RP + 3
+  // RPP en janvier -> seul le dernier des deux affiche "n°10") — un jour
+  // reporté vers l'année précédente n'appartient plus à cette série locale
+  // (donc jamais concerné par la règle "dernier du mois"), il est toujours
+  // affiché, avec son propre numéro dans la série de l'année qui le
+  // revendique et cette année entre parenthèses.
+  const rpNumeros=useMemo(()=>{
+    const localTousJours=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear,["RP","RPP"],"rpReports",null,false).tousJours;
+    const m={};
+    localTousJours.forEach((d,i)=>{
+      const mois=d.slice(0,7);
+      const moisSuivant=localTousJours[i+1]?.slice(0,7);
+      if(mois!==moisSuivant) m[d]={numero:i+1};
+    });
+    const reportsVersAnneePrec=agentProfiles?.[agent?.id]?.rpReports?.[curYear-1]||[];
+    if(reportsVersAnneePrec.length){
+      const prevTousJours=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear-1,["RP","RPP"],"rpReports",null,false).tousJours;
+      reportsVersAnneePrec.forEach(d=>{
+        if(!d.startsWith(String(curYear))) return;
+        const idx=prevTousJours.indexOf(d);
+        if(idx>=0) m[d]={numero:idx+1,anneeReport:curYear-1};
+      });
+    }
+    return m;
+  },[agent,schedule,agentProfiles,curYear]);
   // Numérotation VT (05/08, étendue le 06/08 pour inclure les VT "Demandés"
   // dans la MÊME série cumulative que les VT accordés — exactement le même
   // principe que congeToutNumeros ci-dessous pour les Congés, sur demande
@@ -7605,10 +7653,10 @@ justifyContent: "flex-start",
                 <span lang="fr" style={CODES_FETES[code]||code==="CA"||code==="CP"
                   ? {fontSize:14,fontWeight:800,display:"block",whiteSpace:"nowrap"}
                   : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):(code==="CA"||code==="CP")?code:avecCesure(EQ_COLORS[code]?.label||code)}</span>
-                {(code==="CA"||code==="CP")&&congeToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeToutNumeros[dk].numero}</span>}
-                {code==="RU"&&ruNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{ruNumeros[dk]}</span>}
+                {(code==="CA"||code==="CP")&&congeToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeToutNumeros[dk].numero}{congeToutNumeros[dk].anneeReport?` (${congeToutNumeros[dk].anneeReport})`:""}</span>}
+                {code==="RU"&&ruNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{ruNumeros[dk].numero}{ruNumeros[dk].anneeReport?` (${ruNumeros[dk].anneeReport})`:""}</span>}
                 {code==="RQ"&&rqNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rqNumeros[dk]}</span>}
-                {code==="RP"&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rpNumeros[dk]}</span>}
+                {code==="RP"&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rpNumeros[dk].numero}{rpNumeros[dk].anneeReport?` (${rpNumeros[dk].anneeReport})`:""}</span>}
                 {code==="VT"&&vtToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{vtToutNumeros[dk].numero}</span>}
                 {code==="MA"&&maNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{maNumeros[dk]}</span>}
                 {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
@@ -7625,7 +7673,7 @@ justifyContent: "flex-start",
               }}>
                 RPP
               </div>}
-              {code==="RPP"&&showData&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block",textAlign:"center"}}>n°{rpNumeros[dk]}</span>}
+              {code==="RPP"&&showData&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block",textAlign:"center"}}>n°{rpNumeros[dk].numero}{rpNumeros[dk].anneeReport?` (${rpNumeros[dk].anneeReport})`:""}</span>}
               {code==="RPP"&&showData&&isOwnProfile&&en?.notePerso&&<span style={{
                 fontSize:8, color:"#fff", fontWeight:700,
                 background:getColor("NOTE"), borderRadius:4, padding:"1px 5px",
