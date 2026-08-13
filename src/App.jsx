@@ -3000,47 +3000,6 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
     }
   };
 
-  // Mini-calendrier "Ajouter en demande" (13/08, Olivier : "je vois pas
-  // comment sélectionner plusieurs jour et les mettre en conges demande ?"
-  // — complète "+ Nouvelle demande" (Du/Au) pour sélectionner des jours
-  // dispersés dans le mois, même widget que RP/Maladie. N'écrit JAMAIS dans
-  // le planning perso (même principe que Nouvelle demande/ajouterDemande) —
-  // seuls les jours déjà accordés ou déjà en demande sont grisés, un jour
-  // occupé par autre chose reste sélectionnable (aucun conflit possible tant
-  // que rien n'est accordé).
-  const [miniMonthDA, setMiniMonthDA] = useState(()=>{
-    const now = new Date();
-    return now.getFullYear()===year ? `${year}-${String(now.getMonth()+1).padStart(2,"0")}` : `${year}-01`;
-  });
-  const [joursSelectDA, setJoursSelectDA] = useState([]);
-  const [selectOkDA, setSelectOkDA] = useState("");
-  const [miniYearDA, miniMonthNumDA] = miniMonthDA.split("-").map(Number);
-  const miniDaysInMonthDA = new Date(miniYearDA, miniMonthNumDA, 0).getDate();
-  const miniFirstDowDA = new Date(miniYearDA, miniMonthNumDA-1, 1).getDay();
-  const miniOffsetDA = miniFirstDowDA===0 ? 6 : miniFirstDowDA-1;
-  const changerMiniMoisDA = (delta) => {
-    let m = miniMonthNumDA + delta, y = miniYearDA;
-    if(m<1){ m=12; y--; } else if(m>12){ m=1; y++; }
-    setMiniMonthDA(`${y}-${String(m).padStart(2,"0")}`);
-  };
-  const toggleJourSelectDA = (dk, indispo) => {
-    if(indispo) return;
-    setSelectOkDA("");
-    setJoursSelectDA(prev=> prev.includes(dk) ? prev.filter(x=>x!==dk) : [...prev,dk].sort());
-  };
-  const ajouterSelectionDA = () => {
-    if(joursSelectDA.length===0) return;
-    const maj = {};
-    joursSelectDA.forEach(dk=>{
-      const v = schedule[`${agCp}-${dk}`];
-      const jourEtaitVide = !(v?.equipe || v?.equipe2);
-      maj[dk] = {statut:"demande", dateDemande: today, jourEtaitVide};
-    });
-    setAgentProfiles(prev=>({...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes:{...(prev[agent.id]?.congesDemandes||{}), ...maj}}}));
-    setSelectOkDA(`${joursSelectDA.length} jour${joursSelectDA.length>1?"s":""} ajouté${joursSelectDA.length>1?"s":""} en demande.`);
-    setJoursSelectDA([]);
-  };
-
   // Mini-calendrier "Ajouter en accordé" (13/08, demandé par Olivier — même
   // widget que RP/Maladie, mais suit la règle DÉJÀ établie pour Accordé :
   // écrase volontairement ce qu'il y avait (comme accorderDemande ci-dessus
@@ -3346,57 +3305,6 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
               <span style={{background:"#eab308",color:"#1e293b",border:"1.5px dashed #1e293b",borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:700,flexShrink:0}}>⏳ CA (n°X)</span>
               <span>= badge visible dans le planning tant que le congé n'est pas accordé.</span>
             </div>
-          </div>
-
-          {/* Ajouter en demande, jours dispersés (13/08, Olivier : "je vois
-              pas comment sélectionner plusieurs jour et les mettre en conges
-              demande ?") — même mini-calendrier que RP/Maladie, mais n'écrit
-              jamais dans le planning perso (contrairement au widget Accordé
-              juste en dessous). */}
-          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
-            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>+ Ajouter en demande (jours dispersés)</div>
-            <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
-              N'écrit rien dans le planning perso — la journée déjà prévue reste affichée telle quelle, avec juste le badge ⏳ en plus, jusqu'à ce que le congé soit accordé.
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <button onClick={()=>changerMiniMoisDA(-1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#a16207",padding:"2px 8px",fontWeight:700}}>‹</button>
-              <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{MOIS_L[miniMonthNumDA-1]} {miniYearDA}</span>
-              <button onClick={()=>changerMiniMoisDA(1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#a16207",padding:"2px 8px",fontWeight:700}}>›</button>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-              {["L","M","M","J","V","S","D"].map((j,i)=>(
-                <div key={i} style={{fontSize:9,fontWeight:700,color:"#94a3b8",textAlign:"center"}}>{j}</div>
-              ))}
-              {Array.from({length:miniOffsetDA}).map((_,i)=><div key={"o"+i}/>)}
-              {Array.from({length:miniDaysInMonthDA}).map((_,i)=>{
-                const day = i+1;
-                const dk = `${miniYearDA}-${String(miniMonthNumDA).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-                const v = schedule[`${agCp}-${dk}`];
-                const dejaAccorde = v?.equipe==="CA"||v?.equipe2==="CA"||v?.equipe==="CP"||v?.equipe2==="CP";
-                const dejaDemande = agentProfiles?.[agent.id]?.congesDemandes?.[dk]?.statut==="demande";
-                const indispo = dejaAccorde || dejaDemande;
-                const isSel = joursSelectDA.includes(dk);
-                return (
-                  <button key={dk} onClick={()=>toggleJourSelectDA(dk,indispo)} disabled={indispo}
-                    title={dejaAccorde?"Déjà accordé":dejaDemande?"Déjà en demande":undefined}
-                    style={{
-                      aspectRatio:"1", border:`1.5px solid ${isSel?"#eab308":indispo?"#e2e8f0":"#fde68a"}`,
-                      borderRadius:6, background:isSel?"#eab308":indispo?"#f1f5f9":"#fff",
-                      color:isSel?"#1e293b":indispo?"#cbd5e1":"#334155",
-                      fontSize:11, fontWeight:700, cursor:indispo?"default":"pointer",
-                      display:"flex", alignItems:"center", justifyContent:"center", padding:0,
-                    }}>
-                    {day}
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8,gap:8}}>
-              <span style={{fontSize:11,fontWeight:600,color:"#475569"}}>{joursSelectDA.length} jour{joursSelectDA.length>1?"s":""} sélectionné{joursSelectDA.length>1?"s":""}</span>
-              <button onClick={ajouterSelectionDA} disabled={joursSelectDA.length===0}
-                style={{background:joursSelectDA.length===0?"#cbd5e1":"#eab308",color:"#1e293b",border:"none",borderRadius:8,padding:"7px 14px",cursor:joursSelectDA.length===0?"default":"pointer",fontSize:12,fontWeight:700}}>+ Ajouter en demande</button>
-            </div>
-            {selectOkDA && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {selectOkDA}</div>}
           </div>
 
           {/* Ajouter directement en accordé, jours dispersés (13/08, "tente
