@@ -8093,6 +8093,32 @@ justifyContent: "flex-start",
         // correct si la sauvegarde met plus de 500ms a aboutir).
         try {
           await api.planning.saveEntry(agCp, dk, fullEntry);
+          // Descente de nuit auto (14/08, Olivier : "le jour suivant une nuit,
+          // il faut mettre d'office la descente de nuit le lendemain [...] et
+          // qu'elle puisse etre annule en solo" / "remettre ou enlever a
+          // volonte") : dès qu'une nuit est enregistrée sur ce jour, on
+          // pré-coche "🌙 Descente de nuit" sur le lendemain — mais UNIQUEMENT
+          // si ce lendemain n'a encore AUCUNE donnée (jamais écrasé un jour
+          // déjà saisi, même juste finNuit=false) — une fois posé, le toggle
+          // reste entièrement sous contrôle de l'agent via le popup normal
+          // (déjà éditable à volonté, aucun changement nécessaire côté
+          // DayEditPopup), y compris le re-créer après l'avoir retiré.
+          const aUneNuit = fullEntry.equipe==='N' || fullEntry.equipe2==='N';
+          if(aUneNuit){
+            const dNext = new Date(dk+'T12:00:00'); dNext.setDate(dNext.getDate()+1);
+            const dkNext = `${dNext.getFullYear()}-${String(dNext.getMonth()+1).padStart(2,'0')}-${String(dNext.getDate()).padStart(2,'0')}`;
+            const keyNext = agCp+'-'+dkNext;
+            if(!schedule[keyNext]){
+              const entreeFinNuit = {equipe:null, equipe2:null, jsCode:null, jsCode2:null, horaires:null, prive:true, finNuit:true, notePerso:null, greve:null, formation:null, impressionAt:null};
+              setSchedule(prev=> prev[keyNext] ? prev : {...prev, [keyNext]: entreeFinNuit});
+              // Attendu AVANT le getSchedule/reconcile ci-dessous : sinon
+              // reconcileSchedule (qui supprime toute cle locale absente de
+              // la reponse serveur) pourrait effacer cette entree optimiste
+              // si le fetch revient avant que cette sauvegarde soit confirmee.
+              try { await api.planning.saveEntry(agCp, dkNext, entreeFinNuit); }
+              catch(e){ console.error('Erreur auto descente de nuit:', e); }
+            }
+          }
           api.planning.getSchedule(agCp).then(entries=>{if(entries)setSchedule(prev=>reconcileSchedule(prev, agCp, entries));});
         } catch(e) {
           console.error('Erreur save:', e);
