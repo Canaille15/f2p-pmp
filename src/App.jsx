@@ -4610,7 +4610,7 @@ function NoticeSection({ sections, accentDark, bgLight, borderLight }){
   );
 }
 
-function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur, notice }){
+function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur, notice }){
   const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis]);
   const ledgerData = useMemo(()=> ledgerKey ? computeLedgerSolde(agentProfiles, agent?.id, ledgerKey) : null, [agentProfiles, agent?.id, ledgerKey]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
@@ -4679,6 +4679,51 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
       const existants = prev[agent.id]?.[reportKey]?.[year] || [];
       return { ...prev, [agent.id]:{ ...(prev[agent.id]||{}), [reportKey]: {...(prev[agent.id]?.[reportKey]||{}), [year]: existants.filter(x=>x!==d)} } };
     });
+  };
+
+  // Saisie "du ... au ..." (13/08, demandé par Olivier — "certains compteurs
+  // ... module maladie ... et ça remplit le planning perso") : écrit le code
+  // principal du compteur (codes[0] — pour RP, "RP" et jamais "RPP") dans le
+  // planning perso de chaque jour de la période en un seul geste, plutôt que
+  // de devoir ouvrir DayEditPopup jour par jour. Bloque TOUTE la période si
+  // un seul jour contient déjà autre chose (même principe que VT/Formation
+  // dans ce projet — jamais d'écrasement silencieux), rien n'est écrit tant
+  // qu'un conflit existe.
+  const [periodeDu, setPeriodeDu] = useState("");
+  const [periodeAu, setPeriodeAu] = useState("");
+  const [periodeErr, setPeriodeErr] = useState("");
+  const [periodeOk, setPeriodeOk] = useState("");
+  const ajouterPeriode = () => {
+    setPeriodeErr(""); setPeriodeOk("");
+    if(!periodeDu) return;
+    const debut = periodeDu, fin = periodeAu || periodeDu;
+    if(fin < debut){ setPeriodeErr("La date de fin doit être après la date de début."); return; }
+    const jours = [];
+    let d = new Date(debut+"T12:00:00");
+    const dFin = new Date(fin+"T12:00:00");
+    while(d<=dFin){
+      jours.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+      d.setDate(d.getDate()+1);
+    }
+    if(jours.length>366){ setPeriodeErr("Période trop longue (max 366 jours)."); return; }
+    const agCp = agent?.immatriculation || agent?.cp || agent?.id;
+    const occupes = jours.filter(dk=>{
+      const v = schedule[`${agCp}-${dk}`];
+      return v && (v.equipe || v.equipe2);
+    });
+    if(occupes.length){
+      setPeriodeErr(`${occupes.length} jour${occupes.length>1?"s":""} déjà occupé${occupes.length>1?"s":""} dans le planning perso (${occupes.slice(0,3).map(fmtDate).join(", ")}${occupes.length>3?"…":""}) — modifie ou efface ${occupes.length>1?"ces jours":"ce jour"} d'abord, rien n'a été écrit.`);
+      return;
+    }
+    const code = codes[0];
+    jours.forEach(dk=>{
+      const key = `${agCp}-${dk}`;
+      const fullEntry = { equipe: code, prive: true };
+      setSchedule(prev=>({...prev,[key]:fullEntry}));
+      api.planning.saveEntry(agCp, dk, fullEntry).catch(e=>console.error(`Erreur sauvegarde ${label}:`, e));
+    });
+    setPeriodeOk(`${jours.length} jour${jours.length>1?"s":""} ${label.toLowerCase()} ajouté${jours.length>1?"s":""} au planning perso.`);
+    setPeriodeDu(""); setPeriodeAu("");
   };
 
   const moisTries = Object.keys(data.parMois).sort();
@@ -4809,6 +4854,26 @@ function CompteurDetailModal({ agent, schedule, agentProfiles, setAgentProfiles,
           </div>
 
           {!acquisKey && <div style={{fontSize:12,fontWeight:700,color:"#334155"}}>Total {year} : {data.total} jour{data.total>1?"s":""}</div>}
+
+          {/* Saisie "du ... au ..." (13/08, demandé par Olivier) : écrit le
+              code du compteur dans le planning perso pour toute la période en
+              un seul geste — bloque tout si un seul jour est déjà occupé. */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>+ Ajouter une période</div>
+            <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
+              Écrit "{codes[0]}" dans le planning perso pour chaque jour — bloqué si un seul jour de la période contient déjà autre chose.
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <input type="date" value={periodeDu} onChange={e=>{setPeriodeDu(e.target.value);setPeriodeErr("");setPeriodeOk("");}}
+                style={{flex:1,minWidth:120,padding:"7px 9px",border:`1.5px solid ${borderLight}`,borderRadius:8,fontSize:12}}/>
+              <input type="date" value={periodeAu} onChange={e=>{setPeriodeAu(e.target.value);setPeriodeErr("");setPeriodeOk("");}}
+                style={{flex:1,minWidth:120,padding:"7px 9px",border:`1.5px solid ${borderLight}`,borderRadius:8,fontSize:12}}/>
+              <button onClick={ajouterPeriode} style={{background:accentDark,color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+            </div>
+            <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Laisse "Au" vide pour un seul jour.</div>
+            {periodeErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{periodeErr}</div>}
+            {periodeOk && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {periodeOk}</div>}
+          </div>
 
           {data.donnesAnneePrecedente.length>0 && (
             <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
@@ -5553,7 +5618,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         <CongesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCongesDash(false)} cetTransfere={cetTransfereCA}/>
       )}
       {openDetailKey&&DETAIL_CONFIG[openDetailKey]&&(
-        <CompteurDetailModal agent={agent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}
+        <CompteurDetailModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}
           cetDeduction={openDetailKey==="RQ" ? cetTransfereRQ.total : 0}
           cetTransfere={CET_TRANSFERE_BY_KEY[openDetailKey]}/>
       )}
