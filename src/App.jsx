@@ -2653,6 +2653,29 @@ function getCongesDemandeesAnnee(agent, agentProfiles, schedule, year){
   return jours;
 }
 
+// Jours "Congé refusé" de l'année (13/08, même principe que
+// getCongesDemandeesAnnee ci-dessus — utilisé uniquement pour retrouver la
+// position exacte d'un jour reporté dans la série de l'année qui le
+// revendique, jamais pour afficher un badge : un jour refusé n'en a jamais
+// eu, voir DayEditPopup/App.jsx). Exclu aussi si finalement accordé entre-
+// temps (même garde que dans computeDashboardConges).
+function getCongesRefuseesAnnee(agent, agentProfiles, schedule, year){
+  const profil = agentProfiles?.[agent?.id] || {};
+  const tracking = profil.congesDemandes || {};
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const jours = [];
+  Object.entries(tracking).forEach(([d,t])=>{
+    if(!t || t.statut!=="refuse") return;
+    if(d<start||d>end) return;
+    const entree = schedule[`${agent?.id}-${d}`];
+    const codeActuel = entree?.equipe || entree?.equipe2;
+    if(codeActuel==="CA"||codeActuel==="CP") return;
+    if(t.jourEtaitVide && codeActuel) return;
+    jours.push(d);
+  });
+  return jours;
+}
+
 // Jours "VT demandé" de l'année (06/08, même principe que
 // getCongesDemandeesAnnee — VT suit désormais le même cycle
 // Accordé/Demandé/Refusé que Congés, voir computeDashboardVT).
@@ -2767,6 +2790,11 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
     if(t.jourEtaitVide && codeActuel) return; // etait vide a la demande/refus, rempli depuis -> perime
     if(t.statut==="demande"){
       if(brut.includes(d)) return; // deja accorde -> compte via brut, pas ici
+      // 13/08 (Olivier) : deja revendique par l'annee precedente (report sur
+      // "year" d'un jour demande physiquement date ici) -> compte sur le solde
+      // theorique de year-1 (via demandesReportees ci-dessous), pas ici, sinon
+      // double-compte.
+      if(reportsAnneePrecedente.includes(d)) return;
       demandes.push({date:d, dateDemande:t.dateDemande});
     } else if(t.statut==="refuse"){
       // Si le jour a finalement ete accorde entre-temps (typé CA/CP directement
@@ -2779,12 +2807,30 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   demandes.sort((a,b)=>a.date<b.date?-1:1);
   refusees.sort((a,b)=>a.date<b.date?-1:1);
 
+  // Congés demandés (pas encore accordés) physiquement datés sur l'année
+  // SUIVANTE mais déjà revendiqués sur "year" via un report (13/08, Olivier :
+  // "il faut que le compteur du report tienne aussi compte du congé demandé
+  // l'année suivante pour avoir le bon calcul") — le report n'exige plus que
+  // le jour soit déjà accordé (voir ajouterReport), un jour encore "Demandé"
+  // peut être flagué de la même façon. Jamais compté dans "pris" (qui reste
+  // strictement réservé aux jours réellement accordés), mais déjà engagé sur
+  // le solde théorique de l'année qui le revendique — sinon l'agent croit à
+  // tort avoir plus de solde restant qu'il n'en aura une fois ce jour accordé.
+  const demandesReportees = reportsCetteAnnee.filter(d=>{
+    if(d.startsWith(String(year))) return false; // deja compte ci-dessus si physiquement dans year
+    const v = schedule[`${agent.id}-${d}`];
+    const estAccorde = v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
+    if(estAccorde) return false; // deja dans reportsValides/pris, pas ici
+    const t = tracking[d];
+    return !!t && t.statut==="demande";
+  });
+
   // Solde théorique (06/08, demandé par Olivier) : projection "si toutes les
-  // demandes en attente sont accordées" — soustrait uniquement demandes.length
-  // (jamais refusees, qui ne consommeront jamais le solde). Peut devenir
-  // négatif si l'agent demande plus que son solde réel restant (signal
-  // volontairement affiché tel quel, pas plafonné à 0, pour alerter).
-  const soldeTheorique = (entitlement-pris) - demandes.length;
+  // demandes en attente sont accordées" — soustrait les demandes.length ET les
+  // demandesReportees.length (jamais refusees, qui ne consommeront jamais le
+  // solde). Peut devenir négatif si l'agent demande plus que son solde réel
+  // restant (signal volontairement affiché tel quel, pas plafonné à 0, pour alerter).
+  const soldeTheorique = (entitlement-pris) - demandes.length - demandesReportees.length;
 
   return {
     entitlement, pris, solde: entitlement-pris,
@@ -2793,7 +2839,7 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
     tousJours,
     reports: reportsValides,
     donnesAnneePrecedente,
-    demandes, refusees,
+    demandes, refusees, demandesReportees,
   };
 }
 
@@ -2959,8 +3005,14 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
     if(!reportDate) return;
     const v = schedule[`${agent.id}-${reportDate}`];
     const estConge = v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
-    if(!estConge){ setReportErr("Ce jour n'est pas saisi comme congé (CA/CP) dans le planning perso — saisis-le d'abord, puis reviens ici."); return; }
-    if(data.reports.includes(reportDate)){ setReportErr("Ce jour est déjà comptabilisé en report."); return; }
+    // 13/08 (Olivier) : un jour encore "Demandé" (pas encore accordé) peut
+    // aussi être flagué comme report — le solde théorique de l'année en tient
+    // compte (voir demandesReportees dans computeDashboardConges), pas "Pris"
+    // qui reste strictement réservé aux jours réellement accordés.
+    const demandeTracking = agentProfiles?.[agent.id]?.congesDemandes?.[reportDate];
+    const estDemande = demandeTracking?.statut==="demande";
+    if(!estConge && !estDemande){ setReportErr("Ce jour n'est ni accordé (CA/CP) ni en attente d'accord dans le planning perso — saisis-le ou demande-le d'abord, puis reviens ici."); return; }
+    if(data.reports.includes(reportDate) || (data.demandesReportees||[]).includes(reportDate)){ setReportErr("Ce jour est déjà comptabilisé en report."); return; }
     setAgentProfiles(prev=>{
       const existants = prev[agent.id]?.congesReports?.[year] || [];
       return {
@@ -3126,12 +3178,14 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
               Olivier) — widget partagé, voir CetView.jsx EpargneCetWidget. */}
           <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source="CA" sourceLabel="mes congés" year={year} besoinValeur={false}/>
 
-          {/* Solde théorique (06/08) : projection "si toutes les demandes en
-              attente sont accordées" — visible uniquement s'il y a des
-              demandes en cours, jamais affecté par les refus. */}
-          {data.demandes.length>0 && (
+          {/* Solde théorique (06/08, étendu le 13/08 aux demandes reportées) :
+              projection "si toutes les demandes en attente sont accordées" —
+              visible dès qu'il y a des demandes en cours (locales OU
+              reportées vers {year+1}, voir demandesReportees), jamais affecté
+              par les refus. */}
+          {(data.demandes.length+(data.demandesReportees||[]).length)>0 && (
             <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:10,padding:"9px 12px",fontSize:11.5,fontWeight:600,color:"#1e40af"}}>
-              ⏳ {data.demandes.length} jour{data.demandes.length>1?"s":""} en attente d'accord — solde théorique si tout accordé : <strong style={{color:data.soldeTheorique<0?"#dc2626":"#1e40af",fontSize:13}}>{data.soldeTheorique}</strong>
+              ⏳ {data.demandes.length+(data.demandesReportees||[]).length} jour{(data.demandes.length+(data.demandesReportees||[]).length)>1?"s":""} en attente d'accord — solde théorique si tout accordé : <strong style={{color:data.soldeTheorique<0?"#dc2626":"#1e40af",fontSize:13}}>{data.soldeTheorique}</strong>
             </div>
           )}
 
@@ -3358,13 +3412,19 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>↪️ Report sur {year+1}</div>
             <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
-              Un jour de congé pris sur {year+1} mais décompté du solde {year} (tolérance de report).
+              Un jour de congé pris sur {year+1} mais décompté du solde {year} (tolérance de report). Peut être ajouté dès la demande (⏳), pas besoin d'attendre l'accord — le solde théorique en tient compte tout de suite.
             </div>
-            {data.reports.length>0 && (
+            {(data.reports.length>0 || (data.demandesReportees||[]).length>0) && (
               <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:8}}>
                 {data.reports.map(d=>(
                   <div key={d} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#f8fafc",borderRadius:7,padding:"5px 9px"}}>
-                    <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>{fmtDate(d)}</span>
+                    <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>✓ {fmtDate(d)}</span>
+                    <button onClick={()=>retirerReport(d)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}}>✕ Retirer</button>
+                  </div>
+                ))}
+                {(data.demandesReportees||[]).map(d=>(
+                  <div key={d} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#fffbeb",border:"1px dashed #fde68a",borderRadius:7,padding:"5px 9px"}}>
+                    <span style={{fontSize:11,fontWeight:600,color:"#92400e"}}>⏳ {fmtDate(d)} — en attente d'accord</span>
                     <button onClick={()=>retirerReport(d)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:12,fontWeight:700}}>✕ Retirer</button>
                   </div>
                 ))}
@@ -7304,19 +7364,58 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
   // parenthèses pour lever l'ambiguïté — jamais un numéro "local" à curYear,
   // qui donnerait à tort l'impression qu'il compte sur le budget de curYear.
   const congeToutNumeros=useMemo(()=>{
+    const reportsVersAnneePrec=agentProfiles?.[agent?.id]?.congesReports?.[curYear-1]||[];
     const localTousJours=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear,["CA","CP"],"congesReports",null,false).tousJours;
     const accordes=localTousJours.map(d=>({date:d,statut:"accorde"}));
-    const demandes=getCongesDemandeesAnnee(agent,agentProfiles,schedule,curYear).map(d=>({date:d,statut:"demande"}));
+    // 13/08 (Olivier) : un jour "Demandé" physiquement dans curYear mais DÉJÀ
+    // revendiqué par curYear-1 (report en attente, pas encore accordé — voir
+    // ajouterReport) n'occupe plus de rang dans la série locale de curYear
+    // non plus, exactement comme un jour accordé reporté — il sera géré par
+    // l'override ci-dessous, avec son propre badge sablier.
+    const demandes=getCongesDemandeesAnnee(agent,agentProfiles,schedule,curYear)
+      .filter(d=>!reportsVersAnneePrec.includes(d))
+      .map(d=>({date:d,statut:"demande"}));
     const combine=[...accordes,...demandes].sort((a,b)=>a.date<b.date?-1:1);
     const m={};
     combine.forEach((it,i)=>{ m[it.date]={numero:i+1,statut:it.statut}; });
-    const reportsVersAnneePrec=agentProfiles?.[agent?.id]?.congesReports?.[curYear-1]||[];
     if(reportsVersAnneePrec.length){
-      const prevTousJours=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear-1,["CA","CP"],"congesReports",null,false).tousJours;
+      // Série complète de l'année qui revendique le report : accordés +
+      // demandés + refusés (13/08, "au cas où" — même règle "accordé OU
+      // demandé" que la numérotation locale, additionnée des refusés pour ne
+      // jamais sous-compter un cas limite où le report devient orphelin d'un
+      // jour finalement refusé). getCongesRefuseesAnnee/getCongesDemandeesAnnee
+      // n'affichent eux-mêmes jamais de badge — utilisés ici uniquement pour
+      // retrouver la bonne position chronologique.
+      const prevAccordes=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear-1,["CA","CP"],"congesReports",null,false).tousJours;
+      const prevDemandes=getCongesDemandeesAnnee(agent,agentProfiles,schedule,curYear-1);
+      const prevRefuses=getCongesRefuseesAnnee(agent,agentProfiles,schedule,curYear-1);
+      // Un report encore "Demandé" (pas accordé) est physiquement daté HORS de
+      // curYear-1 (dans curYear) — invisible à getCongesDemandeesAnnee(curYear-1),
+      // qui ne scanne que les dates physiquement dans cette année. Il doit
+      // pourtant occuper un rang dans la série de curYear-1 (c'est justement ce
+      // qu'on cherche à positionner) : ajouté explicitement ici, jamais compté
+      // deux fois avec prevAccordes (celui-ci ne contient que les reports déjà
+      // accordés, via reportsValides dans computeCompteurAvecDetail).
+      const reportsEncoreDemandes=reportsVersAnneePrec.filter(d=>{
+        const v=schedule[`${agent.id}-${d}`];
+        const estAccorde=v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
+        return !estAccorde;
+      });
+      const prevCombine=[...prevAccordes,...prevDemandes,...prevRefuses,...reportsEncoreDemandes].sort();
       reportsVersAnneePrec.forEach(d=>{
         if(!d.startsWith(String(curYear))) return;
-        const idx=prevTousJours.indexOf(d);
-        if(idx>=0) m[d]={numero:idx+1,statut:"accorde",anneeReport:curYear-1};
+        const idx=prevCombine.indexOf(d);
+        if(idx<0) return;
+        // Statut RÉEL du jour reporté (accordé ou encore demandé) déterminé
+        // depuis son propre état courant — un report peut être ajouté sur un
+        // jour encore "Demandé" (voir ajouterReport, 13/08), le badge doit
+        // rester le sablier tant qu'il n'est pas accordé.
+        const v=schedule[`${agent.id}-${d}`];
+        const estAccorde=v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
+        const t=agentProfiles?.[agent?.id]?.congesDemandes?.[d];
+        const estDemande=!estAccorde && t && t.statut==="demande";
+        if(!estAccorde && !estDemande) return; // report orphelin (jour refusé/vide depuis) -> pas de badge
+        m[d]={numero:idx+1,statut:estAccorde?"accorde":"demande",anneeReport:curYear-1};
       });
     }
     return m;
@@ -7615,7 +7714,7 @@ justifyContent: "flex-start",
                 display:"inline-flex", alignItems:"center", gap:4,
                 alignSelf:"flex-start",
               }}>
-                ⏳ CA (n°{congeToutNumeros[dk].numero})
+                ⏳ CA (n°{congeToutNumeros[dk].numero}){congeToutNumeros[dk].anneeReport?` (${congeToutNumeros[dk].anneeReport})`:""}
               </div>}
               {/* VT demandé (06/08, même principe que Congés ci-dessus) — le
                   badge s'affiche toujours pour un VT en attente, le numéro
