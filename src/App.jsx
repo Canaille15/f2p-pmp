@@ -5559,7 +5559,13 @@ function getDatesFetesAnnee(annee){
   const jourPaq=((h+l-7*m+114)%31)+1;
   const paques=new Date(annee,moisPaq-1,jourPaq);
 
-  const fmt=(d)=>d.toISOString().slice(0,10);
+  // IMPORTANT : jamais toISOString() ici — elle convertit en UTC et decale
+  // la date d'un jour en arriere des que le fuseau local est en avance sur
+  // UTC (toute la France, ete comme hiver). Bug reel constate le 13/08 sur
+  // 2027 : Lundi de Paques (29/03) affiche a tort comme le 28/03 (dimanche,
+  // Paques elle-meme) — reconstruction manuelle depuis les composants LOCAUX
+  // de la date, jamais de passage par UTC pour un simple format YYYY-MM-DD.
+  const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
   // Fêtes mobiles depuis Pâques
   const lunPaques=new Date(paques); lunPaques.setDate(paques.getDate()+1);       // F2
