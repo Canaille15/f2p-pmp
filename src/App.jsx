@@ -3541,18 +3541,47 @@ function groupRefusEnPeriodes(refus){
 // (détecté depuis le planning perso) reste lui annuel et purement informatif,
 // complètement indépendant du solde en heures.
 const TC_MIN_PAUSE   = 90;   // 1h30 créditées par pause figée validée
-const TC_PLAFOND_MIN = 1920; // 32h00 — au-delà, le surplus n'est pas ajouté (à vérifier en heures sup)
+// 32h00 — plafond partagé par TC (déjà en place) et TY (13/08, Olivier :
+// "le compteur ty a le meme plafont de 32h00 que le tc. il faut mettre le
+// meme mecanisme avec le paiement aumatatique au dela") — au-delà, le
+// surplus n'est jamais ajouté au solde (à payer automatiquement/vérifier
+// en heures sup).
+const PLAFOND_32H_MIN = 1920;
+const TC_PLAFOND_MIN = PLAFOND_32H_MIN; // alias historique, TC préexistant
 
 // Solde en heures/minutes d'un journal d'ajustements manuels (utilisé par
 // TC/TY/RN) — pas de notion d'année : simple somme de tous les ajustements
 // jamais saisis, chacun tagué avec un mois pour repère/tri, mais qui
 // n'affecte jamais le calcul lui-même (pas de remise à zéro).
-function computeLedgerSolde(agentProfiles, agentId, ledgerKey){
+// plafondMin (optionnel, 13/08 — TY uniquement, RN reste sans plafond) :
+// si fourni, rejoue le ledger en ordre chronologique RÉEL (saisiLe, pas le
+// tri d'affichage par mois) et plafonne le solde cumulé — un ajout qui
+// dépasserait le plafond n'est crédité que jusqu'au plafond, l'excédent est
+// remonté dans horsPlafond (même principe que le plafond TC sur les pauses
+// figées, computeDashboardTC) ; un retrait (delta négatif) n'est lui jamais
+// plafonné.
+function computeLedgerSolde(agentProfiles, agentId, ledgerKey, plafondMin){
   const ledger = agentProfiles?.[agentId]?.[ledgerKey] || [];
-  const solde = ledger.reduce((s,e)=>s+(e.deltaMinutes||0), 0);
   const dernierSaisiLe = ledger.reduce((max,e)=> (!max || (e.saisiLe||"")>max) ? e.saisiLe : max, null);
   const trie = [...ledger].sort((a,b)=>(b.mois||"").localeCompare(a.mois||"") || (b.saisiLe||"").localeCompare(a.saisiLe||""));
-  return { solde, ledger: trie, dernierSaisiLe };
+  if(plafondMin==null){
+    const solde = ledger.reduce((s,e)=>s+(e.deltaMinutes||0), 0);
+    return { solde, ledger: trie, dernierSaisiLe, horsPlafond: 0 };
+  }
+  const chrono = [...ledger].sort((a,b)=>(a.saisiLe||"").localeCompare(b.saisiLe||""));
+  let solde = 0, horsPlafond = 0;
+  chrono.forEach(e=>{
+    const delta = e.deltaMinutes||0;
+    if(delta>0){
+      const place = Math.max(0, plafondMin - solde);
+      const ajoute = Math.min(delta, place);
+      solde += ajoute;
+      horsPlafond += (delta - ajoute);
+    } else {
+      solde += delta;
+    }
+  });
+  return { solde, ledger: trie, dernierSaisiLe, horsPlafond };
 }
 
 function minToHM(min){
@@ -4454,7 +4483,10 @@ const DETAIL_CONFIG = {
   // TC (17/07) : sorti de ce mécanisme générique — devient un solde en heures/
   // minutes plafonné, alimenté par les pauses figées validées, avec sa propre
   // logique (computeDashboardTC/TcDashboardModal). Voir CLAUDE.md.
-  TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7", cetSource:"TY", cetBesoinValeur:true },
+  // TY plafonné à 32h00 comme TC (13/08, Olivier) — plafondMin déclenche le
+  // même mécanisme de capping+heures sup dans computeLedgerSolde, RN n'a pas
+  // ce champ et reste sans plafond.
+  TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", plafondMin:PLAFOND_32H_MIN, label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7", cetSource:"TY", cetBesoinValeur:true },
   MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626", notice:NOTICE_MALADIE },
   // Formation (17/07, demandé par Olivier) : même principe que Maladie — pure
   // consultation (pas d'acquis, pas de report), archive A+1 + 2 ans, détail
@@ -4610,9 +4642,9 @@ function NoticeSection({ sections, accentDark, bgLight, borderLight }){
   );
 }
 
-function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur, notice }){
+function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, plafondMin, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur, notice }){
   const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis]);
-  const ledgerData = useMemo(()=> ledgerKey ? computeLedgerSolde(agentProfiles, agent?.id, ledgerKey) : null, [agentProfiles, agent?.id, ledgerKey]);
+  const ledgerData = useMemo(()=> ledgerKey ? computeLedgerSolde(agentProfiles, agent?.id, ledgerKey, plafondMin) : null, [agentProfiles, agent?.id, ledgerKey, plafondMin]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
   const [reportDate, setReportDate] = useState("");
   const [reportErr, setReportErr] = useState("");
@@ -4793,12 +4825,21 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
               ci-dessous (qui reste, lui, purement informatif). */}
           {ledgerKey && ledgerData && (
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{background:bgLight,border:`2px solid ${borderLight}`,borderRadius:12,padding:"14px 12px",textAlign:"center"}}>
+              <div style={{background:bgLight,border:`2px solid ${plafondMin!=null&&ledgerData.solde>=plafondMin?"#fcd34d":borderLight}`,borderRadius:12,padding:"14px 12px",textAlign:"center"}}>
                 <div style={{fontSize:11,fontWeight:700,color:accentDark}}>Solde {label} (en cours)</div>
-                <div style={{fontSize:32,fontWeight:900,color:accentColor,lineHeight:1,marginTop:4}}>{minToHM(ledgerData.solde)}</div>
+                <div style={{fontSize:32,fontWeight:900,color:plafondMin!=null&&ledgerData.solde>=plafondMin?"#d97706":accentColor,lineHeight:1,marginTop:4}}>{minToHM(ledgerData.solde)}</div>
                 <div style={{fontSize:10,fontWeight:600,color:"#64748b",marginTop:4}}>
                   {ledgerData.dernierSaisiLe ? `Mis à jour le ${new Date(ledgerData.dernierSaisiLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}` : "Aucune saisie pour l'instant"}
                 </div>
+                {/* Plafond 32h00 (13/08, TY — même mécanisme que TC) : au-delà,
+                    l'excédent des ajouts n'est jamais crédité (computeLedgerSolde),
+                    remonté ici comme rappel "à vérifier/payer en heures sup". */}
+                {plafondMin!=null && ledgerData.solde>=plafondMin && (
+                  <div style={{fontSize:11,fontWeight:700,color:"#b45309",marginTop:6}}>⚠️ Plafond 32h00 atteint — tout nouvel ajout au-delà sera à payer automatiquement (heures sup), jamais crédité au solde</div>
+                )}
+                {plafondMin!=null && ledgerData.horsPlafond>0 && (
+                  <div style={{fontSize:10,fontWeight:600,color:"#92400e",marginTop:4}}>{minToHM(ledgerData.horsPlafond)} déjà passés en heures sup depuis le début du suivi</div>
+                )}
               </div>
 
               <div>
@@ -5114,7 +5155,7 @@ function BilanGlobalModal({agent, schedule, agentProfiles, setAgentProfiles, pau
   const bilanJours = useMemo(()=>computeBilanGlobalJours(agent, schedule, agentProfiles, year, dateProjection||null), [agent, schedule, agentProfiles, year, dateProjection]);
   const tcData = useMemo(()=>computeDashboardTC(agent, schedule, agentProfiles, pausesData, year), [agent, schedule, agentProfiles, pausesData, year]);
   const rnLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agKey, "rnLedger"), [agentProfiles, agKey]);
-  const tyLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agKey, "tyLedger"), [agentProfiles, agKey]);
+  const tyLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agKey, "tyLedger", PLAFOND_32H_MIN), [agentProfiles, agKey]);
   const bilanHeures = useMemo(()=>computeBilanGlobalHeures(tcData, rnLedgerData, tyLedgerData), [tcData, rnLedgerData, tyLedgerData]);
   // Rappel CET (08/08, demandé par Olivier) — volontairement à part du
   // total ci-dessus : ce sont des jours déjà épargnés, pas forcément à
@@ -5395,7 +5436,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // d'ajustements manuels datés par mois), affiché sur la carte à la place
   // du nombre de jours — voir DETAIL_CONFIG.RN/TY (ledgerKey).
   const rnLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agent?.id, "rnLedger"), [agentProfiles, agent?.id]);
-  const tyLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agent?.id, "tyLedger"), [agentProfiles, agent?.id]);
+  const tyLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agent?.id, "tyLedger", PLAFOND_32H_MIN), [agentProfiles, agent?.id]);
 
   // Fêtes légales : nombre de fêtes "à traiter" (attente ou probable perdue)
   // pour la cloche sur la carte — évite d'ouvrir la fenêtre juste pour savoir
@@ -5485,7 +5526,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"RN",      label:"RN",              color:"#4338ca", subtitle:`Solde — ${moisEnCoursLabel}`},
     {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
     {key:"TC",      label:"TC",              color:"#0284c7", subtitle: tcData.solde>=TC_PLAFOND_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tcData.solde>=TC_PLAFOND_MIN},
-    {key:"TY",      label:"TY",              color:"#0284c7", subtitle:`Solde — ${moisEnCoursLabel}`},
+    {key:"TY",      label:"TY",              color:"#0284c7", subtitle: tyLedgerData.solde>=PLAFOND_32H_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tyLedgerData.solde>=PLAFOND_32H_MIN},
     ...(vtActif ? [{key:"VT", label:"VT",    color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2}] : []),
     {key:"CET",     label:"CET",             color:"#7c3aed", subtitle:"Compte épargne temps"},
     {key:"FOR",     label:"Formation",       color:"#b45309", subtitle: nbFormationsNonVues>0 ? `🔔 ${nbFormationsNonVues} à voir` : "Jours formation dans l'année", alert: nbFormationsNonVues>0},
