@@ -2843,7 +2843,29 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
   };
 }
 
-function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose, cetTransfere }){
+// Perte de jours RP/RU/RQ/Congés suite à un arrêt maladie (14/08, demandé par
+// Olivier — "on perd les RP RU RQ CA en fonction du nb de jour de maladie...
+// il faut pouvoir affecter les jours perdu sur ses compteur vers le compteur
+// Maladie et inversement ; et avoir une trace"). Cadrage confirmé avant tout
+// code : saisie manuelle (pas de barème automatique calculé depuis le nombre
+// de jours maladie), un mouvement = un seul compteur cible (plusieurs
+// mouvements possibles pour un même arrêt), restauration toujours manuelle
+// (jamais détectée automatiquement à la reprise du travail), agent seul
+// maître de ses propres mouvements. agentProfiles[agentId].maladiePertes est
+// un tableau plat, jamais indexé par année — chaque mouvement porte son
+// propre champ `annee` (année du compteur SOURCE concerné, pas forcément
+// l'année de saisie). "Perdu" (statut actif) réduit immédiatement le solde
+// affiché du compteur visé ; "Restauré" rend les jours sans jamais effacer
+// la trace (les mouvements restaurés restent visibles, juste inertes pour le
+// calcul) — géré exclusivement depuis le module Maladie (MaladiePertesSection
+// ci-dessous), les autres compteurs (RP/RU/RQ/Congés) n'affichent qu'un
+// rappel en lecture seule, même principe que le récap CET (getCetTransfereJours).
+function getMaladiePerteJours(agentProfiles, agentId, compteur, annee){
+  const mvts = agentProfiles?.[agentId]?.maladiePertes || [];
+  return mvts.filter(m=>m.compteur===compteur && m.annee===annee && m.statut==="perdu").reduce((s,m)=>s+(m.jours||0), 0);
+}
+
+function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose, cetTransfere, maladiePerte }){
   const data = useMemo(()=>computeDashboardConges(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const [entitlementInput, setEntitlementInput] = useState(String(data.entitlement));
   const [reportDate, setReportDate] = useState("");
@@ -3153,9 +3175,9 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
               <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris</div>
               <div style={{fontSize:20,fontWeight:900,color:"#a16207"}}>{data.pris}</div>
             </div>
-            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${(data.solde-(cetTransfere?.total||0))<5?"#fca5a5":"#e2e8f0"}`}}>
-              <div style={{fontSize:11,fontWeight:700,color:(data.solde-(cetTransfere?.total||0))<5?"#dc2626":"#334155"}}>Restant</div>
-              <div style={{fontSize:20,fontWeight:900,color:(data.solde-(cetTransfere?.total||0))<5?"#dc2626":"#16a34a"}}>{data.solde-(cetTransfere?.total||0)}</div>
+            <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${(data.solde-(cetTransfere?.total||0)-(maladiePerte||0))<5?"#fca5a5":"#e2e8f0"}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:(data.solde-(cetTransfere?.total||0)-(maladiePerte||0))<5?"#dc2626":"#334155"}}>Restant</div>
+              <div style={{fontSize:20,fontWeight:900,color:(data.solde-(cetTransfere?.total||0)-(maladiePerte||0))<5?"#dc2626":"#16a34a"}}>{data.solde-(cetTransfere?.total||0)-(maladiePerte||0)}</div>
             </div>
             <div style={{flex:1,background:refusData.total>0?"#fef2f2":"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${refusData.total>0?"#fecaca":"#e2e8f0"}`}}>
               <div style={{fontSize:11,fontWeight:700,color:refusData.total>0?"#991b1b":"#334155"}}>Refusés</div>
@@ -3171,6 +3193,16 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
               🏦 {cetTransfere.total} jour{cetTransfere.total>1?"s":""} transféré{cetTransfere.total>1?"s":""} au CET
               {cetTransfere.parSousCompte.courant>0 && ` — Compte courant : ${cetTransfere.parSousCompte.courant}j`}
               {cetTransfere.parSousCompte.finActivite>0 && ` — Compte fin d'activité : ${cetTransfere.parSousCompte.finActivite}j`}
+            </div>
+          )}
+
+          {/* Perte maladie (14/08) : jours de Congés perdus suite à un arrêt
+              maladie — jamais écrit dans le planning perso, purement un rappel
+              en lecture seule (voir getMaladiePerteJours). Créés/restaurés
+              exclusivement depuis le module Maladie. */}
+          {maladiePerte>0 && (
+            <div style={{fontSize:11,fontWeight:600,color:"#b91c1c",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 10px"}}>
+              🤒 {maladiePerte} jour{maladiePerte>1?"s":""} perdu{maladiePerte>1?"s":""} suite à un arrêt maladie — gestion et restauration depuis le module Maladie.
             </div>
           )}
 
@@ -4642,7 +4674,112 @@ function NoticeSection({ sections, accentDark, bgLight, borderLight }){
   );
 }
 
-function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, plafondMin, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur, notice }){
+// Gestion des pertes RP/RU/RQ/Congés liées à un arrêt maladie (14/08,
+// demandé par Olivier — voir getMaladiePerteJours plus haut pour le cadrage
+// complet). Seul endroit de l'appli où un mouvement de ce type peut être
+// créé ou restauré — les autres compteurs n'affichent qu'un rappel en
+// lecture seule (CompteurDetailModal via maladiePerteDeduction/maladiePerte,
+// CongesDashboardModal via maladiePerte). Un message libre optionnel par
+// mouvement ("un peu comme le CET", demandé par Olivier) sert de trace —
+// utile par exemple pour noter la référence de l'arrêt concerné.
+const COMPTEURS_MALADIE_PERTE = [
+  {key:"RP", label:"RP"},
+  {key:"RU", label:"RU"},
+  {key:"RQ", label:"RQ"},
+  {key:"CA", label:"Congés"},
+];
+
+function MaladiePertesSection({ agent, agentProfiles, setAgentProfiles, year }){
+  const [compteur, setCompteur] = useState("RP");
+  const [jours, setJours] = useState("1");
+  const [note, setNote] = useState("");
+  const [err, setErr] = useState("");
+  const [ok, setOk] = useState("");
+
+  const mvts = agentProfiles?.[agent?.id]?.maladiePertes || [];
+  const mvtsAnnee = mvts.filter(m=>m.annee===year).sort((a,b)=>(b.dateSaisie||"").localeCompare(a.dateSaisie||""));
+  const enCours = mvtsAnnee.filter(m=>m.statut==="perdu");
+  const restaurees = mvtsAnnee.filter(m=>m.statut==="restaure");
+
+  const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
+  const labelCompteur = (c)=> COMPTEURS_MALADIE_PERTE.find(x=>x.key===c)?.label || c;
+
+  const ajouter = () => {
+    setErr(""); setOk("");
+    const n = parseInt(jours,10);
+    if(!n || n<=0){ setErr("Indique un nombre de jours valide."); return; }
+    const entry = { id:`${Date.now()}-${Math.random().toString(36).slice(2)}`, compteur, jours:n, annee:year, statut:"perdu", note:note.trim()||null, dateSaisie:new Date().toISOString().slice(0,10), dateRestauration:null };
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{ ...(prev[agent.id]||{}), maladiePertes:[...(prev[agent.id]?.maladiePertes||[]), entry] }
+    }));
+    setOk(`${n} jour${n>1?"s":""} marqué${n>1?"s":""} perdu${n>1?"s":""} sur ${labelCompteur(compteur)}.`);
+    setJours("1"); setNote("");
+  };
+
+  const restaurer = (id) => {
+    setAgentProfiles(prev=>({
+      ...prev,
+      [agent.id]:{ ...(prev[agent.id]||{}), maladiePertes:(prev[agent.id]?.maladiePertes||[]).map(m=>m.id===id?{...m, statut:"restaure", dateRestauration:new Date().toISOString().slice(0,10)}:m) }
+    }));
+  };
+
+  return (
+    <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+      <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>🤒→ Jours perdus sur d'autres compteurs</div>
+      <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
+        En cas d'arrêt maladie, indique combien de jours sont perdus sur RP/RU/RQ/Congés — le restant du compteur concerné est immédiatement réduit d'autant. Une fois l'arrêt terminé et la reprise du travail faite, restaure chaque mouvement pour rendre les jours au compteur (jamais automatique).
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <select value={compteur} onChange={e=>setCompteur(e.target.value)}
+          style={{padding:"7px 9px",border:"1.5px solid #fecaca",borderRadius:8,fontSize:12,fontWeight:700,background:"#fff"}}>
+          {COMPTEURS_MALADIE_PERTE.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}
+        </select>
+        <input type="number" min="1" value={jours} onChange={e=>setJours(e.target.value)}
+          style={{width:60,textAlign:"center",padding:"7px 4px",border:"1.5px solid #fecaca",borderRadius:8,fontSize:13,fontWeight:700}}/>
+        <span style={{fontSize:12,fontWeight:600,color:"#334155"}}>jour(s)</span>
+        <button onClick={ajouter} style={{background:"#b91c1c",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Marquer perdu</button>
+      </div>
+      <input type="text" value={note} onChange={e=>setNote(e.target.value)} placeholder="Note (optionnel) — ex: référence de l'arrêt"
+        style={{marginTop:6,width:"100%",padding:"7px 9px",border:"1.5px solid #fecaca",borderRadius:8,fontSize:12,boxSizing:"border-box"}}/>
+      {err && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{err}</div>}
+      {ok && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {ok}</div>}
+
+      {enCours.length>0 && (
+        <div style={{marginTop:12}}>
+          <div style={{fontSize:11,fontWeight:800,color:"#b91c1c",marginBottom:5}}>⚠️ En cours ({enCours.length})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {enCours.map(m=>(
+              <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:7,padding:"7px 10px"}}>
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>{labelCompteur(m.compteur)} — {m.jours}j — perdu{m.jours>1?"s":""} le {fmtDate(m.dateSaisie)}</div>
+                  {m.note && <div style={{fontSize:10,fontWeight:500,color:"#7f1d1d",marginTop:2,fontStyle:"italic"}}>{m.note}</div>}
+                </div>
+                <button onClick={()=>restaurer(m.id)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>↩️ Restaurer</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {restaurees.length>0 && (
+        <div style={{marginTop:12}}>
+          <div style={{fontSize:11,fontWeight:800,color:"#475569",marginBottom:5}}>✅ Restaurés ({restaurees.length})</div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {restaurees.map(m=>(
+              <div key={m.id} style={{fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px"}}>
+                {labelCompteur(m.compteur)} — {m.jours}j — perdu le {fmtDate(m.dateSaisie)}, restauré le {fmtDate(m.dateRestauration)}
+                {m.note && <span style={{fontStyle:"italic"}}> — {m.note}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, codes, reportKey, acquisKey, rollingAcquis, ledgerKey, plafondMin, label, icon, gradientFrom, gradientTo, bgLight, borderLight, accentDark, accentColor, onClose, cetDeduction, cetTransfere, cetSource, cetBesoinValeur, notice, maladiePerteDeduction, maladiePertesGestion }){
   const data = useMemo(()=>computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis), [agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis]);
   const ledgerData = useMemo(()=> ledgerKey ? computeLedgerSolde(agentProfiles, agent?.id, ledgerKey, plafondMin) : null, [agentProfiles, agent?.id, ledgerKey, plafondMin]);
   const [dateSnapshot, setDateSnapshot] = useState(()=>new Date().toISOString().slice(0,10));
@@ -4904,9 +5041,9 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
                 <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>Pris</div>
                 <div style={{fontSize:20,fontWeight:900,color:accentColor}}>{data.total}</div>
               </div>
-              <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${(data.solde-(cetDeduction||0))<0?"#fca5a5":"#e2e8f0"}`}}>
-                <div style={{fontSize:11,fontWeight:700,color:(data.solde-(cetDeduction||0))<0?"#dc2626":"#334155"}}>Restant</div>
-                <div style={{fontSize:20,fontWeight:900,color:(data.solde-(cetDeduction||0))<0?"#dc2626":"#16a34a"}}>{data.solde-(cetDeduction||0)}</div>
+              <div style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:`1px solid ${(data.solde-(cetDeduction||0)-(maladiePerteDeduction||0))<0?"#fca5a5":"#e2e8f0"}`}}>
+                <div style={{fontSize:11,fontWeight:700,color:(data.solde-(cetDeduction||0)-(maladiePerteDeduction||0))<0?"#dc2626":"#334155"}}>Restant</div>
+                <div style={{fontSize:20,fontWeight:900,color:(data.solde-(cetDeduction||0)-(maladiePerteDeduction||0))<0?"#dc2626":"#16a34a"}}>{data.solde-(cetDeduction||0)-(maladiePerteDeduction||0)}</div>
               </div>
             </div>
           )}
@@ -4923,11 +5060,28 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
             </div>
           )}
 
+          {/* Perte maladie (14/08) : jours de ce compteur perdus suite à un
+              arrêt maladie — jamais écrit dans le planning perso, purement un
+              rappel en lecture seule (voir getMaladiePerteJours). Créés/
+              restaurés exclusivement depuis le module Maladie. */}
+          {maladiePerteDeduction>0 && (
+            <div style={{fontSize:11,fontWeight:600,color:"#b91c1c",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 10px"}}>
+              🤒 {maladiePerteDeduction} jour{maladiePerteDeduction>1?"s":""} perdu{maladiePerteDeduction>1?"s":""} suite à un arrêt maladie — gestion et restauration depuis le module Maladie.
+            </div>
+          )}
+
           {/* Épargner directement au CET depuis ce compteur (07/08, demandé
               par Olivier) — uniquement pour RQ/RN/TY (voir cetSource dans
               DETAIL_CONFIG), widget partagé — voir CetView.jsx EpargneCetWidget. */}
           {cetSource && (
             <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source={cetSource} sourceLabel={label} year={year} besoinValeur={!!cetBesoinValeur}/>
+          )}
+
+          {/* Gestion des pertes maladie (14/08, demandé par Olivier) —
+              uniquement pour le module Maladie (maladiePertesGestion), voir
+              MaladiePertesSection plus bas dans ce fichier. */}
+          {maladiePertesGestion && (
+            <MaladiePertesSection agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={year}/>
           )}
 
           <div style={{background:bgLight,border:`1.5px solid ${borderLight}`,borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -5479,6 +5633,17 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   );
   const CET_TRANSFERE_BY_KEY = {RQ:cetTransfereRQ, RN:cetTransfereRN, TY:cetTransfereTY, TC:cetTransfereTC};
 
+  // Perte maladie (14/08, demandé par Olivier) : jours perdus sur RP/RU/RQ/
+  // Congés suite à un arrêt — même principe que la déduction CET ci-dessus
+  // (recalculé à la volée depuis maladiePertes, jamais stocké dans le solde
+  // du compteur lui-même). Gestion (créer/restaurer) exclusivement depuis le
+  // module Maladie, voir MaladiePertesSection.
+  const maladiePerteRP = useMemo(()=>getMaladiePerteJours(agentProfiles, agent?.id, "RP", year), [agentProfiles, agent?.id, year]);
+  const maladiePerteRU = useMemo(()=>getMaladiePerteJours(agentProfiles, agent?.id, "RU", year), [agentProfiles, agent?.id, year]);
+  const maladiePerteRQ = useMemo(()=>getMaladiePerteJours(agentProfiles, agent?.id, "RQ", year), [agentProfiles, agent?.id, year]);
+  const maladiePerteCA = useMemo(()=>getMaladiePerteJours(agentProfiles, agent?.id, "CA", year), [agentProfiles, agent?.id, year]);
+  const MALADIE_PERTE_BY_KEY = {RP:maladiePerteRP, RU:maladiePerteRU, RQ:maladiePerteRQ};
+
   // Pause Figée (17/07) : données chargées ici (pas dans la modale) pour être
   // partagées avec le calcul du solde TC, qui en dépend (voir computeDashboardTC).
   const agentIdPauses = agent?.cp || agent?.immatriculation || agent?.id;
@@ -5517,7 +5682,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // : ne touche à aucun calcul, seulement à la présence de la carte ici.
   const vtActif = agentProfiles?.[agentIdPauses]?.vtModuleActif !== false;
   const CARDS = [
-    {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:(solde-cetTransfereCA.total)<5},
+    {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:(solde-cetTransfereCA.total-maladiePerteCA)<5},
     {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
     {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Pris au 31/12"},
     {key:"RU",      label:"RU",              color:"#d97706", subtitle:"Pris au 31/12"},
@@ -5660,7 +5825,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       {/* Grille compteurs */}
       {(()=>{
         const renderCard = (card) => {
-          const v = card.key==="conges" ? congesData.solde - cetTransfereCA.total
+          const v = card.key==="conges" ? congesData.solde - cetTransfereCA.total - maladiePerteCA
             : card.key==="VT" ? vtData.pris
             : card.key==="CET" ? cetData.soldeTotal
             : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
@@ -5669,7 +5834,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
             : card.key==="TY" ? minToHM(tyLedgerData.solde)
             // RQ affiche le restant (Acquis - Pris) au lieu du nombre de jours pris
             // (17/07, demandé par Olivier) — RP/RU restent sur le total "pris".
-            : card.key==="RQ" ? (rqData.solde ?? rqData.total) - cetTransfereRQ.total
+            : card.key==="RQ" ? (rqData.solde ?? rqData.total) - cetTransfereRQ.total - maladiePerteRQ
             : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
           const isTravailCard = card.key==="travail";
           const isCongesCard = card.key==="conges";
@@ -5753,12 +5918,14 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
         <TravailDashboardModal agent={agent} schedule={schedule} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowTravailDash(false)}/>
       )}
       {showCongesDash&&(
-        <CongesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCongesDash(false)} cetTransfere={cetTransfereCA}/>
+        <CongesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowCongesDash(false)} cetTransfere={cetTransfereCA} maladiePerte={maladiePerteCA}/>
       )}
       {openDetailKey&&DETAIL_CONFIG[openDetailKey]&&(
         <CompteurDetailModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setOpenDetailKey(null)} {...DETAIL_CONFIG[openDetailKey]}
           cetDeduction={openDetailKey==="RQ" ? cetTransfereRQ.total : 0}
-          cetTransfere={CET_TRANSFERE_BY_KEY[openDetailKey]}/>
+          cetTransfere={CET_TRANSFERE_BY_KEY[openDetailKey]}
+          maladiePerteDeduction={MALADIE_PERTE_BY_KEY[openDetailKey]||0}
+          maladiePertesGestion={openDetailKey==="MA"}/>
       )}
       {showFetesDash&&(
         <FetesDashboardModal agent={agent} schedule={schedule} setSchedule={setSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} isAdmin={isAdmin} isOwnProfile={isOwnProfile} year={selectedYear} availableYears={availableYears} onYearChange={setSelectedYear} onClose={()=>setShowFetesDash(false)}/>

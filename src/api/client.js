@@ -517,6 +517,7 @@ export const profil = {
       signatureDataUrl:         extra.signatureDataUrl        ?? null,
       formationsPersoDeclarees: extra.formationsPersoDeclarees|| [],
       formationNotifications:   extra.formationNotifications  || [],
+      maladiePertes:            extra.maladiePertes            || [],
     };
   },
 
@@ -552,6 +553,7 @@ export const profil = {
       'vtEntitlement','vtTracking','vtReports','congesDemandes','tcAjustementManuel',
       'tcLedger','tyLedger','rnLedger','bilanGlobalDureeJourMin','cetLedger','compteursOrdre',
       'vtModuleActif','signatureDataUrl','formationsPersoDeclarees','formationNotifications',
+      'maladiePertes',
     ];
     const donnees_json = {};
     EXTRA_KEYS.forEach(k => { if (data[k] !== undefined) donnees_json[k] = data[k]; });
