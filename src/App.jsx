@@ -4689,6 +4689,31 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
   // un seul jour contient déjà autre chose (même principe que VT/Formation
   // dans ce projet — jamais d'écrasement silencieux), rien n'est écrit tant
   // qu'un conflit existe.
+  // Ecriture partagee (13/08) : garde-fou "tout ou rien" + ecriture reelle,
+  // reutilisee par la periode Du/Au ET par la selection multi-jours du mini-
+  // calendrier ci-dessous — un seul endroit qui decide ce qui bloque, jamais
+  // deux implementations qui pourraient diverger.
+  const ecrireJoursCompteur = (jours) => {
+    if(jours.length===0) return null;
+    if(jours.length>366) return "Sélection trop grande (max 366 jours).";
+    const agCp = agent?.immatriculation || agent?.cp || agent?.id;
+    const occupes = jours.filter(dk=>{
+      const v = schedule[`${agCp}-${dk}`];
+      return v && (v.equipe || v.equipe2);
+    });
+    if(occupes.length){
+      return `${occupes.length} jour${occupes.length>1?"s":""} déjà occupé${occupes.length>1?"s":""} dans le planning perso (${occupes.slice(0,3).map(fmtDate).join(", ")}${occupes.length>3?"…":""}) — modifie ou efface ${occupes.length>1?"ces jours":"ce jour"} d'abord, rien n'a été écrit.`;
+    }
+    const code = codes[0];
+    jours.forEach(dk=>{
+      const key = `${agCp}-${dk}`;
+      const fullEntry = { equipe: code, prive: true };
+      setSchedule(prev=>({...prev,[key]:fullEntry}));
+      api.planning.saveEntry(agCp, dk, fullEntry).catch(e=>console.error(`Erreur sauvegarde ${label}:`, e));
+    });
+    return null;
+  };
+
   const [periodeDu, setPeriodeDu] = useState("");
   const [periodeAu, setPeriodeAu] = useState("");
   const [periodeErr, setPeriodeErr] = useState("");
@@ -4705,25 +4730,48 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
       jours.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
       d.setDate(d.getDate()+1);
     }
-    if(jours.length>366){ setPeriodeErr("Période trop longue (max 366 jours)."); return; }
-    const agCp = agent?.immatriculation || agent?.cp || agent?.id;
-    const occupes = jours.filter(dk=>{
-      const v = schedule[`${agCp}-${dk}`];
-      return v && (v.equipe || v.equipe2);
-    });
-    if(occupes.length){
-      setPeriodeErr(`${occupes.length} jour${occupes.length>1?"s":""} déjà occupé${occupes.length>1?"s":""} dans le planning perso (${occupes.slice(0,3).map(fmtDate).join(", ")}${occupes.length>3?"…":""}) — modifie ou efface ${occupes.length>1?"ces jours":"ce jour"} d'abord, rien n'a été écrit.`);
-      return;
-    }
-    const code = codes[0];
-    jours.forEach(dk=>{
-      const key = `${agCp}-${dk}`;
-      const fullEntry = { equipe: code, prive: true };
-      setSchedule(prev=>({...prev,[key]:fullEntry}));
-      api.planning.saveEntry(agCp, dk, fullEntry).catch(e=>console.error(`Erreur sauvegarde ${label}:`, e));
-    });
+    const err = ecrireJoursCompteur(jours);
+    if(err){ setPeriodeErr(err); return; }
     setPeriodeOk(`${jours.length} jour${jours.length>1?"s":""} ${label.toLowerCase()} ajouté${jours.length>1?"s":""} au planning perso.`);
     setPeriodeDu(""); setPeriodeAu("");
+  };
+
+  // Mini-calendrier de sélection multi-jours (13/08, demandé par Olivier —
+  // "un sélecteur de jour multiple", pour les jours dispersés qu'un simple
+  // Du/Au ne peut pas couvrir, ex: "tous les repos d'un mois"). Complètement
+  // séparé du VRAI calendrier "Mon planning" (zone fragile du projet) — un
+  // petit widget autonome, cantonné à ce panneau, la sélection persiste en
+  // changeant de mois affiché. Les jours déjà occupés sont visibles grisés
+  // et non cliquables (contrairement à Du/Au, le conflit est visible avant
+  // même de valider, pas seulement après).
+  const [miniMonth, setMiniMonth] = useState(()=>{
+    const now = new Date();
+    return now.getFullYear()===year ? `${year}-${String(now.getMonth()+1).padStart(2,"0")}` : `${year}-01`;
+  });
+  const [joursSelect, setJoursSelect] = useState([]);
+  const [selectErr, setSelectErr] = useState("");
+  const [selectOk, setSelectOk] = useState("");
+  const [miniYear, miniMonthNum] = miniMonth.split("-").map(Number);
+  const miniDaysInMonth = new Date(miniYear, miniMonthNum, 0).getDate();
+  const miniFirstDow = new Date(miniYear, miniMonthNum-1, 1).getDay();
+  const miniOffset = miniFirstDow===0 ? 6 : miniFirstDow-1;
+  const changerMiniMois = (delta) => {
+    let m = miniMonthNum + delta, y = miniYear;
+    if(m<1){ m=12; y--; } else if(m>12){ m=1; y++; }
+    setMiniMonth(`${y}-${String(m).padStart(2,"0")}`);
+  };
+  const toggleJourSelect = (dk, occupe) => {
+    if(occupe) return;
+    setSelectErr(""); setSelectOk("");
+    setJoursSelect(prev=> prev.includes(dk) ? prev.filter(x=>x!==dk) : [...prev,dk].sort());
+  };
+  const ajouterSelection = () => {
+    setSelectErr(""); setSelectOk("");
+    if(joursSelect.length===0) return;
+    const err = ecrireJoursCompteur(joursSelect);
+    if(err){ setSelectErr(err); return; }
+    setSelectOk(`${joursSelect.length} jour${joursSelect.length>1?"s":""} ${label.toLowerCase()} ajouté${joursSelect.length>1?"s":""} au planning perso.`);
+    setJoursSelect([]);
   };
 
   const moisTries = Object.keys(data.parMois).sort();
@@ -4873,6 +4921,55 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
             <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Laisse "Au" vide pour un seul jour.</div>
             {periodeErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{periodeErr}</div>}
             {periodeOk && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {periodeOk}</div>}
+          </div>
+
+          {/* Mini-calendrier multi-jours (13/08, demandé par Olivier) : pour
+              les jours dispersés dans un même mois (ex. "tous les repos du
+              mois") que Du/Au ne peut pas couvrir en une fois. Widget autonome
+              — jamais le vrai calendrier "Mon planning". */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>+ Sélectionner des jours (dispersés)</div>
+            <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
+              Coche les jours à ajouter, même non consécutifs. Les jours grisés sont déjà occupés dans le planning perso.
+            </div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <button onClick={()=>changerMiniMois(-1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:accentDark,padding:"2px 8px",fontWeight:700}}>‹</button>
+              <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{MOIS_L[miniMonthNum-1]} {miniYear}</span>
+              <button onClick={()=>changerMiniMois(1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:accentDark,padding:"2px 8px",fontWeight:700}}>›</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+              {["L","M","M","J","V","S","D"].map((j,i)=>(
+                <div key={i} style={{fontSize:9,fontWeight:700,color:"#94a3b8",textAlign:"center"}}>{j}</div>
+              ))}
+              {Array.from({length:miniOffset}).map((_,i)=><div key={"o"+i}/>)}
+              {Array.from({length:miniDaysInMonth}).map((_,i)=>{
+                const day = i+1;
+                const dk = `${miniYear}-${String(miniMonthNum).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                const agCpMini = agent?.immatriculation || agent?.cp || agent?.id;
+                const v = schedule[`${agCpMini}-${dk}`];
+                const occupe = !!(v && (v.equipe || v.equipe2));
+                const isSel = joursSelect.includes(dk);
+                return (
+                  <button key={dk} onClick={()=>toggleJourSelect(dk,occupe)} disabled={occupe}
+                    style={{
+                      aspectRatio:"1", border:`1.5px solid ${isSel?accentDark:occupe?"#e2e8f0":borderLight}`,
+                      borderRadius:6, background:isSel?accentDark:occupe?"#f1f5f9":"#fff",
+                      color:isSel?"#fff":occupe?"#cbd5e1":"#334155",
+                      fontSize:11, fontWeight:700, cursor:occupe?"default":"pointer",
+                      display:"flex", alignItems:"center", justifyContent:"center", padding:0,
+                    }}>
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8,gap:8}}>
+              <span style={{fontSize:11,fontWeight:600,color:"#475569"}}>{joursSelect.length} jour{joursSelect.length>1?"s":""} sélectionné{joursSelect.length>1?"s":""}</span>
+              <button onClick={ajouterSelection} disabled={joursSelect.length===0}
+                style={{background:joursSelect.length===0?"#cbd5e1":accentDark,color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:joursSelect.length===0?"default":"pointer",fontSize:12,fontWeight:700}}>+ Ajouter</button>
+            </div>
+            {selectErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{selectErr}</div>}
+            {selectOk && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {selectOk}</div>}
           </div>
 
           {data.donnesAnneePrecedente.length>0 && (
