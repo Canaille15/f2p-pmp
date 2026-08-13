@@ -111,7 +111,15 @@ export default function SignaturePad({ agent, agentProfiles, setAgentProfiles })
     const rect = e.currentTarget.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
+  // preventDefault() explicite (13/08, stylet tablette/iPad signalé en échec
+  // par Olivier) : `touchAction:"none"` seul n'est pas toujours suffisant sur
+  // Safari iOS/iPadOS ni certains Chrome Android quand le canvas est niché
+  // dans un panneau défilant (ce popup "Mon profil" l'est) — le navigateur
+  // peut quand même intercepter le geste comme un scroll/zoom et le stylet
+  // ne dessine jamais, sans aucune erreur visible. N'affecte pas souris/
+  // doigt, qui fonctionnaient déjà (setPointerCapture reste inchangé).
   const onPointerDown = (e) => {
+    e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     const { x, y } = getPos(e);
     ctxRef.current.beginPath();
@@ -120,12 +128,13 @@ export default function SignaturePad({ agent, agentProfiles, setAgentProfiles })
   };
   const onPointerMove = (e) => {
     if (!isDrawingRef.current) return;
+    e.preventDefault();
     const { x, y } = getPos(e);
     ctxRef.current.lineTo(x, y);
     ctxRef.current.stroke();
     setEstVide(false);
   };
-  const onPointerUp = () => { isDrawingRef.current = false; };
+  const onPointerUp = (e) => { e.preventDefault(); isDrawingRef.current = false; };
 
   const effacerDessin = () => {
     const canvas = drawCanvasRef.current;
