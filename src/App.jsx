@@ -2846,23 +2846,23 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
 // Perte de jours RP/RU/RQ/Congés suite à un arrêt maladie (14/08, demandé par
 // Olivier — "on perd les RP RU RQ CA en fonction du nb de jour de maladie...
 // il faut pouvoir affecter les jours perdu sur ses compteur vers le compteur
-// Maladie et inversement ; et avoir une trace"). Cadrage confirmé avant tout
-// code : saisie manuelle (pas de barème automatique calculé depuis le nombre
-// de jours maladie), un mouvement = un seul compteur cible (plusieurs
-// mouvements possibles pour un même arrêt), restauration toujours manuelle
-// (jamais détectée automatiquement à la reprise du travail), agent seul
-// maître de ses propres mouvements. agentProfiles[agentId].maladiePertes est
-// un tableau plat, jamais indexé par année — chaque mouvement porte son
-// propre champ `annee` (année du compteur SOURCE concerné, pas forcément
-// l'année de saisie). "Perdu" (statut actif) réduit immédiatement le solde
-// affiché du compteur visé ; "Restauré" rend les jours sans jamais effacer
-// la trace (les mouvements restaurés restent visibles, juste inertes pour le
-// calcul) — géré exclusivement depuis le module Maladie (MaladiePertesSection
-// ci-dessous), les autres compteurs (RP/RU/RQ/Congés) n'affichent qu'un
-// rappel en lecture seule, même principe que le récap CET (getCetTransfereJours).
+// Maladie... et avoir une trace"). **Simplifié le même jour** (Olivier, après
+// un premier essai avec cycle perdu/restauré : "tu as mis un message de
+// restauration. Ce n'est pas utile [...] Il faut juste tracer le nombre de
+// jours qui sont perdus [...] Les restaurations on s'en fout. C'est aux
+// agents de vérifier que les compteurs suivent.") — plus de statut ni de
+// restauration : chaque mouvement est un simple constat permanent (compteur
+// + jours + note), retirable uniquement pour corriger une erreur de saisie
+// (bouton "✕ Retirer", suppression définitive, pas un cycle perdu/restauré).
+// agentProfiles[agentId].maladiePertes est un tableau plat, jamais indexé par
+// année — chaque mouvement porte son propre champ `annee` (année du compteur
+// SOURCE concerné). Géré exclusivement depuis le module Maladie
+// (MaladiePertesSection ci-dessous, fusionnée dans "+ Ajouter une période"),
+// les autres compteurs (RP/RU/RQ/Congés) n'affichent qu'un rappel en lecture
+// seule, même principe que le récap CET (getCetTransfereJours).
 function getMaladiePerteJours(agentProfiles, agentId, compteur, annee){
   const mvts = agentProfiles?.[agentId]?.maladiePertes || [];
-  return mvts.filter(m=>m.compteur===compteur && m.annee===annee && m.statut==="perdu").reduce((s,m)=>s+(m.jours||0), 0);
+  return mvts.filter(m=>m.compteur===compteur && m.annee===annee).reduce((s,m)=>s+(m.jours||0), 0);
 }
 
 function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgentProfiles, year, availableYears, onYearChange, onClose, cetTransfere, maladiePerte }){
@@ -3198,11 +3198,11 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
 
           {/* Perte maladie (14/08) : jours de Congés perdus suite à un arrêt
               maladie — jamais écrit dans le planning perso, purement un rappel
-              en lecture seule (voir getMaladiePerteJours). Créés/restaurés
-              exclusivement depuis le module Maladie. */}
+              en lecture seule (voir getMaladiePerteJours). Gérée exclusivement
+              depuis le module Maladie. */}
           {maladiePerte>0 && (
             <div style={{fontSize:11,fontWeight:600,color:"#b91c1c",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 10px"}}>
-              🤒 {maladiePerte} jour{maladiePerte>1?"s":""} perdu{maladiePerte>1?"s":""} suite à un arrêt maladie — gestion et restauration depuis le module Maladie.
+              🤒 {maladiePerte} jour{maladiePerte>1?"s":""} perdu{maladiePerte>1?"s":""} suite à un arrêt maladie — gestion depuis le module Maladie.
             </div>
           )}
 
@@ -4676,12 +4676,19 @@ function NoticeSection({ sections, accentDark, bgLight, borderLight }){
 
 // Gestion des pertes RP/RU/RQ/Congés liées à un arrêt maladie (14/08,
 // demandé par Olivier — voir getMaladiePerteJours plus haut pour le cadrage
-// complet). Seul endroit de l'appli où un mouvement de ce type peut être
-// créé ou restauré — les autres compteurs n'affichent qu'un rappel en
-// lecture seule (CompteurDetailModal via maladiePerteDeduction/maladiePerte,
-// CongesDashboardModal via maladiePerte). Un message libre optionnel par
-// mouvement ("un peu comme le CET", demandé par Olivier) sert de trace —
-// utile par exemple pour noter la référence de l'arrêt concerné.
+// complet + la simplification du même jour, restauration retirée). Seul
+// endroit de l'appli où un mouvement de ce type peut être créé — les autres
+// compteurs n'affichent qu'un rappel en lecture seule (CompteurDetailModal
+// via maladiePerteDeduction, CongesDashboardModal via maladiePerte). Fusionné
+// directement sous "+ Ajouter une période" (même jour, Olivier : "est-ce
+// qu'il n'y avait pas la possibilité de faire un module unique qui permettait
+// d'ajouter une période de jour de maladie, et de préciser en dessous [...]
+// le nombre de jours perdus selon chaque compteur ? Je trouve que le module
+// commence déjà à faire fouillis") — reçoit periodeDu/periodeAu en props
+// uniquement pour préremplir la note par défaut ("Arrêt du ... au ..."),
+// aucune autre dépendance avec la saisie du planning (les 2 actions restent
+// indépendantes : la période peut déjà exister dans le planning sans que ça
+// bloque la déclaration des jours perdus, et inversement).
 const COMPTEURS_MALADIE_PERTE = [
   {key:"RP", label:"RP"},
   {key:"RU", label:"RU"},
@@ -4689,90 +4696,81 @@ const COMPTEURS_MALADIE_PERTE = [
   {key:"CA", label:"Congés"},
 ];
 
-function MaladiePertesSection({ agent, agentProfiles, setAgentProfiles, year }){
-  const [compteur, setCompteur] = useState("RP");
-  const [jours, setJours] = useState("1");
+function MaladiePertesSection({ agent, agentProfiles, setAgentProfiles, year, periodeDu, periodeAu }){
+  const [rp, setRp] = useState("");
+  const [ru, setRu] = useState("");
+  const [rq, setRq] = useState("");
+  const [ca, setCa] = useState("");
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");
 
   const mvts = agentProfiles?.[agent?.id]?.maladiePertes || [];
   const mvtsAnnee = mvts.filter(m=>m.annee===year).sort((a,b)=>(b.dateSaisie||"").localeCompare(a.dateSaisie||""));
-  const enCours = mvtsAnnee.filter(m=>m.statut==="perdu");
-  const restaurees = mvtsAnnee.filter(m=>m.statut==="restaure");
 
   const fmtDate = (d)=> d ? new Date(d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—";
   const labelCompteur = (c)=> COMPTEURS_MALADIE_PERTE.find(x=>x.key===c)?.label || c;
+  const noteParDefaut = periodeDu ? `Arrêt du ${fmtDate(periodeDu)}${periodeAu&&periodeAu!==periodeDu?` au ${fmtDate(periodeAu)}`:""}` : "";
 
-  const ajouter = () => {
+  const enregistrer = () => {
     setErr(""); setOk("");
-    const n = parseInt(jours,10);
-    if(!n || n<=0){ setErr("Indique un nombre de jours valide."); return; }
-    const entry = { id:`${Date.now()}-${Math.random().toString(36).slice(2)}`, compteur, jours:n, annee:year, statut:"perdu", note:note.trim()||null, dateSaisie:new Date().toISOString().slice(0,10), dateRestauration:null };
+    const champs = [["RP",rp],["RU",ru],["RQ",rq],["CA",ca]];
+    const valides = champs.map(([k,v])=>[k,parseInt(v,10)||0]).filter(([,n])=>n>0);
+    if(valides.length===0){ setErr("Indique au moins un nombre de jours sur un des compteurs."); return; }
+    const noteFinale = note.trim() || noteParDefaut || null;
+    const dateSaisie = new Date().toISOString().slice(0,10);
+    const nouveaux = valides.map(([compteur,jours])=>({
+      id:`${Date.now()}-${compteur}-${Math.random().toString(36).slice(2)}`,
+      compteur, jours, annee:year, note:noteFinale, dateSaisie,
+    }));
     setAgentProfiles(prev=>({
       ...prev,
-      [agent.id]:{ ...(prev[agent.id]||{}), maladiePertes:[...(prev[agent.id]?.maladiePertes||[]), entry] }
+      [agent.id]:{ ...(prev[agent.id]||{}), maladiePertes:[...(prev[agent.id]?.maladiePertes||[]), ...nouveaux] }
     }));
-    setOk(`${n} jour${n>1?"s":""} marqué${n>1?"s":""} perdu${n>1?"s":""} sur ${labelCompteur(compteur)}.`);
-    setJours("1"); setNote("");
+    setOk(`Compteur${valides.length>1?"s":""} mis à jour — ${valides.map(([k,n])=>`${labelCompteur(k)} −${n}j`).join(", ")}.`);
+    setRp("");setRu("");setRq("");setCa("");setNote("");
   };
 
-  const restaurer = (id) => {
+  const retirer = (id) => {
     setAgentProfiles(prev=>({
       ...prev,
-      [agent.id]:{ ...(prev[agent.id]||{}), maladiePertes:(prev[agent.id]?.maladiePertes||[]).map(m=>m.id===id?{...m, statut:"restaure", dateRestauration:new Date().toISOString().slice(0,10)}:m) }
+      [agent.id]:{ ...(prev[agent.id]||{}), maladiePertes:(prev[agent.id]?.maladiePertes||[]).filter(m=>m.id!==id) }
     }));
   };
 
   return (
-    <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
-      <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>🤒→ Jours perdus sur d'autres compteurs</div>
+    <div style={{marginTop:12,paddingTop:12,borderTop:"1px dashed #fecaca"}}>
+      <div style={{fontSize:11,fontWeight:800,color:"#b91c1c",marginBottom:4}}>🤒 Jours perdus sur d'autres compteurs pour cet arrêt (optionnel)</div>
       <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
-        En cas d'arrêt maladie, indique combien de jours sont perdus sur RP/RU/RQ/Congés — le restant du compteur concerné est immédiatement réduit d'autant. Une fois l'arrêt terminé et la reprise du travail faite, restaure chaque mouvement pour rendre les jours au compteur (jamais automatique).
+        Indique combien de jours sont perdus sur chaque compteur pour cet arrêt — le restant est réduit immédiatement. Laisse à 0 les compteurs non concernés. C'est à toi de vérifier ensuite que les compteurs sont à jour.
       </div>
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        <select value={compteur} onChange={e=>setCompteur(e.target.value)}
-          style={{padding:"7px 9px",border:"1.5px solid #fecaca",borderRadius:8,fontSize:12,fontWeight:700,background:"#fff"}}>
-          {COMPTEURS_MALADIE_PERTE.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}
-        </select>
-        <input type="number" min="1" value={jours} onChange={e=>setJours(e.target.value)}
-          style={{width:60,textAlign:"center",padding:"7px 4px",border:"1.5px solid #fecaca",borderRadius:8,fontSize:13,fontWeight:700}}/>
-        <span style={{fontSize:12,fontWeight:600,color:"#334155"}}>jour(s)</span>
-        <button onClick={ajouter} style={{background:"#b91c1c",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>+ Marquer perdu</button>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+        {[["RP",rp,setRp],["RU",ru,setRu],["RQ",rq,setRq],["Congés",ca,setCa]].map(([lbl,val,setter])=>(
+          <div key={lbl}>
+            <div style={{fontSize:10,fontWeight:700,color:"#334155",textAlign:"center",marginBottom:2}}>{lbl}</div>
+            <input type="number" min="0" value={val} onChange={e=>setter(e.target.value)} placeholder="0"
+              style={{width:"100%",textAlign:"center",padding:"6px 2px",border:"1.5px solid #fecaca",borderRadius:8,fontSize:13,fontWeight:700,boxSizing:"border-box"}}/>
+          </div>
+        ))}
       </div>
-      <input type="text" value={note} onChange={e=>setNote(e.target.value)} placeholder="Note (optionnel) — ex: référence de l'arrêt"
+      <input type="text" value={note} onChange={e=>setNote(e.target.value)}
+        placeholder={noteParDefaut ? `Note (optionnel) — défaut : ${noteParDefaut}` : "Note (optionnel) — ex: référence de l'arrêt"}
         style={{marginTop:6,width:"100%",padding:"7px 9px",border:"1.5px solid #fecaca",borderRadius:8,fontSize:12,boxSizing:"border-box"}}/>
+      <button onClick={enregistrer} style={{marginTop:6,background:"#b91c1c",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>Enregistrer les jours perdus</button>
       {err && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{err}</div>}
       {ok && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {ok}</div>}
 
-      {enCours.length>0 && (
-        <div style={{marginTop:12}}>
-          <div style={{fontSize:11,fontWeight:800,color:"#b91c1c",marginBottom:5}}>⚠️ En cours ({enCours.length})</div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {enCours.map(m=>(
-              <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:7,padding:"7px 10px"}}>
-                <div>
-                  <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>{labelCompteur(m.compteur)} — {m.jours}j — perdu{m.jours>1?"s":""} le {fmtDate(m.dateSaisie)}</div>
-                  {m.note && <div style={{fontSize:10,fontWeight:500,color:"#7f1d1d",marginTop:2,fontStyle:"italic"}}>{m.note}</div>}
-                </div>
-                <button onClick={()=>restaurer(m.id)} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>↩️ Restaurer</button>
+      {mvtsAnnee.length>0 && (
+        <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:5}}>
+          {mvtsAnnee.map(m=>(
+            <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:7,padding:"7px 10px"}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>{labelCompteur(m.compteur)} — {m.jours}j — {fmtDate(m.dateSaisie)}</div>
+                {m.note && <div style={{fontSize:10,fontWeight:500,color:"#7f1d1d",marginTop:2,fontStyle:"italic"}}>{m.note}</div>}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {restaurees.length>0 && (
-        <div style={{marginTop:12}}>
-          <div style={{fontSize:11,fontWeight:800,color:"#475569",marginBottom:5}}>✅ Restaurés ({restaurees.length})</div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {restaurees.map(m=>(
-              <div key={m.id} style={{fontSize:11,fontWeight:600,color:"#64748b",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px"}}>
-                {labelCompteur(m.compteur)} — {m.jours}j — perdu le {fmtDate(m.dateSaisie)}, restauré le {fmtDate(m.dateRestauration)}
-                {m.note && <span style={{fontStyle:"italic"}}> — {m.note}</span>}
-              </div>
-            ))}
-          </div>
+              <button onClick={()=>retirer(m.id)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>✕ Retirer</button>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -5062,11 +5060,12 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
 
           {/* Perte maladie (14/08) : jours de ce compteur perdus suite à un
               arrêt maladie — jamais écrit dans le planning perso, purement un
-              rappel en lecture seule (voir getMaladiePerteJours). Créés/
-              restaurés exclusivement depuis le module Maladie. */}
+              rappel en lecture seule (voir getMaladiePerteJours). Gérée
+              exclusivement depuis le module Maladie (MaladiePertesSection,
+              fusionnée sous "+ Ajouter une période" ci-dessous). */}
           {maladiePerteDeduction>0 && (
             <div style={{fontSize:11,fontWeight:600,color:"#b91c1c",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"8px 10px"}}>
-              🤒 {maladiePerteDeduction} jour{maladiePerteDeduction>1?"s":""} perdu{maladiePerteDeduction>1?"s":""} suite à un arrêt maladie — gestion et restauration depuis le module Maladie.
+              🤒 {maladiePerteDeduction} jour{maladiePerteDeduction>1?"s":""} perdu{maladiePerteDeduction>1?"s":""} suite à un arrêt maladie — gestion depuis le module Maladie.
             </div>
           )}
 
@@ -5075,13 +5074,6 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
               DETAIL_CONFIG), widget partagé — voir CetView.jsx EpargneCetWidget. */}
           {cetSource && (
             <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source={cetSource} sourceLabel={label} year={year} besoinValeur={!!cetBesoinValeur}/>
-          )}
-
-          {/* Gestion des pertes maladie (14/08, demandé par Olivier) —
-              uniquement pour le module Maladie (maladiePertesGestion), voir
-              MaladiePertesSection plus bas dans ce fichier. */}
-          {maladiePertesGestion && (
-            <MaladiePertesSection agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={year}/>
           )}
 
           <div style={{background:bgLight,border:`1.5px solid ${borderLight}`,borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -5116,6 +5108,14 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
             <div style={{fontSize:10,color:"#94a3b8",marginTop:5}}>Laisse "Au" vide pour un seul jour.</div>
             {periodeErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{periodeErr}</div>}
             {periodeOk && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {periodeOk}</div>}
+
+            {/* Jours perdus sur d'autres compteurs, fusionné ici (14/08,
+                demandé par Olivier) — reste dans la même carte que l'ajout de
+                période plutôt qu'une section à part, pour ne pas surcharger
+                le module Maladie. Voir MaladiePertesSection. */}
+            {maladiePertesGestion && (
+              <MaladiePertesSection agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={year} periodeDu={periodeDu} periodeAu={periodeAu}/>
+            )}
           </div>
 
           {/* Mini-calendrier multi-jours (13/08, demandé par Olivier) : pour
@@ -6157,9 +6157,24 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
       }
     }
 
+    // Override manuel (déplacé avant le motif, 14/08 — la perte pour cause
+    // de maladie doit pouvoir influencer le motif affiché ci-dessous).
+    const override = fetesData[code] || {};
+
+    // Perte pour cause de maladie (14/08, demandé par Olivier — "il faut
+    // pouvoir noter une fête comme perdu pour motif de maladie") : override
+    // manuel prioritaire sur le calcul réglementaire habituel (Sunday rule,
+    // etc.) — même principe que les autres corrections manuelles de ce
+    // module (priseLe/estPayee/epargneCet), jamais stocké ailleurs que
+    // fetesTracking[année][code]. Ne modifie aucune des règles existantes,
+    // juste une raison supplémentaire de forcer estPerdue=true.
+    if(override.perdueMaladie) estPerdue = true;
+
     // Motif réglementaire
     let motifReglementaire = null;
-    if(estPerdue && estF3Dimanche){
+    if(override.perdueMaladie){
+      motifReglementaire = "Marquée perdue pour cause d'arrêt maladie (saisie manuelle par l'agent, ne suit pas le calcul réglementaire habituel).";
+    } else if(estPerdue && estF3Dimanche){
       motifReglementaire = "Lorsque le 1er mai tombe un dimanche, seuls les agents qui travaillent réellement ce jour-là bénéficient d'un RC (le repos périodique ne compte pas). Toutes les autres fêtes tombant un dimanche sont perdues sans exception, contrairement au 1er mai. Aucun service imposé détecté. (Réf. GRH00143)";
     } else if(estPerdueProbable && estF3Dimanche){
       motifReglementaire = "1er mai dimanche — Planning non encore saisi ce jour-là. Ce sera PERDUE sauf si vous travaillez ce jour (le RP ne compte pas pour cette fête). (Réf. GRH00143)";
@@ -6170,9 +6185,6 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
     } else if(code === "VN"){
       motifReglementaire = "Les agents chôment le samedi veille de Noël lorsque cette fête tombe un dimanche. Ceux utilisés ou en RP bénéficient d'un RC dans le trimestre suivant. (Réf. GRH00143)";
     }
-
-    // Override manuel
-    const override = fetesData[code] || {};
     const priseLeFinal = override.priseLe !== undefined ? override.priseLe : priseLe;
     const priseTypeFinal = override.priseType || priseType;
     const snoozeJusquau = override.snoozeJusquau || null;
@@ -6261,7 +6273,9 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
     // dimanche par construction).
     const dowN1 = new Date(dateFete).getDay();
     const estDimancheN1 = code !== "F0" && dowN1 === 0;
-    const estPerdueN1 = estDimancheN1;
+    // Perte maladie (14/08) : même override que le calcul principal, prioritaire
+    // sur la règle du dimanche — voir computeFetesLignes plus haut.
+    const estPerdueN1 = estDimancheN1 || !!override.perdueMaladie;
 
     let statut;
     if(estPerdueN1)   statut = "perdue";
@@ -6274,7 +6288,9 @@ function computeFetesLignes(agent, schedule, agentProfiles, year){
       code, label, dateFete, limiteDate, priseLe, priseType, statut,
       estPayee, moisPaye, anneePaye,
       estDimanche:estDimancheN1, estF3Dimanche:false, estPerdue:estPerdueN1,
-      motifReglementaire: estPerdueN1
+      motifReglementaire: override.perdueMaladie
+        ? "Marquée perdue pour cause d'arrêt maladie (saisie manuelle par l'agent, ne suit pas le calcul réglementaire habituel)."
+        : estPerdueN1
         ? `Fête légale de ${yearMoins1} tombée un dimanche — perdue, non récupérable (rémunérée comme un dimanche normal). (Réf. GRH00143)`
         : `Fête légale de ${yearMoins1} reportable jusqu'au 31 mars ${year} (trimestre civil suivant). (Réf. GRH00143)`,
       override,
@@ -6434,6 +6450,17 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
   const setManualPayee = (code, val, targetYear=year) => {
     setFetesDataYear(targetYear, prev=>({...prev,[code]:{...(prev[code]||{}),estPayee:val}}));
   };
+  // Perte pour cause de maladie (14/08, demandé par Olivier) : simple bascule
+  // manuelle — même principe que setManualPayee, mais avec un tombstone null
+  // explicite au retrait (JSON_MERGE_PATCH côté backend ne supprime jamais
+  // une clé simplement absente, même piège que resetManuel/annulerPaiementAnticipe
+  // juste en dessous, déjà documenté plusieurs fois sur ce projet).
+  const toggleMaladiePerdue = (code, targetYear=year) => {
+    setFetesDataYear(targetYear, prev=>{
+      const curr = prev[code] || {};
+      return {...prev, [code]:{...curr, perdueMaladie: curr.perdueMaladie ? null : {date:today}}};
+    });
+  };
   const resetManuel = (code, targetYear=year) => {
     // 05/08 : "delete" local ne suffit pas - le backend fusionne donnees_json
     // via JSON_MERGE_PATCH, une cle simplement absente du patch envoye reste
@@ -6562,14 +6589,16 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
           </div>
 
           {/* Statut badge — une fête épargnée au CET (07/08) prime toujours
-              sur le badge réglementaire habituel, quel que soit l.statut. */}
+              sur le badge réglementaire habituel, quel que soit l.statut.
+              Perdue pour maladie (14/08) : distincte d'une perte réglementaire
+              (dimanche) pour qu'on comprenne d'où vient la perte au coup d'œil. */}
           <span style={{
-            background:l.override?.epargneCet?"#ede9fe":s.badge,
-            color:l.override?.epargneCet?"#5b21b6":s.badgeTc,
+            background:l.override?.epargneCet?"#ede9fe":l.override?.perdueMaladie?"#fef2f2":s.badge,
+            color:l.override?.epargneCet?"#5b21b6":l.override?.perdueMaladie?"#991b1b":s.badgeTc,
             borderRadius:20,padding:"5px 12px",
             fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
           }}>
-            {l.override?.epargneCet ? "🏦 Épargnée CET" : <>{s.icon} {s.label}</>}
+            {l.override?.epargneCet ? "🏦 Épargnée CET" : l.override?.perdueMaladie ? "🤒 Perdue (maladie)" : <>{s.icon} {s.label}</>}
             {l.statut==="payee"&&!l.override?.epargneCet&&` ${MOIS_NOMS[l.moisPaye-1]}`}
             {l.statut==="payee_auto"&&!l.override?.epargneCet&&` ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==year?` ${l.anneePaye}`:""}`}
           </span>
@@ -6664,8 +6693,22 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
               <span style={{fontSize:15}}>💶</span>
               <span style={{fontSize:9,fontWeight:600,color:"#475569"}}>Payé</span>
             </button>
+            {/* Perte pour cause de maladie (14/08, demandé par Olivier) — masqué
+                si la fête est déjà prise ou épargnée au CET (incohérent avec
+                "perdue"), annulable via le même bouton "↺ Annuler" ci-dessous
+                (qui efface tout override, ou en re-cliquant ce bouton). */}
+            {!l.priseLe && !l.override?.epargneCet && <button
+              onClick={()=>toggleMaladiePerdue(l.code,targetYear)}
+              title={l.override?.perdueMaladie?"Retirer la perte maladie":"Marquer perdue pour cause de maladie"}
+              style={{background:l.override?.perdueMaladie?"#fee2e2":"#f1f5f9",
+                border:`1.5px solid ${l.override?.perdueMaladie?"#fca5a5":"#cbd5e1"}`,
+                borderRadius:8,padding:"6px 4px",cursor:"pointer",width:52,
+                display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+              <span style={{fontSize:15}}>🤒</span>
+              <span style={{fontSize:9,fontWeight:600,color:"#475569"}}>Maladie</span>
+            </button>}
             {/* Bouton réinitialiser — visible seulement si une correction manuelle a été posée sur cette fête */}
-            {(l.override?.priseLe!==undefined||l.override?.estPayee!==undefined)&&<button
+            {(l.override?.priseLe!==undefined||l.override?.estPayee!==undefined||l.override?.perdueMaladie!==undefined)&&<button
               onClick={()=>setResetConfirmOuvert(resetConfirmOuvert===editKey?null:editKey)}
               title="Annuler la correction manuelle et revenir au calcul automatique"
               style={{background:resetConfirmOuvert===editKey?"#ffedd5":"#fff7ed",
