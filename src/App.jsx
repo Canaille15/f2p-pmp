@@ -11347,26 +11347,37 @@ export default function App(){
               if (pdfGroupRendered) return null;
               pdfGroupRendered = true;
               return (
-                <div key="pdf-group" style={{ margin: "8px 12px", padding: "8px 8px 6px", background: "#fdf6ec", border: "1.5px solid #fde9c8", borderRadius: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: "#b45309", letterSpacing: .5, textTransform: "uppercase", padding: "2px 6px 6px" }}>
-                    📄 Générateurs PDF
+                <div key="pdf-group" style={{ margin: "8px 12px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(15,23,42,.05)" }}>
+                  {/* En-tête de section (15/08, retouché — Olivier : "le titre est
+                      moche [...] soit plus moderne et pro") : icône SVG trait fin
+                      (même principe déjà en place pour "Annuaire" dans ce menu,
+                      plutôt qu'un emoji) + libellé gris neutre discret, séparés du
+                      contenu par un simple filet plutôt qu'un aplat de couleur
+                      plein sur tout le pavé — rendu plus proche d'un dashboard pro. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 12px 9px", borderBottom: "1px solid #f1f5f9" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", letterSpacing: .7, textTransform: "uppercase" }}>Générateurs PDF</span>
                   </div>
-                  {pdfViews.map(({ k: pk, l: pl }) => {
-                    const actif = view === pk;
-                    return (
-                      <button key={pk} onClick={() => { setView(pk); setMenuOpen(false); }}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 10, border: "none",
-                          background: actif ? "#fff" : "transparent",
-                          boxShadow: actif ? "0 1px 4px rgba(180,83,9,.18)" : "none",
-                          padding: "11px 10px", cursor: "pointer", fontSize: 14,
-                          fontWeight: actif ? 700 : 600, color: actif ? "#b45309" : "#1e293b",
-                          textAlign: "left", width: "100%", borderRadius: 8, marginBottom: 3,
-                        }}>
-                        {pl}
-                      </button>
-                    );
-                  })}
+                  <div style={{ padding: 4 }}>
+                    {pdfViews.map(({ k: pk, l: pl }) => {
+                      const actif = view === pk;
+                      return (
+                        <button key={pk} onClick={() => { setView(pk); setMenuOpen(false); }}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 10, border: "none",
+                            background: actif ? "#fdf6ec" : "transparent",
+                            padding: "10px 8px", cursor: "pointer", fontSize: 14,
+                            fontWeight: actif ? 700 : 500, color: actif ? "#b45309" : "#1e293b",
+                            textAlign: "left", width: "100%", borderRadius: 7,
+                          }}>
+                          {pl}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             }
