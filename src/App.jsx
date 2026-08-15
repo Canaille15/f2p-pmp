@@ -11355,9 +11355,14 @@ export default function App(){
                       contenu par un simple filet plutôt qu'un aplat de couleur
                       plein sur tout le pavé — rendu plus proche d'un dashboard pro. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 12px 9px", borderBottom: "1px solid #f1f5f9" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                      <polyline points="14 2 14 8 20 8"/>
+                    {/* Icône pleine (15/08, retouchée — Olivier : "l'icone en
+                        plus est quasi invible") : un trait fin à 13px passait
+                        inaperçu, remplacé par une icône document PLEINE (même
+                        principe que l'icône "Annuaire" du menu, fill plutôt
+                        que stroke — beaucoup plus visible à petite taille). */}
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="#b45309">
+                      <path d="M4 3a1 1 0 0 1 1-1h5.586a1 1 0 0 1 .707.293l3.414 3.414a1 1 0 0 1 .293.707V17a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3Z"/>
+                      <path fill="#fff" d="M11 2.5V6a1 1 0 0 0 1 1h3.5L11 2.5Z"/>
                     </svg>
                     <span style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", letterSpacing: .7, textTransform: "uppercase" }}>Générateurs PDF</span>
                   </div>
