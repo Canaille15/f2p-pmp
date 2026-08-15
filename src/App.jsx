@@ -11329,14 +11329,55 @@ export default function App(){
           <div style={{fontSize:14,fontWeight:800,color:"#0f4c81"}}>F2P.PMP</div>
           <button onClick={()=>setMenuOpen(false)} style={{border:"none",background:"none",cursor:"pointer",fontSize:18,color:"#94a3b8",padding:4}}>×</button>
         </div>
-        {VIEWS.map(({k,l})=>{
-          const actif=view===k;
-          const aDesEchanges=k==="echanges"&&echangesOuvertesCount>0;
-          return(<button key={k} onClick={()=>{setView(k);setMenuOpen(false);}} style={{display:"flex",alignItems:"center",gap:10,border:"none",background:actif?"#eff6ff":(aDesEchanges?"#fef3c7":"transparent"),padding:"12px 16px",cursor:"pointer",fontSize:14,fontWeight:actif?700:500,color:actif?"#0f4c81":"#1e293b",textAlign:"left",width:"100%"}}>
-            {l}
-            {aDesEchanges&&<span style={{marginLeft:"auto",background:"#dc2626",color:"#fff",borderRadius:10,padding:"1px 7px",fontSize:11,fontWeight:700}}>{echangesOuvertesCount}</span>}
-          </button>);
-        })}
+        {/* Pavé "Générateurs PDF" (14/08, demandé par Olivier — "il faut qu'il
+            y ait un pavé qui regroupe les générateurs de PDF [...] améliore
+            le rendu, les boutons et l'organisation, pour mieux s'y
+            retrouver") : regroupe Congés et CET (les 2 seules vues qui
+            génèrent un document PDF officiel, DemandeCongesView/CetPdfsView)
+            dans une carte distincte du reste du menu, à leur position
+            d'origine dans VIEWS — plutôt qu'un simple ajout d'icône, pour que
+            ce soit visuellement évident que ce sont 2 outils de même nature.
+            Les autres entrées du menu gardent exactement leur rendu d'avant. */}
+        {(() => {
+          const PDF_KEYS = ["conges", "cetPdfs"];
+          const pdfViews = VIEWS.filter(v => PDF_KEYS.includes(v.k));
+          let pdfGroupRendered = false;
+          return VIEWS.map(({ k, l }) => {
+            if (PDF_KEYS.includes(k)) {
+              if (pdfGroupRendered) return null;
+              pdfGroupRendered = true;
+              return (
+                <div key="pdf-group" style={{ margin: "8px 12px", padding: "8px 8px 6px", background: "#fdf6ec", border: "1.5px solid #fde9c8", borderRadius: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: "#b45309", letterSpacing: .5, textTransform: "uppercase", padding: "2px 6px 6px" }}>
+                    📄 Générateurs PDF
+                  </div>
+                  {pdfViews.map(({ k: pk, l: pl }) => {
+                    const actif = view === pk;
+                    return (
+                      <button key={pk} onClick={() => { setView(pk); setMenuOpen(false); }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10, border: "none",
+                          background: actif ? "#fff" : "transparent",
+                          boxShadow: actif ? "0 1px 4px rgba(180,83,9,.18)" : "none",
+                          padding: "11px 10px", cursor: "pointer", fontSize: 14,
+                          fontWeight: actif ? 700 : 600, color: actif ? "#b45309" : "#1e293b",
+                          textAlign: "left", width: "100%", borderRadius: 8, marginBottom: 3,
+                        }}>
+                        {pl}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            }
+            const actif = view === k;
+            const aDesEchanges = k === "echanges" && echangesOuvertesCount > 0;
+            return (<button key={k} onClick={() => { setView(k); setMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: actif ? "#eff6ff" : (aDesEchanges ? "#fef3c7" : "transparent"), padding: "12px 16px", cursor: "pointer", fontSize: 14, fontWeight: actif ? 700 : 500, color: actif ? "#0f4c81" : "#1e293b", textAlign: "left", width: "100%" }}>
+              {l}
+              {aDesEchanges && <span style={{ marginLeft: "auto", background: "#dc2626", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{echangesOuvertesCount}</span>}
+            </button>);
+          });
+        })()}
         <div style={{flex:1}}/>
         <button onClick={()=>{setMenuOpen(false);handleLogout();}} style={{display:"flex",alignItems:"center",gap:10,border:"none",borderTop:"1px solid #f1f5f9",background:"transparent",padding:"14px 16px",cursor:"pointer",fontSize:14,fontWeight:600,color:"#ef4444",textAlign:"left",width:"100%"}}>
           Déconnexion
