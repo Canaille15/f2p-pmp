@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo } from "react";
 import api from "../api/client";
 
 // ─── Stat'Equip ──────────────────────────────────────────────────────────────
-// Module de statistiques d'équipe agrégées (effectifs, couverture EAC, congés/
-// VT refusés — anonymisés, jamais de liste nominative —, postes non tenus,
-// âge moyen, formation interne, habilitations par poste, % temps partiel).
+// Module de statistiques d'équipe agrégées (effectifs, couverture Réserve
+// régionale, congés/VT refusés — anonymisés, jamais de liste nominative —,
+// postes non tenus, âge moyen, formation interne, habilitations par poste,
+// % temps partiel).
 // Composant autonome (même principe que CetView.jsx/FormationView.jsx) : toute
 // la donnée vient d'un seul appel à /api/stats-equipe, ouvert à tout agent
 // connecté (rien de nominatif n'y transite, voir CLAUDE.md).
@@ -43,6 +44,14 @@ function ordrePoste(code) {
 function labelPoste(code) {
   const label = POSTE_LABELS[code];
   return label ? `${label} (${code})` : code;
+}
+// L'API ne renvoie que les postes avec au moins 1 agent habilité — un poste
+// à 0 (ex: DPX PRCI si personne n'est habilité dessus) disparaissait sinon
+// silencieusement de la liste, donnant l'impression qu'il avait été oublié.
+function completerAvecPostesConnus(rows) {
+  const presents = new Set(rows.map(r => r.code_poste));
+  const manquants = Object.keys(POSTE_LABELS).filter(c => !presents.has(c)).map(code_poste => ({ code_poste, nbAgents: 0 }));
+  return [...rows, ...manquants];
 }
 
 function fmtPct(v) { return `${v}%`; }
@@ -107,7 +116,7 @@ export default function StatsEquipeView() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
               <Tuile label="Agents global" valeur={data.headcounts.totalAgents} />
               <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} />
-              <Tuile label="Agents EAC" valeur={data.headcounts.totalEac} />
+              <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} />
               <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 11, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04 }}>Temps partiel</div>
@@ -119,16 +128,16 @@ export default function StatsEquipeView() {
             </div>
           </div>
 
-          {/* Couverture EAC */}
+          {/* Couverture Réserve régionale */}
           <div style={card}>
-            <div style={sectionTitle}>🧭 Couverture des postes par les EAC</div>
+            <div style={sectionTitle}>🔁 Couverture des postes par la Réserve régionale</div>
             <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 10 }}>
-              Part des journées CPS couvertes par un agent EAC (présent directement, ou couvrant un poste vacant via un signalement d'échange) sur le total des journées importées cette année.
+              Part des journées CPS couvertes par un réserviste (présent directement, ou couvrant un poste vacant via un signalement d'échange) sur le total des journées importées cette année.
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
-              <Tuile label="Global" valeur={fmtPct(data.coverageEac.global.pct)} sousLabel={`${data.coverageEac.global.numerateur} / ${data.coverageEac.global.denominateur} j.`} />
-              <Tuile label="PRCI" valeur={fmtPct(data.coverageEac.PRCI.pct)} sousLabel={`${data.coverageEac.PRCI.numerateur} / ${data.coverageEac.PRCI.denominateur} j.`} />
-              <Tuile label="PAR" valeur={fmtPct(data.coverageEac.PAR.pct)} sousLabel={`${data.coverageEac.PAR.numerateur} / ${data.coverageEac.PAR.denominateur} j.`} />
+              <Tuile label="Global" valeur={fmtPct(data.coverageReserve.global.pct)} sousLabel={`${data.coverageReserve.global.numerateur} / ${data.coverageReserve.global.denominateur} j.`} />
+              <Tuile label="PRCI" valeur={fmtPct(data.coverageReserve.PRCI.pct)} sousLabel={`${data.coverageReserve.PRCI.numerateur} / ${data.coverageReserve.PRCI.denominateur} j.`} />
+              <Tuile label="PAR" valeur={fmtPct(data.coverageReserve.PAR.pct)} sousLabel={`${data.coverageReserve.PAR.numerateur} / ${data.coverageReserve.PAR.denominateur} j.`} />
             </div>
           </div>
 
@@ -152,10 +161,10 @@ export default function StatsEquipeView() {
           {/* Âge moyen + Formation interne */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
             <div style={card}>
-              <div style={sectionTitle}>🎂 Âge moyen (hors EAC)</div>
-              <Tuile label="Âge moyen" valeur={data.ageMoyenHorsEac.moyenne != null ? `${data.ageMoyenHorsEac.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsEac.nbAgentsInclus} agent(s)`} large />
+              <div style={sectionTitle}>🎂 Âge moyen (hors Réserve régionale)</div>
+              <Tuile label="Âge moyen" valeur={data.ageMoyenHorsReserve.moyenne != null ? `${data.ageMoyenHorsReserve.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsReserve.nbAgentsInclus} agent(s)`} large />
               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
-                Estimé à partir des 2 premiers chiffres du CP (année de naissance). {data.ageMoyenHorsEac.nbAgentsExclusParseEchec > 0 && `${data.ageMoyenHorsEac.nbAgentsExclusParseEchec} agent(s) exclu(s), CP non reconnu.`}
+                Estimé à partir des 2 premiers chiffres du CP (année de naissance). {data.ageMoyenHorsReserve.nbAgentsExclusParseEchec > 0 && `${data.ageMoyenHorsReserve.nbAgentsExclusParseEchec} agent(s) exclu(s), CP non reconnu.`}
               </div>
             </div>
             <div style={card}>
@@ -194,7 +203,7 @@ export default function StatsEquipeView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...data.habilitationsParPoste].sort((a, b) => triHab === "planning" ? ordrePoste(a.code_poste) - ordrePoste(b.code_poste) : b.nbAgents - a.nbAgents).map(h => (
+                  {completerAvecPostesConnus(data.habilitationsParPoste).sort((a, b) => triHab === "planning" ? ordrePoste(a.code_poste) - ordrePoste(b.code_poste) : b.nbAgents - a.nbAgents).map(h => (
                     <tr key={h.code_poste} style={{ borderTop: "1px solid #f1f5f9" }}>
                       <td style={{ padding: "6px 8px", fontWeight: 600, color: "#334155" }}>{labelPoste(h.code_poste)}</td>
                       <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{h.nbAgents}</td>

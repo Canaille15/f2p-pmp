@@ -31,34 +31,39 @@ async function getStats(req, res) {
 
   try {
     // ─── Effectifs (#1-3) ─────────────────────────────────────────────────
+    // "EAC" (élève/agent en formation initiale) abandonné le 16/08 avant même
+    // d'être utilisé : Olivier a confondu le nouveau bouton avec "Réserve
+    // régionale" (déjà en place depuis juillet, déjà correctement peuplé) —
+    // plutôt que de faire ressaisir 70 fiches, tout le module réutilise
+    // is_reserve. Le flag is_eac (colonne + AdminPanel) a été retiré.
     const [[hc]] = await pool.query(
-      `SELECT COUNT(*) AS total, SUM(COALESCE(pa.is_eac,0)) AS nbEac
+      `SELECT COUNT(*) AS total, SUM(COALESCE(pa.is_reserve,0)) AS nbReserve
        FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
     );
     const totalAgents = hc.total || 0;
-    const totalEac = Number(hc.nbEac) || 0;
-    const totalEquipe = totalAgents - totalEac;
+    const totalReserve = Number(hc.nbReserve) || 0;
+    const totalEquipe = totalAgents - totalReserve;
 
-    // ─── Âge moyen hors EAC (#8) ────────────────────────────────────────────
+    // ─── Âge moyen hors Réserve régionale (#8) ───────────────────────────────
     const [ageRows] = await pool.query(
-      `SELECT a.cp, COALESCE(pa.is_eac,0) AS is_eac
+      `SELECT a.cp, COALESCE(pa.is_reserve,0) AS is_reserve
        FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
     );
     let sommeAges = 0, nbAgentsInclus = 0, nbAgentsExclusParseEchec = 0;
     ageRows.forEach(r => {
-      if (r.is_eac) return;
+      if (r.is_reserve) return;
       const naissance = parseAnneeNaissance(r.cp);
       if (naissance == null) { nbAgentsExclusParseEchec++; return; }
       sommeAges += (year - naissance);
       nbAgentsInclus++;
     });
-    const ageMoyenHorsEac = {
+    const ageMoyenHorsReserve = {
       moyenne: nbAgentsInclus ? Math.round((sommeAges / nbAgentsInclus) * 10) / 10 : null,
       nbAgentsInclus,
       nbAgentsExclusParseEchec,
     };
 
-    // ─── Couverture EAC (#4) ────────────────────────────────────────────────
+    // ─── Couverture Réserve régionale (#4) ───────────────────────────────────
     const [denomRows] = await pool.query(
       `SELECT famille, COUNT(*) AS total FROM planning_cps
        WHERE date_jour BETWEEN ? AND ? GROUP BY famille`,
@@ -67,23 +72,23 @@ async function getStats(req, res) {
     const denominateur = { PRCI: 0, PAR: 0 };
     denomRows.forEach(r => { denominateur[r.famille] = r.total; });
 
-    const [eacCps] = await pool.query(`SELECT cp_agent FROM profil_agent WHERE is_eac = 1`);
-    const eacSet = new Set(eacCps.map(r => r.cp_agent));
+    const [reserveCps] = await pool.query(`SELECT cp_agent FROM profil_agent WHERE is_reserve = 1`);
+    const reserveSet = new Set(reserveCps.map(r => r.cp_agent));
 
     const numeratorSet = new Set(); // clé "famille|cp|date"
 
-    // (a) présence directe d'un EAC dans planning_cps
+    // (a) présence directe d'un réserviste dans planning_cps
     const [presenceDirecte] = await pool.query(
       `SELECT pc.famille, pc.cp_agent, pc.date_jour
        FROM planning_cps pc JOIN profil_agent pa ON pa.cp_agent = pc.cp_agent
-       WHERE pa.is_eac = 1 AND pc.date_jour BETWEEN ? AND ?`,
+       WHERE pa.is_reserve = 1 AND pc.date_jour BETWEEN ? AND ?`,
       [from, to]
     );
     presenceDirecte.forEach(r => {
       numeratorSet.add(`${r.famille}|${r.cp_agent}|${r.date_jour instanceof Date ? r.date_jour.toISOString().slice(0,10) : r.date_jour}`);
     });
 
-    // (b) EAC couvrant un poste vacant via une aléa échange/erreur_cps
+    // (b) réserviste couvrant un poste vacant via une aléa échange/erreur_cps
     const [aleas] = await pool.query(
       `SELECT js_code, date_jour, famille, agents_concernes FROM cps_aleas
        WHERE type IN ('echange','erreur_cps') AND date_jour BETWEEN ? AND ?`,
@@ -98,11 +103,11 @@ async function getStats(req, res) {
     aleas.forEach(a => {
       const dateStr = a.date_jour instanceof Date ? a.date_jour.toISOString().slice(0,10) : a.date_jour;
       const keyRempli = `${dateStr}|${a.js_code}`;
-      if (remplisSet.has(keyRempli)) return; // le poste n'était pas vacant, pas une couverture EAC
+      if (remplisSet.has(keyRempli)) return; // le poste n'était pas vacant, pas une couverture réserve
       let concernes = [];
       try { concernes = typeof a.agents_concernes === 'string' ? JSON.parse(a.agents_concernes) : (a.agents_concernes || []); } catch (e) { concernes = []; }
       concernes.forEach(cp => {
-        if (eacSet.has(cp)) numeratorSet.add(`${a.famille}|${cp}|${dateStr}`);
+        if (reserveSet.has(cp)) numeratorSet.add(`${a.famille}|${cp}|${dateStr}`);
       });
     });
 
@@ -114,7 +119,7 @@ async function getStats(req, res) {
     }
     const numGlobal = numeratorSet.size;
     const denomGlobal = (denominateur.PRCI || 0) + (denominateur.PAR || 0);
-    const coverageEac = {
+    const coverageReserve = {
       global: { pct: pct(numGlobal, denomGlobal), numerateur: numGlobal, denominateur: denomGlobal },
       PRCI: { pct: pct(countFamille(numeratorSet,'PRCI'), denominateur.PRCI), numerateur: countFamille(numeratorSet,'PRCI'), denominateur: denominateur.PRCI },
       PAR: { pct: pct(countFamille(numeratorSet,'PAR'), denominateur.PAR), numerateur: countFamille(numeratorSet,'PAR'), denominateur: denominateur.PAR },
@@ -196,9 +201,9 @@ async function getStats(req, res) {
     const pctTempsPartiel = totalAgents > 0 ? Math.round((nbTempsPartiel / totalAgents) * 1000) / 10 : 0;
 
     res.json({
-      headcounts: { totalAgents, totalEquipe, totalEac, nbTempsPartiel, pctTempsPartiel },
-      ageMoyenHorsEac,
-      coverageEac,
+      headcounts: { totalAgents, totalEquipe, totalReserve, nbTempsPartiel, pctTempsPartiel },
+      ageMoyenHorsReserve,
+      coverageReserve,
       congesRefuses,
       vtRefuses,
       postesNonTenus,
