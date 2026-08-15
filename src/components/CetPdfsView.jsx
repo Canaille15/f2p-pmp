@@ -307,9 +307,37 @@ function trouverZonesSignature(doc, form) {
   return zones;
 }
 
+// Retire les annotations de commentaire Acrobat (icone "note" + sa bulle
+// /Popup) laissees par megarde dans les 6 imprimes CET officiels source —
+// verifie present sur les 6 PDF ET sur celui de Conges des l'origine (donc
+// pas introduit par ce code), toujours au meme endroit pres de "Etude :".
+// Invisible sur le PDF de Conges final car son pipeline (embedPdf, page
+// integree comme XObject) ne recopie jamais les annotations de la page
+// source — seul le CET (qui charge le template directement comme document
+// de sortie, pour remplir ses vrais champs AcroForm) les conserve jusqu'ici.
+// Signale par Olivier comme "point d'interrogation rouge... pas sur l'original".
+function retirerAnnotationsCommentaire(doc) {
+  const subtypeKey = PDFName.of("Subtype");
+  const annotsKey = PDFName.of("Annots");
+  doc.getPages().forEach(page => {
+    const annots = page.node.Annots();
+    if (!annots) return;
+    const garder = [];
+    for (let i = 0; i < annots.size(); i++) {
+      const ref = annots.get(i);
+      const obj = doc.context.lookup(ref);
+      const subtype = obj?.get?.(subtypeKey)?.toString();
+      if (subtype === "/Text" || subtype === "/Popup") continue;
+      garder.push(ref);
+    }
+    page.node.set(annotsKey, doc.context.obj(garder));
+  });
+}
+
 async function finaliser(doc, form, signatureDataUrl) {
   const zones = signatureDataUrl ? trouverZonesSignature(doc, form) : [];
   try { form.flatten(); } catch (e) {}
+  retirerAnnotationsCommentaire(doc);
   if (signatureDataUrl && zones.length) {
     try {
       const sig = await doc.embedPng(signatureDataUrl);

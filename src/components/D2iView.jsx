@@ -10,34 +10,37 @@ import { PDFDocument, StandardFonts } from "pdf-lib";
 // (mêmes valeurs, jamais devinées) — toute vraie case à cocher dessinée par-
 // dessus une case vide du PDF de fond, même principe que DemandeCongesView.jsx.
 const RECT = {
-  preavisDuDate: { x: 186.67, y: 601.89, w: 60 },
-  preavisDuH: { x: 257.79, y: 601.89, w: 26 },
-  preavisDuM: { x: 289.35, y: 601.89, w: 26 },
-  preavisAuDate: { x: 334.81, y: 601.89, w: 60 },
-  preavisAuH: { x: 405.93, y: 601.89, w: 26 },
-  preavisAuM: { x: 437.49, y: 601.89, w: 26 },
-  nom: { x: 147.24, y: 505.89, w: 130 },
-  prenom: { x: 337.31, y: 505.89, w: 110 },
-  cp: { x: 477.38, y: 505.89, w: 80 },
-  etablissement: { x: 188.34, y: 483.89, w: 300 },
-  cbIntention: { x: 55, y: 456.59, w: 8, h: 8 },
-  intentionDate: { x: 350.87, y: 457.89, w: 60 },
-  intentionH: { x: 421.99, y: 457.89, w: 30 },
-  intentionM: { x: 457.55, y: 457.89, w: 30 },
-  cbSuiteDii: { x: 55, y: 434.59, w: 8, h: 8 },
-  diiNumero: { x: 180.44, y: 435.89, w: 70 },
-  cbRenoncer: { x: 95, y: 416.59, w: 8, h: 8 },
-  cbReprendre: { x: 95, y: 398.59, w: 8, h: 8 },
-  reprendreDate: { x: 264.4, y: 399.89, w: 60 },
-  reprendreH: { x: 335.52, y: 399.89, w: 30 },
-  reprendreM: { x: 371.08, y: 399.89, w: 30 },
-  agentLieu: { x: 64.45, y: 373.89, w: 140 },
-  agentDate: { x: 223.35, y: 373.89, w: 80 },
-  // Hauteur modeste et centrée sur la ligne "A ... le ... Signature" (pas un
-  // grand bloc au-dessus, qui chevaucherait la ligne "Reprendre le travail"
-  // juste au-dessus dans le cadre) — une vraie signature manuscrite déborde
-  // un peu de part et d'autre de sa ligne, pas plus.
-  agentSignature: { x: 385, y: 369.89, w: 130, h: 22 },
+  preavisDuDate: { x: 186.67, y: 612.99, w: 60 },
+  preavisDuH: { x: 257.79, y: 612.99, w: 26 },
+  preavisDuM: { x: 289.35, y: 612.99, w: 26 },
+  preavisAuDate: { x: 334.81, y: 612.99, w: 60 },
+  preavisAuH: { x: 405.93, y: 612.99, w: 26 },
+  preavisAuM: { x: 437.49, y: 612.99, w: 26 },
+  nom: { x: 147.24, y: 519.99, w: 130 },
+  prenom: { x: 337.31, y: 519.99, w: 110 },
+  cp: { x: 477.38, y: 519.99, w: 80 },
+  etablissement: { x: 188.34, y: 497.99, w: 300 },
+  cbIntention: { x: 55, y: 470.69, w: 8, h: 8 },
+  intentionDate: { x: 350.87, y: 471.99, w: 60 },
+  intentionH: { x: 421.99, y: 471.99, w: 30 },
+  intentionM: { x: 457.55, y: 471.99, w: 30 },
+  cbSuiteDii: { x: 55, y: 448.69, w: 8, h: 8 },
+  diiNumero: { x: 180.44, y: 449.99, w: 70 },
+  cbRenoncer: { x: 95, y: 430.69, w: 8, h: 8 },
+  cbReprendre: { x: 95, y: 412.69, w: 8, h: 8 },
+  reprendreDate: { x: 264.4, y: 413.99, w: 60 },
+  reprendreH: { x: 335.52, y: 413.99, w: 30 },
+  reprendreM: { x: 371.08, y: 413.99, w: 30 },
+  agentLieu: { x: 64.45, y: 373.99, w: 140 },
+  agentDate: { x: 223.35, y: 373.99, w: 80 },
+  // 15/08, 2e passe (signature trop petite, signale par Olivier — "un
+  // confetti") : la boite 2 du template a ete elargie verticalement autour de
+  // cette ligne spécifiquement pour degager une vraie zone de signature
+  // (avant : 22pt de haut, largement insuffisant pour une signature ~500x250px
+  // sans l'ecraser a une taille illisible). Desormais 40pt de haut, la plus
+  // grande zone que la mise en page du cadre permet sans chevaucher la ligne
+  // "Reprendre le travail" au-dessus ni les renvois (1)-(4) en dessous.
+  agentSignature: { x: 385, y: 367.99, w: 145, h: 40 },
   recuNomAgent: { x: 176.02, y: 100.99, w: 150 },
 };
 
