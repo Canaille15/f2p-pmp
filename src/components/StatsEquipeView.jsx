@@ -23,6 +23,18 @@ const POSTE_LABELS = {
   "PAAC1-": "AC PAR", "PAAC2-": "Aide AC PAR", PAACXX: "CT AC Travaux",
   PAPAUJ: "Pauseur PAR", PADPXJ: "DPX PAR", PAASMJ: "ASMTE PAR", "AFO PAR": "AFO PAR",
 };
+// Ordre du planning (Olivier : "ccl en 1er adj ensuite [...] journee en dernier")
+// — les postes 3×8 d'abord (PRCI puis PAR), les postes journée en dernier.
+const POSTE_ORDER = [
+  "PICCL", "PIADJ", "PILNE", "PILNO", "PILCL", "PIVGD",
+  "PAAC1-", "PAAC2-", "PAACXX",
+  "PIPA1J", "PIPA2J", "PIPA3J", "PIDPXJ", "PIASSJ", "PPRCI", "AFOPRCI", "A-PRCI", "SD%",
+  "PAPAUJ", "PADPXJ", "PAASMJ", "AFO PAR",
+];
+function ordrePoste(code) {
+  const i = POSTE_ORDER.indexOf(code);
+  return i === -1 ? POSTE_ORDER.length : i;
+}
 function labelPoste(code) {
   const label = POSTE_LABELS[code];
   return label ? `${label} (${code})` : code;
@@ -90,13 +102,13 @@ export default function StatsEquipeView() {
               <Tuile label="Agents global" valeur={data.headcounts.totalAgents} />
               <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} />
               <Tuile label="Agents EAC" valeur={data.headcounts.totalEac} />
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 11, padding: "10px 12px", display: "flex", alignItems: "center", gap: 12 }}>
-                <Donut pct={data.headcounts.pctTempsPartiel} />
-                <div style={{ display: "flex", flexDirection: "column", gap: 3, fontSize: 11.5 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04 }}>Temps de travail</div>
-                  <LegendLine color={NAVY.from} label={`Temps partiel — ${fmtPct(data.headcounts.pctTempsPartiel)}`} />
-                  <LegendLine color="#e2e8f0" bordered label={`Temps plein — ${fmtPct(pctTempsPlein)}`} />
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 11, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04 }}>Temps partiel</div>
+                  <div style={{ fontFamily: "ui-monospace,Consolas,monospace", fontSize: 15, fontWeight: 800, color: "#1e293b" }}>{fmtPct(data.headcounts.pctTempsPartiel)}</div>
                 </div>
+                <Barre pct={data.headcounts.pctTempsPartiel} />
+                <div style={{ fontSize: 10.5, color: "#94a3b8" }}>Temps plein {fmtPct(pctTempsPlein)}</div>
               </div>
             </div>
           </div>
@@ -164,7 +176,7 @@ export default function StatsEquipeView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.habilitationsParPoste.map(h => (
+                  {[...data.habilitationsParPoste].sort((a, b) => ordrePoste(a.code_poste) - ordrePoste(b.code_poste)).map(h => (
                     <tr key={h.code_poste} style={{ borderTop: "1px solid #f1f5f9" }}>
                       <td style={{ padding: "6px 8px", fontWeight: 600, color: "#334155" }}>{labelPoste(h.code_poste)}</td>
                       <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{h.nbAgents}</td>
@@ -191,23 +203,11 @@ function Tuile({ label, valeur, sousLabel, large }) {
   );
 }
 
-function Donut({ pct }) {
+function Barre({ pct }) {
   const clamped = Math.max(0, Math.min(100, pct));
   return (
-    <div style={{
-      width: 44, height: 44, borderRadius: "50%", flex: "none", position: "relative",
-      background: `conic-gradient(${NAVY.from} 0% ${clamped}%, #e2e8f0 ${clamped}% 100%)`,
-    }}>
-      <div style={{ position: "absolute", inset: 7, borderRadius: "50%", background: "#f8fafc" }} />
-    </div>
-  );
-}
-
-function LegendLine({ color, label, bordered }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#475569" }}>
-      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, border: bordered ? "1px solid #cbd5e1" : "none", flex: "none" }} />
-      {label}
+    <div style={{ height: 8, borderRadius: 999, background: "#e2e8f0", overflow: "hidden" }}>
+      <div style={{ height: "100%", width: `${clamped}%`, borderRadius: 999, background: NAVY.from, transition: "width .2s ease" }} />
     </div>
   );
 }
