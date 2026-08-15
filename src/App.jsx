@@ -1617,51 +1617,83 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
 
         let text="";
         if(file.type==="application/pdf"){
-          // Rendu client page par page (pdfjs-dist) puis OCR de chaque image PNG
-          // haute resolution. Envoyer le PDF brut directement a OCR.space (essaye
-          // le 04/08) evite bien la page blanche mais degrade la qualite du texte
-          // (horaires mal formates, isTable moins efficace sur le PDF entier) au
-          // point de faire echouer la reconnaissance d'agents ensuite - constate
-          // par Olivier juste apres ce changement. La vraie cause de la page
-          // blanche etait une regression de pdfjs-dist 6.x (rendu completement
-          // vide sur ces PDF scannes, meme avec fond blanc explicite et delai
-          // avant rendu) : figee sur la version 4.0.379, confirmee correcte.
-          const pdfjsLib=await import("pdfjs-dist");
-          pdfjsLib.GlobalWorkerOptions.workerSrc=new URL("pdfjs-dist/build/pdf.worker.mjs",import.meta.url).toString();
-          const pdfData=atob(b64);
-          const pdfBytes=new Uint8Array(pdfData.length);
-          for(let i=0;i<pdfData.length;i++) pdfBytes[i]=pdfData.charCodeAt(i);
-          const pdf=await pdfjsLib.getDocument({data:pdfBytes}).promise;
-          const numPages=pdf.numPages;
-          const texts=[];
-          for(let pageNum=1;pageNum<=numPages;pageNum++){
-            const page=await pdf.getPage(pageNum);
-            const scale=3.0; // haute résolution pour meilleur OCR
-            const viewport=page.getViewport({scale});
-            const canvas=document.createElement("canvas");
-            canvas.width=viewport.width;
-            canvas.height=viewport.height;
-            const ctx=canvas.getContext("2d");
-            await page.render({canvasContext:ctx,viewport}).promise;
-            const pageB64=canvas.toDataURL("image/png").split(",")[1];
-            const pageText=await ocrPage(pageB64,"image/png");
-            texts.push(pageText);
+          // Texte natif d'abord (14/08, meme principe deja eprouve pour
+          // BulletinImportButton/extraireTextePdfNatif) : les feuilles de
+          // presence "FEUILLE DE PRESENCE JOURNALIERE" recues par Olivier sont
+          // des PDF natifs (texte selectionnable), pas des scans — l'ancien
+          // pipeline forcait pourtant systematiquement rendu canvas haute
+          // resolution (scale 3.0) + OCR.space page par page, meme pour ces
+          // documents-la. Sur un import multi-jours (une feuille = plusieurs
+          // pages, une par jour), ca representait autant d'allers-retours OCR
+          // sequentiels (jusqu'a 45s chacun en cas de repli moteur 1) — cause
+          // tres probable des echecs/blocages signales par Olivier (ordi et
+          // tel) sur un import PRCI 10 pages / PAR 6 pages. Le texte natif est
+          // instantane, sans le moindre artefact d'OCR, et se lit
+          // parfaitement sur ces documents (verifie : cheque page produit un
+          // texte propre et complet). Seuil identique a BulletinImportButton
+          // (30 caracteres hors espaces) pour bien distinguer un vrai PDF
+          // natif d'un PDF scanne sans aucune couche texte, qui doit toujours
+          // repasser par l'OCR ci-dessous.
+          const nativeText=await extraireTextePdfNatif(b64);
+          if(nativeText && nativeText.replace(/\s/g,"").length>=30){
+            text=nativeText;
+          }else{
+            // Rendu client page par page (pdfjs-dist) puis OCR de chaque image PNG
+            // haute resolution. Envoyer le PDF brut directement a OCR.space (essaye
+            // le 04/08) evite bien la page blanche mais degrade la qualite du texte
+            // (horaires mal formates, isTable moins efficace sur le PDF entier) au
+            // point de faire echouer la reconnaissance d'agents ensuite - constate
+            // par Olivier juste apres ce changement. La vraie cause de la page
+            // blanche etait une regression de pdfjs-dist 6.x (rendu completement
+            // vide sur ces PDF scannes, meme avec fond blanc explicite et delai
+            // avant rendu) : figee sur la version 4.0.379, confirmee correcte.
+            const pdfjsLib=await import("pdfjs-dist");
+            pdfjsLib.GlobalWorkerOptions.workerSrc=new URL("pdfjs-dist/build/pdf.worker.mjs",import.meta.url).toString();
+            const pdfData=atob(b64);
+            const pdfBytes=new Uint8Array(pdfData.length);
+            for(let i=0;i<pdfData.length;i++) pdfBytes[i]=pdfData.charCodeAt(i);
+            const pdf=await pdfjsLib.getDocument({data:pdfBytes}).promise;
+            const numPages=pdf.numPages;
+            const texts=[];
+            for(let pageNum=1;pageNum<=numPages;pageNum++){
+              const page=await pdf.getPage(pageNum);
+              const scale=3.0; // haute résolution pour meilleur OCR
+              const viewport=page.getViewport({scale});
+              const canvas=document.createElement("canvas");
+              canvas.width=viewport.width;
+              canvas.height=viewport.height;
+              const ctx=canvas.getContext("2d");
+              await page.render({canvasContext:ctx,viewport}).promise;
+              const pageB64=canvas.toDataURL("image/png").split(",")[1];
+              const pageText=await ocrPage(pageB64,"image/png");
+              texts.push(pageText);
+            }
+            text=texts.join("\n");
           }
-          text=texts.join("\n");
         }else{
           // Image directe
           text=await ocrPage(b64,file.type||"image/jpeg");
         }
-        console.log("TEXTE OCR:",text);
+        console.log("TEXTE:",text);
         // Fix OCR : espace parasite a l'interieur d'un code JS (ex: "PIL CLX" -> "PILCLX")
+        // — inoffensif sur du texte natif (ne matche que le defaut OCR exact).
         text=text.replace(/\b(PI|PA)([A-Z]{2,4}) ([A-Z0-9]{1,3}[-OXJ%]?)\b/g,"$1$2$3");
         if(!text) throw new Error("Aucun texte extrait du document");
 
-        const dateMatch=text.match(/DU\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/);
+        // Regex date tolerante (14/08) : certaines pages de ces feuilles de
+        // presence natives perdent le ":" ("DU   14/0812026" au lieu de
+        // "DU:   14/08/2026") et/ou un "/" se lit comme un "1" — meme defaut
+        // d'extraction deja tolere par parseBulletinCommande plus haut dans ce
+        // fichier, jamais aligne ici. Verifie sur les 2 PDF reels d'Olivier :
+        // l'ancienne regex stricte manquait 2 marqueurs "DU" sur 10 (PRCI) et
+        // 2 sur 5 (PAR) — les jours concernes se faisaient alors silencieusement
+        // rattacher a la date du marqueur precedent (dateForIndex ci-dessous),
+        // au lieu d'echouer proprement.
+        const dateMatch=text.match(/DU\s*:?\s*(\d{2})[\/1](\d{2})[\/1](\d{4})/);
         const dateStr=dateMatch?`${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}`:new Date().toISOString().slice(0,10);
         // Decouper le texte en blocs par page : chaque page a son propre "DU : JJ/MM/AAAA"
         // qui s'applique a toutes les lignes suivantes jusqu'a la prochaine occurrence.
-        const dateBlockRe=/DU\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/g;
+        const dateBlockRe=/DU\s*:?\s*(\d{2})[\/1](\d{2})[\/1](\d{4})/g;
         const dateMarkers=[];
         let dm;
         while((dm=dateBlockRe.exec(text))!==null){
