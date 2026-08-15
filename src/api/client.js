@@ -476,6 +476,7 @@ export const profil = {
       roulement:                row.roulement              || null,
       isReserve:                row.is_reserve             || false,
       isAfo:                    row.is_afo                 || false,
+      isEac:                    row.is_eac                 || false,
       famillesHab:              row.familles_hab           || null,
       habilitations:            Array.isArray(hab) ? Object.fromEntries((hab||[]).map(h=>[h.code_poste,'HC'])) : (row.habilitations||{}),
       agentColors:              row.couleurs               || {},
@@ -562,6 +563,7 @@ export const profil = {
     if (data.roulement      !== undefined) body.roulement      = data.roulement;
     if (data.isReserve      !== undefined) body.is_reserve     = data.isReserve;
     if (data.isAfo          !== undefined) body.is_afo         = data.isAfo;
+    if (data.isEac          !== undefined) body.is_eac         = data.isEac;
     if (data.famillesHab    !== undefined) body.familles_hab   = data.famillesHab;
     if (data.habilitations  !== undefined) body.habilitations  = data.habilitations;
     if (data.agentColors    !== undefined) body.agent_colors   = data.agentColors;
@@ -603,6 +605,12 @@ export const formation = {
 
   // Stats AFO
   getStats: () => apiFetch('/formation/stats'),
+};
+
+// ─── MODULE STAT'EQUIP (statistiques d'équipe agrégées) ───────────────────────
+
+export const statsEquipe = {
+  get: (year) => apiFetch(`/stats-equipe?year=${year}`),
 };
 
 // ─── MODULE CPS (planning officiel SNCF importé) ──────────────────────────────
@@ -917,6 +925,7 @@ const api = {
   journeeSpecialeNotes,
   annuaire,
   formation,
+  statsEquipe,
 };
 
 export default api;

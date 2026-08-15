@@ -29,6 +29,7 @@ app.use('/api/journee-speciale-notes', require('./src/routes/journeeSpecialeNote
 app.use('/api/annuaire',      require('./src/routes/annuaire'));
 app.use('/api/annuaire',      require('./src/routes/annuaire'));
 app.use('/api/formation',     require('./src/routes/formation'));
+app.use('/api/stats-equipe',  require('./src/routes/statsEquipe'));
 
 app.get('/health', (req, res) => res.json({ status: 'ok', routes: 9, ts: new Date() }));
 app.use((req, res) => res.status(404).json({ error: 'Route introuvable' }));

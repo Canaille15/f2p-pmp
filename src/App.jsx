@@ -10,6 +10,7 @@ import CetPdfsView from "./components/CetPdfsView";
 import D2iView from "./components/D2iView";
 import SignaturePad from "./components/SignaturePad";
 import FormationView from "./components/FormationView";
+import StatsEquipeView from "./components/StatsEquipeView";
 
 
 // ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
@@ -11298,6 +11299,7 @@ export default function App(){
     {k:"cetPdfs",l:"🏦 CET"},
     {k:"d2i",l:"✊ D2I"},
     {k:"formation",l:`🎓 Formation${nbFormationsNonVues>0?` 🔔${nbFormationsNonVues}`:""}`},
+    {k:"statsEquipe", l:"📊 Stat'Equip"},
     {k:"profil",  l:"👤 Mon profil"},
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
@@ -11436,7 +11438,7 @@ export default function App(){
           // Trié alphabétiquement (Annuaire, Échanges, Formation), fixe : 3
           // entrées seulement, pas besoin d'un tri générique sur des libellés
           // JSX (Annuaire porte une icône, pas un simple texte).
-          const REST_KEYS = ["annuaire", "echanges", "formation"];
+          const REST_KEYS = ["annuaire", "echanges", "formation", "statsEquipe"];
           return (
             <>
               {renderPave("planning-group", "Planning",
@@ -11488,6 +11490,7 @@ export default function App(){
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="d2i"&&<D2iView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} currentUser={currentUser} agents={agents} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} refreshProfil={refreshMonProfil}/>}
+  {view==="statsEquipe"&&<StatsEquipeView/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
