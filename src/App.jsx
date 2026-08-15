@@ -7,6 +7,7 @@ import DayEditPopup from "./components/DayEditPopup";
 import DemandeCongesView from "./components/DemandeCongesView";
 import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget, EpargneFetesCetWidget } from "./components/CetView";
 import CetPdfsView from "./components/CetPdfsView";
+import D2iView from "./components/D2iView";
 import SignaturePad from "./components/SignaturePad";
 import FormationView from "./components/FormationView";
 
@@ -11263,6 +11264,7 @@ export default function App(){
     {k:"annuaire",l:(<><svg width="15" height="15" viewBox="0 0 24 24" fill="#D22B2B" style={{verticalAlign:"-2px",marginRight:2}}><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.36 11.36 0 0 0 3.57.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.57 1 1 0 0 1-.24 1.01l-2.21 2.21z"/></svg> Annuaire</>)},
     {k:"conges",l:"🗓️ Demande de congés"},
     {k:"cetPdfs",l:"🏦 CET"},
+    {k:"d2i",l:"✊ D2I"},
     {k:"formation",l:`🎓 Formation${nbFormationsNonVues>0?` 🔔${nbFormationsNonVues}`:""}`},
     {k:"profil",  l:"👤 Mon profil"},
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
@@ -11413,7 +11415,7 @@ export default function App(){
                   <path d="M4 3a1 1 0 0 1 1-1h5.586a1 1 0 0 1 .707.293l3.414 3.414a1 1 0 0 1 .293.707V17a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3Z"/>
                   <path fill="#fff" d="M11 2.5V6a1 1 0 0 0 1 1h3.5L11 2.5Z"/>
                 </svg>,
-                "#b45309", "#fdf6ec", ["conges", "cetPdfs"])}
+                "#b45309", "#fdf6ec", ["conges", "cetPdfs", "d2i"])}
               {REST_KEYS.map(renderFlat)}
               {renderFlat("profil")}
               {isAdmin && renderFlat("admin")}
@@ -11452,6 +11454,7 @@ export default function App(){
   {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
   {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
+  {view==="d2i"&&<D2iView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} currentUser={currentUser} agents={agents} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} refreshProfil={refreshMonProfil}/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}

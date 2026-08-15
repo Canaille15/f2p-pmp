@@ -68,6 +68,25 @@ const RECT_DATES_UTIL_COURANT = {
   au: { jour: [218, 239], mois: [247, 267], annee: [277, 318] },
 };
 
+// Nom de fichier harmonisé (15/08, même principe que DemandeCongesView.jsx :
+// "Nom_TypeCet_MoisAnnee") — d'après la date de début pour le seul type qui
+// en a une (utilisationCourant, dateDebutUtil), sinon la date de génération
+// (les 5 autres types n'ont aucun champ date réel à représenter).
+const MOIS_NOMS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+function moisAnneeNom(iso) {
+  if (!iso) return "";
+  const [a, m] = iso.split("-").map(Number);
+  return `${MOIS_NOMS[m - 1]}${a}`;
+}
+const LABEL_FICHIER_TYPE = {
+  epargne: "EpargneCet",
+  intention: "IntentionEpargneConges",
+  utilisation: "UtilisationFinActivite",
+  monetisation: "MonetisationFinActivite",
+  utilisationCourant: "UtilisationCourant",
+  transfert: "TransfertJours",
+};
+
 function versDDMMYYYY(iso) {
   if (!iso) return "";
   const [a, m, j] = iso.split("-");
@@ -551,26 +570,24 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
     }
     setBusy(true);
     try {
-      let bytes, nomFichier;
-      const dateNom = new Date().toISOString().slice(0, 10);
+      let bytes;
+      const nomAgent = (nom || "Agent").toUpperCase().replace(/\s+/g, "_");
+      const moisAnnee = type === "utilisationCourant" && dateDebutUtil
+        ? moisAnneeNom(dateDebutUtil)
+        : moisAnneeNom(new Date().toISOString().slice(0, 10));
+      const nomFichier = `${nomAgent}_${LABEL_FICHIER_TYPE[type]}_${moisAnnee}.pdf`;
       if (type === "epargne") {
         bytes = await genererEpargneHorsConges({ nom, prenom, cp, lignes: lignesEpargneValides, signatureDataUrl });
-        nomFichier = `CET epargne du ${dateNom}.pdf`;
       } else if (type === "intention") {
         bytes = await genererIntentionConges({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl });
-        nomFichier = `CET intention epargne conges du ${dateNom}.pdf`;
       } else if (type === "utilisation") {
         bytes = await genererUtilisationFinActivite({ nom, prenom, cp, jours, formeAbsence, dureeReduite, dateAboutir, signatureDataUrl });
-        nomFichier = `CET utilisation fin activite du ${dateNom}.pdf`;
       } else if (type === "monetisation") {
         bytes = await genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, signatureDataUrl });
-        nomFichier = `CET monetisation fin activite du ${dateNom}.pdf`;
       } else if (type === "utilisationCourant") {
         bytes = await genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, dateDebut: dateDebutUtil, dateFin: dateFinUtil, signatureDataUrl });
-        nomFichier = `CET utilisation courant du ${dateNom}.pdf`;
       } else {
         bytes = await genererTransfertJours({ nom, prenom, cp, jours, signatureDataUrl });
-        nomFichier = `CET transfert jours du ${dateNom}.pdf`;
       }
       const blob = new Blob([bytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);

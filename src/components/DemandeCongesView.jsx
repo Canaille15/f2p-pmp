@@ -50,6 +50,16 @@ function versDDMMYYYY(iso) {
   return `${j}/${m}/${a}`;
 }
 
+// Nom de fichier harmonisé (15/08, demandé par Olivier : "Nom_Conges_mois de
+// debut et annee", ex. "TEST_Conge_Octobre2026") — d'après la date de début
+// de la 1ère période de la demande, jamais la date de génération.
+const MOIS_NOMS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+function moisAnneeNom(iso) {
+  if (!iso) return "";
+  const [a, m] = iso.split("-").map(Number);
+  return `${MOIS_NOMS[m - 1]}${a}`;
+}
+
 function messageEmail({ prenom, nom, periodes, repartition }) {
   const periodesValides = periodes.filter(p => p.debut && p.fin);
   const periodesTexte = periodesValides
@@ -229,9 +239,9 @@ export default function DemandeCongesView({ currentAgent, agentProfiles }) {
       const blob = new Blob([bytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const dateNom = periodesValides[0].debut.split("-").reverse().join("-");
+      const nomAgent = (currentAgent?.nom || "Agent").toUpperCase().replace(/\s+/g, "_");
       a.href = url;
-      a.download = `Demande de conges du ${dateNom}.pdf`;
+      a.download = `${nomAgent}_Conge_${moisAnneeNom(periodesValides[0].debut)}.pdf`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
