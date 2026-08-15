@@ -12,17 +12,21 @@ import api from "../api/client";
 
 const NAVY = { from: "#0f4c81", to: "#1e3a5f", bgLight: "#eff6ff", borderLight: "#bfdbfe" };
 
-// Table de libellés locale et minimale (les codes postes sont hardcodés dans
-// App.jsx, non exportés — repli sur le code brut si absent).
+// Table de libellés recopiée telle quelle depuis HAB_PRCI/HAB_PAR (App.jsx,
+// non exportés) — code = code_poste réel de la table `habilitation`. Toujours
+// afficher nom ET code ensemble (Olivier : "sinon trop fastidieux à lire").
 const POSTE_LABELS = {
-  "PIVGD-": "AC VGD (matinée)", "PIVGDO": "AC VGD (soirée)",
-  "PIADJ-": "Adj CCL (matinée)", "PIADJO": "Adj CCL (soirée)", "PIADJX": "Adj CCL (nuit)",
-  "PICCL-": "CCL (matinée)", "PICCLO": "CCL (soirée)", "PICCLX": "CCL (nuit)",
-  "PIPA1J": "Pauseur CCL", "PIPA2J": "Pauseur Adjoint", "PIPA3J": "Pauseur VGD",
-  "PAPAUJ": "Pauseur PAR", "PAASMJ": "ASMTE PAR",
-  "PPRCI": "PRCI (journée)", "A-PRCI": "Adjoint PRCI",
+  PICCL: "CCL", PIADJ: "Adj CCL", PILNE: "AC LNE", PILNO: "AC LNO", PILCL: "AC LC", PIVGD: "AC VGD",
+  PIPA1J: "Pauseur CCL", PIPA2J: "Pauseur Adjoint", PIPA3J: "Pauseur VGD",
+  PIDPXJ: "DPX PRCI", PIASSJ: "Adj DPX", PPRCI: "PPRCI", AFOPRCI: "AFO PRCI",
+  "A-PRCI": "A-PRCI", "SD%": "SD",
+  "PAAC1-": "AC PAR", "PAAC2-": "Aide AC PAR", PAACXX: "CT AC Travaux",
+  PAPAUJ: "Pauseur PAR", PADPXJ: "DPX PAR", PAASMJ: "ASMTE PAR", "AFO PAR": "AFO PAR",
 };
-function labelPoste(code) { return POSTE_LABELS[code] || code; }
+function labelPoste(code) {
+  const label = POSTE_LABELS[code];
+  return label ? `${label} (${code})` : code;
+}
 
 function fmtPct(v) { return `${v}%`; }
 
