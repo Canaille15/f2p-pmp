@@ -1716,17 +1716,32 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           cursor+=l.length+1; // +1 pour le \n consomme par split
           return {text:l.trim(), pos:startPos};
         }).filter(o=>o.text.length>0);
-        const rawLines=rawLinesWithPos.map(o=>o.text);
+        // Filtrer le texte de pied de page / en-tete connu AVANT la fusion (15/08) : ces
+        // lignes ("SOCIETE NATIONALE DES CHEMINS DE FER FRANCAIS", legende des prefixes,
+        // en-tete "FEUILLE DE PRESENCE JOURNALIERE"/"JOURNEE DE SERVICE COUVERTE PAR"/
+        // "Nom Prenom Grade Cde Observ.") ne commencent jamais par un jsCode ni un horaire
+        // complet, donc se recollaient en cascade a la ligne precedente sur les PDF qui
+        // regroupent plusieurs jours/pages en un seul fichier — engloutissant au passage
+        // la toute premiere ligne de donnees reelles de la page suivante (ex: un agent
+        // entier disparu, noye dans un bloc geant melangeant plusieurs rangees de tableau
+        // differentes). Les retirer avant la fusion les empeche de servir de pont.
+        const boilerplateRe=/SOCIETE NATIONALE DES CHEMINS DE FER|FEUILLE DE PRESENCE JOURNALIERE|JOURNEE DE SERVICE COUVERTE PAR|U\.?O\.?P\.?\s*:|Nom Pr[ée]nom|Grade Cde Observ|Cde Observ\.?$|(signification.*(pr[ée]fixes|accol[ée]s))|(accol[ée]s.*signification)|^Page\s*:?\s*\d+/i;
+        const rawLinesFiltered=rawLinesWithPos.filter(o=>!boilerplateRe.test(o.text));
+        const rawLines=rawLinesFiltered.map(o=>o.text);
         // Fusionner les lignes : si une ligne ne contient pas de debut d'horaire (HH:MM en debut/proche du debut)
         // et ne commence pas par un jsCode connu, on la rattache a la ligne precedente (cas OCR qui scinde
         // le jsCode+debut d'horaire d'un cote et la fin d'horaire+nom de l'autre cote)
         const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)\b/;
+        // Le marqueur de date "DU : JJ/MM/AAAA" signale toujours une transition de page/jour
+        // reelle — jamais rattache a la ligne precedente, meme s'il ne matche ni jsCode ni
+        // horaire complet (evite qu'il serve lui aussi de pont entre deux rangees).
+        const dateMarkerLineRe=/DU\s*:?\s*\d{2}[\/1]\d{2}[\/1]\d{4}/;
         const lines=[];
         const lineDates=[];
-        rawLinesWithPos.forEach(o=>{
+        rawLinesFiltered.forEach(o=>{
           const line=o.text;
           const hasFullHoraire=/\d{2}:\d{2}\s*-\s*\d{2}:\d{2}/.test(line);
-          const startsNewBlock=jsCodeStartRe.test(line)||hasFullHoraire;
+          const startsNewBlock=jsCodeStartRe.test(line)||hasFullHoraire||dateMarkerLineRe.test(line);
           if(startsNewBlock||lines.length===0){
             lines.push(line);
             lineDates.push(dateForIndex(o.pos));
