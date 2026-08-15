@@ -212,6 +212,37 @@ function estNonTenuWeekend(jsCode, dateKey){
   const liste=POSTES_NON_TENU_PAR_JOUR[jourSemaine];
   return liste ? liste.includes(jsCode) : false;
 }
+// Un jour ferie est traite comme un dimanche pour ces regles de postes
+// structurellement non tenus (15/08, demande d'Olivier) — peu importe le
+// jour de semaine reel sur lequel il tombe. Reutilise getDatesFetesAnnee
+// (calcul deja fiabilise le 13/08 sur 2020-2050) plutot qu'une liste
+// figee, pour rester juste tant que les dates de fetes sont calculables.
+function estJourFerie(dateKey){
+  const annee=parseInt(dateKey.slice(0,4),10);
+  const dates=getDatesFetesAnnee(annee);
+  return Object.values(dates).includes(dateKey);
+}
+function jourSuivant(dateKey){
+  const d=new Date(dateKey+"T12:00:00");
+  d.setDate(d.getDate()+1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+// Combine week-end + ferie (traite comme dimanche) + cas particulier PIADJX
+// (nuit Adj CCL non tenue la veille d'un ferie, quel que soit le jour de la
+// semaine — ex. nuit du 13/07 avant le 14 juillet). Renvoie le motif pour
+// distinguer l'affichage "(week-end)" vs "(férié)", demande explicitement
+// par Olivier — reste modifiable via le meme bouton 🔄 (renfort/alea) que
+// le week-end, aucun changement necessaire de ce cote.
+function estNonTenu(jsCode, dateKey){
+  // Le week-end est toujours prioritaire sur le ferie : si un ferie tombe
+  // un samedi ou un dimanche, on garde le libelle "week-end" deja existant
+  // plutot que de le rebasculer en "ferie" — demande explicite d'Olivier
+  // le 15/08 ("pas utile de mettre en ferie" dans ce cas).
+  if(estNonTenuWeekend(jsCode,dateKey)) return {nonTenu:true, motif:"weekend"};
+  if(estJourFerie(dateKey) && (POSTES_NON_TENU_PAR_JOUR[0]||[]).includes(jsCode)) return {nonTenu:true, motif:"ferie"};
+  if(jsCode==="PIADJX" && estJourFerie(jourSuivant(dateKey))) return {nonTenu:true, motif:"ferie"};
+  return {nonTenu:false, motif:null};
+}
 const POSTES_PAR_3x8 = [
   { code:"AC1",  label:"AC PAR",        M:"PAAC1-", AM:"PAAC1O", N:"PAAC1X" },
   { code:"AC2",  label:"Aide AC PAR",   M:"PAAC2-", AM:"PAAC2O", N:"PAAC2X" },
@@ -2092,9 +2123,10 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         </div>
                         <div style={{fontSize:10,color:"#1d4ed8",paddingLeft:20,lineHeight:1.4}}>{aleaVacant.motif}</div>
                       </div>);
-                      if(estNonTenuWeekend(row.jsCode,dateKey))return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#f1f5f9",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
-                        <div style={{width:22,height:22,borderRadius:"50%",background:"#cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11}}>📅</div>
-                        <div style={{fontSize:10,color:"#475569",fontWeight:600}}>Non tenu (week-end)</div>
+                      const nonTenu=estNonTenu(row.jsCode,dateKey);
+                      if(nonTenu.nonTenu)return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:"#f1f5f9",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
+                        <div style={{width:22,height:22,borderRadius:"50%",background:"#cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11}}>{nonTenu.motif==="ferie"?"🎉":"📅"}</div>
+                        <div style={{fontSize:10,color:"#475569",fontWeight:600}}>{nonTenu.motif==="ferie"?"Non tenu (férié)":"Non tenu (week-end)"}</div>
                         {!isPrevisionnel&&<button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant"})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
                       </div>);
                       return(<div key={si} style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,255,255,.5)",border:"1.5px dashed rgba(0,0,0,.08)",borderRadius:9,padding:"4px 9px"}}>
