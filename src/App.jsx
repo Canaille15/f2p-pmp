@@ -11329,70 +11329,81 @@ export default function App(){
           <div style={{fontSize:14,fontWeight:800,color:"#0f4c81"}}>F2P.PMP</div>
           <button onClick={()=>setMenuOpen(false)} style={{border:"none",background:"none",cursor:"pointer",fontSize:18,color:"#94a3b8",padding:4}}>×</button>
         </div>
-        {/* Pavé "Générateurs PDF" (14/08, demandé par Olivier — "il faut qu'il
-            y ait un pavé qui regroupe les générateurs de PDF [...] améliore
-            le rendu, les boutons et l'organisation, pour mieux s'y
-            retrouver") : regroupe Congés et CET (les 2 seules vues qui
-            génèrent un document PDF officiel, DemandeCongesView/CetPdfsView)
-            dans une carte distincte du reste du menu, à leur position
-            d'origine dans VIEWS — plutôt qu'un simple ajout d'icône, pour que
-            ce soit visuellement évident que ce sont 2 outils de même nature.
-            Les autres entrées du menu gardent exactement leur rendu d'avant. */}
+        {/* Menu réorganisé en 2 pavés + reste trié (15/08, demandé par Olivier
+            — "sur le meme principa tu va metre le perso, cps et previonnelle
+            dans un groupe appelés les planning [...] tu les met en haut
+            suivi des generateur de pdf. le reste va en bas avec tri en
+            ordres alphabetique. mon profil avant dernier et admin reste en
+            dernier"). "Planning" (pas "Agenda") retenu — cohérent avec le
+            vocabulaire déjà utilisé partout ailleurs dans l'appli (Mon
+            planning, Planning Prévisionnel, planning perso...).
+            - Pavé "Planning" (Mon planning / CPS Officiel / Planning
+              Prévisionnel, accent bleu #0f4c81) en premier.
+            - Pavé "Générateurs PDF" (Congés / CET, accent ambre) juste après
+              — même principe visuel que le pavé Planning, voir 14-15/08.
+            - Le reste, trié alphabétiquement (Annuaire, Échanges, Formation)
+              en items plats, comme avant.
+            - "Mon profil" avant-dernier, "Admin" toujours en tout dernier
+              (déjà conditionné à isAdmin dans VIEWS). */}
         {(() => {
-          const PDF_KEYS = ["conges", "cetPdfs"];
-          const pdfViews = VIEWS.filter(v => PDF_KEYS.includes(v.k));
-          let pdfGroupRendered = false;
-          return VIEWS.map(({ k, l }) => {
-            if (PDF_KEYS.includes(k)) {
-              if (pdfGroupRendered) return null;
-              pdfGroupRendered = true;
-              return (
-                <div key="pdf-group" style={{ margin: "8px 12px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(15,23,42,.05)" }}>
-                  {/* En-tête de section (15/08, retouché — Olivier : "le titre est
-                      moche [...] soit plus moderne et pro") : icône SVG trait fin
-                      (même principe déjà en place pour "Annuaire" dans ce menu,
-                      plutôt qu'un emoji) + libellé gris neutre discret, séparés du
-                      contenu par un simple filet plutôt qu'un aplat de couleur
-                      plein sur tout le pavé — rendu plus proche d'un dashboard pro. */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 12px 9px", borderBottom: "1px solid #f1f5f9" }}>
-                    {/* Icône pleine (15/08, retouchée — Olivier : "l'icone en
-                        plus est quasi invible") : un trait fin à 13px passait
-                        inaperçu, remplacé par une icône document PLEINE (même
-                        principe que l'icône "Annuaire" du menu, fill plutôt
-                        que stroke — beaucoup plus visible à petite taille). */}
-                    <svg width="14" height="14" viewBox="0 0 20 20" fill="#b45309">
-                      <path d="M4 3a1 1 0 0 1 1-1h5.586a1 1 0 0 1 .707.293l3.414 3.414a1 1 0 0 1 .293.707V17a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3Z"/>
-                      <path fill="#fff" d="M11 2.5V6a1 1 0 0 0 1 1h3.5L11 2.5Z"/>
-                    </svg>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", letterSpacing: .7, textTransform: "uppercase" }}>Générateurs PDF</span>
-                  </div>
-                  <div style={{ padding: 4 }}>
-                    {pdfViews.map(({ k: pk, l: pl }) => {
-                      const actif = view === pk;
-                      return (
-                        <button key={pk} onClick={() => { setView(pk); setMenuOpen(false); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 10, border: "none",
-                            background: actif ? "#fdf6ec" : "transparent",
-                            padding: "10px 8px", cursor: "pointer", fontSize: 14,
-                            fontWeight: actif ? 700 : 500, color: actif ? "#b45309" : "#1e293b",
-                            textAlign: "left", width: "100%", borderRadius: 7,
-                          }}>
-                          {pl}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            }
+          const byKey = k => VIEWS.find(v => v.k === k);
+          const renderPave = (key, label, icon, accentColor, accentBg, keys) => (
+            <div key={key} style={{ margin: "8px 12px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(15,23,42,.05)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 12px 9px", borderBottom: "1px solid #f1f5f9" }}>
+                {icon}
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", letterSpacing: .7, textTransform: "uppercase" }}>{label}</span>
+              </div>
+              <div style={{ padding: 4 }}>
+                {keys.map(k => {
+                  const v = byKey(k);
+                  if (!v) return null;
+                  const actif = view === k;
+                  return (
+                    <button key={k} onClick={() => { setView(k); setMenuOpen(false); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10, border: "none",
+                        background: actif ? accentBg : "transparent",
+                        padding: "10px 8px", cursor: "pointer", fontSize: 14,
+                        fontWeight: actif ? 700 : 500, color: actif ? accentColor : "#1e293b",
+                        textAlign: "left", width: "100%", borderRadius: 7,
+                      }}>
+                      {v.l}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+          const renderFlat = k => {
+            const v = byKey(k);
+            if (!v) return null;
             const actif = view === k;
             const aDesEchanges = k === "echanges" && echangesOuvertesCount > 0;
             return (<button key={k} onClick={() => { setView(k); setMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: actif ? "#eff6ff" : (aDesEchanges ? "#fef3c7" : "transparent"), padding: "12px 16px", cursor: "pointer", fontSize: 14, fontWeight: actif ? 700 : 500, color: actif ? "#0f4c81" : "#1e293b", textAlign: "left", width: "100%" }}>
-              {l}
+              {v.l}
               {aDesEchanges && <span style={{ marginLeft: "auto", background: "#dc2626", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{echangesOuvertesCount}</span>}
             </button>);
-          });
+          };
+          // Trié alphabétiquement (Annuaire, Échanges, Formation), fixe : 3
+          // entrées seulement, pas besoin d'un tri générique sur des libellés
+          // JSX (Annuaire porte une icône, pas un simple texte).
+          const REST_KEYS = ["annuaire", "echanges", "formation"];
+          return (
+            <>
+              {renderPave("planning-group", "Planning",
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="#0f4c81"><path fillRule="evenodd" d="M5.75 2a.75.75 0 0 1 .75.75V4h7V2.75a.75.75 0 0 1 1.5 0V4h.25A2.75 2.75 0 0 1 18 6.75v8.5A2.75 2.75 0 0 1 15.25 18H4.75A2.75 2.75 0 0 1 2 15.25v-8.5A2.75 2.75 0 0 1 4.75 4H5V2.75A.75.75 0 0 1 5.75 2Zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75Z" clipRule="evenodd"/></svg>,
+                "#0f4c81", "#eff6ff", ["personal", "global", "previsionnel"])}
+              {renderPave("pdf-group", "Générateurs PDF",
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="#b45309">
+                  <path d="M4 3a1 1 0 0 1 1-1h5.586a1 1 0 0 1 .707.293l3.414 3.414a1 1 0 0 1 .293.707V17a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3Z"/>
+                  <path fill="#fff" d="M11 2.5V6a1 1 0 0 0 1 1h3.5L11 2.5Z"/>
+                </svg>,
+                "#b45309", "#fdf6ec", ["conges", "cetPdfs"])}
+              {REST_KEYS.map(renderFlat)}
+              {renderFlat("profil")}
+              {isAdmin && renderFlat("admin")}
+            </>
+          );
         })()}
         <div style={{flex:1}}/>
         <button onClick={()=>{setMenuOpen(false);handleLogout();}} style={{display:"flex",alignItems:"center",gap:10,border:"none",borderTop:"1px solid #f1f5f9",background:"transparent",padding:"14px 16px",cursor:"pointer",fontSize:14,fontWeight:600,color:"#ef4444",textAlign:"left",width:"100%"}}>
