@@ -24,11 +24,16 @@ const POSTE_LABELS = {
   PAPAUJ: "Pauseur PAR", PADPXJ: "DPX PAR", PAASMJ: "ASMTE PAR", "AFO PAR": "AFO PAR",
 };
 // Ordre du planning (Olivier : "ccl en 1er adj ensuite [...] journee en dernier")
-// — les postes 3×8 d'abord (PRCI puis PAR), les postes journée en dernier.
+// — PRCI d'abord, PAR ensuite ; dans chaque famille, les postes 3×8 (ccl,
+// adjoint...) d'abord, les postes journée en dernier.
 const POSTE_ORDER = [
+  // PRCI — 3×8
   "PICCL", "PIADJ", "PILNE", "PILNO", "PILCL", "PIVGD",
-  "PAAC1-", "PAAC2-", "PAACXX",
+  // PRCI — journée
   "PIPA1J", "PIPA2J", "PIPA3J", "PIDPXJ", "PIASSJ", "PPRCI", "AFOPRCI", "A-PRCI", "SD%",
+  // PAR — 3×8
+  "PAAC1-", "PAAC2-", "PAACXX",
+  // PAR — journée
   "PAPAUJ", "PADPXJ", "PAASMJ", "AFO PAR",
 ];
 function ordrePoste(code) {
@@ -50,6 +55,7 @@ export default function StatsEquipeView() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [triHab, setTriHab] = useState("planning"); // "planning" | "nombre"
 
   const availableYears = useMemo(() => {
     const cur = new Date().getFullYear();
@@ -163,7 +169,19 @@ export default function StatsEquipeView() {
 
           {/* Habilitations par poste */}
           <div style={card}>
-            <div style={sectionTitle}>🛠️ Agents habilités par poste</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+              <div style={{ ...sectionTitle, marginBottom: 0 }}>🛠️ Agents habilités par poste</div>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => setTriHab("planning")}
+                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "planning" ? NAVY.from : "#f1f5f9", color: triHab === "planning" ? "#fff" : "#64748b" }}>
+                  Ordre planning
+                </button>
+                <button onClick={() => setTriHab("nombre")}
+                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "nombre" ? NAVY.from : "#f1f5f9", color: triHab === "nombre" ? "#fff" : "#64748b" }}>
+                  Nombre d'agents
+                </button>
+              </div>
+            </div>
             <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 10 }}>
               Habilitations actives (table Habilitations) — indépendant du module Formation.
             </div>
@@ -176,7 +194,7 @@ export default function StatsEquipeView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...data.habilitationsParPoste].sort((a, b) => ordrePoste(a.code_poste) - ordrePoste(b.code_poste)).map(h => (
+                  {[...data.habilitationsParPoste].sort((a, b) => triHab === "planning" ? ordrePoste(a.code_poste) - ordrePoste(b.code_poste) : b.nbAgents - a.nbAgents).map(h => (
                     <tr key={h.code_poste} style={{ borderTop: "1px solid #f1f5f9" }}>
                       <td style={{ padding: "6px 8px", fontWeight: 600, color: "#334155" }}>{labelPoste(h.code_poste)}</td>
                       <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{h.nbAgents}</td>
