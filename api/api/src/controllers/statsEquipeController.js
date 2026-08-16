@@ -161,12 +161,67 @@ async function getStats(req, res) {
     const formationInterne = { nbJours: joursFormation.n || 0, nbAgentsFormes: agentsFormes.n || 0 };
 
     // ─── Habilitations par poste (#11) ──────────────────────────────────────
+    // PPRCI retiré le 16/08 (Olivier : "tout le monde est apte à ça", pas
+    // significatif) — rien ne le remplace ici, DISPO est une stat à part non
+    // nominative (voir plus bas), ce tableau reste nominatif par construction.
     const [habRows] = await pool.query(
       `SELECT code_poste, COUNT(DISTINCT cp_agent) AS nbAgents
-       FROM habilitation WHERE date_fin IS NULL
+       FROM habilitation WHERE date_fin IS NULL AND code_poste != 'PPRCI'
        GROUP BY code_poste ORDER BY nbAgents DESC`
     );
     const habilitationsParPoste = habRows.map(r => ({ code_poste: r.code_poste, nbAgents: r.nbAgents }));
+
+    // ─── Dispo (#g, 16/08) — anonyme, jamais de nom d'agent ─────────────────
+    // Un agent présent un jour où tous les postes CPS sont déjà tenus se voit
+    // signalé par un message libre (cps_aleas type='message') contenant
+    // "Dispo" — comme agents_concernes est toujours vide pour ce type (voir
+    // App.jsx:1343), impossible d'attribuer ces jours à un agent précis. Sur
+    // demande explicite d'Olivier : total + dates seulement, jamais de nom.
+    const [dispoRows] = await pool.query(
+      `SELECT date_jour, motif FROM cps_aleas
+       WHERE type = 'message' AND LOWER(motif) LIKE '%dispo%' AND date_jour BETWEEN ? AND ?
+       ORDER BY date_jour`,
+      [from, to]
+    );
+    const dispo = {
+      total: dispoRows.length,
+      entries: dispoRows.map(r => ({
+        date_jour: r.date_jour instanceof Date ? r.date_jour.toISOString().slice(0,10) : r.date_jour,
+        motif: r.motif || null,
+      })),
+    };
+
+    // ─── Réserve / Roulement — historique mensuel (#b,c,d, 16/08) ───────────
+    // Distinct de "Réserve régionale" (is_reserve). Réutilise roulement_historique
+    // (déjà daté, existait mais jamais branché à un bouton) pour garantir qu'un
+    // changement de statut en décembre ne modifie jamais les mois déjà passés.
+    // Seules 2 valeurs comptent ici : 'Réserve' vs tout le reste ("Roulement" à
+    // l'affichage, que la ligne source soit '3x8' ou 'Journée').
+    const [roulementRows] = await pool.query(
+      `SELECT cp_agent, type_roulement, date_debut, date_fin FROM roulement_historique ORDER BY cp_agent, date_debut`
+    );
+    const dstr = v => v instanceof Date ? v.toISOString().slice(0,10) : v;
+    const roulementParAgent = {};
+    roulementRows.forEach(r => {
+      if (!roulementParAgent[r.cp_agent]) roulementParAgent[r.cp_agent] = [];
+      roulementParAgent[r.cp_agent].push({ type_roulement: r.type_roulement, date_debut: dstr(r.date_debut), date_fin: dstr(r.date_fin) });
+    });
+    const parMois = [];
+    for (let m = 1; m <= 12; m++) {
+      const finMois = new Date(year, m, 0);
+      const finMoisStr = `${finMois.getFullYear()}-${String(finMois.getMonth()+1).padStart(2,'0')}-${String(finMois.getDate()).padStart(2,'0')}`;
+      let nbReserve = 0;
+      Object.values(roulementParAgent).forEach(rows => {
+        const actif = rows.filter(r => r.date_debut <= finMoisStr && (!r.date_fin || r.date_fin > finMoisStr)).pop();
+        if (actif && actif.type_roulement === 'Réserve') nbReserve++;
+      });
+      parMois.push({ mois: m, nbReserve, nbRoulement: totalAgents - nbReserve });
+    }
+    const [[actuelRow]] = await pool.query(
+      `SELECT COUNT(*) AS n FROM roulement_historique WHERE date_fin IS NULL AND type_roulement = 'Réserve'`
+    );
+    const nbReserveActuel = actuelRow.n || 0;
+    const reserveRoulement = { actuel: { nbReserve: nbReserveActuel, nbRoulement: totalAgents - nbReserveActuel }, parMois };
 
     // ─── Scans donnees_json (#5, #6, #12) — congés/VT refusés (anonymisés),
     // temps partiel — un seul fetch, une seule boucle Node ─────────────────
@@ -209,6 +264,8 @@ async function getStats(req, res) {
       postesNonTenus,
       formationInterne,
       habilitationsParPoste,
+      dispo,
+      reserveRoulement,
     });
   } catch (e) {
     console.error(e);

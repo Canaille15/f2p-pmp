@@ -12,6 +12,25 @@ import api from "../api/client";
 const GRADES = ["CO4","CO5","CP4NIV1","CP4NIV2","CP5NIV1","CP5NIV2","CP5NIV3","CP6NIV1","CP6NIV2","CP7NIV1","CO6"];
 const FAMILLES = ["PRCI","PAR"];
 
+// Table de libellés + ordre recopiés depuis HAB_PRCI/HAB_PAR (App.jsx, non
+// exportés) — même convention que StatsEquipeView.jsx. Ici PPRCI est gardé
+// (contrairement à Stat'Equip) : c'est un vrai code de la table habilitation,
+// l'éditeur admin doit pouvoir le cocher/décocher comme les autres.
+const HAB_LABELS = {
+  PICCL: "CCL", PIADJ: "Adj CCL", PILNE: "AC LNE", PILNO: "AC LNO", PILCL: "AC LC", PIVGD: "AC VGD",
+  PIPA1J: "Pauseur CCL", PIPA2J: "Pauseur Adjoint", PIPA3J: "Pauseur VGD",
+  PIDPXJ: "DPX PRCI", PIASSJ: "Adj DPX", PPRCI: "PPRCI", AFOPRCI: "AFO PRCI",
+  "A-PRCI": "A-PRCI", "SD%": "SD",
+  "PAAC1-": "AC PAR", "PAAC2-": "Aide AC PAR", PAACXX: "CT AC Travaux",
+  PAPAUJ: "Pauseur PAR", PADPXJ: "DPX PAR", PAASMJ: "ASMTE PAR", "AFO PAR": "AFO PAR",
+};
+const HAB_ORDER = [
+  "PICCL", "PIADJ", "PILNE", "PILNO", "PILCL", "PIVGD",
+  "PIPA1J", "PIPA2J", "PIPA3J", "PIDPXJ", "PIASSJ", "PPRCI", "AFOPRCI", "A-PRCI", "SD%",
+  "PAAC1-", "PAAC2-", "PAACXX",
+  "PAPAUJ", "PADPXJ", "PAASMJ", "AFO PAR",
+];
+
 // ─── COMPOSANT PRINCIPAL ──────────────────────────────────────────────────────
 
 export default function AdminPanel({ currentUser, onAgentsChanged }) {
@@ -25,6 +44,12 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   // Filtre "Formateur AFO" : même principe que Réserve régionale, orthogonal
   // à famille/réserve (un AFO garde sa famille PRCI/PAR de base).
   const [afoOnly, setAfoOnly] = useState(false);
+  // Filtre "Admin" : même principe, complète le trio Réserve/AFO (16/08) —
+  // sert aussi de "liste des admins" (cliquer réduit la grille aux admins).
+  const [adminOnly, setAdminOnly] = useState(false);
+  // Statut actif/quitté (16/08) — par défaut on ne montre que les actifs,
+  // un agent quitté reste consultable via ce filtre (historique jamais supprimé).
+  const [statutFilter, setStatutFilter] = useState("actif");
   const [modal, setModal]             = useState(null); // "create" | { type:"delete"|"reset", agent }
   const [msg, setMsg]                 = useState(null); // { type:"ok"|"err", text }
 
@@ -55,10 +80,14 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
     const matchFamille = familleFilter === "TOUS" || a.famille === familleFilter;
     const matchReserve = !reserveOnly || a.is_reserve;
     const matchAfo = !afoOnly || a.is_afo;
-    return matchSearch && matchFamille && matchReserve && matchAfo;
+    const matchAdmin = !adminOnly || a.is_admin;
+    const matchStatut = (a.statut || "actif") === statutFilter;
+    return matchSearch && matchFamille && matchReserve && matchAfo && matchAdmin && matchStatut;
   });
-  const nbReserve = agents.filter(a => a.is_reserve).length;
-  const nbAfo = agents.filter(a => a.is_afo).length;
+  const nbReserve = agents.filter(a => a.is_reserve && (a.statut || "actif") === "actif").length;
+  const nbAfo = agents.filter(a => a.is_afo && (a.statut || "actif") === "actif").length;
+  const nbAdmin = agents.filter(a => a.is_admin && (a.statut || "actif") === "actif").length;
+  const nbQuittes = agents.filter(a => a.statut === "quitte").length;
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
   async function handleCreate(data) {
@@ -124,6 +153,37 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       onAgentsChanged?.();
     } catch (e) {
       afficherMsg("err", e.message || "Erreur modification statut AFO");
+    }
+  }
+  async function handleToggleRoulement(agent) {
+    const nouveau = agent.type_roulement === "Réserve" ? "3x8" : "Réserve";
+    try {
+      await api.agents.setRoulement(agent.cp, nouveau);
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} : ${nouveau === "Réserve" ? "Réserve" : "Roulement"}`);
+      charger();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur modification réserve/roulement");
+    }
+  }
+  async function handleDepart(agent, dateDepart) {
+    try {
+      await api.agents.marquerDepart(agent.cp, dateDepart);
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} marqué comme quitté`);
+      setModal(null);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur départ agent");
+    }
+  }
+  async function handleReactiver(agent) {
+    try {
+      await api.agents.reactiver(agent.cp);
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} réactivé`);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur réactivation");
     }
   }
   async function handleResetPin(agent, newPin) {
@@ -205,6 +265,24 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                 color: afoOnly ? "#fff" : "#64748b"
               }}>
               🎓 Formateur AFO ({nbAfo})
+            </button>
+            <button onClick={() => setAdminOnly(v => !v)}
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: adminOnly ? "#1e293b" : "#f1f5f9",
+                color: adminOnly ? "#fff" : "#64748b"
+              }}>
+              👑 Admin ({nbAdmin})
+            </button>
+            <button onClick={() => setStatutFilter(s => s === "actif" ? "quitte" : "actif")}
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: statutFilter === "quitte" ? "#78716c" : "#f1f5f9",
+                color: statutFilter === "quitte" ? "#fff" : "#64748b"
+              }}>
+              {statutFilter === "quitte" ? `🚪 Quittés (${nbQuittes})` : `🚪 Voir les quittés (${nbQuittes})`}
             </button>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
@@ -306,25 +384,46 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                   }}>
                   🎓 Formateur AFO{a.is_afo ? " ✓" : ""}
                 </button>
+                <button onClick={() => handleToggleRoulement(a)}
+                  style={{
+                    background: a.type_roulement === "Réserve" ? "#ecfdf5" : "#f8fafc",
+                    color: a.type_roulement === "Réserve" ? "#047857" : "#94a3b8",
+                    border: `1px solid ${a.type_roulement === "Réserve" ? "#a7f3d0" : "#e2e8f0"}`,
+                    borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                  }}>
+                  {a.type_roulement === "Réserve" ? "🔁 Réserve" : "🔄 Roulement"}
+                </button>
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", gap: 7, flexWrap: "wrap", borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
-                <button onClick={() => setModal({ type: "edit", agent: a })}
-                  style={{ background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
-                  ✏️ Modifier
-                </button>
-                <button onClick={() => setModal({ type: "reset", agent: a })}
-                  style={{ background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
-                  🔑 PIN
-                </button>
-                {a.cp !== currentUser?.agent?.cp && (
-                  <button onClick={() => setModal({ type: "delete", agent: a })}
-                    style={{ background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700, marginLeft: "auto" }}>
-                    🗑 Supprimer
+              {a.statut === "quitte" ? (
+                <div style={{ display: "flex", gap: 7, flexWrap: "wrap", borderTop: "1px solid #f1f5f9", paddingTop: 10, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#78716c", fontWeight: 600 }}>
+                    🚪 Quitté le {a.date_depart ? new Date(a.date_depart).toLocaleDateString("fr-FR") : "?"}
+                  </span>
+                  <button onClick={() => handleReactiver(a)}
+                    style={{ background: "#f0fdf4", color: "#15803d", border: "1px solid #86efac", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700, marginLeft: "auto" }}>
+                    ↺ Réactiver
                   </button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 7, flexWrap: "wrap", borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
+                  <button onClick={() => setModal({ type: "edit", agent: a })}
+                    style={{ background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                    ✏️ Modifier
+                  </button>
+                  <button onClick={() => setModal({ type: "reset", agent: a })}
+                    style={{ background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                    🔑 PIN
+                  </button>
+                  {a.cp !== currentUser?.agent?.cp && (
+                    <button onClick={() => setModal({ type: "delete", agent: a })}
+                      style={{ background: "#fef2f2", color: "#b91c1c", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700, marginLeft: "auto" }}>
+                      🚪 Départ
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -338,7 +437,7 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
         <ModalModifier agent={modal.agent} onConfirm={(data) => handleUpdate(modal.agent, data)} onClose={() => setModal(null)} />
       )}
       {modal?.type === "delete" && (
-        <ModalSupprimer agent={modal.agent} onConfirm={() => handleDelete(modal.agent)} onClose={() => setModal(null)} />
+        <ModalDepart agent={modal.agent} onConfirmDepart={(date) => handleDepart(modal.agent, date)} onConfirmSuppression={() => handleDelete(modal.agent)} onClose={() => setModal(null)} />
       )}
       {modal?.type === "reset" && (
         <ModalResetPin agent={modal.agent} onConfirm={(pin) => handleResetPin(modal.agent, pin)} onClose={() => setModal(null)} />
@@ -417,20 +516,41 @@ function ModalModifier({ agent, onConfirm, onClose }) {
   const [nouveauCp, setNouveauCp] = useState(agent.cp || "");
   const [err, setErr] = useState("");
   const [coordLoading, setCoordLoading] = useState(true);
+  const [habilitations, setHabilitations] = useState({}); // {code_poste:'HC'}
+  const [habLoading, setHabLoading] = useState(true);
+  const [habSaving, setHabSaving] = useState(false);
   useEffect(() => {
     api.agents.getById(agent.cp).then(full => {
       setForm(p => ({ ...p, telephone: full?.telephone || "", email: full?.email || "" }));
       setCoordLoading(false);
     }).catch(() => setCoordLoading(false));
+    api.profil.get(agent.cp).then(p => {
+      setHabilitations(p?.habilitations || {});
+      setHabLoading(false);
+    }).catch(() => setHabLoading(false));
   }, [agent.cp]);
 
-  function submit() {
+  function toggleHab(code) {
+    setHabilitations(p => { const next = { ...p }; if (next[code]) delete next[code]; else next[code] = 'HC'; return next; });
+  }
+
+  async function submit() {
     if (!form.nom.trim()) return setErr("Le nom est obligatoire");
     if (!form.prenom.trim()) return setErr("Le prenom est obligatoire");
     if (!nouveauCp.trim()) return setErr("Le CP est obligatoire");
     const cpChange = nouveauCp.trim().toUpperCase() !== agent.cp;
     if (cpChange && !window.confirm(`Changer le CP de ${agent.cp} vers ${nouveauCp.trim().toUpperCase()} ? Cette action met a jour toutes les donnees liees a cet agent.`)) return;
     setErr("");
+    setHabSaving(true);
+    try {
+      const aujourdhui = new Date().toISOString().slice(0, 10);
+      const habsArray = Object.keys(habilitations).filter(c => habilitations[c]).map(code_poste => ({ code_poste, date_debut: aujourdhui }));
+      await api.profil.setHabilitations(agent.cp, habsArray);
+    } catch (e) {
+      setHabSaving(false);
+      return setErr(e.message || "Erreur sauvegarde habilitations");
+    }
+    setHabSaving(false);
     onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, is_afo: form.is_afo, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
   }
 
@@ -515,31 +635,90 @@ function ModalModifier({ agent, onConfirm, onClose }) {
             🎓 {form.is_afo ? "Formateur AFO" : "Pas formateur"}
           </button>
         </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>
+            🛠️ Habilitations {habLoading && "(chargement…)"}
+          </div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>
+            Déclarées par l'agent lui-même dans "Mon profil" — modifiables ici.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 6 }}>
+            {HAB_ORDER.map(code => {
+              const actif = !!habilitations[code];
+              return (
+                <button key={code} onClick={() => toggleHab(code)}
+                  style={{
+                    padding: "6px 8px", borderRadius: 7, cursor: "pointer", fontSize: 11.5, fontWeight: 700,
+                    border: `1px solid ${actif ? "#93c5fd" : "#e2e8f0"}`,
+                    background: actif ? "#eff6ff" : "#f8fafc",
+                    color: actif ? "#1d4ed8" : "#94a3b8",
+                    textAlign: "left",
+                  }}>
+                  {actif ? "✓ " : ""}{HAB_LABELS[code] || code}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {err && <div style={{ color: "#dc2626", fontSize: 12, fontWeight: 600 }}>! {err}</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
-          <button onClick={submit} style={{ flex: 1, padding: "10px", background: "#1e293b", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Enregistrer</button>
+          <button onClick={submit} disabled={habSaving} style={{ flex: 1, padding: "10px", background: "#1e293b", color: "#fff", border: "none", borderRadius: 8, cursor: habSaving ? "wait" : "pointer", fontWeight: 700 }}>
+            {habSaving ? "Enregistrement…" : "Enregistrer"}
+          </button>
         </div>
       </div>
     </Modal>
   );
 }
 
-function ModalSupprimer({ agent, onConfirm, onClose }) {
+// Remplace l'ancienne suppression physique (ON DELETE CASCADE, détruisait tout
+// l'historique — planning, formations, échanges) par un départ : le planning
+// est vidé strictement après la date de départ (le prévisionnel que l'agent
+// aurait rempli à l'avance et oublié d'effacer, qui polluerait sinon Planning
+// Prévisionnel), tout ce qui précède est conservé, la connexion est bloquée.
+// La suppression définitive reste possible mais discrète, en dernier recours.
+function ModalDepart({ agent, onConfirmDepart, onConfirmSuppression, onClose }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [confirmSuppression, setConfirmSuppression] = useState(false);
+
   return (
-    <Modal title="🗑 Supprimer un agent" onClose={onClose}>
-      <div style={{ textAlign: "center", padding: "8px 0" }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b", marginBottom: 8 }}>
-          Supprimer {agent.prenom} {agent.nom} ?
+    <Modal title="🚪 Départ d'un agent" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>
+          {agent.prenom} {agent.nom} ({agent.cp})
         </div>
-        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>
-          CP : {agent.cp} · Cette action est irréversible.<br/>
-          Tout son planning sera également supprimé.
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Date de départ</div>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}
+          />
+        </div>
+        <div style={{ fontSize: 12, color: "#64748b" }}>
+          Le planning après cette date sera supprimé (prévisionnel non pertinent après le départ). Tout ce qui précède — planning réel, formations, échanges — est conservé. La connexion de l'agent sera bloquée, sa fiche reste consultable via le filtre "Quittés".
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
-          <button onClick={onConfirm} style={{ flex: 1, padding: "10px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Supprimer</button>
+          <button onClick={() => onConfirmDepart(date)} style={{ flex: 1, padding: "10px", background: "#78716c", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Confirmer le départ</button>
+        </div>
+
+        <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 10, marginTop: 4 }}>
+          {!confirmSuppression ? (
+            <button onClick={() => setConfirmSuppression(true)}
+              style={{ background: "none", border: "none", color: "#b91c1c", cursor: "pointer", fontSize: 11.5, fontWeight: 600, textDecoration: "underline" }}>
+              Suppression définitive (irréversible, déconseillé)
+            </button>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontSize: 11.5, color: "#b91c1c" }}>
+                ⚠️ Efface tout l'historique de cet agent (planning, formations, échanges) — irréversible. Réservé à une fiche créée par erreur.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setConfirmSuppression(false)} style={{ flex: 1, padding: "8px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>Annuler</button>
+                <button onClick={onConfirmSuppression} style={{ flex: 1, padding: "8px", background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>Supprimer définitivement</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Modal>
@@ -592,6 +771,12 @@ function ModalResetPin({ agent, onConfirm, onClose }) {
 
 // ─── MODAL BASE ───────────────────────────────────────────────────────────────
 
+// Le contenu de ModalModifier a grossi (habilitations, 16/08) au point de
+// dépasser la hauteur d'un écran mobile — l'overlay plein écran n'avait ni
+// scroll ni maxHeight, donc `alignItems:"center"` recentrait un contenu trop
+// grand en coupant le haut ET le bas, sans aucun moyen d'atteindre le bouton
+// "Enregistrer". Corrigé : la carte a désormais une hauteur plafonnée, avec
+// un scroll interne sur le corps uniquement (l'en-tête reste toujours visible).
 function Modal({ title, onClose, children }) {
   return (
     <div style={{
@@ -601,16 +786,17 @@ function Modal({ title, onClose, children }) {
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
         background: "#fff", borderRadius: 16, width: "100%", maxWidth: 420,
+        maxHeight: "90vh", display: "flex", flexDirection: "column",
         boxShadow: "0 24px 60px rgba(0,0,0,.25)", overflow: "hidden"
       }}>
         <div style={{
-          background: "#1e293b", padding: "16px 20px",
+          background: "#1e293b", padding: "16px 20px", flexShrink: 0,
           display: "flex", justifyContent: "space-between", alignItems: "center"
         }}>
           <div style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>{title}</div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", fontSize: 18 }}>✕</button>
         </div>
-        <div style={{ padding: "20px" }}>{children}</div>
+        <div style={{ padding: "20px", overflowY: "auto" }}>{children}</div>
       </div>
     </div>
   );

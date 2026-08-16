@@ -55,6 +55,14 @@ async function updateProfil(req, res) {
 }
 
 // POST /api/profil/:cp/roulement — changer de roulement
+// Depuis le 16/08, réutilisé par le bouton Admin "Réserve/Roulement" (AdminPanel.jsx)
+// pour un besoin plus simple que ce que permet ce champ : seules 2 valeurs sont
+// désormais écrites par ce chemin, 'Réserve' ou '3x8' (choix arbitraire, jamais
+// affiché — "Roulement" à l'écran, quel que soit '3x8'/'Journée' en base). La
+// distinction 3x8/Journée elle-même reste un mécanisme mort ailleurs dans l'appli
+// (ROULEMENTS array jamais rendu, App.jsx/AgentHeader.jsx) — volontairement pas
+// nettoyé dans ce lot (demande explicite d'Olivier de le garder pour l'instant),
+// à reprendre un jour.
 async function setRoulement(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)

@@ -7,11 +7,15 @@ async function getAll(req, res) {
   try {
     const [rows] = await pool.query(
       `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel,
+              a.statut, a.date_depart,
               pa.familles_hab AS famille,
               pa.is_reserve,
               pa.is_afo,
               au.is_admin,
-              au.pin_hash IS NOT NULL AS has_pin
+              au.pin_hash IS NOT NULL AS has_pin,
+              (SELECT rh.type_roulement FROM roulement_historique rh
+                WHERE rh.cp_agent = a.cp AND rh.date_fin IS NULL
+                ORDER BY rh.date_debut DESC LIMIT 1) AS type_roulement
        FROM agent a
        LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp
        LEFT JOIN auth au ON au.cp_agent = a.cp
@@ -171,6 +175,57 @@ async function remove(req, res) {
   }
 }
 
+// ─── DÉPART (admin) ───────────────────────────────────────────────────────────
+// Remplace la suppression physique pour un départ normal : vide le planning
+// strictement après date_depart (le prévisionnel oublié par l'agent, qui
+// pourrait sinon polluer le Planning Prévisionnel partagé), garde tout
+// jusqu'à cette date inclus, et bloque la connexion via statut='quitte' —
+// sans jamais cascade-supprimer l'historique (formations, échanges, CPS...).
+async function depart(req, res) {
+  const { cp } = req.params;
+  const { date_depart } = req.body;
+
+  if (req.agent.cp === cp)
+    return res.status(400).json({ error: 'Impossible de marquer votre propre compte comme quitté' });
+  if (!date_depart)
+    return res.status(400).json({ error: 'date_depart requise' });
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    await conn.query(
+      `DELETE FROM planning_periode WHERE planning_jour_id IN
+        (SELECT id FROM planning_jour WHERE cp_agent = ? AND date_jour > ?)`,
+      [cp, date_depart]
+    );
+    await conn.query('DELETE FROM planning_jour WHERE cp_agent = ? AND date_jour > ?', [cp, date_depart]);
+    await conn.query('UPDATE agent SET statut = ?, date_depart = ? WHERE cp = ?', ['quitte', date_depart, cp]);
+
+    await conn.commit();
+    res.json({ message: 'Agent marqué comme quitté, planning vidé au-delà du ' + date_depart });
+  } catch (e) {
+    await conn.rollback();
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  } finally {
+    conn.release();
+  }
+}
+
+// ─── RÉACTIVER (admin) ────────────────────────────────────────────────────────
+async function reactiver(req, res) {
+  const { cp } = req.params;
+  try {
+    const [result] = await pool.query(`UPDATE agent SET statut = 'actif', date_depart = NULL WHERE cp = ?`, [cp]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Agent introuvable' });
+    res.json({ message: 'Agent réactivé' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
 // ─── RESET PIN (admin) ────────────────────────────────────────────────────────
 async function resetPin(req, res) {
   const { cp } = req.params;
@@ -194,4 +249,4 @@ async function resetPin(req, res) {
   }
 }
 
-module.exports = { getAll, getOne, update, create, remove, resetPin };
+module.exports = { getAll, getOne, update, create, remove, resetPin, depart, reactiver };

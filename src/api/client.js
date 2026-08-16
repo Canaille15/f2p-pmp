@@ -186,6 +186,27 @@ export const agents = {
 
   resetPin: (cp, newPin) =>
     apiFetch(`/profil/${cp}/pin`, { method: 'PUT', body: JSON.stringify({ pin: newPin }) }),
+
+  /**
+   * Bascule le statut Réserve/Roulement d'un agent (admin) — type_roulement
+   * réutilisé mais seules 'Réserve' et '3x8' sont écrites par ce chemin.
+   */
+  setRoulement: (cp, type_roulement) =>
+    apiFetch(`/profil/${cp}/roulement`, {
+      method: 'POST',
+      body: JSON.stringify({ type_roulement, date_debut: new Date().toISOString().slice(0, 10) }),
+    }),
+
+  /**
+   * Marquer un agent comme quitté (admin) — vide son planning strictement
+   * après date_depart, garde tout l'historique jusqu'à cette date.
+   */
+  marquerDepart: (cp, date_depart) =>
+    apiFetch(`/agents/${cp}/depart`, { method: 'PATCH', body: JSON.stringify({ date_depart }) }),
+
+  /** Réactive un agent marqué quitté (admin) */
+  reactiver: (cp) =>
+    apiFetch(`/agents/${cp}/reactiver`, { method: 'PATCH' }),
 };
 
 // ─── MODULE PLANNING ─────────────────────────────────────────────────────────

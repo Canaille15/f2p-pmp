@@ -24,10 +24,11 @@ async function login(req, res) {
   if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (5 chiffres)' });
   try {
     const [rows] = await pool.query(
-      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, au.pin_hash, au.is_admin, pa.is_afo
+      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, a.statut, au.pin_hash, au.is_admin, pa.is_afo
        FROM agent a JOIN auth au ON au.cp_agent = a.cp LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp WHERE a.cp = ?`, [cp]);
     if (!rows.length) return res.status(401).json({ error: 'Identifiants incorrects' });
     const agent = rows[0];
+    if (agent.statut === 'quitte') return res.status(403).json({ error: 'Ce compte n\'est plus actif' });
     if (!agent.pin_hash) return res.status(401).json({ error: 'Compte sans PIN — première connexion' });
     const valid = await bcrypt.compare(pin, agent.pin_hash);
     if (!valid) return res.status(401).json({ error: 'Identifiants incorrects' });
@@ -44,10 +45,11 @@ async function register(req, res) {
   if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (4 chiffres)' });
   try {
     const [rows] = await pool.query(
-      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, au.pin_hash, au.is_admin, pa.is_afo
+      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, a.statut, au.pin_hash, au.is_admin, pa.is_afo
        FROM agent a JOIN auth au ON au.cp_agent = a.cp LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp WHERE a.cp = ?`, [cp]);
     if (!rows.length) return res.status(401).json({ error: 'Identifiants incorrects' });
     const agent = rows[0];
+    if (agent.statut === 'quitte') return res.status(403).json({ error: 'Ce compte n\'est plus actif' });
     if (agent.pin_hash) return res.status(409).json({ error: 'Ce compte a déjà un PIN — utilise la connexion normale' });
     await pool.query('UPDATE auth SET pin_hash = ? WHERE cp_agent = ?', [await bcrypt.hash(pin, 12), cp]);
     await issueSession(req, res, agent);

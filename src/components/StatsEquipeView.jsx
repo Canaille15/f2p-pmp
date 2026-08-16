@@ -16,10 +16,12 @@ const NAVY = { from: "#0f4c81", to: "#1e3a5f", bgLight: "#eff6ff", borderLight: 
 // Table de libellés recopiée telle quelle depuis HAB_PRCI/HAB_PAR (App.jsx,
 // non exportés) — code = code_poste réel de la table `habilitation`. Toujours
 // afficher nom ET code ensemble (Olivier : "sinon trop fastidieux à lire").
+// PPRCI retiré le 16/08 (Olivier : "tout le monde est apte à ça") — DISPO ne
+// le remplace pas ici, c'est une stat à part non nominative (voir plus bas).
 const POSTE_LABELS = {
   PICCL: "CCL", PIADJ: "Adj CCL", PILNE: "AC LNE", PILNO: "AC LNO", PILCL: "AC LC", PIVGD: "AC VGD",
   PIPA1J: "Pauseur CCL", PIPA2J: "Pauseur Adjoint", PIPA3J: "Pauseur VGD",
-  PIDPXJ: "DPX PRCI", PIASSJ: "Adj DPX", PPRCI: "PPRCI", AFOPRCI: "AFO PRCI",
+  PIDPXJ: "DPX PRCI", PIASSJ: "Adj DPX", AFOPRCI: "AFO PRCI",
   "A-PRCI": "A-PRCI", "SD%": "SD",
   "PAAC1-": "AC PAR", "PAAC2-": "Aide AC PAR", PAACXX: "CT AC Travaux",
   PAPAUJ: "Pauseur PAR", PADPXJ: "DPX PAR", PAASMJ: "ASMTE PAR", "AFO PAR": "AFO PAR",
@@ -31,7 +33,7 @@ const POSTE_ORDER = [
   // PRCI — 3×8
   "PICCL", "PIADJ", "PILNE", "PILNO", "PILCL", "PIVGD",
   // PRCI — journée
-  "PIPA1J", "PIPA2J", "PIPA3J", "PIDPXJ", "PIASSJ", "PPRCI", "AFOPRCI", "A-PRCI", "SD%",
+  "PIPA1J", "PIPA2J", "PIPA3J", "PIDPXJ", "PIASSJ", "AFOPRCI", "A-PRCI", "SD%",
   // PAR — 3×8
   "PAAC1-", "PAAC2-", "PAACXX",
   // PAR — journée
@@ -117,6 +119,7 @@ export default function StatsEquipeView() {
               <Tuile label="Agents global" valeur={data.headcounts.totalAgents} />
               <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} />
               <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} />
+              <Tuile label="Réserve (actuel)" valeur={data.reserveRoulement.actuel.nbReserve} sousLabel={`${data.reserveRoulement.actuel.nbRoulement} en roulement`} />
               <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 11, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04 }}>Temps partiel</div>
@@ -127,6 +130,9 @@ export default function StatsEquipeView() {
               </div>
             </div>
           </div>
+
+          {/* Réserve / Roulement — historique mensuel, jamais recalculé rétroactivement */}
+          <ReserveRoulementSection data={data.reserveRoulement} />
 
           {/* Couverture Réserve régionale */}
           <div style={card}>
@@ -154,6 +160,9 @@ export default function StatsEquipeView() {
               <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
             </div>
           </div>
+
+          {/* Dispo — anonyme, pas de nom d'agent (impossible à attribuer de façon fiable) */}
+          <DispoSection data={data.dispo} />
 
           {/* Postes non tenus */}
           <PostesNonTenusSection data={data.postesNonTenus} />
@@ -235,6 +244,74 @@ function Barre({ pct }) {
   return (
     <div style={{ height: 8, borderRadius: 999, background: "#e2e8f0", overflow: "hidden" }}>
       <div style={{ height: "100%", width: `${clamped}%`, borderRadius: 999, background: NAVY.from, transition: "width .2s ease" }} />
+    </div>
+  );
+}
+
+const MOIS_L = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+
+function ReserveRoulementSection({ data }) {
+  const [ouvert, setOuvert] = useState(false);
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={sectionTitle}>🔁 Réserve / Roulement — historique mensuel</div>
+        <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700 }}>
+          {ouvert ? "▲ Masquer le détail" : "▼ Voir le détail par mois"}
+        </button>
+      </div>
+      <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 6 }}>
+        Un changement de statut ne modifie jamais le comptage des mois déjà passés.
+      </div>
+      {ouvert && (
+        <div style={{ overflowX: "auto", marginTop: 12 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ textAlign: "left", color: "#94a3b8", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
+                <th style={{ padding: "4px 8px", fontWeight: 700 }}>Mois</th>
+                <th style={{ padding: "4px 8px", fontWeight: 700 }}>Réserve</th>
+                <th style={{ padding: "4px 8px", fontWeight: 700 }}>Roulement</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.parMois.map(m => (
+                <tr key={m.mois} style={{ borderTop: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "6px 8px", fontWeight: 600, color: "#334155" }}>{MOIS_L[m.mois - 1]}</td>
+                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{m.nbReserve}</td>
+                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{m.nbRoulement}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DispoSection({ data }) {
+  const [ouvert, setOuvert] = useState(false);
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={sectionTitle}>📢 Dispo</div>
+        <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700 }}>
+          {ouvert ? "▲ Masquer le détail" : "▼ Voir le détail"}
+        </button>
+      </div>
+      <Tuile label="Jours signalés" valeur={data.total} large />
+      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
+        Journées où un agent présent, tous postes CPS déjà tenus, a été signalé "Dispo" par message libre — chiffre anonymisé, aucun nom (non attribuable de façon fiable).
+      </div>
+      {ouvert && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 3 }}>
+          {data.entries.map((e, i) => (
+            <div key={i} style={{ fontSize: 11.5, color: "#64748b", borderTop: "1px solid #f1f5f9", paddingTop: 4 }}>
+              {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
