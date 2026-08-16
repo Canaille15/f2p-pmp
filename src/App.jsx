@@ -3697,6 +3697,68 @@ function computeLedgerSolde(agentProfiles, agentId, ledgerKey, plafondMin){
   return { solde, ledger: trie, dernierSaisiLe, horsPlafond };
 }
 
+// Semestre civil (S1 = janvier-juin, S2 = juillet-décembre) — nouveau (16/08,
+// module TQ) : aucun concept de semestre n'existait dans l'appli avant, ne
+// réutilise pas rollingAcquis (spécifique au modèle acquis-par-année de RQ,
+// un mécanisme différent du ledger continu utilisé ici).
+function getSemestreCourant(dateStr){
+  const d = dateStr ? new Date(dateStr+"T12:00:00") : new Date();
+  const annee = d.getFullYear();
+  const numero = (d.getMonth() < 6) ? 1 : 2;
+  return { annee, numero, label: `S${numero} ${annee}` };
+}
+
+// Bascule le solde TQ courant vers TY (plafonné à 32h00, PLAFOND_32H_MIN) —
+// jamais automatique, déclenché par l'agent depuis le module TQ. Écrit 2
+// entrées ledger liées par un même transfertId (annulable via
+// annulerTransfertTQ ci-dessous) + une ligne d'archive dans tqTransferts. Le
+// surplus au-delà du plafond TY n'est écrit nulle part comme un mouvement
+// d'heures — c'est un vrai paiement en paie, hors du système d'heures de
+// l'appli — juste gardé dans tqTransferts pour affichage/archivage.
+function basculerTQversTY(agentProfiles, agentId, setAgentProfiles){
+  const tq = computeLedgerSolde(agentProfiles, agentId, "tqLedger");
+  const soldeTQ = tq.solde;
+  if(soldeTQ<=0) return null;
+  const ty = computeLedgerSolde(agentProfiles, agentId, "tyLedger", PLAFOND_32H_MIN);
+  const placeDisponible = Math.max(0, PLAFOND_32H_MIN - ty.solde);
+  const montantVersTY = Math.min(soldeTQ, placeDisponible);
+  const montantPaye = soldeTQ - montantVersTY;
+  const transfertId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const aujourdhui = new Date().toISOString().slice(0,10);
+  const mois = aujourdhui.slice(0,7);
+  const { annee, numero } = getSemestreCourant();
+  const semestre = `${annee}-S${numero}`;
+  setAgentProfiles(prev=>{
+    const p = prev[agentId] || {};
+    const tqLedger = [...(p.tqLedger||[]), { id:`${transfertId}-tq`, mois, deltaMinutes:-soldeTQ, saisiLe:aujourdhui, note:"transfert", transfertId }];
+    const tyLedger = montantVersTY>0
+      ? [...(p.tyLedger||[]), { id:`${transfertId}-ty`, mois, deltaMinutes:montantVersTY, saisiLe:aujourdhui, note:"transfert_tq", transfertId }]
+      : (p.tyLedger||[]);
+    const tqTransferts = [...(p.tqTransferts||[]), { id:transfertId, semestre, dateTransfert:aujourdhui, montantVersTY, montantPaye }];
+    return { ...prev, [agentId]: { ...p, tqLedger, tyLedger, tqTransferts } };
+  });
+  return { montantVersTY, montantPaye };
+}
+
+// Annule un basculement TQ→TY : retire les 2 entrées ledger liées par
+// transfertId + la ligne d'archive — solde TQ et TY reviennent exactement à
+// leur état d'avant, sans limite de délai (même principe que "Annuler" sur
+// Congés/CET, qui n'a pas non plus de délai).
+function annulerTransfertTQ(agentProfiles, agentId, transfertId, setAgentProfiles){
+  setAgentProfiles(prev=>{
+    const p = prev[agentId] || {};
+    return {
+      ...prev,
+      [agentId]: {
+        ...p,
+        tqLedger: (p.tqLedger||[]).filter(e=>e.transfertId!==transfertId),
+        tyLedger: (p.tyLedger||[]).filter(e=>e.transfertId!==transfertId),
+        tqTransferts: (p.tqTransferts||[]).filter(t=>t.id!==transfertId),
+      }
+    };
+  });
+}
+
 function minToHM(min){
   const neg = min < 0;
   const abs = Math.abs(Math.round(min));
@@ -4435,6 +4497,13 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
                 })}
               </div>}
           </div>
+
+          {/* Définition courte (16/08, demandé par Olivier pour distinguer
+              TC/TY/TQ — "sans que ce soit lourd", donc juste une ligne, pas
+              de section repliable). */}
+          <div style={{fontSize:10.5,color:"#94a3b8",borderTop:"1px solid #f1f5f9",paddingTop:8}}>
+            TC : dépassement accidentel de la durée du temps de travail des mois précédents.
+          </div>
         </div>
       </div>
     </div>
@@ -4582,6 +4651,28 @@ const NOTICE_VT = [
   },
 ];
 
+// Notice TQ (16/08, nouveau module) — explique le principe, le basculement
+// semestriel vers TY (annulable, surplus payé hors CET) et se termine par la
+// définition courte fournie par Olivier, verbatim.
+const NOTICE_TQ = [
+  {
+    titre: "Le principe",
+    texte: `Le TQ suit le temps à compenser du semestre civil en cours (janvier-juin, puis juillet-décembre) — saisi manuellement, heure par heure, comme TC/TY/RN. Mets-le à jour chaque mois.`,
+  },
+  {
+    titre: "Le basculement vers TY",
+    texte: `En fin de semestre, c'est toi qui décides de basculer ton solde TQ vers le compteur TY — jamais automatique, prends le temps de vérifier tes compteurs avant. TY reste plafonné à 32h00 : si ton solde TQ dépasse la place disponible dans TY, le surplus n'y est pas versé — il te sera payé sur la paie du mois suivant. Un basculement reste annulable à tout moment, sans limite de délai : tes deux compteurs reviennent exactement à leur état d'avant.`,
+  },
+  {
+    titre: "Paiement et CET",
+    texte: `Le paiement hors CET est possible sur demande de l'agent. ⚠️ Ces heures ne peuvent pas être épargnées sur le CET.`,
+  },
+  {
+    titre: "Définition",
+    texte: `TQ : dépassement de la durée du temps de travail prévu mensuellement.`,
+  },
+];
+
 const DETAIL_CONFIG = {
   RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:"rpAcquis", rollingAcquis:false, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
   RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
@@ -4600,6 +4691,13 @@ const DETAIL_CONFIG = {
   // même mécanisme de capping+heures sup dans computeLedgerSolde, RN n'a pas
   // ce champ et reste sans plafond.
   TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", plafondMin:PLAFOND_32H_MIN, label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7", cetSource:"TY", cetBesoinValeur:true },
+  // TQ (16/08, nouveau module) : temps à compenser du semestre en cours, même
+  // mécanisme ledger que RN/TY mais SANS plafond sur lui-même (le plafond
+  // s'applique à TY une fois basculé, voir basculerTQversTY) et SANS
+  // cetSource/cetBesoinValeur — volontairement absent des widgets d'épargne
+  // CET (App.jsx/CetView.jsx), ces heures ne sont jamais épargnables au CET.
+  // codes:[] : aucun code de planning associé, pur ledger manuel.
+  TQ: { codes:[], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tqLedger", label:"TQ", icon:"🟠", gradientFrom:"#ea580c", gradientTo:"#c2410c", bgLight:"#fff7ed", borderLight:"#fed7aa", accentDark:"#9a3412", accentColor:"#ea580c", notice:NOTICE_TQ },
   MA: { codes:["MA"], reportKey:null, acquisKey:null, rollingAcquis:false, label:"Maladie", icon:"🤒", gradientFrom:"#dc2626", gradientTo:"#b91c1c", bgLight:"#fef2f2", borderLight:"#fecaca", accentDark:"#991b1b", accentColor:"#dc2626", notice:NOTICE_MALADIE },
   // Formation (17/07, demandé par Olivier) : même principe que Maladie — pure
   // consultation (pas d'acquis, pas de report), archive A+1 + 2 ans, détail
@@ -5099,6 +5197,15 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
             </div>
           )}
 
+          {/* Basculement semestriel TQ→TY (16/08, nouveau module) — TQ n'a
+              aucun code de planning (codes:[]), donc rien de la section
+              "jours" plus bas (Ajouter une période/Sélectionner des jours/
+              historique par mois) ne le concerne, voir codes.length>0
+              ci-dessous qui l'exclut proprement. */}
+          {ledgerKey==="tqLedger" && (
+            <TqBasculeSection agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} soldeTQ={ledgerData.solde} accentDark={accentDark} accentColor={accentColor} bgLight={bgLight} borderLight={borderLight}/>
+          )}
+
           {/* Acquis/Pris/Restant — pour les compteurs qui s'accumulent au fil
               du temps (comme le Droit à congés) : l'agent déclare son solde
               déjà acquis avant que l'appli ne le suive, combiné au calcul du
@@ -5157,6 +5264,12 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
             <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source={cetSource} sourceLabel={label} year={year} besoinValeur={!!cetBesoinValeur}/>
           )}
 
+          {/* Tout ce bloc "jours" (pris jusqu'au, ajout de période, mini-
+              calendrier, historique par mois) ne concerne que les compteurs
+              qui ont un vrai code de planning (codes non vide) — TQ (16/08)
+              est un pur ledger manuel sans code associé, codes:[], donc rien
+              de tout ça ne s'applique et ne doit s'afficher pour lui. */}
+          {codes.length>0 && (<>
           <div style={{background:bgLight,border:`1.5px solid ${borderLight}`,borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
             <div style={{flex:1,minWidth:150}}>
               <div style={{fontSize:12,fontWeight:700,color:accentDark}}>{label} pris jusqu'au</div>
@@ -5294,6 +5407,7 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
           {codes.includes("RPP") && moisTries.length>0 && (
             <div style={{fontSize:10,fontWeight:600,color:"#dc2626"}}>Date en rouge = jour RPP</div>
           )}
+          </>)}
 
           {reportKey && (
             <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
@@ -5321,8 +5435,83 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
           )}
 
           {notice && <NoticeSection sections={notice} accentDark={accentDark} bgLight={bgLight} borderLight={borderLight}/>}
+
+          {/* Définition courte (16/08, demandé par Olivier pour distinguer
+              TC/TY/TQ — "sans que ce soit lourd", donc juste une ligne, pas
+              de section repliable comme la notice ci-dessus). */}
+          {label==="TY" && (
+            <div style={{fontSize:10.5,color:"#94a3b8",borderTop:"1px solid #f1f5f9",paddingTop:8}}>
+              TY : dépassement de la durée du temps de travail des semestres précédents.
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Bascule semestrielle TQ→TY (16/08, nouveau module) — jamais automatique,
+// déclenchée par l'agent depuis le module TQ. Voir basculerTQversTY/
+// annulerTransfertTQ (fonctions pures, à côté de computeLedgerSolde) pour la
+// logique de répartition/annulation ; ce composant n'est que l'affichage.
+function TqBasculeSection({ agent, agentProfiles, setAgentProfiles, soldeTQ, accentDark, accentColor, bgLight, borderLight }){
+  const semestre = getSemestreCourant();
+  const moisCourant = new Date().getMonth(); // 5=juin (fin S1), 11=décembre (fin S2)
+  const dansDernierMoisDuSemestre = moisCourant===5 || moisCourant===11;
+  const transferts = (agentProfiles?.[agent.id]?.tqTransferts || []).slice().sort((a,b)=>(b.dateTransfert||"").localeCompare(a.dateTransfert||""));
+  const [msg, setMsg] = useState(null);
+
+  const basculer = () => {
+    const res = basculerTQversTY(agentProfiles, agent.id, setAgentProfiles);
+    if(!res){ setMsg({ok:false, text:"Rien à basculer — le solde TQ est nul."}); return; }
+    const text = res.montantPaye>0
+      ? `${minToHM(res.montantVersTY)} basculés vers TY, ${minToHM(res.montantPaye)} seront payés le mois suivant (plafond TY atteint).`
+      : `${minToHM(res.montantVersTY)} basculés vers TY.`;
+    setMsg({ok:true, text});
+  };
+  const annuler = (transfertId) => {
+    annulerTransfertTQ(agentProfiles, agent.id, transfertId, setAgentProfiles);
+    setMsg(null);
+  };
+
+  return (
+    <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14,display:"flex",flexDirection:"column",gap:10}}>
+      {dansDernierMoisDuSemestre && soldeTQ>0 && (
+        <div style={{fontSize:11,fontWeight:700,color:"#9a3412",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"8px 10px"}}>
+          📅 Fin de semestre — pense à vérifier tes compteurs et à basculer ton TQ vers TY quand tu es prêt (pas d'obligation de le faire aujourd'hui).
+        </div>
+      )}
+      <div style={{background:bgLight,border:`1.5px solid ${borderLight}`,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:accentDark}}>📅 Semestre en cours</div>
+          <div style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{semestre.label}</div>
+        </div>
+        <button onClick={basculer} disabled={soldeTQ<=0}
+          style={{background:soldeTQ<=0?"#cbd5e1":accentDark,color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",cursor:soldeTQ<=0?"default":"pointer",fontSize:12,fontWeight:700}}>
+          🔁 Basculer vers TY
+        </button>
+      </div>
+      {msg && (
+        <div style={{fontSize:11,fontWeight:600,color:msg.ok?"#16a34a":"#64748b",background:msg.ok?"#f0fdf4":"#f8fafc",border:`1px solid ${msg.ok?"#bbf7d0":"#e2e8f0"}`,borderRadius:8,padding:"8px 10px"}}>
+          {msg.ok?"✓ ":""}{msg.text}
+        </div>
+      )}
+      {transferts.length>0 && (
+        <div>
+          <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>Historique des basculements</div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {transferts.map(t=>(
+              <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px"}}>
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:"#334155"}}>{t.semestre} — {t.dateTransfert ? new Date(t.dateTransfert).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) : "—"}</div>
+                  <div style={{fontSize:10,color:"#64748b"}}>{minToHM(t.montantVersTY)} → TY{t.montantPaye>0?` · ${minToHM(t.montantPaye)} payés`:""}</div>
+                </div>
+                <button onClick={()=>annuler(t.id)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>↺ Annuler</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5578,7 +5767,7 @@ function BilanGlobalModal({agent, schedule, agentProfiles, setAgentProfiles, pau
 // réorganiser comme on veut, tu peux les dissocier pour les déplacer
 // individuellement" — chacune est désormais une unité déplaçable à part
 // entière, comme n'importe quelle autre carte.
-const COMPTEUR_CARD_KEYS = ["conges","travail","RP","RU","RQ","FETE","RN","PF","TC","TY","VT","CET","FOR","MA"];
+const COMPTEUR_CARD_KEYS = ["conges","travail","RP","RU","RQ","FETE","RN","PF","TC","TY","TQ","VT","CET","FOR","MA"];
 
 function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAgentProfiles, isOwnProfile, isAdmin, onOpenFormation}){
   const currentYear = new Date().getFullYear();
@@ -5672,6 +5861,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // du nombre de jours — voir DETAIL_CONFIG.RN/TY (ledgerKey).
   const rnLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agent?.id, "rnLedger"), [agentProfiles, agent?.id]);
   const tyLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agent?.id, "tyLedger", PLAFOND_32H_MIN), [agentProfiles, agent?.id]);
+  // TQ (16/08) : solde sans plafond (le plafond ne s'applique qu'une fois
+  // basculé vers TY, voir basculerTQversTY) — même principe que RN.
+  const tqLedgerData = useMemo(()=>computeLedgerSolde(agentProfiles, agent?.id, "tqLedger"), [agentProfiles, agent?.id]);
 
   // Fêtes légales : nombre de fêtes "à traiter" (attente ou probable perdue)
   // pour la cloche sur la carte — évite d'ouvrir la fenêtre juste pour savoir
@@ -5773,6 +5965,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
     {key:"TC",      label:"TC",              color:"#0284c7", subtitle: tcData.solde>=TC_PLAFOND_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tcData.solde>=TC_PLAFOND_MIN},
     {key:"TY",      label:"TY",              color:"#0284c7", subtitle: tyLedgerData.solde>=PLAFOND_32H_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tyLedgerData.solde>=PLAFOND_32H_MIN},
+    {key:"TQ",      label:"TQ",              color:"#ea580c", subtitle:`Solde ${getSemestreCourant().label}`},
     ...(vtActif ? [{key:"VT", label:"VT",    color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2}] : []),
     {key:"CET",     label:"CET",             color:"#7c3aed", subtitle:"Compte épargne temps"},
     {key:"FOR",     label:"Formation",       color:"#b45309", subtitle: nbFormationsNonVues>0 ? `🔔 ${nbFormationsNonVues} à voir` : "Jours formation dans l'année", alert: nbFormationsNonVues>0},
@@ -5913,6 +6106,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
             : card.key==="TC" ? minToHM(tcData.solde)
             : card.key==="RN" ? minToHM(rnLedgerData.solde)
             : card.key==="TY" ? minToHM(tyLedgerData.solde)
+            : card.key==="TQ" ? minToHM(tqLedgerData.solde)
             // RQ affiche le restant (Acquis - Pris) au lieu du nombre de jours pris
             // (17/07, demandé par Olivier) — RP/RU restent sur le total "pris".
             : card.key==="RQ" ? (rqData.solde ?? rqData.total) - cetTransfereRQ.total - maladiePerteRQ
