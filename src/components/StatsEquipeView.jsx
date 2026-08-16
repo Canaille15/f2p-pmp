@@ -117,9 +117,8 @@ export default function StatsEquipeView() {
             <div style={sectionTitle}>Vue d'ensemble équipe</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
               <Tuile label="Agents global" valeur={data.headcounts.totalAgents} />
-              <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} />
-              <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} />
-              <Tuile label="Réserve (actuel)" valeur={data.reserveRoulement.actuel.nbReserve} sousLabel={`${data.reserveRoulement.actuel.nbRoulement} en roulement`} />
+              <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} sousLabel={`dont ${data.reserveRoulement.actuel.nbReserve} réserve · ${data.reserveRoulement.actuel.nbRoulement} roulement`} />
+              <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} sousLabel="compte à part" />
               <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 11, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04 }}>Temps partiel</div>
@@ -138,7 +137,7 @@ export default function StatsEquipeView() {
           <div style={card}>
             <div style={sectionTitle}>🔁 Couverture des postes par la Réserve régionale</div>
             <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 10 }}>
-              Part des journées CPS couvertes par un réserviste (présent directement, ou couvrant un poste vacant via un signalement d'échange) sur le total des journées importées cette année.
+              Part des journées CPS couvertes par la réserve régionale, sur le total des journées importées cette année.
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
               <Tuile label="Global" valeur={fmtPct(data.coverageReserve.global.pct)} sousLabel={`${data.coverageReserve.global.numerateur} / ${data.coverageReserve.global.denominateur} j.`} />
@@ -255,13 +254,13 @@ function ReserveRoulementSection({ data }) {
   return (
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={sectionTitle}>🔁 Réserve / Roulement — historique mensuel</div>
+        <div style={sectionTitle}>🔁 Réserve / Roulement (agents équipe) — historique mensuel</div>
         <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700 }}>
           {ouvert ? "▲ Masquer le détail" : "▼ Voir le détail par mois"}
         </button>
       </div>
       <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 6 }}>
-        Un changement de statut ne modifie jamais le comptage des mois déjà passés.
+        Porte uniquement sur les agents équipe — la Réserve régionale est comptée à part. Un changement de statut ne modifie jamais le comptage des mois déjà passés.
       </div>
       {ouvert && (
         <div style={{ overflowX: "auto", marginTop: 12 }}>
@@ -301,7 +300,7 @@ function DispoSection({ data }) {
       </div>
       <Tuile label="Jours signalés" valeur={data.total} large />
       <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
-        Journées où un agent présent, tous postes CPS déjà tenus, a été signalé "Dispo" par message libre — chiffre anonymisé, aucun nom (non attribuable de façon fiable).
+        Journées où un agent présent est signalé dans le planning CPS Officiel "Dispo" par message libre — chiffre anonymisé, aucun nom (non attribuable de façon fiable).
       </div>
       {ouvert && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 3 }}>

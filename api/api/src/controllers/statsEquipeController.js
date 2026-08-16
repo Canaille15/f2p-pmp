@@ -191,37 +191,46 @@ async function getStats(req, res) {
       })),
     };
 
-    // ─── Réserve / Roulement — historique mensuel (#b,c,d, 16/08) ───────────
-    // Distinct de "Réserve régionale" (is_reserve). Réutilise roulement_historique
-    // (déjà daté, existait mais jamais branché à un bouton) pour garantir qu'un
-    // changement de statut en décembre ne modifie jamais les mois déjà passés.
-    // Seules 2 valeurs comptent ici : 'Réserve' vs tout le reste ("Roulement" à
-    // l'affichage, que la ligne source soit '3x8' ou 'Journée').
+    // ─── Réserve / Roulement — historique mensuel (#b,c,d, 16/08, ajusté le 17/08) ─
+    // Distinct de "Réserve régionale" (is_reserve) — et surtout, un axe qui ne
+    // s'applique QU'aux agents "équipe" (hors Réserve régionale, qui a déjà son
+    // propre compte à part) : Olivier — "les agents reserve regionale en compte
+    // a part". Le dénominateur est donc totalEquipe (60), jamais totalAgents (70),
+    // et les lignes roulement_historique d'un agent Réserve régionale sont
+    // ignorées ici (agentsEquipeCps, dérivé de ageRows déjà chargé plus haut).
+    // Réutilise roulement_historique (déjà daté, existait mais jamais branché à
+    // un bouton) pour garantir qu'un changement de statut en décembre ne modifie
+    // jamais les mois déjà passés. Seules 2 valeurs comptent : 'Réserve' vs tout
+    // le reste ("Roulement" à l'affichage, que la ligne source soit '3x8' ou
+    // 'Journée').
+    const agentsEquipeCps = new Set(ageRows.filter(r => !r.is_reserve).map(r => r.cp));
     const [roulementRows] = await pool.query(
       `SELECT cp_agent, type_roulement, date_debut, date_fin FROM roulement_historique ORDER BY cp_agent, date_debut`
     );
     const dstr = v => v instanceof Date ? v.toISOString().slice(0,10) : v;
     const roulementParAgent = {};
     roulementRows.forEach(r => {
+      if (!agentsEquipeCps.has(r.cp_agent)) return; // Réserve régionale : compte à part, exclu de cet axe
       if (!roulementParAgent[r.cp_agent]) roulementParAgent[r.cp_agent] = [];
       roulementParAgent[r.cp_agent].push({ type_roulement: r.type_roulement, date_debut: dstr(r.date_debut), date_fin: dstr(r.date_fin) });
     });
+    function nbReserveAuMois(finMoisStr) {
+      let n = 0;
+      Object.values(roulementParAgent).forEach(rows => {
+        const actif = rows.filter(r => r.date_debut <= finMoisStr && (!r.date_fin || r.date_fin > finMoisStr)).pop();
+        if (actif && actif.type_roulement === 'Réserve') n++;
+      });
+      return n;
+    }
     const parMois = [];
     for (let m = 1; m <= 12; m++) {
       const finMois = new Date(year, m, 0);
       const finMoisStr = `${finMois.getFullYear()}-${String(finMois.getMonth()+1).padStart(2,'0')}-${String(finMois.getDate()).padStart(2,'0')}`;
-      let nbReserve = 0;
-      Object.values(roulementParAgent).forEach(rows => {
-        const actif = rows.filter(r => r.date_debut <= finMoisStr && (!r.date_fin || r.date_fin > finMoisStr)).pop();
-        if (actif && actif.type_roulement === 'Réserve') nbReserve++;
-      });
-      parMois.push({ mois: m, nbReserve, nbRoulement: totalAgents - nbReserve });
+      const nbReserve = nbReserveAuMois(finMoisStr);
+      parMois.push({ mois: m, nbReserve, nbRoulement: totalEquipe - nbReserve });
     }
-    const [[actuelRow]] = await pool.query(
-      `SELECT COUNT(*) AS n FROM roulement_historique WHERE date_fin IS NULL AND type_roulement = 'Réserve'`
-    );
-    const nbReserveActuel = actuelRow.n || 0;
-    const reserveRoulement = { actuel: { nbReserve: nbReserveActuel, nbRoulement: totalAgents - nbReserveActuel }, parMois };
+    const nbReserveActuel = nbReserveAuMois(dstr(new Date()));
+    const reserveRoulement = { actuel: { nbReserve: nbReserveActuel, nbRoulement: totalEquipe - nbReserveActuel }, parMois };
 
     // ─── Scans donnees_json (#5, #6, #12) — congés/VT refusés (anonymisés),
     // temps partiel — un seul fetch, une seule boucle Node ─────────────────
