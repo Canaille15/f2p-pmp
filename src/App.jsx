@@ -1800,7 +1800,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         const lineDates=[];
         rawLinesFiltered.forEach(o=>{
           const line=o.text;
-          const hasFullHoraire=/\d{2}:\d{2}\s*-\s*\d{2}:\d{2}/.test(line);
+          const hasFullHoraire=/\d{2}:\d{2}\s*[-.]\s*\d{2}:\d{2}/.test(line);
           const startsNewBlock=jsCodeStartRe.test(line)||hasFullHoraire||dateMarkerLineRe.test(line);
           if(startsNewBlock||lines.length===0){
             lines.push(line);
@@ -1813,7 +1813,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         const updates=[];
         lines.forEach((line,lineIdx)=>{
           const lineDateStr=lineDates[lineIdx]||dateStr;
-          const horaireMatch=line.match(/(\d{2}):(\d{2})\s*-\s*(\d{2}):(\d{2})/);
+          // fix extraction (17/08) : sur certaines pages, pdfjs extrait un "." (code 46)
+          // a la place du "-" separateur entre les deux heures de l'horaire principal
+          // (ex: "06:15 . 14:17" au lieu de "06:15 - 14:17") - probablement un artefact
+          // de police/kerning propre a cette page du document source (l'horaire de la
+          // pause juste a cote, sur la meme ligne, garde lui un vrai "-"). Sans ca, la
+          // ligne entiere etait ignoree (horaireMatch null) et la case restait "Vacant"
+          // ou gardait une ancienne donnee perimee. Accepter aussi "." est sans risque :
+          // aucune autre donnee du tableau ne prend la forme "HH:MM . HH:MM".
+          const horaireMatch=line.match(/(\d{2}):(\d{2})\s*[-.]\s*(\d{2}):(\d{2})/);
           if(!horaireMatch) return;
           const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)/);
           let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
@@ -1841,7 +1849,17 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           if(jsCode&&/^PAACZO$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : Z lu au lieu de 2
           if(jsCode&&/^PAAC20$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : 0 chiffre lu au lieu de O lettre
           if(jsCode==="RET SAM") jsCode="RFT SAM"; // fix OCR : E lu au lieu de F
-          const candidats=agents.filter(a=>line.toUpperCase().includes(a.nom.toUpperCase()));
+          if(jsCode==="PICOLO") jsCode="PICCLO"; // fix extraction (17/08) : un des deux "C" de "PICCLO" disparait a l'extraction sur certaines pages (glyphes "CL" trop rapproches)
+          // fix extraction (17/08) : un nom de famille en 2 mots (ex: "VICENTE CARREIRA",
+          // "EL ADRAOUI", "LE MOISY") peut etre extrait par pdfjs comme un seul mot colle
+          // sans espace ("VICENTECARREIRA") - la comparaison stricte ne matchait alors
+          // plus jamais aucun candidat pour ces agents (0 candidat -> ligne ignoree),
+          // laissant une ancienne donnee perimee en base indefiniment quel que soit le
+          // contenu de la ligne par ailleurs. Comparaison insensible aux espaces = sans
+          // risque avec 71 agents aux noms suffisamment distincts.
+          const norm=s=>s.toUpperCase().replace(/\s+/g,"");
+          const ligneNorm=norm(line);
+          const candidats=agents.filter(a=>ligneNorm.includes(norm(a.nom)));
           // Distance de Levenshtein simple pour tolerer les erreurs OCR sur le prenom (ex: AVON vs YVON)
           const levenshtein=(a,b)=>{
             const m=a.length,n=b.length;
