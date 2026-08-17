@@ -387,6 +387,40 @@ async function ocrImageViaOcrSpace(imageB64, mimeType) {
   return ocrSpaceRequest(imageB64, mimeType, "1", 45000);
 }
 
+// Regroupe les items de texte d'une page en "rangees" par PROXIMITE reelle du Y
+// (au lieu d'un simple Math.round a l'entier le plus proche) : sur les feuilles
+// de presence SNCF (CPS Officiel + bulletin de commande), les colonnes d'une
+// meme rangee (code JS, horaire, Nom...) peuvent avoir un Y qui varie de
+// quelques diziemes de point d'une colonne a l'autre (decalage de ligne de
+// base typographique) - assez pour, de temps en temps, tomber de part et
+// d'autre d'une frontiere d'arrondi (ex: 594.48 arrondi a 594 mais 594.96
+// arrondi a 595) et scinder a tort UNE SEULE vraie rangee en deux morceaux
+// distincts (code JS isole d'un cote, Nom isole de l'autre). Cause racine
+// confirmee par script de diagnostic sur 2 PDF reels (17/08 : import CPS
+// PRCI/PAR "devenu tres mauvais", agents manquants + mal attribues) : le code
+// JS orphelin ne trouve alors aucun nom dans sa propre ligne et est rejete
+// (`if(!ag) return`), pendant que le Nom orphelin se recolle sur une tout
+// autre rangee (regle de fusion "pas de jsCode/horaire -> rattacher a la
+// ligne precedente") - source des 2 symptomes signales (jours non detectes +
+// mauvais poste). Seuil de 3.0pt choisi apres mesure : les vrais ecarts
+// intra-rangee observes sont <2pt, les vrais ecarts entre 2 rangees
+// distinctes sont >12pt - plateau de resultats identiques confirme de 3 a
+// 8pt (aucune sur-fusion de rangees reellement distinctes a ce seuil).
+function clusterizeRowsByProximity(items, tolerance = 3.0) {
+  const sorted = [...items].sort((a, b) => b.y - a.y);
+  const clusters = [];
+  let current = null, anchorY = null;
+  sorted.forEach(it => {
+    if (current === null || Math.abs(anchorY - it.y) > tolerance) {
+      current = [];
+      clusters.push(current);
+      anchorY = it.y;
+    }
+    current.push(it);
+  });
+  return clusters.map(c => c.sort((a, b) => a.x - b.x).map(o => o.s).join(" ").replace(/\s+/g, " ").trim()).filter(Boolean);
+}
+
 async function extraireTextePdfNatif(base64Pdf) {
   const pdfjsLib = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
@@ -398,15 +432,8 @@ async function extraireTextePdfNatif(base64Pdf) {
   for (let n = 1; n <= pdf.numPages; n++) {
     const page = await pdf.getPage(n);
     const tcontent = await page.getTextContent();
-    const rows = {};
-    tcontent.items.forEach(it => {
-      const y = Math.round(it.transform[5]);
-      if (!rows[y]) rows[y] = [];
-      rows[y].push({ x: it.transform[4], s: it.str });
-    });
-    const ys = Object.keys(rows).map(Number).sort((a, b) => b - a);
-    const lines = ys.map(y => rows[y].sort((a, b) => a.x - b.x).map(o => o.s).join(" ").replace(/\s+/g, " ").trim()).filter(Boolean);
-    pages.push(lines.join("\n"));
+    const items = tcontent.items.map(it => ({ y: it.transform[5], x: it.transform[4], s: it.str }));
+    pages.push(clusterizeRowsByProximity(items).join("\n"));
   }
   return pages.join("\n");
 }
