@@ -462,6 +462,11 @@ function deriveCodeEquipeBulletin(code, heureDebut) {
   if (code.endsWith("-")) return "M";
   if (code.endsWith("O")) return "AM";
   if (code.endsWith("X")) return "N";
+  // fix (18/08) : un code "PH..." (autre UO, ex: PH0003) n'a aucun des suffixes
+  // -/O/X/J connus — faute d'horaire fourni par le déroulé prévisionnel pour
+  // en déduire l'équipe, traité par défaut comme une Journée générique plutôt
+  // que d'être perdu (equipe=null aurait empêché toute écriture planning).
+  if (/^PH/.test(code)) return "J";
   if (heureDebut) {
     const h = parseInt(heureDebut.slice(0, 2), 10);
     if (h >= 4 && h < 11) return "M";
@@ -632,6 +637,19 @@ function parseBulletinCommande(text) {
 // profit de l'extraction texte native — voir FEATURES_ajout_04072026)
 
 function parseDeroulePrevisionnel(text) {
+  // fix extraction (18/08, déroulé prévisionnel d'Antoine LEGOGUELIN) : sur ce
+  // document, la lettre "P" est systématiquement rendue "I'" (I majuscule +
+  // apostrophe) par l'extraction pdfjs — "PIPA2J" (le poste, qui contient DEUX
+  // "P") ressort donc "I'IPA2J" (1er P touché), "PII'A2J" (3e P touché) ou
+  // "I'II'A2J" (les deux). Les variantes ou le "P" corrompu est le TOUT DEBUT
+  // du code (ex: "I'IPA2J") ne satisfont meme pas le minimum de longueur du
+  // regex de capture de code (1 seul caractere valide avant l'apostrophe) —
+  // le code entier disparaissait silencieusement (aucune ligne "rejetee" a
+  // afficher, juste un jour jamais importe). Mesure precise : 58 jours sur
+  // 365 concernes sur le cas reel testé. Remplacement au niveau texte brut,
+  // avant tout parsing — l'apostrophe n'apparait nulle part ailleurs dans ce
+  // type de document, substitution donc sans risque.
+  text = text.replace(/I['’]/g, "P");
   const editionMatch = text.match(/Le\s*(\d{2})[/1](\d{2})[/1](\d{4})/i);
   const editionDate = editionMatch
     ? `${editionMatch[3]}-${editionMatch[2]}-${editionMatch[1]} 00:00:00`
@@ -651,6 +669,23 @@ function parseDeroulePrevisionnel(text) {
     c = c.replace(/\bHP\b/g, "RP");
     c = c.replace(/P[IO][CO][CO]L/g, "PICCL");
     c = c.replace(/ccx/gi, "PICCLX"); c = c.replace(/^(F-)\s+/, "$1");
+    // fix OCR (18/08, déroulé prévisionnel) : "I" majuscule lu comme chiffre "1"
+    // en tête de code (ex: "P1PA2J" au lieu de "PIPA2J") — aucun vrai code ne
+    // commence par "P1" (toujours "PI"/"PA"), remplacement sans risque.
+    if (/^P1/.test(c)) c = "PI" + c.slice(2);
+    // fix OCR : "RP" (repos périodique) rendu "RI" par certaines polices — le
+    // "P" est lu comme "I" suivi d'une apostrophe (jamais capturée par le
+    // regex de code, qui s'arrête à la première non-lettre/chiffre). Aucun
+    // vrai code ne vaut "RI", alias sans risque.
+    if (c === "RI") c = "RP";
+    // fix OCR : "F1" (1er Janvier) rendu "FI" (chiffre 1 lu comme lettre I)
+    if (c === "FI") c = "F1";
+    // fix OCR : "PIPA2J" rendu "PII'A2J" (le 2e "P" lu "I'", regex de code
+    // s'arrete a l'apostrophe -> ne capture que "PII") ou "PPPA2J" (le "I"
+    // disparait, le "P" se duplique) — confirme par inspection du texte brut
+    // (systematiquement suivi de "A2J" dans les 2 cas), meme categorie que
+    // les autres fixups OCR ci-dessus.
+    if (c === "PII" || c === "PPPA2J") c = "PIPA2J";
     return c || null;
   };
   const getHoraires = eq => {
@@ -661,9 +696,24 @@ function parseDeroulePrevisionnel(text) {
     return { heure_debut: `${mh[1]}:${mh[2]}:00`, heure_fin: `${mh[3]}:${mh[4]}:00` };
   };
 
-  // Séparer les deux blocs au séparateur "___"
-  const sepIdx = text.search(/_{6,}/);
-  const sepEnd = sepIdx >= 0 ? text.indexOf("\n", sepIdx) : -1;
+  // Séparer les deux blocs (Jan-Juin / Juil-Déc) : on cherche la ligne d'en-tête
+  // du 2e bloc ("07/AAAA ..."), pas un simple run de "___". Bug trouvé le 18/08
+  // (déroulé prévisionnel d'Antoine LEGOGUELIN, 2027) : l'ancien découpage
+  // cherchait le PREMIER run de 6+ underscores n'importe où dans tout le texte
+  // — mais certains documents ont un underline décoratif dès l'en-tête
+  // ("Affectations de l'agent ________"), bien avant la vraie frontière entre
+  // les 2 blocs. Le split tombait alors juste après ce tout premier underline,
+  // faisant basculer l'INTÉGRALITÉ du document (les 2 blocs réunis) dans
+  // "texteBloc2" — la table de correspondance jour/mois de bloc2 (juillet à
+  // décembre seulement) ne reconnaissait alors plus aucune date de
+  // janvier-juin, perdues silencieusement (0 jour importé sur tout le 1er
+  // semestre, confirmé par script : 0 match bloc1 / 366 matches bloc2 avant
+  // ce correctif). La ligne d'en-tête "07/AAAA..." est un repère fiable et
+  // unique (les jours du calendrier n'ont jamais ce format MM/AAAA) — reste
+  // robuste même si un run de "___" apparaît ailleurs dans le document.
+  const bloc2Match = new RegExp("^0?7\\/" + annee, "m").exec(text);
+  const sepEnd = bloc2Match ? bloc2Match.index
+    : (() => { const sepIdx = text.search(/_{6,}/); return sepIdx >= 0 ? text.indexOf("\n", sepIdx) : -1; })();
   const texteBloc1 = sepEnd > 0 ? text.slice(0, sepEnd) : text;
   const texteBloc2 = sepEnd > 0 ? text.slice(sepEnd) : "";
 
@@ -708,7 +758,12 @@ function parseDeroulePrevisionnel(text) {
   const cmap2 = buildCandidates(MOIS_BLOC2, ord2);
 
   const DAY_ABBRS = new Set(["Je","Ve","Sa","Di","Lu","Ma","Me"]);
-  const CODE_VALID = /^(RPP|RP|RU|RQ|CA|C|DISPO|F[0-9V]|F-[A-Z]{2,}|PI[A-Z0-9-]{2,}|PA[A-Z0-9-]{2,})$/;
+  // "PH..." (18/08, découvert sur le déroulé d'Antoine LEGOGUELIN) : code d'une
+  // affectation sur une autre UO que PRCI/PAR (ex: PH0003), jamais rejeté avant
+  // ce correctif — était donc silencieusement ignoré sur toute la période de
+  // l'ancienne affectation. Traité comme un poste Journée générique par
+  // deriveCodeEquipeBulletin (pas de suffixe -/O/X connu), faute de mieux.
+  const CODE_VALID = /^(RPP|RP|RU|RQ|CA|C|DISPO|F[0-9V]|F-[A-Z]{2,}|PI[A-Z0-9-]{2,}|PA[A-Z0-9-]{2,}|PH[A-Z0-9-]{2,})$/;
   const SPECIAL = new Set(["RPP","RP","RU","RQ","CA","C","DISPO"]);
   const DAY_RE = /(Je|Ve|Va|Sa|Di|Dl|Lu|Ma|Me)\s+(\d+|[IiSs5])(?:\s+([A-Z][A-Z0-9-]+)(?:\s+([A-Z][A-Z0-9-]+))?)?/g;
 
