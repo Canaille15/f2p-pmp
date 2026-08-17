@@ -1817,6 +1817,16 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           if(!horaireMatch) return;
           const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)/);
           let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
+          // fix extraction (17/08) : sur certaines occurrences, pdfjs ne separe pas le
+          // code JS et le debut de l'horaire par un espace dans son propre texte source
+          // (ex: "PICCLX22:15" au lieu de "PICCLX" + "22:15") - le regex de code JS,
+          // gourmand sur [A-Z0-9]+, avale alors les 1-2 premiers chiffres de l'heure
+          // ("PICCLX22" au lieu de "PICCLX"). Aucun vrai code JS ne se termine par un
+          // chiffre nu (toujours -/O/X/J ou un suffixe fixe) - retirer ces chiffres
+          // parasites est donc sans risque de casser un cas legitime. Bug confirme via
+          // l'agent BELOTTI Florent (PICCLX), reste invisible/vacant dans le calendrier
+          // sans ce correctif malgre une extraction et un matching par ailleurs corrects.
+          if(jsCode&&/^(PA|PI)[A-Z]+\d{1,2}$/.test(jsCode)) jsCode=jsCode.replace(/\d{1,2}$/,"");
           if(jsCode&&/PA[A-Z]+1[0]$/.test(jsCode)) jsCode=jsCode.slice(0,-1)+"O";
           if(jsCode&&/OR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres O
           if(jsCode&&/XR$/.test(jsCode)) jsCode=jsCode.slice(0,-1); // fix OCR : R parasite apres X
