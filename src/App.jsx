@@ -1823,8 +1823,25 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // aucune autre donnee du tableau ne prend la forme "HH:MM . HH:MM".
           const horaireMatch=line.match(/(\d{2}):(\d{2})\s*[-.]\s*(\d{2}):(\d{2})/);
           if(!horaireMatch) return;
-          const jsCodeMatch=line.match(/\b(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)/);
+          // fix extraction (17/08) : le regex de code JS n'etait pas ancre au debut de
+          // la ligne — quand le vrai code etait trop corrompu pour matcher (glyphe illisible),
+          // .match() cherchait alors n'importe ou dans le reste de la ligne et retombait sur
+          // le premier fragment PA.../PI... suivant : souvent le mot "PAR" du libelle de
+          // famille ("AC PAR"/"ASMTE PAR" en fin de ligne), ou meme le nom de l'agent s'il
+          // commence par PA (ex: "PASTANT", "PATRICK") — un code totalement invente etait
+          // alors ecrit en base a la place de la vraie donnee. Le code JS est toujours le
+          // tout premier token de la ligne assemblee (regle de detection de nouveau bloc,
+          // voir jsCodeStartRe plus haut) — ancrer au debut elimine ce faux-positif ; si le
+          // vrai code reste illisible, jsCode redevient null (fallback sur l'ancienne valeur)
+          // plutot que d'ecrire une donnee activement fausse.
+          // fix extraction (17/08) : "Pl" (P + L minuscule) au tres debut de ligne est une
+          // confusion glyphe connue de "PI" (I majuscule lu comme l minuscule) — normalise
+          // uniquement pour la detection du code, jamais pour le reste de la ligne (nom,
+          // horaire...).
+          const lineForJs=line.replace(/^(\s*)Pl(?=[A-Z])/,"$1PI");
+          const jsCodeMatch=lineForJs.match(/^[#*€|]?\s*(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|50%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)/);
           let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
+          if(jsCode==="50%") jsCode="SD%"; // fix OCR : S/D lus comme 5/0
           // fix extraction (17/08) : sur certaines occurrences, pdfjs ne separe pas le
           // code JS et le debut de l'horaire par un espace dans son propre texte source
           // (ex: "PICCLX22:15" au lieu de "PICCLX" + "22:15") - le regex de code JS,
@@ -1850,6 +1867,8 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           if(jsCode&&/^PAAC20$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : 0 chiffre lu au lieu de O lettre
           if(jsCode==="RET SAM") jsCode="RFT SAM"; // fix OCR : E lu au lieu de F
           if(jsCode==="PICOLO") jsCode="PICCLO"; // fix extraction (17/08) : un des deux "C" de "PICCLO" disparait a l'extraction sur certaines pages (glyphes "CL" trop rapproches)
+          if(jsCode==="PILND-") jsCode="PILNO-"; // fix OCR : D lu au lieu de O
+          if(jsCode==="PIAOJX") jsCode="PIADJX"; // fix OCR : O lu au lieu de D
           // fix extraction (17/08) : un nom de famille en 2 mots (ex: "VICENTE CARREIRA",
           // "EL ADRAOUI", "LE MOISY") peut etre extrait par pdfjs comme un seul mot colle
           // sans espace ("VICENTECARREIRA") - la comparaison stricte ne matchait alors
