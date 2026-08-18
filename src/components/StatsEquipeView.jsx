@@ -113,6 +113,34 @@ function groupPostesNonTenus(parPoste) {
   });
   return Object.values(groupes).sort((a, b) => b.nb - a.nb);
 }
+// Code affiché à côté du nom du poste (18/08, demande d'Olivier : "tu met
+// le nom du poste avec son code", pour TOUS les postes, pas seulement ceux
+// à un seul code) — pour un poste à plusieurs variantes M/AM/N (3 codes
+// distincts, ex. PICCL-/PICCLO/PICCLX), le code affiché est leur base
+// commune obtenue en retirant le suffixe de vacation (dernier caractère :
+// "-"/"O"/"X") plutôt que d'afficher les 3 codes ou aucun.
+function codeAffichePoste(codes) {
+  const arr = [...codes];
+  if (arr.length === 1) return arr[0];
+  const bases = new Set(arr.map(c => c.slice(0, -1)));
+  return bases.size === 1 ? [...bases][0] : arr.join("/");
+}
+// En-tête de section collapsible : titre + bouton, protégés contre le
+// wrap cassé sur mobile (le titre peut passer sur plusieurs lignes, le
+// bouton reste toujours entier sur sa propre ligne plutôt que de voir
+// son texte lui-même se couper au milieu — bug signalé par Olivier le
+// 18/08 sur un téléphone réel, "Voir le détail par année" cassé en 3
+// lignes illisibles faute de flexWrap sur le conteneur).
+function SectionHeader({ icon, titre, ouvert, onToggle, labelOuvert = "Voir le détail", labelFerme = "Masquer le détail" }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px 10px" }}>
+      <div style={{ ...sectionTitle, marginBottom: 0, flex: "1 1 180px", minWidth: 0 }}>{icon} {titre}</div>
+      <button onClick={onToggle} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap", padding: 0 }}>
+        {ouvert ? `▲ ${labelFerme}` : `▼ ${labelOuvert}`}
+      </button>
+    </div>
+  );
+}
 // L'API ne renvoie que les postes avec au moins 1 agent habilité — un poste
 // à 0 (ex: DPX PRCI si personne n'est habilité dessus) disparaissait sinon
 // silencieusement de la liste, donnant l'impression qu'il avait été oublié.
@@ -307,6 +335,18 @@ function Tuile({ label, valeur, sousLabel, large }) {
   );
 }
 
+// Cellule pourcentage+fraction empilée verticalement (plutôt qu'en ligne)
+// pour garder chaque colonne étroite sur mobile — le tableau à 4 colonnes
+// (Année/Global/PRCI/PAR) débordait sinon facilement à 375px de large.
+function CellPct({ pct, num, den }) {
+  return (
+    <div style={{ lineHeight: 1.25 }}>
+      <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 12.5 }}>{fmtPct(pct)}</div>
+      <div style={{ fontSize: 10, color: "#94a3b8" }}>{num}/{den}</div>
+    </div>
+  );
+}
+
 function Barre({ pct }) {
   const clamped = Math.max(0, Math.min(100, pct));
   return (
@@ -322,12 +362,7 @@ function ReserveRoulementSection({ data }) {
   const [ouvert, setOuvert] = useState(false);
   return (
     <div style={card}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={sectionTitle}>🔁 Réserve / Roulement (agents équipe) — historique mensuel</div>
-        <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700 }}>
-          {ouvert ? "▲ Masquer le détail" : "▼ Voir le détail par mois"}
-        </button>
-      </div>
+      <SectionHeader icon="🔁" titre="Réserve / Roulement (agents équipe) — historique mensuel" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail par mois" />
       <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 6 }}>
         Porte uniquement sur les agents équipe — la Réserve régionale est comptée à part. Un changement de statut ne modifie jamais le comptage des mois déjà passés.
       </div>
@@ -365,12 +400,7 @@ function CoverageParAnneeSection({ data, anneeActuelle }) {
   const [ouvert, setOuvert] = useState(false);
   return (
     <div style={card}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={sectionTitle}>📈 Couverture Réserve régionale — évolution par année</div>
-        <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700 }}>
-          {ouvert ? "▲ Masquer le détail" : "▼ Voir le détail par année"}
-        </button>
-      </div>
+      <SectionHeader icon="📈" titre="Couverture Réserve régionale — évolution par année" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail par année" />
       {ouvert && (
         <div style={{ overflowX: "auto", marginTop: 12 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
@@ -385,10 +415,10 @@ function CoverageParAnneeSection({ data, anneeActuelle }) {
             <tbody>
               {data.map(row => (
                 <tr key={row.annee} style={{ borderTop: "1px solid #f1f5f9", background: row.annee === anneeActuelle ? "#eff6ff" : "transparent" }}>
-                  <td style={{ padding: "6px 8px", fontWeight: row.annee === anneeActuelle ? 800 : 600, color: "#334155" }}>{row.annee}</td>
-                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{fmtPct(row.global.pct)} <span style={{ fontSize: 10.5, color: "#94a3b8", fontWeight: 500 }}>({row.global.numerateur}/{row.global.denominateur})</span></td>
-                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{fmtPct(row.PRCI.pct)} <span style={{ fontSize: 10.5, color: "#94a3b8", fontWeight: 500 }}>({row.PRCI.numerateur}/{row.PRCI.denominateur})</span></td>
-                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{fmtPct(row.PAR.pct)} <span style={{ fontSize: 10.5, color: "#94a3b8", fontWeight: 500 }}>({row.PAR.numerateur}/{row.PAR.denominateur})</span></td>
+                  <td style={{ padding: "6px 6px", fontWeight: row.annee === anneeActuelle ? 800 : 600, color: "#334155" }}>{row.annee}</td>
+                  <td style={{ padding: "6px 6px" }}><CellPct pct={row.global.pct} num={row.global.numerateur} den={row.global.denominateur} /></td>
+                  <td style={{ padding: "6px 6px" }}><CellPct pct={row.PRCI.pct} num={row.PRCI.numerateur} den={row.PRCI.denominateur} /></td>
+                  <td style={{ padding: "6px 6px" }}><CellPct pct={row.PAR.pct} num={row.PAR.numerateur} den={row.PAR.denominateur} /></td>
                 </tr>
               ))}
             </tbody>
@@ -403,12 +433,7 @@ function DispoSection({ data }) {
   const [ouvert, setOuvert] = useState(false);
   return (
     <div style={card}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={sectionTitle}>📢 Dispo</div>
-        <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700 }}>
-          {ouvert ? "▲ Masquer le détail" : "▼ Voir le détail"}
-        </button>
-      </div>
+      <SectionHeader icon="📢" titre="Dispo" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} />
       <Tuile label="Jours signalés" valeur={data.total} large />
       <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
         Journées où un agent présent est signalé dans le planning CPS Officiel "Dispo" par message libre — chiffre anonymisé, aucun nom (non attribuable de façon fiable).
@@ -431,19 +456,14 @@ function PostesNonTenusSection({ data }) {
   const groupes = useMemo(() => groupPostesNonTenus(data.parPoste), [data.parPoste]);
   return (
     <div style={card}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={sectionTitle}>⚠️ Postes non tenus (signalements manuels)</div>
-        <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700 }}>
-          {ouvert ? "▲ Masquer le détail" : "▼ Voir le détail"}
-        </button>
-      </div>
+      <SectionHeader icon="⚠️" titre="Postes non tenus (signalements manuels)" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} />
       <Tuile label="Total" valeur={data.total} large />
       {ouvert && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
           {groupes.map(g => (
             <div key={g.label} style={{ borderTop: "1px solid #f1f5f9", paddingTop: 8 }}>
               <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 12.5, marginBottom: 6 }}>
-                {g.label}{g.codes.size === 1 ? ` (${[...g.codes][0]})` : ""} — {g.nb} fois
+                {g.label} ({codeAffichePoste(g.codes)}) — {g.nb} fois
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 4 }}>
                 {Object.values(g.parService).sort((a, b) => b.nb - a.nb).map(s => (
@@ -454,7 +474,7 @@ function PostesNonTenusSection({ data }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 10, marginTop: 2 }}>
                       {s.entries.map((e, i) => (
                         <div key={i} style={{ fontSize: 11, color: "#64748b" }}>
-                          {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}{g.codes.size > 1 ? ` (${e.js_code})` : ""}
+                          {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
                         </div>
                       ))}
                     </div>
