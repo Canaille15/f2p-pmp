@@ -131,18 +131,30 @@ async function getStats(req, res) {
     const totalAfo = ageRows.filter(r => r.is_afo).length;
 
     // ─── Grades (18/08, demande d'Olivier : "decompté les Cadre Op [...]
-    // les Maitrises [...] et Maytises 2") — basé sur `agent.grade`, préfixe
-    // (les vrais grades ont des suffixes NIV1/NIV2/NIV3, ex. "CP5NIV2").
-    // Purement informatif, comme AFO : jamais soustrait d'"Agents équipe"
-    // (contrairement à Encadrement, qui est basé sur le poste tenu, pas le
-    // grade — un agent peut très bien être Cadre Op ET DPX à la fois).
+    // les Maitrises [...] et Maytises 2", puis en suite immédiate : "affine
+    // chaque groupe pour mettre un decompte en nombre des agent et reserve
+    // regionale [...] tu garde le global par groupe") — basé sur
+    // `agent.grade`, préfixe (les vrais grades ont des suffixes
+    // NIV1/NIV2/NIV3, ex. "CP5NIV2"). Purement informatif, comme AFO :
+    // jamais soustrait d'"Agents équipe" (contrairement à Encadrement, qui
+    // est basé sur le poste tenu, pas le grade — un agent peut très bien
+    // être Cadre Op ET DPX à la fois). Chaque groupe garde son total global
+    // (totalCadreOp/totalMaitrise/totalMaitrise2, inchangés) + un détail
+    // équipe/réserve régionale (reserveSet déjà calculé plus haut).
     let totalCadreOp = 0, totalMaitrise = 0, totalMaitrise2 = 0;
+    let cadreOpReserve = 0, maitriseReserve = 0, maitrise2Reserve = 0;
     ageRows.forEach(r => {
       const g = r.grade || '';
-      if (g.startsWith('CP6') || g.startsWith('CO6')) totalCadreOp++;
-      if (g.startsWith('CP5') || g.startsWith('CO5')) totalMaitrise++;
-      if (g.startsWith('CP4') || g.startsWith('CO4')) totalMaitrise2++;
+      const estReserve = reserveSet.has(r.cp);
+      if (g.startsWith('CP6') || g.startsWith('CO6')) { totalCadreOp++; if (estReserve) cadreOpReserve++; }
+      if (g.startsWith('CP5') || g.startsWith('CO5')) { totalMaitrise++; if (estReserve) maitriseReserve++; }
+      if (g.startsWith('CP4') || g.startsWith('CO4')) { totalMaitrise2++; if (estReserve) maitrise2Reserve++; }
     });
+    const gradesDetail = {
+      cadreOp: { total: totalCadreOp, equipe: totalCadreOp - cadreOpReserve, reserve: cadreOpReserve },
+      maitrise: { total: totalMaitrise, equipe: totalMaitrise - maitriseReserve, reserve: maitriseReserve },
+      maitrise2: { total: totalMaitrise2, equipe: totalMaitrise2 - maitrise2Reserve, reserve: maitrise2Reserve },
+    };
     // "Agents équipe" = tout le monde sauf Réserve régionale ET Encadrement,
     // par différence d'ensembles (jamais une simple soustraction de totaux,
     // qui compterait deux fois un éventuel agent à la fois réserve et DPX).
@@ -325,6 +337,7 @@ async function getStats(req, res) {
 
     res.json({
       headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, totalCadreOp, totalMaitrise, totalMaitrise2, nbTempsPartiel, pctTempsPartiel },
+      gradesDetail,
       ageMoyenHorsReserve,
       coverageReserve,
       coverageReserveParAnnee,

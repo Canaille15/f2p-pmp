@@ -225,15 +225,21 @@ export default function StatsEquipeView() {
               </div>
             </div>
             {/* Par grade (18/08, demande d'Olivier : "decompté les Cadre Op
-                [...] Maitrises [...] Maytises 2") — axe indépendant des
-                catégories ci-dessus (un agent peut être Cadre Op ET DPX, par
-                exemple), jamais soustrait des autres tuiles. */}
+                [...] Maitrises [...] Maytises 2", puis en suite immédiate :
+                "affine chaque groupe pour mettre un decompte en nombre des
+                agent et reserve regionale [...] tu garde le global par
+                groupe") — axe indépendant des catégories ci-dessus (un agent
+                peut être Cadre Op ET DPX, par exemple), jamais soustrait des
+                autres tuiles. Le total global par groupe est conservé
+                (valeur de la tuile), le détail équipe/réserve régionale est
+                ajouté en sous-label, même principe que "Agents équipe"
+                au-dessus. */}
             <div style={{ borderTop: "1px solid #f1f5f9", marginTop: 14, paddingTop: 12 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04, marginBottom: 8 }}>Par grade</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-                <Tuile label="Cadre Op" valeur={data.headcounts.totalCadreOp} sousLabel="CP6 / CO6" />
-                <Tuile label="Maîtrise" valeur={data.headcounts.totalMaitrise} sousLabel="CP5 / CO5" />
-                <Tuile label="Maîtrise 2" valeur={data.headcounts.totalMaitrise2} sousLabel="CP4 / CO4" />
+                <Tuile label="Cadre Op (CP6/CO6)" valeur={data.gradesDetail.cadreOp.total} sousLabel={`dont ${data.gradesDetail.cadreOp.equipe} équipe · ${data.gradesDetail.cadreOp.reserve} réserve régionale`} />
+                <Tuile label="Maîtrise (CP5/CO5)" valeur={data.gradesDetail.maitrise.total} sousLabel={`dont ${data.gradesDetail.maitrise.equipe} équipe · ${data.gradesDetail.maitrise.reserve} réserve régionale`} />
+                <Tuile label="Maîtrise 2 (CP4/CO4)" valeur={data.gradesDetail.maitrise2.total} sousLabel={`dont ${data.gradesDetail.maitrise2.equipe} équipe · ${data.gradesDetail.maitrise2.reserve} réserve régionale`} />
               </div>
             </div>
           </div>
