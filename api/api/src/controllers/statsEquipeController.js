@@ -101,19 +101,42 @@ async function getStats(req, res) {
     // régionale" (déjà en place depuis juillet, déjà correctement peuplé) —
     // plutôt que de faire ressaisir 70 fiches, tout le module réutilise
     // is_reserve. Le flag is_eac (colonne + AdminPanel) a été retiré.
-    const [[hc]] = await pool.query(
-      `SELECT COUNT(*) AS total, SUM(COALESCE(pa.is_reserve,0)) AS nbReserve
-       FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
-    );
-    const totalAgents = hc.total || 0;
-    const totalReserve = Number(hc.nbReserve) || 0;
-    const totalEquipe = totalAgents - totalReserve;
-
-    // ─── Âge moyen hors Réserve régionale (#8) ───────────────────────────────
+    // ageRows sert aussi de base unique pour tous les effectifs (fusionné le
+    // 18/08 avec l'ancienne requête `hc` séparée) — évite deux comptages qui
+    // pourraient diverger.
     const [ageRows] = await pool.query(
-      `SELECT a.cp, COALESCE(pa.is_reserve,0) AS is_reserve
+      `SELECT a.cp, COALESCE(pa.is_reserve,0) AS is_reserve, COALESCE(pa.is_afo,0) AS is_afo
        FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
     );
+    const totalAgents = ageRows.length;
+    const reserveSet = new Set(ageRows.filter(r => r.is_reserve).map(r => r.cp));
+    const totalReserve = reserveSet.size;
+
+    // ─── Encadrement (DPX/Adj DPX) mis à part (18/08, demande d'Olivier :
+    // "il faut mettre a par les dpx et assisant [...] et tu recalcule bien
+    // les effectifs des autres") — basé sur la table `habilitation` (même
+    // source que "Agents habilités par poste"), pas un flag dédié sur
+    // l'agent. Un agent habilité DPX/Adj DPX est retiré du décompte "Agents
+    // équipe" (recalculé net, via une différence d'ensembles pour rester
+    // correct même dans le cas rare d'un chevauchement avec Réserve
+    // régionale) — jamais retiré du total "Agents global", qui reste un vrai
+    // total de tous les agents.
+    const CODES_ENCADREMENT = ['PIDPXJ', 'PIASSJ', 'PADPXJ'];
+    const [encadrementRows] = await pool.query(
+      `SELECT DISTINCT cp_agent FROM habilitation WHERE code_poste IN (?,?,?) AND date_fin IS NULL`,
+      CODES_ENCADREMENT
+    );
+    const encadrementSet = new Set(encadrementRows.map(r => r.cp_agent));
+    const totalEncadrement = encadrementSet.size;
+    const totalAfo = ageRows.filter(r => r.is_afo).length;
+    // "Agents équipe" = tout le monde sauf Réserve régionale ET Encadrement,
+    // par différence d'ensembles (jamais une simple soustraction de totaux,
+    // qui compterait deux fois un éventuel agent à la fois réserve et DPX).
+    const equipeSet = new Set(ageRows.map(r => r.cp));
+    reserveSet.forEach(cp => equipeSet.delete(cp));
+    encadrementSet.forEach(cp => equipeSet.delete(cp));
+    const totalEquipe = equipeSet.size;
+
     let sommeAges = 0, nbAgentsInclus = 0, nbAgentsExclusParseEchec = 0;
     ageRows.forEach(r => {
       if (r.is_reserve) return;
@@ -214,15 +237,18 @@ async function getStats(req, res) {
     // Distinct de "Réserve régionale" (is_reserve) — et surtout, un axe qui ne
     // s'applique QU'aux agents "équipe" (hors Réserve régionale, qui a déjà son
     // propre compte à part) : Olivier — "les agents reserve regionale en compte
-    // a part". Le dénominateur est donc totalEquipe (60), jamais totalAgents (70),
+    // a part". Le dénominateur est donc totalEquipe, jamais totalAgents,
     // et les lignes roulement_historique d'un agent Réserve régionale sont
-    // ignorées ici (agentsEquipeCps, dérivé de ageRows déjà chargé plus haut).
-    // Réutilise roulement_historique (déjà daté, existait mais jamais branché à
-    // un bouton) pour garantir qu'un changement de statut en décembre ne modifie
-    // jamais les mois déjà passés. Seules 2 valeurs comptent : 'Réserve' vs tout
-    // le reste ("Roulement" à l'affichage, que la ligne source soit '3x8' ou
-    // 'Journée').
-    const agentsEquipeCps = new Set(ageRows.filter(r => !r.is_reserve).map(r => r.cp));
+    // ignorées ici. Depuis le 18/08, l'Encadrement (DPX/Adj DPX) est lui aussi
+    // exclu de cet axe pour rester cohérent avec le nouveau totalEquipe (net
+    // de Réserve régionale ET d'Encadrement) — sinon la somme "dont X réserve
+    // · Y roulement" ne correspondrait plus au total affiché sur la tuile
+    // "Agents équipe". Réutilise roulement_historique (déjà daté, existait mais
+    // jamais branché à un bouton) pour garantir qu'un changement de statut en
+    // décembre ne modifie jamais les mois déjà passés. Seules 2 valeurs
+    // comptent : 'Réserve' vs tout le reste ("Roulement" à l'affichage, que la
+    // ligne source soit '3x8' ou 'Journée').
+    const agentsEquipeCps = equipeSet;
     const [roulementRows] = await pool.query(
       `SELECT cp_agent, type_roulement, date_debut, date_fin FROM roulement_historique ORDER BY cp_agent, date_debut`
     );
@@ -284,7 +310,7 @@ async function getStats(req, res) {
     const pctTempsPartiel = totalAgents > 0 ? Math.round((nbTempsPartiel / totalAgents) * 1000) / 10 : 0;
 
     res.json({
-      headcounts: { totalAgents, totalEquipe, totalReserve, nbTempsPartiel, pctTempsPartiel },
+      headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, nbTempsPartiel, pctTempsPartiel },
       ageMoyenHorsReserve,
       coverageReserve,
       coverageReserveParAnnee,
