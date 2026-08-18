@@ -229,7 +229,11 @@ export default function StatsEquipeView() {
           {/* Réserve / Roulement — historique mensuel, jamais recalculé rétroactivement */}
           <ReserveRoulementSection data={data.reserveRoulement} />
 
-          {/* Couverture Réserve régionale */}
+          {/* Couverture Réserve régionale — tuiles de l'année consultée + évolution
+              par année, réunies dans une seule carte (18/08, Olivier : "tu peux pas
+              ameliorer ca au meme endroit ?" — les 2 cartes séparées faisaient
+              doublon, la ligne surlignée du tableau ci-dessous porte d'ailleurs
+              exactement les mêmes 3 chiffres que les tuiles). */}
           <div style={card}>
             <div style={sectionTitle}>🔁 Couverture des postes par la Réserve régionale</div>
             <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 10 }}>
@@ -240,10 +244,8 @@ export default function StatsEquipeView() {
               <Tuile label="PRCI" valeur={fmtPct(data.coverageReserve.PRCI.pct)} sousLabel={`${data.coverageReserve.PRCI.numerateur} / ${data.coverageReserve.PRCI.denominateur} j.`} />
               <Tuile label="PAR" valeur={fmtPct(data.coverageReserve.PAR.pct)} sousLabel={`${data.coverageReserve.PAR.numerateur} / ${data.coverageReserve.PAR.denominateur} j.`} />
             </div>
+            {data.coverageReserveParAnnee && <CoverageParAnneeTable data={data.coverageReserveParAnnee} anneeActuelle={year} />}
           </div>
-
-          {/* Couverture Réserve régionale par année (18/08) */}
-          {data.coverageReserveParAnnee && <CoverageParAnneeSection data={data.coverageReserveParAnnee} anneeActuelle={year} />}
 
           {/* Congés / VT refusés — anonymisés */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
@@ -398,13 +400,18 @@ function ReserveRoulementSection({ data }) {
 // d'Olivier : "d'ailleurs fait les stat par anee") — même fenêtre de 5 ans
 // que le sélecteur d'année du haut de page, même principe collapsible que
 // ReserveRoulementSection ci-dessus.
-function CoverageParAnneeSection({ data, anneeActuelle }) {
-  const [ouvert, setOuvert] = useState(false);
+// Sous-bloc "évolution par année" — nesté DANS la carte "Couverture des postes
+// par la Réserve régionale" (18/08, fusionné sur demande d'Olivier, voir plus
+// haut), plus de carte/titre séparé, juste un filet + un petit titre pour se
+// distinguer des tuiles au-dessus. Repliable, ouvert par défaut (c'est la
+// donnée elle-même, pas un détail secondaire).
+function CoverageParAnneeTable({ data, anneeActuelle }) {
+  const [ouvert, setOuvert] = useState(true);
   return (
-    <div style={card}>
-      <SectionHeader icon="📈" titre="Couverture Réserve régionale — évolution par année" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail par année" />
+    <div style={{ borderTop: "1px solid #f1f5f9", marginTop: 12, paddingTop: 10 }}>
+      <SectionHeader icon="📈" titre="Évolution par année" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail" />
       {ouvert && (
-        <div style={{ overflowX: "auto", marginTop: 12 }}>
+        <div style={{ overflowX: "auto", marginTop: 10 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr style={{ textAlign: "left", color: "#94a3b8", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
