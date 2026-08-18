@@ -105,7 +105,7 @@ async function getStats(req, res) {
     // 18/08 avec l'ancienne requête `hc` séparée) — évite deux comptages qui
     // pourraient diverger.
     const [ageRows] = await pool.query(
-      `SELECT a.cp, COALESCE(pa.is_reserve,0) AS is_reserve, COALESCE(pa.is_afo,0) AS is_afo
+      `SELECT a.cp, a.grade, COALESCE(pa.is_reserve,0) AS is_reserve, COALESCE(pa.is_afo,0) AS is_afo
        FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
     );
     const totalAgents = ageRows.length;
@@ -129,6 +129,20 @@ async function getStats(req, res) {
     const encadrementSet = new Set(encadrementRows.map(r => r.cp_agent));
     const totalEncadrement = encadrementSet.size;
     const totalAfo = ageRows.filter(r => r.is_afo).length;
+
+    // ─── Grades (18/08, demande d'Olivier : "decompté les Cadre Op [...]
+    // les Maitrises [...] et Maytises 2") — basé sur `agent.grade`, préfixe
+    // (les vrais grades ont des suffixes NIV1/NIV2/NIV3, ex. "CP5NIV2").
+    // Purement informatif, comme AFO : jamais soustrait d'"Agents équipe"
+    // (contrairement à Encadrement, qui est basé sur le poste tenu, pas le
+    // grade — un agent peut très bien être Cadre Op ET DPX à la fois).
+    let totalCadreOp = 0, totalMaitrise = 0, totalMaitrise2 = 0;
+    ageRows.forEach(r => {
+      const g = r.grade || '';
+      if (g.startsWith('CP6') || g.startsWith('CO6')) totalCadreOp++;
+      if (g.startsWith('CP5') || g.startsWith('CO5')) totalMaitrise++;
+      if (g.startsWith('CP4') || g.startsWith('CO4')) totalMaitrise2++;
+    });
     // "Agents équipe" = tout le monde sauf Réserve régionale ET Encadrement,
     // par différence d'ensembles (jamais une simple soustraction de totaux,
     // qui compterait deux fois un éventuel agent à la fois réserve et DPX).
@@ -310,7 +324,7 @@ async function getStats(req, res) {
     const pctTempsPartiel = totalAgents > 0 ? Math.round((nbTempsPartiel / totalAgents) * 1000) / 10 : 0;
 
     res.json({
-      headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, nbTempsPartiel, pctTempsPartiel },
+      headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, totalCadreOp, totalMaitrise, totalMaitrise2, nbTempsPartiel, pctTempsPartiel },
       ageMoyenHorsReserve,
       coverageReserve,
       coverageReserveParAnnee,

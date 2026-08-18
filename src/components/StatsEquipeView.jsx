@@ -224,6 +224,18 @@ export default function StatsEquipeView() {
                 <div style={{ fontSize: 10.5, color: "#94a3b8" }}>Temps plein {fmtPct(pctTempsPlein)}</div>
               </div>
             </div>
+            {/* Par grade (18/08, demande d'Olivier : "decompté les Cadre Op
+                [...] Maitrises [...] Maytises 2") — axe indépendant des
+                catégories ci-dessus (un agent peut être Cadre Op ET DPX, par
+                exemple), jamais soustrait des autres tuiles. */}
+            <div style={{ borderTop: "1px solid #f1f5f9", marginTop: 14, paddingTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04, marginBottom: 8 }}>Par grade</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+                <Tuile label="Cadre Op" valeur={data.headcounts.totalCadreOp} sousLabel="CP6 / CO6" />
+                <Tuile label="Maîtrise" valeur={data.headcounts.totalMaitrise} sousLabel="CP5 / CO5" />
+                <Tuile label="Maîtrise 2" valeur={data.headcounts.totalMaitrise2} sousLabel="CP4 / CO4" />
+              </div>
+            </div>
           </div>
 
           {/* Réserve / Roulement — historique mensuel, jamais recalculé rétroactivement */}
