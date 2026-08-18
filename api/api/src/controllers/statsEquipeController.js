@@ -23,6 +23,71 @@ const PRESENCE_REELLE = `(
   )
 )`;
 
+// Couverture Réserve régionale (#4) — extrait en fonction reutilisable le
+// 18/08 pour pouvoir la calculer sur plusieurs annees a la fois (demande
+// d'Olivier : "fait les stat par annee"), sans dupliquer la logique entre
+// l'annee courante et l'historique.
+async function computeCoverageReserve(from, to) {
+  const [denomRows] = await pool.query(
+    `SELECT famille, COUNT(*) AS total FROM planning_cps
+     WHERE date_jour BETWEEN ? AND ? GROUP BY famille`,
+    [from, to]
+  );
+  const denominateur = { PRCI: 0, PAR: 0 };
+  denomRows.forEach(r => { denominateur[r.famille] = r.total; });
+
+  const [reserveCps] = await pool.query(`SELECT cp_agent FROM profil_agent WHERE is_reserve = 1`);
+  const reserveSet = new Set(reserveCps.map(r => r.cp_agent));
+
+  const numeratorSet = new Set(); // clé "famille|cp|date"
+
+  const [presenceDirecte] = await pool.query(
+    `SELECT pc.famille, pc.cp_agent, pc.date_jour
+     FROM planning_cps pc JOIN profil_agent pa ON pa.cp_agent = pc.cp_agent
+     WHERE pa.is_reserve = 1 AND pc.date_jour BETWEEN ? AND ?`,
+    [from, to]
+  );
+  presenceDirecte.forEach(r => {
+    numeratorSet.add(`${r.famille}|${r.cp_agent}|${r.date_jour instanceof Date ? r.date_jour.toISOString().slice(0,10) : r.date_jour}`);
+  });
+
+  const [aleas] = await pool.query(
+    `SELECT js_code, date_jour, famille, agents_concernes FROM cps_aleas
+     WHERE type IN ('echange','erreur_cps') AND date_jour BETWEEN ? AND ?`,
+    [from, to]
+  );
+  const [remplis] = await pool.query(
+    `SELECT DISTINCT date_jour, js_code FROM planning_cps
+     WHERE date_jour BETWEEN ? AND ? AND js_code IS NOT NULL`,
+    [from, to]
+  );
+  const remplisSet = new Set(remplis.map(r => `${r.date_jour instanceof Date ? r.date_jour.toISOString().slice(0,10) : r.date_jour}|${r.js_code}`));
+  aleas.forEach(a => {
+    const dateStr = a.date_jour instanceof Date ? a.date_jour.toISOString().slice(0,10) : a.date_jour;
+    const keyRempli = `${dateStr}|${a.js_code}`;
+    if (remplisSet.has(keyRempli)) return; // le poste n'était pas vacant, pas une couverture réserve
+    let concernes = [];
+    try { concernes = typeof a.agents_concernes === 'string' ? JSON.parse(a.agents_concernes) : (a.agents_concernes || []); } catch (e) { concernes = []; }
+    concernes.forEach(cp => {
+      if (reserveSet.has(cp)) numeratorSet.add(`${a.famille}|${cp}|${dateStr}`);
+    });
+  });
+
+  function pct(n, d) { return d > 0 ? Math.round((n / d) * 1000) / 10 : 0; }
+  function countFamille(set, famille) {
+    let n = 0;
+    set.forEach(k => { if (k.startsWith(`${famille}|`)) n++; });
+    return n;
+  }
+  const numGlobal = numeratorSet.size;
+  const denomGlobal = (denominateur.PRCI || 0) + (denominateur.PAR || 0);
+  return {
+    global: { pct: pct(numGlobal, denomGlobal), numerateur: numGlobal, denominateur: denomGlobal },
+    PRCI: { pct: pct(countFamille(numeratorSet,'PRCI'), denominateur.PRCI), numerateur: countFamille(numeratorSet,'PRCI'), denominateur: denominateur.PRCI },
+    PAR: { pct: pct(countFamille(numeratorSet,'PAR'), denominateur.PAR), numerateur: countFamille(numeratorSet,'PAR'), denominateur: denominateur.PAR },
+  };
+}
+
 // GET /api/stats-equipe?year=2026
 async function getStats(req, res) {
   const year = parseInt(req.query.year, 10) || new Date().getFullYear();
@@ -64,66 +129,20 @@ async function getStats(req, res) {
     };
 
     // ─── Couverture Réserve régionale (#4) ───────────────────────────────────
-    const [denomRows] = await pool.query(
-      `SELECT famille, COUNT(*) AS total FROM planning_cps
-       WHERE date_jour BETWEEN ? AND ? GROUP BY famille`,
-      [from, to]
-    );
-    const denominateur = { PRCI: 0, PAR: 0 };
-    denomRows.forEach(r => { denominateur[r.famille] = r.total; });
+    const coverageReserve = await computeCoverageReserve(from, to);
 
-    const [reserveCps] = await pool.query(`SELECT cp_agent FROM profil_agent WHERE is_reserve = 1`);
-    const reserveSet = new Set(reserveCps.map(r => r.cp_agent));
-
-    const numeratorSet = new Set(); // clé "famille|cp|date"
-
-    // (a) présence directe d'un réserviste dans planning_cps
-    const [presenceDirecte] = await pool.query(
-      `SELECT pc.famille, pc.cp_agent, pc.date_jour
-       FROM planning_cps pc JOIN profil_agent pa ON pa.cp_agent = pc.cp_agent
-       WHERE pa.is_reserve = 1 AND pc.date_jour BETWEEN ? AND ?`,
-      [from, to]
-    );
-    presenceDirecte.forEach(r => {
-      numeratorSet.add(`${r.famille}|${r.cp_agent}|${r.date_jour instanceof Date ? r.date_jour.toISOString().slice(0,10) : r.date_jour}`);
-    });
-
-    // (b) réserviste couvrant un poste vacant via une aléa échange/erreur_cps
-    const [aleas] = await pool.query(
-      `SELECT js_code, date_jour, famille, agents_concernes FROM cps_aleas
-       WHERE type IN ('echange','erreur_cps') AND date_jour BETWEEN ? AND ?`,
-      [from, to]
-    );
-    const [remplis] = await pool.query(
-      `SELECT DISTINCT date_jour, js_code FROM planning_cps
-       WHERE date_jour BETWEEN ? AND ? AND js_code IS NOT NULL`,
-      [from, to]
-    );
-    const remplisSet = new Set(remplis.map(r => `${r.date_jour instanceof Date ? r.date_jour.toISOString().slice(0,10) : r.date_jour}|${r.js_code}`));
-    aleas.forEach(a => {
-      const dateStr = a.date_jour instanceof Date ? a.date_jour.toISOString().slice(0,10) : a.date_jour;
-      const keyRempli = `${dateStr}|${a.js_code}`;
-      if (remplisSet.has(keyRempli)) return; // le poste n'était pas vacant, pas une couverture réserve
-      let concernes = [];
-      try { concernes = typeof a.agents_concernes === 'string' ? JSON.parse(a.agents_concernes) : (a.agents_concernes || []); } catch (e) { concernes = []; }
-      concernes.forEach(cp => {
-        if (reserveSet.has(cp)) numeratorSet.add(`${a.famille}|${cp}|${dateStr}`);
-      });
-    });
-
-    function pct(n, d) { return d > 0 ? Math.round((n / d) * 1000) / 10 : 0; }
-    function countFamille(set, famille) {
-      let n = 0;
-      set.forEach(k => { if (k.startsWith(`${famille}|`)) n++; });
-      return n;
+    // ─── Couverture Réserve régionale par année (18/08, demande d'Olivier :
+    // "fait les stat par annee") — même fenêtre de 5 ans que le sélecteur
+    // d'année du frontend (currentYear+1 à currentYear-3), pour permettre de
+    // voir l'évolution du taux de couverture d'une année sur l'autre sans
+    // avoir à rouvrir la page pour chaque année une par une.
+    const anneeCouranteReelle = new Date().getFullYear();
+    const anneesCoverage = [anneeCouranteReelle + 1, anneeCouranteReelle, anneeCouranteReelle - 1, anneeCouranteReelle - 2, anneeCouranteReelle - 3];
+    const coverageReserveParAnnee = [];
+    for (const y of anneesCoverage) {
+      const cov = y === year ? coverageReserve : await computeCoverageReserve(`${y}-01-01`, `${y}-12-31`);
+      coverageReserveParAnnee.push({ annee: y, ...cov });
     }
-    const numGlobal = numeratorSet.size;
-    const denomGlobal = (denominateur.PRCI || 0) + (denominateur.PAR || 0);
-    const coverageReserve = {
-      global: { pct: pct(numGlobal, denomGlobal), numerateur: numGlobal, denominateur: denomGlobal },
-      PRCI: { pct: pct(countFamille(numeratorSet,'PRCI'), denominateur.PRCI), numerateur: countFamille(numeratorSet,'PRCI'), denominateur: denominateur.PRCI },
-      PAR: { pct: pct(countFamille(numeratorSet,'PAR'), denominateur.PAR), numerateur: countFamille(numeratorSet,'PAR'), denominateur: denominateur.PAR },
-    };
 
     // ─── Postes non tenus (#7) ──────────────────────────────────────────────
     const [nonTenusRows] = await pool.query(
@@ -268,6 +287,7 @@ async function getStats(req, res) {
       headcounts: { totalAgents, totalEquipe, totalReserve, nbTempsPartiel, pctTempsPartiel },
       ageMoyenHorsReserve,
       coverageReserve,
+      coverageReserveParAnnee,
       congesRefuses,
       vtRefuses,
       postesNonTenus,

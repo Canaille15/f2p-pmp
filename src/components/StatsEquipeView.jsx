@@ -47,6 +47,72 @@ function labelPoste(code) {
   const label = POSTE_LABELS[code];
   return label ? `${label} (${code})` : code;
 }
+
+// Table dédiée pour "Postes non tenus" (18/08, demande d'Olivier : "il faut
+// indiquer en plus du code du poste l'intitulé du poste et le détail par
+// service") — POSTE_LABELS ci-dessus est keyée par code DE BASE sans
+// suffixe de vacation (ex: "PICCL"), utilisée pour les Habilitations où
+// c'est la convention de la table `habilitation`. Mais cps_aleas.js_code
+// (source de postesNonTenus) stocke toujours le code COMPLET avec suffixe
+// de service (ex: "PICCL-"/"PICCLO"/"PICCLX"), exactement comme
+// planning_cps.js_code — labelPoste() ne matchait donc jamais rien pour ces
+// entrées, affichant juste le code brut sans intitulé. Recopié depuis
+// POSTES_PRCI_3x8/POSTES_PAR_3x8/POSTES_JOURNEE (App.jsx, non exportés).
+const JSCODE_TO_POSTE = {
+  // PRCI — 3×8
+  "PICCL-": { label: "CCL", service: "Matin" }, "PICCLO": { label: "CCL", service: "Soirée" }, "PICCLX": { label: "CCL", service: "Nuit" },
+  "PIADJ-": { label: "Adj CCL", service: "Matin" }, "PIADJO": { label: "Adj CCL", service: "Soirée" }, "PIADJX": { label: "Adj CCL", service: "Nuit" },
+  "PILNE-": { label: "AC LNE", service: "Matin" }, "PILNEO": { label: "AC LNE", service: "Soirée" }, "PILNEX": { label: "AC LNE", service: "Nuit" },
+  "PILNO-": { label: "AC LNO", service: "Matin" }, "PILNOO": { label: "AC LNO", service: "Soirée" }, "PILNOX": { label: "AC LNO", service: "Nuit" },
+  "PIVGD-": { label: "AC VGD", service: "Matin" }, "PIVGDO": { label: "AC VGD", service: "Soirée" },
+  "PILCL-": { label: "AC LC", service: "Matin" }, "PILCLO": { label: "AC LC", service: "Soirée" }, "PILCLX": { label: "AC LC", service: "Nuit" },
+  // PAR — 3×8
+  "PAAC1-": { label: "AC PAR", service: "Matin" }, "PAAC1O": { label: "AC PAR", service: "Soirée" }, "PAAC1X": { label: "AC PAR", service: "Nuit" },
+  "PAAC2-": { label: "Aide AC PAR", service: "Matin" }, "PAAC2O": { label: "Aide AC PAR", service: "Soirée" }, "PAAC2X": { label: "Aide AC PAR", service: "Nuit" },
+  "PAACXX": { label: "CT AC Travaux", service: "Nuit" },
+  // PRCI — journée
+  "PIPA1J": { label: "Pauseur CCL", service: "Journée" },
+  "PIPA2J": { label: "Pauseur Adjoint", service: "Journée" },
+  "PIPA3J": { label: "Pauseur VGD", service: "Journée" },
+  "PIDPXJ": { label: "DPX PRCI", service: "Journée" },
+  "PIASSJ": { label: "Adj DPX PRCI", service: "Journée" },
+  "SD%": { label: "SD", service: "Journée" },
+  "F-PRCI": { label: "K-PRCI", service: "Journée" },
+  "AFOPRCI": { label: "AFO PRCI", service: "Journée" },
+  "CAF": { label: "CAF", service: "Journée" },
+  "PPRCI": { label: "PPRCI", service: "Journée" },
+  "VM": { label: "VM", service: "Journée" },
+  "K-PRCI": { label: "K-PRCI", service: "Journée" },
+  "A-PRCI": { label: "A-PRCI", service: "Journée" },
+  "DISPO": { label: "DISPO", service: "Journée" },
+  // PAR — journée
+  "PAPAUJ": { label: "Pauseur PAR", service: "Journée" },
+  "PADPXJ": { label: "DPX PAR", service: "Journée" },
+  "PAASMJ": { label: "ASMTE PAR", service: "Journée" },
+  "AFO PAR": { label: "AFO PAR", service: "Journée" },
+  "K-PAR": { label: "K-PAR", service: "Journée" },
+  "F-PAR": { label: "F-PAR", service: "Journée" },
+};
+// Regroupe les entrées "postes non tenus" par intitulé de poste (les 3
+// variantes M/AM/N d'un même poste comptent ensemble), avec un sous-détail
+// par service — un code inconnu (jamais vu dans la table ci-dessus) reste
+// affiché tel quel plutôt que de disparaître silencieusement.
+function groupPostesNonTenus(parPoste) {
+  const groupes = {};
+  parPoste.forEach(p => {
+    const info = JSCODE_TO_POSTE[p.js_code] || { label: null, service: null };
+    const label = info.label || p.js_code;
+    if (!groupes[label]) groupes[label] = { label, nb: 0, codes: new Set(), parService: {} };
+    const g = groupes[label];
+    g.nb += p.nb;
+    g.codes.add(p.js_code);
+    const service = info.service || "Service inconnu";
+    if (!g.parService[service]) g.parService[service] = { service, nb: 0, entries: [] };
+    g.parService[service].nb += p.nb;
+    g.parService[service].entries.push(...p.entries.map(e => ({ ...e, js_code: p.js_code })));
+  });
+  return Object.values(groupes).sort((a, b) => b.nb - a.nb);
+}
 // L'API ne renvoie que les postes avec au moins 1 agent habilité — un poste
 // à 0 (ex: DPX PRCI si personne n'est habilité dessus) disparaissait sinon
 // silencieusement de la liste, donnant l'impression qu'il avait été oublié.
@@ -145,6 +211,9 @@ export default function StatsEquipeView() {
               <Tuile label="PAR" valeur={fmtPct(data.coverageReserve.PAR.pct)} sousLabel={`${data.coverageReserve.PAR.numerateur} / ${data.coverageReserve.PAR.denominateur} j.`} />
             </div>
           </div>
+
+          {/* Couverture Réserve régionale par année (18/08) */}
+          {data.coverageReserveParAnnee && <CoverageParAnneeSection data={data.coverageReserveParAnnee} anneeActuelle={year} />}
 
           {/* Congés / VT refusés — anonymisés */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
@@ -288,6 +357,48 @@ function ReserveRoulementSection({ data }) {
   );
 }
 
+// Couverture Réserve régionale sur plusieurs années (18/08, demande
+// d'Olivier : "d'ailleurs fait les stat par anee") — même fenêtre de 5 ans
+// que le sélecteur d'année du haut de page, même principe collapsible que
+// ReserveRoulementSection ci-dessus.
+function CoverageParAnneeSection({ data, anneeActuelle }) {
+  const [ouvert, setOuvert] = useState(false);
+  return (
+    <div style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={sectionTitle}>📈 Couverture Réserve régionale — évolution par année</div>
+        <button onClick={() => setOuvert(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700 }}>
+          {ouvert ? "▲ Masquer le détail" : "▼ Voir le détail par année"}
+        </button>
+      </div>
+      {ouvert && (
+        <div style={{ overflowX: "auto", marginTop: 12 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ textAlign: "left", color: "#94a3b8", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
+                <th style={{ padding: "4px 8px", fontWeight: 700 }}>Année</th>
+                <th style={{ padding: "4px 8px", fontWeight: 700 }}>Global</th>
+                <th style={{ padding: "4px 8px", fontWeight: 700 }}>PRCI</th>
+                <th style={{ padding: "4px 8px", fontWeight: 700 }}>PAR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map(row => (
+                <tr key={row.annee} style={{ borderTop: "1px solid #f1f5f9", background: row.annee === anneeActuelle ? "#eff6ff" : "transparent" }}>
+                  <td style={{ padding: "6px 8px", fontWeight: row.annee === anneeActuelle ? 800 : 600, color: "#334155" }}>{row.annee}</td>
+                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{fmtPct(row.global.pct)} <span style={{ fontSize: 10.5, color: "#94a3b8", fontWeight: 500 }}>({row.global.numerateur}/{row.global.denominateur})</span></td>
+                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{fmtPct(row.PRCI.pct)} <span style={{ fontSize: 10.5, color: "#94a3b8", fontWeight: 500 }}>({row.PRCI.numerateur}/{row.PRCI.denominateur})</span></td>
+                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{fmtPct(row.PAR.pct)} <span style={{ fontSize: 10.5, color: "#94a3b8", fontWeight: 500 }}>({row.PAR.numerateur}/{row.PAR.denominateur})</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DispoSection({ data }) {
   const [ouvert, setOuvert] = useState(false);
   return (
@@ -317,6 +428,7 @@ function DispoSection({ data }) {
 
 function PostesNonTenusSection({ data }) {
   const [ouvert, setOuvert] = useState(false);
+  const groupes = useMemo(() => groupPostesNonTenus(data.parPoste), [data.parPoste]);
   return (
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -327,14 +439,25 @@ function PostesNonTenusSection({ data }) {
       </div>
       <Tuile label="Total" valeur={data.total} large />
       {ouvert && (
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-          {data.parPoste.map(p => (
-            <div key={p.js_code} style={{ borderTop: "1px solid #f1f5f9", paddingTop: 8 }}>
-              <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 12.5, marginBottom: 4 }}>{labelPoste(p.js_code)} — {p.nb} fois</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {p.entries.map((e, i) => (
-                  <div key={i} style={{ fontSize: 11.5, color: "#64748b" }}>
-                    {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+          {groupes.map(g => (
+            <div key={g.label} style={{ borderTop: "1px solid #f1f5f9", paddingTop: 8 }}>
+              <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 12.5, marginBottom: 6 }}>
+                {g.label}{g.codes.size === 1 ? ` (${[...g.codes][0]})` : ""} — {g.nb} fois
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 4 }}>
+                {Object.values(g.parService).sort((a, b) => b.nb - a.nb).map(s => (
+                  <div key={s.service}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "#475569" }}>
+                      {s.service} — {s.nb} fois
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 10, marginTop: 2 }}>
+                      {s.entries.map((e, i) => (
+                        <div key={i} style={{ fontSize: 11, color: "#64748b" }}>
+                          {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}{g.codes.size > 1 ? ` (${e.js_code})` : ""}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
