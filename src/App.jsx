@@ -10990,6 +10990,18 @@ const handleLogin = async (pinOverride) => {
       } catch {}
       onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo });
     } catch(e) {
+      // Réserve régionale : l'auto-enregistrement est bloqué côté serveur
+      // (18/08, demande d'Olivier — "seul un admin donne accès"). On ramène
+      // l'agent à l'écran de connexion normal plutôt que de le laisser sur un
+      // formulaire de création de PIN qui échouera toujours, pour ne pas
+      // donner l'impression qu'il suffit de réessayer.
+      if(e.message?.includes("administrateur")){
+        setStep("login");
+        setPin(["","","",""]);
+        setPinConfirm(["","","",""]);
+        setError(e.message);
+        return;
+      }
       setError(e.message || "Erreur connexion");
     }
   };

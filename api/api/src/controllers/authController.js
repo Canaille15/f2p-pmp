@@ -39,18 +39,25 @@ async function login(req, res) {
 // POST /api/auth/register -> creation du PIN initial d'un compte qui n'en a pas
 // encore (l'agent l'a choisi et confirme deux fois cote frontend avant cet appel).
 // Refuse si un PIN existe deja - dans ce cas c'est /login qu'il faut utiliser.
+// Refuse aussi pour un agent Reserve regionale (is_reserve) : demande explicite
+// d'Olivier (18/08) - ces comptes ne doivent jamais pouvoir s'auto-enregistrer,
+// seul un admin donne acces (bouton "Reinitialiser le PIN" deja existant dans
+// AdminPanel.jsx, agentController.resetPin). Verifie cote serveur (pas
+// seulement cote frontend) - un appel direct a l'API doit etre bloque de la
+// meme facon.
 async function register(req, res) {
   const { cp, pin } = req.body;
   if (!cp || !pin) return res.status(400).json({ error: 'CP et PIN requis' });
   if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (4 chiffres)' });
   try {
     const [rows] = await pool.query(
-      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, a.statut, au.pin_hash, au.is_admin, pa.is_afo
+      `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, a.statut, au.pin_hash, au.is_admin, pa.is_afo, pa.is_reserve
        FROM agent a JOIN auth au ON au.cp_agent = a.cp LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp WHERE a.cp = ?`, [cp]);
     if (!rows.length) return res.status(401).json({ error: 'Identifiants incorrects' });
     const agent = rows[0];
     if (agent.statut === 'quitte') return res.status(403).json({ error: 'Ce compte n\'est plus actif' });
     if (agent.pin_hash) return res.status(409).json({ error: 'Ce compte a déjà un PIN — utilise la connexion normale' });
+    if (agent.is_reserve) return res.status(403).json({ error: 'Ce compte (Réserve régionale) doit être activé par un administrateur — contacte-le pour obtenir ton code PIN.' });
     await pool.query('UPDATE auth SET pin_hash = ? WHERE cp_agent = ?', [await bcrypt.hash(pin, 12), cp]);
     await issueSession(req, res, agent);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
