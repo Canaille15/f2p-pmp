@@ -215,14 +215,7 @@ export default function StatsEquipeView() {
               <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} sousLabel="compte à part" />
               <Tuile label="Encadrement" valeur={data.headcounts.totalEncadrement} sousLabel="DPX / Adj DPX — compte à part" />
               <Tuile label="AFO" valeur={data.headcounts.totalAfo} sousLabel="toutes catégories confondues" />
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 11, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6, justifyContent: "center" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04 }}>Temps partiel</div>
-                  <div style={{ fontFamily: "ui-monospace,Consolas,monospace", fontSize: 15, fontWeight: 800, color: "#1e293b" }}>{fmtPct(data.headcounts.pctTempsPartiel)}</div>
-                </div>
-                <Barre pct={data.headcounts.pctTempsPartiel} />
-                <div style={{ fontSize: 10.5, color: "#94a3b8" }}>Temps plein {fmtPct(pctTempsPlein)}</div>
-              </div>
+              <Tuile label="Temps partiel" valeur={fmtPct(data.headcounts.pctTempsPartiel)} sousLabel={`${data.headcounts.nbTempsPartiel} agent(s) · Temps plein ${fmtPct(pctTempsPlein)}`} />
             </div>
             {/* Par grade (18/08, demande d'Olivier : "decompté les Cadre Op
                 [...] Maitrises [...] Maytises 2", puis en suite immédiate :
@@ -369,14 +362,6 @@ function CellPct({ pct, num, den }) {
   );
 }
 
-function Barre({ pct }) {
-  const clamped = Math.max(0, Math.min(100, pct));
-  return (
-    <div style={{ height: 8, borderRadius: 999, background: "#e2e8f0", overflow: "hidden" }}>
-      <div style={{ height: "100%", width: `${clamped}%`, borderRadius: 999, background: NAVY.from, transition: "width .2s ease" }} />
-    </div>
-  );
-}
 
 const MOIS_L = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
