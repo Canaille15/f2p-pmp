@@ -1934,6 +1934,18 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           if(jsCode&&/^PAAC20$/.test(jsCode)) jsCode="PAAC2O"; // fix OCR : 0 chiffre lu au lieu de O lettre
           if(jsCode==="RET SAM") jsCode="RFT SAM"; // fix OCR : E lu au lieu de F
           if(jsCode==="PICOLO") jsCode="PICCLO"; // fix extraction (17/08) : un des deux "C" de "PICCLO" disparait a l'extraction sur certaines pages (glyphes "CL" trop rapproches)
+          // fix extraction (18/08) : sur certaines pages, l'annotation "Fé" (jour
+          // ferie, a cote d'un horaire de soiree decale — ex: "PIVGDO Fé 16:15 -
+          // 23:52") se colle au code SANS espace dans le flux de texte du build
+          // navigateur reel de pdfjs (jamais reproduit avec le build Node legacy
+          // utilise pour les diagnostics hors-ligne) — l'accent "é" disparait au
+          // passage, ne laissant qu'un "F" isole colle en bout de code ("PIVGDOF"
+          // au lieu de "PIVGDO"). Code corrompu confirme en base apres un import
+          // reel (agent LUCAS Samuel, 25/05/2026, feuille de presence PRCI 44) :
+          // ne correspond a aucun poste connu, la case restait "Vacant" malgre
+          // un agent bien present. Aucun vrai code ne se termine par un "F" seul,
+          // retrait sans risque.
+          if(/^(PA|PI)[A-Z]+F$/.test(jsCode)) jsCode=jsCode.slice(0,-1);
           if(jsCode==="PILND-") jsCode="PILNO-"; // fix OCR : D lu au lieu de O
           if(jsCode==="PIAOJX") jsCode="PIADJX"; // fix OCR : O lu au lieu de D
           // fix extraction (17/08) : un nom de famille en 2 mots (ex: "VICENTE CARREIRA",
