@@ -650,6 +650,18 @@ function parseDeroulePrevisionnel(text) {
   // avant tout parsing — l'apostrophe n'apparait nulle part ailleurs dans ce
   // type de document, substitution donc sans risque.
   text = text.replace(/I['’]/g, "P");
+  // fix extraction (18/08, confirmé par Olivier en comparant au document
+  // papier — "je vois pas ca ecrit [...] et c'esttous des rp") : "RP"
+  // (repos périodique) ressort "14F" sur ce document précis (2026), une
+  // corruption différente de "RI" ci-dessus mais qui vise le même code.
+  // "14F" commence par un chiffre — le regex de capture de code exige une
+  // lettre majuscule en premier caractère, donc ce jeton n'était même pas
+  // capturé du tout (pas juste rejeté, silencieusement absent), d'où un
+  // simple alias dans normaliseCode n'aurait jamais pu suffire. Remplacement
+  // au niveau texte brut comme pour "I'" ci-dessus : "14F" n'apparaît nulle
+  // part ailleurs dans ce type de document (jamais un jour du mois "14"
+  // suivi directement de "F"), substitution sans risque.
+  text = text.replace(/\b14F\b/g, "RP");
   const editionMatch = text.match(/Le\s*(\d{2})[/1](\d{2})[/1](\d{4})/i);
   const editionDate = editionMatch
     ? `${editionMatch[3]}-${editionMatch[2]}-${editionMatch[1]} 00:00:00`
