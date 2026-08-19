@@ -344,6 +344,11 @@ const CESURES_LABEL = {
   "Congés":"Con­gés", "Maladie":"Mala­die", "Formation":"For­ma­tion",
 };
 const avecCesure = (s) => CESURES_LABEL[s] || s;
+// Icônes case planning (19/08, essai demandé par Olivier après une capture
+// d'inspiration mode sombre) — volontairement limité aux 4 codes de travail
+// (les plus fréquents dans le calendrier) pour ne pas surcharger visuellement
+// les autres badges (RP/RU/RQ/CA... gardent leur libellé nu, inchangé).
+const ICONES_CASE = { M:"☀️ ", AM:"🌇 ", N:"🌙 ", J:"🌤️ " };
 
 // EQ_COLORS — alias de EQ avec mapping bg/tc/dot pour compatibilité
 const EQ_COLORS = Object.fromEntries(
@@ -8686,7 +8691,7 @@ justifyContent: "flex-start",
               }}>
                 <span lang="fr" style={CODES_FETES[code]||code==="CA"||code==="CP"
                   ? {fontSize:14,fontWeight:800,display:"block",whiteSpace:"nowrap"}
-                  : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):(code==="CA"||code==="CP")?code:avecCesure(EQ_COLORS[code]?.label||code)}</span>
+                  : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):(code==="CA"||code==="CP")?code:(ICONES_CASE[code]||"")+avecCesure(EQ_COLORS[code]?.label||code)}</span>
                 {(code==="CA"||code==="CP")&&congeToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeToutNumeros[dk].numero}{congeToutNumeros[dk].anneeReport?` (${congeToutNumeros[dk].anneeReport})`:""}</span>}
                 {code==="RU"&&ruNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{ruNumeros[dk].numero}{ruNumeros[dk].anneeReport?` (${ruNumeros[dk].anneeReport})`:""}</span>}
                 {code==="RQ"&&rqNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rqNumeros[dk]}</span>}
@@ -8722,7 +8727,7 @@ justifyContent: "flex-start",
                 display:"flex", flexDirection:"column",
                 minWidth:0,
               }}>
-                <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Nuit</span>
+                <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ICONES_CASE.N}Nuit</span>
                 {(code==="N"?posteLabel:posteNuitLabel)&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
               </div>}
 
