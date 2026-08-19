@@ -18,6 +18,19 @@
      fond de la barre passé en sombre, éclairci uniquement côté sombre
      (19/08, signalé par Olivier : "la touche devient quasiment invisible"). */
   --accent-active: #0a3a63;
+  /* Texte du logo "F2P.PMP" en en-tête -- meme piege que --accent-active,
+     bleu-marine de marque pense pour un fond blanc, invisible une fois le
+     fond de la barre passe en sombre (19/08, Olivier : "ameliore le logo
+     f2p dans le mode sombre"). */
+  --brand-text: #0f4c81;
+  /* Sous-titre "PRCI · PAR" du logo -- premier essai avec var(--text-muted)
+     insuffisant : dans ce projet --text-muted est VOLONTAIREMENT plus foncé
+     que --text-secondary en sombre (l'inverse du clair), donc le réutiliser
+     ici assombrissait le sous-titre au lieu de l'éclaircir. Token dédié,
+     valeur claire identique à l'original (#94a3b8), légèrement éclairci
+     côté sombre pour bien ressortir sur le bleu-marine (19/08, Olivier :
+     "ameliore aussi prci par sous le logo f2p"). */
+  --brand-subtitle: #94a3b8;
 }
 :root[data-theme="dark"] {
   --bg-page: #0a0e1a;
@@ -28,5 +41,7 @@
   --text-muted: #64748b;
   --shadow-card: rgba(0,0,0,.35);
   --accent-active: #60a5fa;
+  --brand-text: #7dd3fc;
+  --brand-subtitle: #b6c3d6;
 }
 body { background: var(--bg-page); transition: background .15s; }

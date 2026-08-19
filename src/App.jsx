@@ -189,8 +189,12 @@ const sb = {
 
 // ─── DONNÉES MÉTIER ───────────────────────────────────────────────────────────
 const FAMILLES = {
-  PRCI:{ label:"PRCI PMP",        color:"#0f4c81", accent:"#3b82f6", light:"#eff6ff" },
-  PAR: { label:"PAR LGV Réserve", color:"#064e3b", accent:"#10b981", light:"#ecfdf5" },
+  // highlightBg (19/08, demande d'Olivier "rendre visible tout de suite ou est
+  // son nom" dans CPS Officiel/Previsionnel) : version nettement plus saturee
+  // de la couleur de famille (deja utilisee pour l'accent/le badge PRCI-PAR),
+  // reservee a la case de l'agent connecte -- jamais utilisee pour une case normale.
+  PRCI:{ label:"PRCI PMP",        color:"#0f4c81", accent:"#3b82f6", light:"#eff6ff", highlightBg:"#bfdbfe" },
+  PAR: { label:"PAR LGV Réserve", color:"#064e3b", accent:"#10b981", light:"#ecfdf5", highlightBg:"#a7f3d0" },
 };
 
 // Postes 3x8 ordonnés
@@ -2307,10 +2311,10 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                           <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#7c3aed"}}>📅 Signalement</div><button onClick={()=>annulerPrevisionnelSignalement(sig.id,setPrevisionnelSignalements)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#7c3aed",opacity:.6,marginLeft:"auto"}}>✕</button></div>
                         </div>);
                       }
-                      return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isMe?"#fafdf0":(fam?.light||"rgba(255,255,255,.8)"),border:`1.5px solid ${isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px"}}>
+                      return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe?2.5:1.5}px solid ${isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px",boxShadow:isMe?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
                         <Av initials={ag.initials} size={22} famille={ag.famille}/>
                         <div>
-                          <div style={{fontSize:11,fontWeight:700,color:row.agents.length>1?"#dc2626":"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
+                          <div style={{fontSize:11,fontWeight:700,color:row.agents.length>1?"#dc2626":"#1e293b"}}>{ag.prenom} {ag.nom}</div>
                           <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
                           {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
                         </div>
@@ -2321,10 +2325,10 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       </div>);
                     }
                     if(ag)return(<div key={si} style={{display:"flex",flexDirection:"column",gap:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?"#fafdf0":(fam?.light||"rgba(255,255,255,.8)"),border:`1.5px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:alea?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe&&!isForm?2.5:1.5}px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:alea?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px",boxShadow:isMe&&!isForm?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
                         <Av initials={ag.initials} size={22} famille={ag.famille}/>
                         <div>
-                          <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}{isMe&&<span style={{fontSize:8,color:fam?.accent||"#6366f1",marginLeft:3}}>●</span>}</div>
+                          <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}</div>
                           <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
                             {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
                         </div>
@@ -11843,9 +11847,9 @@ export default function App(){
         height:48,padding:"0 12px"}}>
         <button onClick={()=>setMenuOpen(true)} style={{border:"none",background:"none",cursor:"pointer",padding:6,marginRight:2,flexShrink:0,display:"flex",alignItems:"center"}}>
           <div style={{display:"flex",flexDirection:"column",gap:3}}>
-            <div style={{width:18,height:2,background:"#475569",borderRadius:1}}/>
-            <div style={{width:18,height:2,background:"#475569",borderRadius:1}}/>
-            <div style={{width:18,height:2,background:"#475569",borderRadius:1}}/>
+            <div style={{width:18,height:2,background:"var(--text-primary)",borderRadius:1}}/>
+            <div style={{width:18,height:2,background:"var(--text-primary)",borderRadius:1}}/>
+            <div style={{width:18,height:2,background:"var(--text-primary)",borderRadius:1}}/>
           </div>
         </button>
 
@@ -11876,8 +11880,8 @@ export default function App(){
             <span style={{fontSize:14}}>🚄</span>
           </div>
           <div style={{lineHeight:1}}>
-            <div style={{fontSize:12,fontWeight:800,color:"#0f4c81",letterSpacing:-.3}}>F2P.PMP</div>
-            <div style={{fontSize:7,color:"#94a3b8",letterSpacing:.4,fontFamily:"monospace"}}>PRCI · PAR</div>
+            <div style={{fontSize:12,fontWeight:800,color:"var(--brand-text)",letterSpacing:-.3}}>F2P.PMP</div>
+            <div style={{fontSize:7,color:"var(--brand-subtitle)",letterSpacing:.4,fontFamily:"monospace"}}>PRCI · PAR</div>
           </div>
         </div>
 
@@ -12027,7 +12031,7 @@ export default function App(){
     </div>}
     {/* CONTENU */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
-      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} previsionnelSignalements={[]} setPrevisionnelSignalements={()=>{}} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}
+      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} previsionnelSignalements={[]} setPrevisionnelSignalements={()=>{}} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}
         onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
         onAddAgent={()=>setAddAgentOpen(true)}
         onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
@@ -12055,7 +12059,7 @@ export default function App(){
   {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} currentUser={currentUser} agents={agents} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} refreshProfil={refreshMonProfil}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
-      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
+      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
     </div>
 
