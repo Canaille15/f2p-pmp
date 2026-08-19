@@ -6201,22 +6201,28 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // Purement visuel ("meme masqué tout ce qui est dedans est comptabilisé")
   // : ne touche à aucun calcul, seulement à la présence de la carte ici.
   const vtActif = agentProfiles?.[agentIdPauses]?.vtModuleActif !== false;
+  // Palette harmonisée (19/08, demandé par Olivier — "unité de couleurs tout
+  // en gardant les touches de couleur") : les 14 teintes ci-dessous viennent
+  // toutes de la même échelle Tailwind "600" (même saturation/luminosité),
+  // réparties sur la roue chromatique pour rester mutuellement distinguables
+  // — remplace l'ancienne palette hétéroclite (mélange de tons vifs et
+  // ternes, VT et Congés partageaient même la même couleur #eab308).
   const CARDS = [
-    {key:"conges",  label:"Congés",          color:"#eab308", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:(solde-cetTransfereCA.total-maladiePerteCA)<5},
-    {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
+    {key:"conges",  label:"Congés",          color:"#d97706", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:(solde-cetTransfereCA.total-maladiePerteCA)<5},
+    {key:"travail", label:"Jours travaillés", color:"#dc2626", subtitle:`Année ${year}`},
     {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Pris au 31/12"},
-    {key:"RU",      label:"RU",              color:"#d97706", subtitle:"Pris au 31/12"},
-    {key:"RQ",      label:"RQ",              color:"#a21caf", subtitle:"Restant au 31/12"},
-    {key:"FETE",    label:"Fêtes",           color:"#ec4899", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
-    {key:"RN",      label:"RN",              color:"#4338ca", subtitle:`Solde — ${moisEnCoursLabel}`},
-    {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
+    {key:"RU",      label:"RU",              color:"#ea580c", subtitle:"Pris au 31/12"},
+    {key:"RQ",      label:"RQ",              color:"#c026d3", subtitle:"Restant au 31/12"},
+    {key:"FETE",    label:"Fêtes",           color:"#db2777", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
+    {key:"RN",      label:"RN",              color:"#4f46e5", subtitle:`Solde — ${moisEnCoursLabel}`},
+    {key:"PF",      label:"Pause Figée",     color:"#0d9488", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
     {key:"TC",      label:"TC",              color:"#0284c7", subtitle: tcData.solde>=TC_PLAFOND_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tcData.solde>=TC_PLAFOND_MIN},
     {key:"TY",      label:"TY",              color:"#9333ea", subtitle: tyLedgerData.solde>=PLAFOND_32H_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tyLedgerData.solde>=PLAFOND_32H_MIN},
-    {key:"TQ",      label:"TQ",              color:"#ea580c", subtitle:`Solde ${getSemestreCourant().label}`},
-    ...(vtActif ? [{key:"VT", label:"VT",    color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2}] : []),
+    {key:"TQ",      label:"TQ",              color:"#ca8a04", subtitle:`Solde ${getSemestreCourant().label}`},
+    ...(vtActif ? [{key:"VT", label:"VT",    color:"#65a30d", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2}] : []),
     {key:"CET",     label:"CET",             color:"#7c3aed", subtitle:"Compte épargne temps"},
-    {key:"FOR",     label:"Formation",       color:"#b45309", subtitle: nbFormationsNonVues>0 ? `🔔 ${nbFormationsNonVues} à voir` : "Jours formation dans l'année", alert: nbFormationsNonVues>0},
-    {key:"MA",      label:"Maladie",         color:"#dc2626", subtitle:"Jours maladie dans l'année"},
+    {key:"FOR",     label:"Formation",       color:"#0891b2", subtitle: nbFormationsNonVues>0 ? `🔔 ${nbFormationsNonVues} à voir` : "Jours formation dans l'année", alert: nbFormationsNonVues>0},
+    {key:"MA",      label:"Maladie",         color:"#e11d48", subtitle:"Jours maladie dans l'année"},
   ];
 
   const [ouvert, setOuvert] = usePersist("compteursOuvert", false);
@@ -6373,7 +6379,14 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
               onClick={!isClickable ? undefined : isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isCetCard ? ()=>setShowCetDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isFormationCard ? onOpenFormation : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
               background:"#fff",borderRadius:12,
-              border:`1.5px solid ${card.alert?"#fca5a5":"#e2e8f0"}`,
+              // Encadrement teinté (19/08, "unité de couleurs tout en gardant
+              // les touches de couleur") : reprend la couleur propre à chaque
+              // tuile en très faible opacité (2A hex ≈ 16%) au lieu du gris
+              // neutre uniforme d'avant — chaque carte garde son identité.
+              // L'alerte garde le rouge conventionnel (#fca5a5, inchangé) :
+              // un signal d'alerte doit rester rouge quelle que soit la
+              // couleur de la tuile, sinon il ne se voit plus comme tel.
+              border:`1.5px solid ${card.alert?"#fca5a5":card.color+"2a"}`,
               padding:"10px 12px",boxShadow:"0 1px 3px rgba(0,0,0,.06)",
               position:"relative",overflow:"hidden",minWidth:0,
               cursor:isClickable?"pointer":"default",
