@@ -11809,7 +11809,13 @@ export default function App(){
 
     {menuOpen&&<div style={{position:"fixed",inset:0,zIndex:300,display:"flex"}}>
       <div onClick={()=>setMenuOpen(false)} style={{position:"absolute",inset:0,background:"rgba(0,0,0,.4)"}}/>
-      <div style={{position:"relative",width:260,maxWidth:"80vw",height:"100%",background:"#fff",boxShadow:"4px 0 24px rgba(0,0,0,.15)",display:"flex",flexDirection:"column",padding:"16px 0",overflowY:"auto"}}>
+      {/* Largeur passee de 260 a 288px le 18/08 (Olivier : "plannig
+          orevisionnel et d2i sont un peu coupé depuis un ordi sur le
+          lateral") -- "Planning Prévisionnel" et "D2I" (pavés du menu)
+          étaient marginaux à 260px (repassaient sur 2 lignes selon le
+          rendu des polices), 288px donne de la marge sans dépasser
+          80vw sur mobile (maxWidth déjà en place). */}
+      <div style={{position:"relative",width:288,maxWidth:"80vw",height:"100%",background:"#fff",boxShadow:"4px 0 24px rgba(0,0,0,.15)",display:"flex",flexDirection:"column",padding:"16px 0",overflowY:"auto"}}>
         <div style={{padding:"0 16px 12px",borderBottom:"1px solid #f1f5f9",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{fontSize:14,fontWeight:800,color:"#0f4c81"}}>F2P.PMP</div>
           <button onClick={()=>setMenuOpen(false)} style={{border:"none",background:"none",cursor:"pointer",fontSize:18,color:"#94a3b8",padding:4}}>×</button>
