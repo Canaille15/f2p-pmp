@@ -679,9 +679,11 @@ function parseDeroulePrevisionnel(text) {
   }
   const annee = Object.entries(yearCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
     || String(new Date().getFullYear());
-  const year = parseInt(annee, 10);
 
-  const normaliseNum = n => n.replace(/[Ii]/g, "1").replace(/[Ss]/g, "5");
+  // fix OCR (19/08, déroulé prévisionnel 2027 de Maxime CORDEAU) : le numéro
+  // de jour peut aussi ressortir "io"→10, "ii"→11, "is"→15 (I/i→1, S/s→5,
+  // O/o→0 combinés sur 2 caractères) — "o"/"O" n'était pas encore couvert.
+  const normaliseNum = n => n.replace(/[Ii]/g, "1").replace(/[Ss]/g, "5").replace(/[Oo]/g, "0");
   const normaliseCode = c => {
     if (!c) return null; c = c.trim();
     c = c.replace(/\bHP\b/g, "RP");
@@ -714,66 +716,89 @@ function parseDeroulePrevisionnel(text) {
     return { heure_debut: `${mh[1]}:${mh[2]}:00`, heure_fin: `${mh[3]}:${mh[4]}:00` };
   };
 
-  // Séparer les deux blocs (Jan-Juin / Juil-Déc) : on cherche la ligne d'en-tête
-  // du 2e bloc ("07/AAAA ..."), pas un simple run de "___". Bug trouvé le 18/08
-  // (déroulé prévisionnel d'Antoine LEGOGUELIN, 2027) : l'ancien découpage
-  // cherchait le PREMIER run de 6+ underscores n'importe où dans tout le texte
-  // — mais certains documents ont un underline décoratif dès l'en-tête
-  // ("Affectations de l'agent ________"), bien avant la vraie frontière entre
-  // les 2 blocs. Le split tombait alors juste après ce tout premier underline,
-  // faisant basculer l'INTÉGRALITÉ du document (les 2 blocs réunis) dans
-  // "texteBloc2" — la table de correspondance jour/mois de bloc2 (juillet à
-  // décembre seulement) ne reconnaissait alors plus aucune date de
-  // janvier-juin, perdues silencieusement (0 jour importé sur tout le 1er
-  // semestre, confirmé par script : 0 match bloc1 / 366 matches bloc2 avant
-  // ce correctif). La ligne d'en-tête "07/AAAA..." est un repère fiable et
-  // unique (les jours du calendrier n'ont jamais ce format MM/AAAA) — reste
-  // robuste même si un run de "___" apparaît ailleurs dans le document.
-  const bloc2Match = new RegExp("^0?7\\/" + annee, "m").exec(text);
-  const sepEnd = bloc2Match ? bloc2Match.index
-    : (() => { const sepIdx = text.search(/_{6,}/); return sepIdx >= 0 ? text.indexOf("\n", sepIdx) : -1; })();
+  // Séparer les deux blocs (6 mois / 6 mois) : lecture directe des 2 lignes
+  // d'en-tête réelles du document (6 paires "MM/AAAA" par ligne), plutôt que
+  // de supposer "Jan-Juin / Juil-Déc de la même année". Bug trouvé le 19/08
+  // (déroulé prévisionnel de Maxime CORDEAU, 05/2026→04/2027) : un roulement
+  // peut être imprimé à tout moment de l'année pour 12 mois, en démarrant
+  // n'importe quel mois et en débordant sur l'année suivante — le split
+  // fixe "^07/annee" ne matchait alors JAMAIS (le doc démarre en mai, pas
+  // janvier), tout le texte retombait dans un seul bloc, traité avec des
+  // mois candidats 01-06 d'une SEULE année globale — les vraies données de
+  // janvier-avril de l'année suivante se faisaient alors mal-attribuer à
+  // un mois de l'année précédente qui partage le même jour de semaine
+  // (148 jours "importés" au lieu de ~345, dont 87 sous la mauvaise année,
+  // silencieusement — le planning perso semblait vide car les jours
+  // atterrissaient sur un mois/année qu'on ne consultait pas).
+  const HEADER_LINE_RE = /^\s*(\d{2})[\/1](\d{4})(?:\s+\d{2}[\/1]\d{4}){5}\s*$/gm;
+  const headerLines = [];
+  { let hm; HEADER_LINE_RE.lastIndex = 0;
+    while ((hm = HEADER_LINE_RE.exec(text)) !== null) {
+      const paires = [];
+      const pairRe = /(\d{2})[\/1](\d{4})/g; let pm;
+      while ((pm = pairRe.exec(hm[0])) !== null) paires.push({ mm: pm[1], yyyy: pm[2] });
+      headerLines.push({ index: hm.index, paires });
+    }
+  }
+
+  let sepEnd, moisAnnee1, moisAnnee2;
+  if (headerLines.length === 2 && headerLines[0].paires.length === 6 && headerLines[1].paires.length === 6) {
+    // Chemin robuste : les 12 (mois, année) réels sont lus directement sur
+    // les 2 lignes d'en-tête du document, dans l'ordre de leurs colonnes —
+    // fonctionne quel que soit le mois de départ et gère nativement un
+    // débordement sur l'année suivante.
+    sepEnd = headerLines[1].index;
+    moisAnnee1 = headerLines[0].paires;
+    moisAnnee2 = headerLines[1].paires;
+  } else {
+    // Repli : comportement historique (documents dont l'en-tête n'a pas pu
+    // être lue proprement, ex. OCR trop dégradé) — Jan-Juin / Juil-Déc de
+    // l'année majoritaire du document, jamais retiré pour rester
+    // non-régressif sur les cas déjà correctement couverts jusqu'ici.
+    const bloc2Match = new RegExp("^0?7\\/" + annee, "m").exec(text);
+    sepEnd = bloc2Match ? bloc2Match.index
+      : (() => { const sepIdx = text.search(/_{6,}/); return sepIdx >= 0 ? text.indexOf("\n", sepIdx) : -1; })();
+    const MOIS_BLOC1 = new Set(["01","02","03","04","05","06"]);
+    const MOIS_BLOC2 = new Set(["07","08","09","10","11","12"]);
+    const detectOrdre = (t, moisSet) => {
+      const re = new RegExp("(\\d{2})\\/" + annee, "g");
+      const seen = new Set(); const ordre = []; let m;
+      while ((m = re.exec(t)) !== null) {
+        const mm = m[1];
+        if (!seen.has(mm) && moisSet.has(mm)) { seen.add(mm); ordre.push(mm); }
+      }
+      for (const mm of moisSet) { if (!ordre.includes(mm)) ordre.push(mm); }
+      return ordre;
+    };
+    moisAnnee1 = detectOrdre(text, MOIS_BLOC1).map(mm => ({ mm, yyyy: annee }));
+    moisAnnee2 = detectOrdre(text, MOIS_BLOC2).map(mm => ({ mm, yyyy: annee }));
+  }
   const texteBloc1 = sepEnd > 0 ? text.slice(0, sepEnd) : text;
   const texteBloc2 = sepEnd > 0 ? text.slice(sepEnd) : "";
 
-  const MOIS_BLOC1 = new Set(["01","02","03","04","05","06"]);
-  const MOIS_BLOC2 = new Set(["07","08","09","10","11","12"]);
-
-  const detectOrdre = (t, moisSet) => {
-    const re = new RegExp("(\\d{2})\\/" + annee, "g");
-    const seen = new Set(); const ordre = []; let m;
-    while ((m = re.exec(t)) !== null) {
-      const mm = m[1];
-      if (!seen.has(mm) && moisSet.has(mm)) { seen.add(mm); ordre.push(mm); }
-    }
-    for (const mm of moisSet) { if (!ordre.includes(mm)) ordre.push(mm); }
-    return ordre;
-  };
-  const ord1 = detectOrdre(text, MOIS_BLOC1);
-  const ord2 = detectOrdre(text, MOIS_BLOC2);
-
   const ABBR_FROM_DAY = ["Di","Lu","Ma","Me","Je","Ve","Sa"];
-  const buildCandidates = (moisSet, ordre) => {
+  // Chaque candidat porte désormais sa propre année (yyyy), plus une année
+  // globale unique pour tout le document — indispensable pour un roulement
+  // qui traverse une frontière calendaire (ex: 04/2027 dans le 2e bloc d'un
+  // document dont l'en-tête global reste majoritairement 2026).
+  const buildCandidates = (paires) => {
     const map = {};
-    for (const mm of moisSet) {
-      const daysInMonth = new Date(year, parseInt(mm, 10), 0).getDate();
+    paires.forEach((p, ordreIdx) => {
+      const y = parseInt(p.yyyy, 10), mIdx = parseInt(p.mm, 10);
+      const daysInMonth = new Date(y, mIdx, 0).getDate();
       for (let day = 1; day <= daysInMonth; day++) {
-        const d = new Date(year, parseInt(mm, 10) - 1, day);
+        const d = new Date(y, mIdx - 1, day);
         const abbr = ABBR_FROM_DAY[d.getDay()];
         const key = `${abbr}_${day}`;
         if (!map[key]) map[key] = [];
-        map[key].push(mm);
+        map[key].push({ mm: p.mm, yyyy: p.yyyy, ordreIdx });
       }
-    }
-    for (const key in map) {
-      map[key].sort((a, b) => {
-        const ia = ordre.indexOf(a), ib = ordre.indexOf(b);
-        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-      });
-    }
+    });
+    for (const key in map) map[key].sort((a, b) => a.ordreIdx - b.ordreIdx);
     return map;
   };
-  const cmap1 = buildCandidates(MOIS_BLOC1, ord1);
-  const cmap2 = buildCandidates(MOIS_BLOC2, ord2);
+  const cmap1 = buildCandidates(moisAnnee1);
+  const cmap2 = buildCandidates(moisAnnee2);
 
   const DAY_ABBRS = new Set(["Je","Ve","Sa","Di","Lu","Ma","Me"]);
   // "PH..." (18/08, découvert sur le déroulé d'Antoine LEGOGUELIN) : code d'une
@@ -783,7 +808,12 @@ function parseDeroulePrevisionnel(text) {
   // deriveCodeEquipeBulletin (pas de suffixe -/O/X connu), faute de mieux.
   const CODE_VALID = /^(RPP|RP|RU|RQ|CA|C|DISPO|F[0-9V]|F-[A-Z]{2,}|PI[A-Z0-9-]{2,}|PA[A-Z0-9-]{2,}|PH[A-Z0-9-]{2,})$/;
   const SPECIAL = new Set(["RPP","RP","RU","RQ","CA","C","DISPO"]);
-  const DAY_RE = /(Je|Ve|Va|Sa|Di|Dl|Lu|Ma|Me)\s+(\d+|[IiSs5])(?:\s+([A-Z][A-Z0-9-]+)(?:\s+([A-Z][A-Z0-9-]+))?)?/g;
+  // Numéro de jour : "\d+" pour le cas normal, ou 1-2 caractères parmi
+  // I/i/S/s/O/o/5 pour tolérer les glyphes corrompus multi-caractères
+  // ("io"→10, "ii"→11, "is"→15) en plus du cas 1 caractère déjà géré
+  // ("I"→1, "S"→5) — mesuré sans aucune régression sur 2 documents réels
+  // avant d'élargir (+4 jours sur un cas, 0 changement sur l'autre).
+  const DAY_RE = /(Je|Ve|Va|Sa|Di|Dl|Lu|Ma|Me)\s+(\d+|[IiSsOo5]{1,2})(?:\s+([A-Z][A-Z0-9-]+)(?:\s+([A-Z][A-Z0-9-]+))?)?/g;
 
   const seen = new Set();
   const jours = [];
@@ -807,13 +837,13 @@ function parseDeroulePrevisionnel(text) {
 
       const idx = (usedCounts[key] || 0) % candidates.length;
       usedCounts[key] = (usedCounts[key] || 0) + 1;
-      const mm = candidates[idx];
+      const cand = candidates[idx];
 
       const c1 = normaliseCode(c1Raw);
       if (!c1 || DAY_ABBRS.has(c1) || !CODE_VALID.test(c1)) continue;
 
       const day = String(dayNum).padStart(2, "0");
-      const dateJour = `${annee}-${mm}-${day}`;
+      const dateJour = `${cand.yyyy}-${cand.mm}-${day}`;
       if (seen.has(dateJour)) continue;
       seen.add(dateJour);
 
@@ -893,8 +923,8 @@ function parseDeroulePrevisionnel(text) {
             const key3 = `${abbr3}_${dayNum3}`;
             const cands3 = cmap3[key3];
             if (!cands3) continue;
-            for (const mm3 of cands3) {
-              const dateJour3 = `${annee}-${mm3}-${String(dayNum3).padStart(2,"0")}`;
+            for (const cand3 of cands3) {
+              const dateJour3 = `${cand3.yyyy}-${cand3.mm}-${String(dayNum3).padStart(2,"0")}`;
               const existing3 = jours.find(j => j.date_jour === dateJour3);
               if (existing3 && !existing3.periodes.some(p => p.code_equipe === "N")) {
                 const eq2 = deriveCodeEquipeBulletin(nuitCode, null);
