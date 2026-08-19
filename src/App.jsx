@@ -1083,6 +1083,11 @@ const TODAY=`${_todayDate.getFullYear()}-${String(_todayDate.getMonth()+1).padSt
 const DAYS_L=["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
 const DAYS_S=["Di","Lu","Ma","Me","Je","Ve","Sa"];
 const MOIS_L=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+// Boutons précédent/suivant à côté d'un titre de mois (Mon planning, CPS Officiel,
+// Planning Prévisionnel) -- 19/08, Olivier : "on les voit presque pas" (texte seul
+// sans fond, ni bordure). Vraie puce cliquable avec fond/bordure, plutôt qu'un
+// simple caractère coloré sur fond transparent.
+const NAV_ARROW_STYLE={border:"1.5px solid var(--border)",background:"var(--bg-card)",color:"var(--text-primary)",borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,fontWeight:700,flexShrink:0,padding:0,lineHeight:1};
 
 function getWeekDates(offset=0){
   const d=new Date();
@@ -1805,6 +1810,16 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
   };
   const weekDates=useMemo(()=>getWeekDates(weekOffset),[weekOffset]);
   const dateKey=weekDates[dayIdx];
+  // Boutons ‹ › à côté du mois (19/08, demandé par Olivier -- absents jusque-là,
+  // seule la navigation jour par jour existait ici, via swipe ou les pastilles de
+  // jour). Saute d'un mois entier (même jour du mois suivant/précédent) via
+  // jumpToDate, qui recalcule déjà correctement weekOffset/dayIdx.
+  const changerMoisNav=(delta)=>{
+    const [y,m,d]=dateKey.split("-").map(Number);
+    const target=new Date(y,m-1+delta,d,12,0,0);
+    const ts=`${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,"0")}-${String(target.getDate()).padStart(2,"0")}`;
+    jumpToDate(ts);
+  };
   const sections=useMemo(()=>buildSections(schedule,dateKey,filterF,agents,isPrevisionnel),[schedule,dateKey,filterF,agents,isPrevisionnel]);
 
     const handleCpsImport=async(e)=>{
@@ -2201,11 +2216,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
 
     {/* Nav semaine */}
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <button onClick={()=>changerMoisNav(-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
         <button onClick={()=>{try{dateJumpRef.current.showPicker();}catch(e){dateJumpRef.current&&dateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",padding:"4px 0",cursor:"pointer"}}>
           <span style={{fontSize:14,fontWeight:700,color:"var(--text-primary)"}}>{MOIS_L[new Date(dateKey).getMonth()]} {new Date(dateKey).getFullYear()}</span>
           <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
         </button>
+        <button onClick={()=>changerMoisNav(1)} aria-label="Mois suivant" style={NAV_ARROW_STYLE}>›</button>
         <button onClick={goToToday} style={{display:"flex",alignItems:"center",gap:6,border:"none",background:weekOffset===0?"#f1f5f9":"#E6F1FB",color:weekOffset===0?"#475569":"#0C447C",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700}}>📅 Aujourd'hui</button>
       </div>
       <input ref={dateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
@@ -8531,12 +8548,12 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
       <div style={{display:"flex",alignItems:"center",gap:2}}>
-        <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={{border:"none",background:"none",cursor:"pointer",fontSize:20,color:"#475569",padding:"4px 8px",lineHeight:1}}>‹</button>
+        <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
         <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer"}}>
           <span style={{fontSize:"clamp(13px,1.6vw,16px)",fontWeight:700,color:"var(--text-primary)",whiteSpace:"nowrap"}}>{MOIS_L[curMonth]} {curYear}</span>
-          <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
+          <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
         </button>
-        <button onClick={()=>setMonthOff(m=>m+1)} aria-label="Mois suivant" style={{border:"none",background:"none",cursor:"pointer",fontSize:20,color:"#475569",padding:"4px 8px",lineHeight:1}}>›</button>
+        <button onClick={()=>setMonthOff(m=>m+1)} aria-label="Mois suivant" style={NAV_ARROW_STYLE}>›</button>
       </div>
       {isOwnProfile && <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
         const agCp=agent.immatriculation||agent.cp||agent.id;
