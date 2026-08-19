@@ -2364,7 +2364,13 @@ function firstDayOfMonth(year,month){
 // que dans un coin sombre).
 const DEFAULT_COLORS = {
   M:"#ff0000", AM:"#ff0000", N:"#ff0000", J:"#ff0000", JF:"#ff82e8",
-  RP:"#16a34a", RPP:"#67bf15", RU:"#ffde08", RQ:"#ffe100", TC:"#7c3aed", TY:"#a855f7", RN:"#4338ca",
+  // RQ recoloré le 18/08 (Olivier, audit UI : "RU et RQ partagent exactement
+  // la même couleur" — #ffde08/#ffe100 étaient quasi indiscernables sur une
+  // case du planning) — même famille de teinte que le nouveau DETAIL_CONFIG.RQ
+  // (fuchsia), en version vive pour rester cohérent avec le reste de cette
+  // palette "planning" (couleurs saturées, contrairement aux teintes plus
+  // sourdes des cartes compteurs/dashboards).
+  RP:"#16a34a", RPP:"#67bf15", RU:"#ffde08", RQ:"#ff00aa", TC:"#7c3aed", TY:"#a855f7", RN:"#4338ca",
   NU:"#64748b", CA:"#f5e900", CP:"#f5e900",
   MA:"#dc2626", ABS:"#b91c1c", VT:"#f59e0b", VM:"#6b7280",
   FOR:"#0dcbff", DISPO:"#059669", NOTE:"#0080ff", GREVE:"#1d51a5",
@@ -4829,7 +4835,12 @@ const NOTICE_TQ = [
 const DETAIL_CONFIG = {
   RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:"rpAcquis", rollingAcquis:false, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
   RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
-  RQ: { codes:["RQ"], reportKey:null, acquisKey:"rqAcquis", rollingAcquis:true, label:"RQ", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309", cetSource:"RQ", cetBesoinValeur:false },
+  // RQ recoloré le 18/08 (Olivier, suite à l'audit UI : "RU et RQ partagent
+  // exactement la même couleur ET la même icône [...] propose une couleur
+  // diffrente par defaut pour les RQ et change l'icone") — nouvelle teinte
+  // fuchsia, ne collisionne avec aucun autre compteur (RP vert, RU ambre,
+  // RN/TY bleu, TQ orange, MA rouge, CET violet #7c3aed comme module à part).
+  RQ: { codes:["RQ"], reportKey:null, acquisKey:"rqAcquis", rollingAcquis:true, label:"RQ", icon:"🟣", gradientFrom:"#c026d3", gradientTo:"#a21caf", bgLight:"#fdf4ff", borderLight:"#f5d0fe", accentDark:"#701a75", accentColor:"#a21caf", cetSource:"RQ", cetBesoinValeur:false },
   // RN et TY (17/07, re-précisé le même jour) : le compteur "acquis" en JOURS
   // est retiré (acquisKey/rollingAcquis) au profit d'un solde en HEURES/MINUTES
   // suivi en continu (ledgerKey → computeLedgerSolde), saisi manuellement par
@@ -6112,7 +6123,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"travail", label:"Jours travaillés", color:"#8B0000", subtitle:`Année ${year}`},
     {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Pris au 31/12"},
     {key:"RU",      label:"RU",              color:"#d97706", subtitle:"Pris au 31/12"},
-    {key:"RQ",      label:"RQ",              color:"#d97706", subtitle:"Restant au 31/12"},
+    {key:"RQ",      label:"RQ",              color:"#a21caf", subtitle:"Restant au 31/12"},
     {key:"FETE",    label:"Fêtes",           color:"#ec4899", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
     {key:"RN",      label:"RN",              color:"#4338ca", subtitle:`Solde — ${moisEnCoursLabel}`},
     {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
@@ -11118,6 +11129,41 @@ const handleLogin = async (pinOverride) => {
 export default function App(){
   // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
   const [view,setView]=usePersist("view","personal");
+  // Historique de navigation interne (18/08, demandé par Olivier — sur un
+  // téléphone où l'appli est lancée depuis un raccourci d'écran d'accueil,
+  // il n'y a pas de vrai historique de navigateur : le geste "retour" natif
+  // ferme l'appli entière au lieu de revenir à l'écran précédent, "l'icone
+  // est juste un raccourci"). Pile perso (pas liée à l'historique du
+  // navigateur), volontairement non persistée — repart à zéro après un
+  // rechargement complet, jugé raisonnable. "dans les 2 sens" (Olivier) :
+  // une pile arrière ET une pile avant, comme back/forward d'un navigateur —
+  // toute nouvelle navigation (menu, lien croisé) vide la pile avant.
+  const [viewBackStack,setViewBackStack]=useState([]);
+  const [viewForwardStack,setViewForwardStack]=useState([]);
+  const navigateToView=(newView)=>{
+    if(newView===view) return;
+    setViewBackStack(s=>[...s,view]);
+    setViewForwardStack([]);
+    setView(newView);
+  };
+  const goBackView=()=>{
+    setViewBackStack(s=>{
+      if(!s.length) return s;
+      const prev=s[s.length-1];
+      setViewForwardStack(f=>[...f,view]);
+      setView(prev);
+      return s.slice(0,-1);
+    });
+  };
+  const goForwardView=()=>{
+    setViewForwardStack(s=>{
+      if(!s.length) return s;
+      const next=s[s.length-1];
+      setViewBackStack(b=>[...b,view]);
+      setView(next);
+      return s.slice(0,-1);
+    });
+  };
   const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
   const [currentAgent,setCurrentAgent]=useState(null);
   const [weekOffset,setWeekOffset]=useState(0);
@@ -11683,6 +11729,26 @@ export default function App(){
           </div>
         </button>
 
+        {/* Navigation ← / → interne (18/08, Olivier — sur un raccourci
+            d'écran d'accueil mobile, le geste "retour" natif ferme l'appli
+            au lieu de revenir à l'écran précédent, faute de vrai historique
+            de navigateur). Visibles seulement quand la pile correspondante
+            n'est pas vide. */}
+        {(viewBackStack.length>0||viewForwardStack.length>0)&&<div style={{display:"flex",alignItems:"center",gap:2,flexShrink:0}}>
+          <button onClick={goBackView} disabled={!viewBackStack.length} title="Écran précédent"
+            style={{border:"none",background:viewBackStack.length?"#f1f5f9":"transparent",
+              cursor:viewBackStack.length?"pointer":"default",padding:"6px 8px",borderRadius:7,
+              display:"flex",alignItems:"center",opacity:viewBackStack.length?1:.3}}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="#334155"><path fillRule="evenodd" d="M12.79 4.22a.75.75 0 0 1 0 1.06L8.06 10l4.73 4.72a.75.75 0 1 1-1.06 1.06l-5.25-5.25a.75.75 0 0 1 0-1.06l5.25-5.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd"/></svg>
+          </button>
+          <button onClick={goForwardView} disabled={!viewForwardStack.length} title="Écran suivant"
+            style={{border:"none",background:viewForwardStack.length?"#f1f5f9":"transparent",
+              cursor:viewForwardStack.length?"pointer":"default",padding:"6px 8px",borderRadius:7,
+              display:"flex",alignItems:"center",opacity:viewForwardStack.length?1:.3}}>
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="#334155"><path fillRule="evenodd" d="M7.21 4.22a.75.75 0 0 1 1.06 0l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 0 1-1.06-1.06L11.94 10 7.21 5.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd"/></svg>
+          </button>
+        </div>}
+
         {/* Logo */}
         <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
           <div style={{width:28,height:28,background:"linear-gradient(135deg,#0f4c81,#1e3a5f)",
@@ -11713,7 +11779,7 @@ export default function App(){
           {VIEWS.filter(v=>["personal","previsionnel","global"].includes(v.k)).map(({k,l})=>{
             const actif = view===k;
             return(
-              <button key={k} onClick={()=>setView(k)}
+              <button key={k} onClick={()=>navigateToView(k)}
                 style={{
                   border:"none",background:"transparent",
                   padding:"9px 6px",cursor:"pointer",flex:1,minWidth:0,
@@ -11769,7 +11835,7 @@ export default function App(){
                   if (!v) return null;
                   const actif = view === k;
                   return (
-                    <button key={k} onClick={() => { setView(k); setMenuOpen(false); }}
+                    <button key={k} onClick={() => { navigateToView(k); setMenuOpen(false); }}
                       style={{
                         display: "flex", alignItems: "center", gap: 10, border: "none",
                         background: actif ? accentBg : "transparent",
@@ -11789,7 +11855,7 @@ export default function App(){
             if (!v) return null;
             const actif = view === k;
             const aDesEchanges = k === "echanges" && echangesOuvertesCount > 0;
-            return (<button key={k} onClick={() => { setView(k); setMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: actif ? "#eff6ff" : (aDesEchanges ? "#fef3c7" : "transparent"), padding: "12px 16px", cursor: "pointer", fontSize: 14, fontWeight: actif ? 700 : 500, color: actif ? "#0f4c81" : "#1e293b", textAlign: "left", width: "100%" }}>
+            return (<button key={k} onClick={() => { navigateToView(k); setMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: actif ? "#eff6ff" : (aDesEchanges ? "#fef3c7" : "transparent"), padding: "12px 16px", cursor: "pointer", fontSize: 14, fontWeight: actif ? 700 : 500, color: actif ? "#0f4c81" : "#1e293b", textAlign: "left", width: "100%" }}>
               {v.l}
               {aDesEchanges && <span style={{ marginLeft: "auto", background: "#dc2626", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{echangesOuvertesCount}</span>}
             </button>);
@@ -11841,8 +11907,8 @@ export default function App(){
         isAdmin={isAdmin}
         currentUser={currentUser}
         echangesCount={echangesOuvertesCount}
-        onOpenEchanges={()=>setView("echanges")}
-        onOpenFormation={()=>setView("formation")}/>}
+        onOpenEchanges={()=>navigateToView("echanges")}
+        onOpenFormation={()=>navigateToView("formation")}/>}
       {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
   {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
   {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
