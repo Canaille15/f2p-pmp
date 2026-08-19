@@ -643,6 +643,16 @@ function parseBulletinCommande(text) {
 // profit de l'extraction texte native — voir FEATURES_ajout_04072026)
 
 function parseDeroulePrevisionnel(text) {
+  // fix (19/08, roulement de Maxime CORDEAU) : tronquer avant la légende
+  // "Note explicative" en fin de document — elle contient de fausses
+  // occurrences "Ve 15"/"Sa 16" (exemples pédagogiques du fonctionnement
+  // NUIT01, jamais de vraies données de jour) qui matchent quand même le
+  // regex de capture d'un jour — elles consomment alors un usedCounts pour
+  // cette clé, ce qui peut décaler l'attribution du vrai candidat suivant
+  // pour tout futur document où plusieurs mois du bloc partagent ce même
+  // jour de semaine. Toujours en toute fin de texte, rien d'utile après.
+  const noteIdx = text.search(/Note explicative/i);
+  if (noteIdx >= 0) text = text.slice(0, noteIdx);
   // fix extraction (18/08, déroulé prévisionnel d'Antoine LEGOGUELIN) : sur ce
   // document, la lettre "P" est systématiquement rendue "I'" (I majuscule +
   // apostrophe) par l'extraction pdfjs — "PIPA2J" (le poste, qui contient DEUX
@@ -668,6 +678,12 @@ function parseDeroulePrevisionnel(text) {
   // part ailleurs dans ce type de document (jamais un jour du mois "14"
   // suivi directement de "F"), substitution sans risque.
   text = text.replace(/\b14F\b/g, "RP");
+  // fix (19/08, roulement de Maxime CORDEAU) : "RP"/"RU"/"RQ"/"RPP" parfois
+  // collé sans espace au code poste qui suit sur la même case ("RPPILNEX" au
+  // lieu de "RP PILNEX", ex. nuit "orpheline" — voir aussi le 2e passage plus
+  // bas) — insère l'espace manquant avant parsing pour que les 2 codes soient
+  // capturés comme 2 périodes distinctes, comme le format normal du document.
+  text = text.replace(/\b(RPP|RP|RU|RQ)(PI|PA)/g, "$1 $2");
   const editionMatch = text.match(/Le\s*(\d{2})[/1](\d{2})[/1](\d{4})/i);
   const editionDate = editionMatch
     ? `${editionMatch[3]}-${editionMatch[2]}-${editionMatch[1]} 00:00:00`
