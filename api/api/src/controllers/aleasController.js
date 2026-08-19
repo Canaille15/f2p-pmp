@@ -36,6 +36,22 @@ async function createAlea(req, res) {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
+// PATCH /api/cps-aleas/:id  -> modifier le motif d'un alea existant (18/08,
+// demande par Olivier : editer un message libre sans devoir l'effacer et le
+// recreer). Volontairement limite au motif -- changer le type/les agents
+// concernes reviendrait a un tout autre alea, pas une simple correction.
+async function updateAlea(req, res) {
+  const { id } = req.params;
+  const { motif } = req.body;
+  try {
+    const [result] = await pool.query(
+      'UPDATE cps_aleas SET motif = ? WHERE id = ?',
+      [motif || null, id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Aléa introuvable' });
+    res.json({ message: 'Aléa modifié' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
 // DELETE /api/cps-aleas/:id  -> retirer un alea (annule le signalement, retour a l'officiel)
 async function deleteAlea(req, res) {
   const { id } = req.params;
@@ -46,4 +62,4 @@ async function deleteAlea(req, res) {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
-module.exports = { getAleas, createAlea, deleteAlea };
+module.exports = { getAleas, createAlea, updateAlea, deleteAlea };

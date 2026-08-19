@@ -868,6 +868,16 @@ const cpsAleas = {
     });
   },
   /**
+   * Modifier le motif d'un alea existant (18/08, edition d'un message
+   * libre sans devoir l'effacer/le recreer)
+   */
+  async update(id, data) {
+    return apiFetch(`/cps-aleas/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+  /**
    * Retirer un alea (retour a l'affichage officiel)
    */
   async remove(id) {

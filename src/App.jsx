@@ -1421,10 +1421,15 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
   return sections;
 }
 
-function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClose,onSaved}){
-  const [type,setType]=useState(null); // "echange" | "erreur_cps" | "non_tenu" | "message"
+// editAlea (18/08, Olivier : "lorqu'on ecrit un message libre, nimporte ou,
+// il serait bien de bouton l'ouvrir pour le modifier. sans effacer et
+// refaire") : optionnel, l'alea "message" existant à modifier — quand
+// fourni, saute l'écran de choix de type et pré-remplit le motif ; la
+// validation appelle update() au lieu de create().
+function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClose,onSaved,editAlea}){
+  const [type,setType]=useState(editAlea?editAlea.type:null); // "echange" | "erreur_cps" | "non_tenu" | "message"
   const [agentsChoisis,setAgentsChoisis]=useState([]);
-  const [motif,setMotif]=useState("");
+  const [motif,setMotif]=useState(editAlea?.motif||"");
   const [busy,setBusy]=useState(false);
   const [search,setSearch]=useState("");
 
@@ -1435,14 +1440,18 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
   const valider=async()=>{
     setBusy(true);
     try{
-      await api.cpsAleas.create({
-        js_code:jsCode,
-        date_jour:dateKey,
-        famille,
-        type,
-        agents_concernes: (type==="non_tenu"||type==="message") ? [] : agentsChoisis.map(a=>a.id),
-        motif: motif||null,
-      });
+      if(editAlea){
+        await api.cpsAleas.update(editAlea.id,{motif:motif||null});
+      }else{
+        await api.cpsAleas.create({
+          js_code:jsCode,
+          date_jour:dateKey,
+          famille,
+          type,
+          agents_concernes: (type==="non_tenu"||type==="message") ? [] : agentsChoisis.map(a=>a.id),
+          motif: motif||null,
+        });
+      }
       onSaved&&onSaved();
       onClose();
     }catch(err){
@@ -1455,10 +1464,10 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
 
   return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:20,maxWidth:420,width:"100%",maxHeight:"85vh",overflowY:"auto"}}>
-      <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>Ajustement du poste</div>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{editAlea?"Modifier le message":"Ajustement du poste"}</div>
       <div style={{fontSize:12,color:"#64748b",marginBottom:14}}>{nomOfficiel} — {jsCode}</div>
 
-      {!type&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {!editAlea&&!type&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
         <button onClick={()=>setType("echange")} style={{padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:10,textAlign:"left",background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>
           🔄 Échange / Combiné<div style={{fontSize:11,color:"#94a3b8",fontWeight:400,marginTop:2}}>Un ou plusieurs agents assurent ce poste</div>
         </button>
@@ -1473,7 +1482,13 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
         </button>
       </div>)}
 
-      {type&&type!=="non_tenu"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {/* Exclut aussi "message" (18/08, Olivier : "ca renplis en meme temps
+          le recherche d'agent") — cette condition n'excluait avant que
+          "non_tenu", donc pour type==="message" ce bloc (recherche d'agent
+          + textarea "Motif") s'affichait EN PLUS du vrai formulaire message
+          juste en dessous, dupliquant textarea et faisant apparaitre un
+          champ de recherche d'agent superflu et deroutant. */}
+      {type&&type!=="non_tenu"&&type!=="message"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>{type==="echange"?"Agent(s) qui assure(nt) le poste":"Préciser l'erreur"}</div>
         <input placeholder="Rechercher un agent…" value={search} onChange={e=>setSearch(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13}}/>
@@ -1516,11 +1531,11 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
         <textarea placeholder="Ton message, visible par tous les agents…" value={motif} onChange={e=>setMotif(e.target.value)} autoFocus
           style={{padding:"8px 10px",border:"1.5px solid #93c5fd",borderRadius:8,fontSize:13,minHeight:80,resize:"vertical"}}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
-          <button onClick={()=>setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Retour</button>
+          <button onClick={()=>editAlea?onClose():setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>{editAlea?"Annuler":"Retour"}</button>
           <button onClick={valider} disabled={busy||!motif.trim()}
             style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
             background:!motif.trim()?"#e2e8f0":"#1d4ed8",color:!motif.trim()?"#94a3b8":"#fff"}}>
-            {busy?"…":"Publier le message"}
+            {busy?"…":(editAlea?"Enregistrer":"Publier le message")}
           </button>
         </div>
       </div>)}
@@ -2248,6 +2263,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       {alea?.type==="message"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"4px 9px"}}>
                         <span style={{fontSize:12}}>📢</span>
                         <div style={{fontSize:10,color:"#1d4ed8",flex:1,lineHeight:1.4}}>{alea.motif}</div>
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
                         <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button>
                       </div>}
                     </div>);
@@ -2279,7 +2295,8 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <span style={{fontSize:14}}>📢</span>
                           <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>Vacant</div>
-                          <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#1d4ed8",opacity:.6,marginLeft:"auto"}}>✕</button>
+                          <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant",editAlea:aleaVacant})} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#1d4ed8",opacity:.6,marginLeft:"auto"}}>✎</button>
+                          <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#1d4ed8",opacity:.6}}>✕</button>
                         </div>
                         <div style={{fontSize:10,color:"#1d4ed8",paddingLeft:20,lineHeight:1.4}}>{aleaVacant.motif}</div>
                       </div>);
@@ -2331,7 +2348,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     {isPrevisionnel&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#475569",lineHeight:1.6,maxWidth:620}}>
       Ici, chaque agent partage volontairement son planning personnel (à activer dans Mon Profil) pour aider à s’organiser collectivement.<br/>Seules les journées de travail sont partagées — le reste (congés, absences...) ne l’est pas.<br/>Ces informations restent indicatives et ne remplacent jamais la feuille de présence officielle — en cas d’écart, rapproche-toi de l’encadrement.
     </div>}
-    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
+    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} editAlea={aleaTarget.editAlea} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
     {previsionnelTarget&&<PrevisionnelSignalementPopup agents={agents} agentTitulaireId={previsionnelTarget.agentId} dateKey={dateKey} nomTitulaire={previsionnelTarget.nomTitulaire} currentAgent={currentAgent} onClose={()=>setPrevisionnelTarget(null)} onSaved={()=>{api.previsionnelSignalements.getAll().then(rows=>setPrevisionnelSignalements(rows||[]));}}/>}
     {journeeSpecialeNoteTarget&&<JourneeSpecialeNotePopup agentId={journeeSpecialeNoteTarget.agentId} agentNom={journeeSpecialeNoteTarget.agentNom} dateKey={dateKey} currentMessage={journeeSpecialeNoteTarget.currentMessage} onClose={()=>setJourneeSpecialeNoteTarget(null)} onSaved={()=>{api.journeeSpecialeNotes.getAll().then(rows=>setJourneeSpecialeNotes(rows||[]));}}/>}
   </div>);
