@@ -13,6 +13,11 @@
   --text-secondary: #64748b;
   --text-muted: #94a3b8;
   --shadow-card: rgba(0,0,0,.06);
+  /* Bleu-marine "actif" (onglet sélectionné, ex. Mon planning/CPS Officiel/
+     Planning Prévisionnel) — trop foncé pour rester visible une fois le
+     fond de la barre passé en sombre, éclairci uniquement côté sombre
+     (19/08, signalé par Olivier : "la touche devient quasiment invisible"). */
+  --accent-active: #0a3a63;
 }
 :root[data-theme="dark"] {
   --bg-page: #0a0e1a;
@@ -22,5 +27,6 @@
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
   --shadow-card: rgba(0,0,0,.35);
+  --accent-active: #60a5fa;
 }
 body { background: var(--bg-page); transition: background .15s; }

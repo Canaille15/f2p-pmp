@@ -2203,8 +2203,8 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <button onClick={()=>{try{dateJumpRef.current.showPicker();}catch(e){dateJumpRef.current&&dateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",padding:"4px 0",cursor:"pointer"}}>
-          <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{MOIS_L[new Date(dateKey).getMonth()]} {new Date(dateKey).getFullYear()}</span>
-          <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
+          <span style={{fontSize:14,fontWeight:700,color:"var(--text-primary)"}}>{MOIS_L[new Date(dateKey).getMonth()]} {new Date(dateKey).getFullYear()}</span>
+          <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
         </button>
         <button onClick={goToToday} style={{display:"flex",alignItems:"center",gap:6,border:"none",background:weekOffset===0?"#f1f5f9":"#E6F1FB",color:weekOffset===0?"#475569":"#0C447C",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700}}>📅 Aujourd'hui</button>
       </div>
@@ -11899,8 +11899,8 @@ export default function App(){
                   border:"none",background:"transparent",
                   padding:"9px 6px",cursor:"pointer",flex:1,minWidth:0,
                   fontSize:"clamp(11px,1.6vw,15px)",fontWeight:700,
-                  color:actif?"#0a3a63":"var(--text-secondary)",
-                  borderBottom:actif?"2.5px solid #0a3a63":"2.5px solid transparent",
+                  color:actif?"var(--accent-active)":"var(--text-secondary)",
+                  borderBottom:actif?"2.5px solid var(--accent-active)":"2.5px solid transparent",
                   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",position:"relative",
                   letterSpacing:actif?-.1:0,
                   transition:"color .15s",
