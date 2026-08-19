@@ -313,7 +313,7 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
                   {it.format === "e-learning" ? "💻 E-learning" : "📋 Externe"}
                 </span>
               </div>
-              <button onClick={() => retirerPerso(it.id)} style={{ marginTop: 8, background: "none", border: "none", color: "#94a3b8", fontSize: 11, cursor: "pointer", padding: 0 }}>
+              <button onClick={() => retirerPerso(it.id)} style={{ marginTop: 8, background: "none", border: "none", color: "#64748b", fontSize: 11, cursor: "pointer", padding: 0 }}>
                 🗑 Retirer de l'archive
               </button>
             </div>
@@ -702,7 +702,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
 
               <div style={{ marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <StatutBadge session={data.session} />
-                <button onClick={supprimer} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: 11, cursor: "pointer" }}>🗑 Supprimer la session</button>
+                <button onClick={supprimer} style={{ background: "none", border: "none", color: "#64748b", fontSize: 11, cursor: "pointer" }}>🗑 Supprimer la session</button>
               </div>
 
               <div style={{ marginTop: 14, fontSize: 12, fontWeight: 700, color: "#1e3a5f" }}>👨‍🏫 Formateurs</div>
@@ -710,7 +710,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                 {data.formateurs.map(f => (
                   <span key={f.cp} style={{ fontSize: 12, background: NAVY.bgLight, color: NAVY.accentDark, borderRadius: 20, padding: "4px 10px", display: "flex", alignItems: "center", gap: 6 }}>
                     {f.prenom} {f.nom}
-                    <button onClick={() => retirerFormateur(f.cp)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 12 }}>✕</button>
+                    <button onClick={() => retirerFormateur(f.cp)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 12 }}>✕</button>
                   </span>
                 ))}
                 {data.formateurs.length < 3 && (
@@ -732,7 +732,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                       {p.prenom} {p.nom}
                       {data.session.statut === "lancee" && !p.toujours_present && <span style={{ marginLeft: 6, fontWeight: 700 }}>⚠️ a retiré la formation de son planning</span>}
                     </span>
-                    <button onClick={() => retirerParticipant(p.cp_agent)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}>✕</button>
+                    <button onClick={() => retirerParticipant(p.cp_agent)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>✕</button>
                   </div>
                 ))}
                 {data.participants.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucun participant.</div>}

@@ -348,7 +348,7 @@ export default function DemandeCongesView({ currentAgent, agentProfiles }) {
             💡 Un message email prêt à copier t'attend juste en dessous — pense à l'envoyer avec ton PDF.
           </div>
 
-          <button onClick={generer} disabled={busy} style={{ padding: "13px 0", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: busy ? "wait" : "pointer", background: "#0C447C", color: "#fff", marginTop: 8 }}>
+          <button onClick={generer} disabled={busy} style={{ padding: "13px 0", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: busy ? "wait" : "pointer", background: "#b45309", color: "#fff", marginTop: 8 }}>
             {busy ? "Génération…" : "📄 Générer le PDF"}
           </button>
         </div>

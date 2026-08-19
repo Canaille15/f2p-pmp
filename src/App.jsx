@@ -307,9 +307,15 @@ const EQUIPES = [
   { code:"RP",   label:"RP",         heures:"",            color:"#16a34a", textColor:"#fff", dot:"#bbf7d0", prive:true,  compteur:"RP",      bg:"#16a34a" },
   { code:"RPP",  label:"RPP",        heures:"",            color:"#0d9488", textColor:"#fff", dot:"#99f6e4", prive:true,  compteur:"RP",      bg:"#0d9488" },
   { code:"RU",   label:"RU",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
-  { code:"RQ",   label:"RQ",         heures:"",            color:"#ca8a04", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"RU",      bg:"#ca8a04" },
+  // RQ recoloré le 18/08 (Olivier, audit UI, suite du correctif RU/RQ sur
+  // DETAIL_CONFIG/CARDS/DEFAULT_COLORS — EQUIPES avait été oublié, gouverne
+  // la vue CPS Officiel non-modifiable) — même fuchsia que le reste.
+  { code:"RQ",   label:"RQ",         heures:"",            color:"#a21caf", textColor:"#fff", dot:"#f5d0fe", prive:true,  compteur:"RU",      bg:"#a21caf" },
   { code:"TC",   label:"TC",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
-  { code:"TY",   label:"TY",         heures:"",            color:"#0284c7", textColor:"#fff", dot:"#e0f2fe", prive:true,  compteur:"TC",      bg:"#0284c7" },
+  // TY recoloré le 18/08 (Olivier, audit UI : "TC et TY partagent exactement
+  // la même couleur" dans EQUIPES/CARDS, alors que DEFAULT_COLORS les
+  // différenciait déjà) — violet distinct, ne collisionne pas avec CET (#7c3aed).
+  { code:"TY",   label:"TY",         heures:"",            color:"#9333ea", textColor:"#fff", dot:"#f3e8ff", prive:true,  compteur:"TC",      bg:"#9333ea" },
   { code:"RN",   label:"RN",         heures:"",            color:"#4338ca", textColor:"#fff", dot:"#e0e7ff", prive:true,  compteur:"RN",      bg:"#4338ca" },
   { code:"NU",   label:"NU",         heures:"",            color:"#475569", textColor:"#fff", dot:"#cbd5e1", prive:false, compteur:"RU",      bg:"#475569" },
   { code:"CA",   label:"Congés", heures:"",            color:"#eab308", textColor:"#fff", dot:"#fef9c3", prive:true,  compteur:"CP",      bg:"#eab308" },
@@ -4854,7 +4860,10 @@ const DETAIL_CONFIG = {
   // TY plafonné à 32h00 comme TC (13/08, Olivier) — plafondMin déclenche le
   // même mécanisme de capping+heures sup dans computeLedgerSolde, RN n'a pas
   // ce champ et reste sans plafond.
-  TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", plafondMin:PLAFOND_32H_MIN, label:"TY", icon:"🔵", gradientFrom:"#0284c7", gradientTo:"#0369a1", bgLight:"#f0f9ff", borderLight:"#bae6fd", accentDark:"#0369a1", accentColor:"#0284c7", cetSource:"TY", cetBesoinValeur:true },
+  // TY recoloré le 18/08 (Olivier, audit UI : "TC et TY partagent exactement
+  // la même couleur" — même violet #9333ea que EQUIPES/CARDS, pour rester
+  // cohérent partout où TY est affiché).
+  TY: { codes:["TY"], reportKey:null, acquisKey:null, rollingAcquis:false, ledgerKey:"tyLedger", plafondMin:PLAFOND_32H_MIN, label:"TY", icon:"🟣", gradientFrom:"#9333ea", gradientTo:"#7e22ce", bgLight:"#faf5ff", borderLight:"#e9d5ff", accentDark:"#7e22ce", accentColor:"#9333ea", cetSource:"TY", cetBesoinValeur:true },
   // TQ (16/08, nouveau module) : temps à compenser du semestre en cours, même
   // mécanisme ledger que RN/TY mais SANS plafond sur lui-même (le plafond
   // s'applique à TY une fois basculé, voir basculerTQversTY) et SANS
@@ -6128,7 +6137,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"RN",      label:"RN",              color:"#4338ca", subtitle:`Solde — ${moisEnCoursLabel}`},
     {key:"PF",      label:"Pause Figée",     color:"#0f766e", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
     {key:"TC",      label:"TC",              color:"#0284c7", subtitle: tcData.solde>=TC_PLAFOND_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tcData.solde>=TC_PLAFOND_MIN},
-    {key:"TY",      label:"TY",              color:"#0284c7", subtitle: tyLedgerData.solde>=PLAFOND_32H_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tyLedgerData.solde>=PLAFOND_32H_MIN},
+    {key:"TY",      label:"TY",              color:"#9333ea", subtitle: tyLedgerData.solde>=PLAFOND_32H_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tyLedgerData.solde>=PLAFOND_32H_MIN},
     {key:"TQ",      label:"TQ",              color:"#ea580c", subtitle:`Solde ${getSemestreCourant().label}`},
     ...(vtActif ? [{key:"VT", label:"VT",    color:"#eab308", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2}] : []),
     {key:"CET",     label:"CET",             color:"#7c3aed", subtitle:"Compte épargne temps"},
@@ -9983,7 +9992,7 @@ function AnnuaireView({currentAgent,isAdmin,agents,cpsSchedule,cpsAleas}){
         {nouvelAcces&&<AccesRapideForm onCancel={()=>setNouvelAcces(false)} onSaved={()=>{setNouvelAcces(false);recharger();}}/>}
         {accesRapide.length===0&&!nouvelAcces&&<div style={{fontSize:13,color:"#64748b",marginBottom:4}}>Aucun numéro pour l'instant.</div>}
         {accesRapide.map(a=>editAccesId===a.id
-          ? <AccesRapideForm key={a.id} initial={a} onCancel={()=>setEditAccesId(null)} onSaved={()=>{setEditAccesId(null);recharger();}} onDelete={()=>{api.annuaire.deleteAccesRapide(a.id).then(recharger);}}/>
+          ? <AccesRapideForm key={a.id} initial={a} onCancel={()=>setEditAccesId(null)} onSaved={()=>{setEditAccesId(null);recharger();}} onDelete={()=>{if(window.confirm(`Supprimer "${a.libelle}" ?`))api.annuaire.deleteAccesRapide(a.id).then(recharger);}}/>
           : <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:"1px solid #e2e8f0"}}>
               <div style={{flex:1}}>
                 <div style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{a.libelle}</div>
@@ -10048,7 +10057,7 @@ function AnnuaireView({currentAgent,isAdmin,agents,cpsSchedule,cpsAleas}){
       {filtreUo.length===0&&!nouvelUo&&<div style={{fontSize:13,color:"#94a3b8"}}>Aucun poste UO pour l'instant.</div>}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {filtreUo.map(u=>editUoId===u.id
-          ? <UoForm key={u.id} initial={u} onCancel={()=>setEditUoId(null)} onSaved={()=>{setEditUoId(null);recharger();}} onDelete={()=>{api.annuaire.deleteUo(u.id).then(recharger);}}/>
+          ? <UoForm key={u.id} initial={u} onCancel={()=>setEditUoId(null)} onSaved={()=>{setEditUoId(null);recharger();}} onDelete={()=>{if(window.confirm(`Supprimer le poste "${u.fonction}" ?`))api.annuaire.deleteUo(u.id).then(recharger);}}/>
           : <div key={u.id} style={{padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
               <div onClick={()=>toggleExpandUo(u.id)} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}}>
                 <div>
