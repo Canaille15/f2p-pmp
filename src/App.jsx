@@ -1395,7 +1395,13 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
     return en&&(en.equipe==="FOR"||jsCodesFormationPostes.has(en.jsCode)||(en.formation&&!en.equipe));
   });
   if(enFormation.length>0){
-    diversRows.push({poste:{jsCode:"FOR",label:"Formation",subtitle:""},jsCode:"FOR",agents:enFormation,famille:null,isFormation:true,maxSlots:99});
+    // famille:"FOR" (pas null) -- 18/08, bug reel signale par Olivier : le
+    // bouton 🔄/Message libre sur cette ligne synthetique (agents en
+    // formation, jamais un vrai poste PRCI/PAR) envoyait famille:null au
+    // backend, qui la refuse (validation "js_code, date_jour, famille et
+    // type sont requis"). "FOR" est deja la convention utilisee ailleurs
+    // dans ce fichier pour cette meme categorie synthetique (ligne ~2718).
+    diversRows.push({poste:{jsCode:"FOR",label:"Formation",subtitle:""},jsCode:"FOR",agents:enFormation,famille:"FOR",isFormation:true,maxSlots:99});
   }
   // Journee speciale (PPRCI/PPAR) - regroupes ensemble, plusieurs agents possibles
   const enJourneeSpeciale=agents.filter(a=>{
