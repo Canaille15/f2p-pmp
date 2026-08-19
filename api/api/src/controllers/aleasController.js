@@ -36,17 +36,23 @@ async function createAlea(req, res) {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
-// PATCH /api/cps-aleas/:id  -> modifier le motif d'un alea existant (18/08,
-// demande par Olivier : editer un message libre sans devoir l'effacer et le
-// recreer). Volontairement limite au motif -- changer le type/les agents
-// concernes reviendrait a un tout autre alea, pas une simple correction.
+// PATCH /api/cps-aleas/:id  -> modifier un alea existant (18/08, demande par
+// Olivier : editer sans devoir effacer et recreer). Motif seul pour un
+// message libre ; motif + agents_concernes pour un echange/erreur CPS (etendu
+// le meme jour, "dans erreur cps il faut mettre le boutons pour modifier
+// aussi") -- le type lui-meme n'est jamais modifiable ici, changer de type
+// reviendrait a un tout autre alea, pas une simple correction.
 async function updateAlea(req, res) {
   const { id } = req.params;
-  const { motif } = req.body;
+  const { motif, agents_concernes } = req.body;
   try {
-    const [result] = await pool.query(
-      'UPDATE cps_aleas SET motif = ? WHERE id = ?',
-      [motif || null, id]);
+    const [result] = agents_concernes !== undefined
+      ? await pool.query(
+          'UPDATE cps_aleas SET motif = ?, agents_concernes = ? WHERE id = ?',
+          [motif || null, JSON.stringify(agents_concernes), id])
+      : await pool.query(
+          'UPDATE cps_aleas SET motif = ? WHERE id = ?',
+          [motif || null, id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Aléa introuvable' });
     res.json({ message: 'Aléa modifié' });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
