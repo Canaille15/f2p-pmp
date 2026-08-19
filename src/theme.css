@@ -1,0 +1,26 @@
+/* Tokens de thème (19/08, mode sombre demandé par Olivier — "garder
+   l'organisation actuelle, juste habillée autrement"). Premier fichier CSS
+   du projet : jusqu'ici tout était en style inline React, sans aucune
+   feuille de style externe. Palette claire = valeurs déjà utilisées partout
+   dans App.jsx (aucun changement visuel en mode clair) ; palette sombre =
+   bleu-marine profond, cohérent avec le logo/l'écran de connexion.
+   Sélection via [data-theme="dark"] sur <html>, posé par App.jsx. */
+:root {
+  --bg-page: #f8fafc;
+  --bg-card: #ffffff;
+  --border: #e2e8f0;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --shadow-card: rgba(0,0,0,.06);
+}
+:root[data-theme="dark"] {
+  --bg-page: #0a0e1a;
+  --bg-card: #131b2e;
+  --border: #26324a;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --shadow-card: rgba(0,0,0,.35);
+}
+body { background: var(--bg-page); transition: background .15s; }

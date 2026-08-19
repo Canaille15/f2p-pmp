@@ -61,7 +61,7 @@ export default function AgentHeader({
   const currentYear = new Date().getFullYear();
 
   return (
-    <div style={{ borderRadius: 16, overflow: "hidden", background: "#fff", boxShadow: "0 1px 6px rgba(0,0,0,.08)", border: "1px solid #e2e8f0" }}>
+    <div style={{ borderRadius: 16, overflow: "hidden", background: "var(--bg-card)", boxShadow: "0 1px 6px rgba(0,0,0,.08)", border: "1px solid var(--border)" }}>
 
       {/* ── BANDE COLORÉE ── */}
       <div style={{ height: 4, background: fam.gradient }} />
@@ -81,7 +81,7 @@ export default function AgentHeader({
 
         {/* Nom + grade */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {agent?.prenom} {agent?.nom}
           </div>
           <div style={{ display: "flex", gap: 5, marginTop: 3, flexWrap: "wrap", alignItems: "center" }}>
@@ -96,7 +96,7 @@ export default function AgentHeader({
               {fam.label}
             </span>
             {agent?.poste && (
-              <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 500 }}>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 500 }}>
                 {agent.poste}
               </span>
             )}
@@ -108,11 +108,11 @@ export default function AgentHeader({
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
 
             {onCouleurs && (
-              <button onClick={onCouleurs} style={btnStyle("#f8fafc", "#475569")} title="Couleurs">
+              <button onClick={onCouleurs} style={btnStyle("var(--bg-page)", "var(--text-secondary)")} title="Couleurs">
                 🎨
               </button>
             )}
-            <button onClick={() => setOuvert(o => !o)} style={btnStyle(ouvert ? fam.color : "#f8fafc", ouvert ? "#fff" : "#475569")} title="Profil">
+            <button onClick={() => setOuvert(o => !o)} style={btnStyle(ouvert ? fam.color : "var(--bg-page)", ouvert ? "#fff" : "var(--text-secondary)")} title="Profil">
               {ouvert ? "▲" : "▼"}
             </button>
           </div>
@@ -123,12 +123,12 @@ export default function AgentHeader({
 
       {/* ── ACCORDÉON PROFIL COMPLET ── */}
       {ouvert && isOwnProfile && (
-        <div style={{ borderTop: "1px solid #f1f5f9", padding: "14px 16px", background: "#f8fafc", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ borderTop: "1px solid var(--border)", padding: "14px 16px", background: "var(--bg-page)", display: "flex", flexDirection: "column", gap: 16 }}>
 
- 
+
           {/* Habilitations */}
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: .5, marginBottom: 8 }}>
               ⚡ Postes habilités
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -141,12 +141,12 @@ export default function AgentHeader({
                     fontSize: 11, fontWeight: 700,
                   }}>⚡ {p.label}</span>
                 ))
-                : <span style={{ fontSize: 11, color: "#94a3b8" }}>Aucune habilitation enregistrée</span>
+                : <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Aucune habilitation enregistrée</span>
               }
               <button onClick={onHabilitations} style={{
                 padding: "4px 10px", borderRadius: 8,
-                background: "#f1f5f9", color: "#64748b",
-                border: "1px dashed #cbd5e1",
+                background: "var(--bg-card)", color: "var(--text-secondary)",
+                border: "1px dashed var(--border)",
                 fontSize: 11, fontWeight: 600, cursor: "pointer",
               }}>⚙️ Modifier</button>
             </div>
@@ -170,7 +170,7 @@ function Badge({ label, bg, color }) {
 
 function btnStyle(bg, color) {
   return {
-    background: bg, color, border: "1px solid #e2e8f0",
+    background: bg, color, border: "1px solid var(--border)",
     borderRadius: 8, width: 32, height: 32,
     display: "flex", alignItems: "center", justifyContent: "center",
     cursor: "pointer", fontSize: 14,

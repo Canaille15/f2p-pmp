@@ -6284,8 +6284,8 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   };
 
   return(
-    <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid #e2e8f0",
-      overflow:"hidden",background:"#fff",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+    <div style={{margin:"20px 0 8px",borderRadius:14,border:"1.5px solid var(--border)",
+      overflow:"hidden",background:"var(--bg-card)",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
 
       {/* ── Header accordéon cliquable ── */}
       {/* nowrap sur le conteneur externe : la flèche reste TOUJOURS à droite,
@@ -6324,7 +6324,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
           <div style={{flex:1}}/>
           {reorderMode&&savedOrdre&&(
             <button onClick={e=>{e.stopPropagation();reinitialiserOrdre();}}
-              style={{background:"#fff",color:"#64748b",border:"1.5px solid #cbd5e1",
+              style={{background:"var(--bg-card)",color:"var(--text-secondary)",border:"1.5px solid var(--border)",
                 borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700}}>
               ↺ Réinitialiser l'ordre
             </button>
@@ -6378,7 +6378,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
             <div key={card.key}
               onClick={!isClickable ? undefined : isTravailCard ? ()=>setShowTravailDash(true) : isCongesCard ? ()=>setShowCongesDash(true) : isFetesCard ? ()=>setShowFetesDash(true) : isVtCard ? ()=>setShowVtDash(true) : isCetCard ? ()=>setShowCetDash(true) : isPfCard ? ()=>setShowPauseFigeeDash(true) : isTcCard ? ()=>setShowTcDash(true) : isFormationCard ? onOpenFormation : isDetailCard ? ()=>setOpenDetailKey(card.key) : undefined}
               style={{
-              background:"#fff",borderRadius:12,
+              background:"var(--bg-card)",borderRadius:12,
               // Encadrement teinté (19/08, "unité de couleurs tout en gardant
               // les touches de couleur") : reprend la couleur propre à chaque
               // tuile en très faible opacité (2A hex ≈ 16%) au lieu du gris
@@ -6394,10 +6394,10 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
               <div style={{position:"absolute",top:0,left:0,right:0,height:4,
                 background:card.color,borderRadius:"10px 10px 0 0"}}/>
               <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4,marginTop:2}}>
-                <span style={{fontSize:10,fontWeight:700,color:"#64748b"}}>{card.label}</span>
+                <span style={{fontSize:10,fontWeight:700,color:"var(--text-secondary)"}}>{card.label}</span>
               </div>
               <div style={{fontSize:26,fontWeight:900,color:card.color,lineHeight:1}}>{v}</div>
-              <div style={{fontSize:9,color:card.alert?"#ef4444":"#94a3b8",marginTop:3,
+              <div style={{fontSize:9,color:card.alert?"#ef4444":"var(--text-muted)",marginTop:3,
                 fontWeight:card.alert?700:400,lineHeight:1.3}}>
                 {card.subtitle}
               </div>
@@ -8533,7 +8533,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
       <div style={{display:"flex",alignItems:"center",gap:2}}>
         <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={{border:"none",background:"none",cursor:"pointer",fontSize:20,color:"#475569",padding:"4px 8px",lineHeight:1}}>‹</button>
         <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer"}}>
-          <span style={{fontSize:"clamp(13px,1.6vw,16px)",fontWeight:700,color:"#1e293b",whiteSpace:"nowrap"}}>{MOIS_L[curMonth]} {curYear}</span>
+          <span style={{fontSize:"clamp(13px,1.6vw,16px)",fontWeight:700,color:"var(--text-primary)",whiteSpace:"nowrap"}}>{MOIS_L[curMonth]} {curYear}</span>
           <span style={{fontSize:11,color:"#94a3b8"}}>▾</span>
         </button>
         <button onClick={()=>setMonthOff(m=>m+1)} aria-label="Mois suivant" style={{border:"none",background:"none",cursor:"pointer",fontSize:20,color:"#475569",padding:"4px 8px",lineHeight:1}}>›</button>
@@ -8549,11 +8549,11 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
     <>
 
       {/* Grille mensuelle */}
-      <div onTouchStart={swipeMonth.onTouchStart} onTouchEnd={swipeMonth.onTouchEnd} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+      <div onTouchStart={swipeMonth.onTouchStart} onTouchEnd={swipeMonth.onTouchEnd} style={{background:"var(--bg-card)",border:"1.5px solid var(--border)",borderRadius:14,overflow:"hidden"}}>
         {/* En-têtes jours */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",background:"var(--bg-page)",borderBottom:"1px solid var(--border)"}}>
           {["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"].map(d=>(
-            <div key={d} style={{padding:"6px 4px",textAlign:"center",fontSize:"clamp(9px,1.2vw,13px)",fontWeight:800,color:"#475569",letterSpacing:.3}}>{d}</div>
+            <div key={d} style={{padding:"6px 4px",textAlign:"center",fontSize:"clamp(9px,1.2vw,13px)",fontWeight:800,color:"var(--text-secondary)",letterSpacing:.3}}>{d}</div>
           ))}
         </div>
         {/* Jours du mois */}
@@ -8590,8 +8590,8 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
             return <div key={dk}
               onClick={()=>{ if(isOwnProfile) setDayPopup({dk, entry:en||null}); }}
               style={{
-                background:"#fff",
-                border:isToday?"2px solid #6366f1":"1px solid #e8edf2",
+                background:"var(--bg-card)",
+                border:isToday?"2px solid #6366f1":"1px solid var(--border)",
                 borderRadius:10, cursor:"pointer",
                 position:"relative",
                 boxShadow:isToday?"0 0 0 3px #eef2ff":"0 1px 3px rgba(0,0,0,.04)",
@@ -8602,7 +8602,7 @@ justifyContent: "flex-start",
               }}>
        {/* Numéro du jour */}
               <div style={{fontSize:"clamp(13px,1.8vw,18px)",fontWeight:isToday?800:700,
-                color:isToday?"#6366f1":isWE?"#b45309":"#1e293b",
+                color:isToday?"#6366f1":isWE?"#b45309":"var(--text-primary)",
                 lineHeight:1.3, marginBottom:1}}>{dayNum}</div>
 
               {/* ZONE 1 — 🌙 descente de nuit + ✊ grève + 📝 note perso (toujours en haut) */}
@@ -11225,6 +11225,13 @@ const handleLogin = async (pinOverride) => {
 export default function App(){
   // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
   const [view,setView]=usePersist("view","personal");
+  // Mode sombre (19/08, demandé par Olivier — "garder l'organisation
+  // actuelle, juste habillée autrement") : préférence liée à l'appareil
+  // (localStorage), pas au compte agent — cohérent avec un réglage
+  // d'affichage plutôt qu'une donnée métier. Applique data-theme sur <html>,
+  // lu par les tokens CSS de theme.css.
+  const [themeMode,setThemeMode]=usePersist("themeMode","light");
+  useEffect(()=>{document.documentElement.setAttribute("data-theme",themeMode);},[themeMode]);
   // Historique de navigation interne (18/08, demandé par Olivier — sur un
   // téléphone où l'appli est lancée depuis un raccourci d'écran d'accueil,
   // il n'y a pas de vrai historique de navigateur : le geste "retour" natif
@@ -11805,11 +11812,11 @@ export default function App(){
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
 
-  return(<div style={{minHeight:"100vh",background:"#ffffff",fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
+  return(<div style={{minHeight:"100vh",background:"var(--bg-page)",fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
     <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;}button:hover{opacity:.85;}`}</style>
 
     {/* ── HEADER ── */}
-    <div style={{background:"#fff",borderBottom:"1.5px solid #e2e8f0",
+    <div style={{background:"var(--bg-card)",borderBottom:"1.5px solid var(--border)",
       position:"sticky",top:0,zIndex:50,
       boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
 
@@ -11859,17 +11866,29 @@ export default function App(){
 
         <div style={{flex:1}}/>
 
+        {/* Mode sombre (19/08) — toggle par appareil, indépendant du compte.
+            Essai limité à "Mon planning" + panneau compteurs pour l'instant
+            (voir CLAUDE.md) : les autres vues gardent leur fond clair tant
+            que les tokens n'y sont pas encore appliqués. */}
+        <button onClick={()=>setThemeMode(m=>m==="dark"?"light":"dark")}
+          title={themeMode==="dark"?"Passer en mode clair":"Passer en mode sombre"}
+          style={{border:"1px solid var(--border)",background:"var(--bg-card)",
+            borderRadius:7,padding:"5px 7px",cursor:"pointer",fontSize:13,
+            display:"flex",alignItems:"center",flexShrink:0}}>
+          {themeMode==="dark"?"☀️":"🌙"}
+        </button>
+
         {/* Admin badges — masqués sur très petit écran */}
         {isAdmin&&<div style={{display:"flex",alignItems:"center",gap:4}}>
           <div style={{background:"#fff8e1",border:"1px solid #fde68a",borderRadius:6,
             padding:"2px 6px",fontSize:9,fontWeight:700,color:"#92400e"}}>👑</div>
-          
+
         </div>}
 
       </div>
 
       {/* Ligne 2 : Onglets navigation — pleine largeur, scrollable */}
-      <div style={{borderTop:"1px solid #f1f5f9",overflowX:"hidden"}}>
+      <div style={{borderTop:"1px solid var(--border)",overflowX:"hidden"}}>
         <div style={{display:"flex",width:"100%",
           padding:"0 6px",gap:2}}>
           {VIEWS.filter(v=>["personal","previsionnel","global"].includes(v.k)).map(({k,l})=>{
@@ -11880,7 +11899,7 @@ export default function App(){
                   border:"none",background:"transparent",
                   padding:"9px 6px",cursor:"pointer",flex:1,minWidth:0,
                   fontSize:"clamp(11px,1.6vw,15px)",fontWeight:700,
-                  color:actif?"#0a3a63":"#334155",
+                  color:actif?"#0a3a63":"var(--text-secondary)",
                   borderBottom:actif?"2.5px solid #0a3a63":"2.5px solid transparent",
                   whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",position:"relative",
                   letterSpacing:actif?-.1:0,
