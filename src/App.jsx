@@ -2222,7 +2222,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <button onClick={()=>changerMoisNav(-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
-        <button onClick={()=>{try{dateJumpRef.current.showPicker();}catch(e){dateJumpRef.current&&dateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",padding:"4px 0",cursor:"pointer"}}>
+        <button onClick={()=>{try{dateJumpRef.current.showPicker();}catch(e){dateJumpRef.current&&dateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,width:150,flexShrink:0,border:"none",background:"none",padding:"4px 0",cursor:"pointer"}}>
           <span style={{fontSize:14,fontWeight:700,color:"var(--text-primary)"}}>{MOIS_L[new Date(dateKey).getMonth()]} {new Date(dateKey).getFullYear()}</span>
           <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
         </button>
@@ -2230,13 +2230,21 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         <button onClick={goToToday} style={{display:"flex",alignItems:"center",gap:6,border:"none",background:weekOffset===0?"#f1f5f9":"#E6F1FB",color:weekOffset===0?"#475569":"#0C447C",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700}}>📅 Aujourd'hui</button>
       </div>
       <input ref={dateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
-      <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
-        {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
-          <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #378ADD":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"var(--bg-card)",color:dayIdx===i?"#fff":isToday?"#0C447C":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
-            {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
-          </button>);})}
+      {/* Semaine précédente/suivante (19/08, Olivier -- sur ordi, sans écran
+          tactile, aucun moyen de changer de semaine sans passer par le
+          sélecteur de date natif "moche et pas pratique". Décale weekOffset
+          d'une semaine en gardant le même jour de la semaine sélectionné
+          (dayIdx inchangé), plutôt que de rejouer goToDay 7 fois. */}
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <button onClick={()=>setWeekOffset(w=>w-1)} aria-label="Semaine précédente" style={NAV_ARROW_STYLE}>‹</button>
+        <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
+          {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
+            <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #378ADD":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"var(--bg-card)",color:dayIdx===i?"#fff":isToday?"#0C447C":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
+              {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
+            </button>);})}
+        </div>
+        <button onClick={()=>setWeekOffset(w=>w+1)} aria-label="Semaine suivante" style={NAV_ARROW_STYLE}>›</button>
       </div>
-      
     </div>
 
     {/* Sections */}
@@ -8552,7 +8560,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <div style={{display:"flex",alignItems:"center",gap:2}}>
         <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
-        <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer"}}>
+        <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,width:150,flexShrink:0,border:"none",background:"none",cursor:"pointer"}}>
           <span style={{fontSize:"clamp(13px,1.6vw,16px)",fontWeight:700,color:"var(--text-primary)",whiteSpace:"nowrap"}}>{MOIS_L[curMonth]} {curYear}</span>
           <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
         </button>
