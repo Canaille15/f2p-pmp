@@ -45,3 +45,15 @@
   --brand-subtitle: #b6c3d6;
 }
 body { background: var(--bg-page); transition: background .15s; }
+
+/* Mon planning (19/08, Olivier : "sur la vue telephone, le bouton de
+   chargement du pdf dans etre au dessus de la date") -- le bouton
+   "Importer bulletin de commande / roulement" doit passer AU-DESSUS de la
+   ligne date/navigation sur téléphone, mais rester EN DESSOUS sur desktop
+   (comportement d'origine, non demandé à changer). Le DOM/JSX garde le
+   même ordre partout (nav-row puis import-row) ; seul l'ordre visuel change
+   ici, via flex `order`, sous ce seul breakpoint mobile. */
+@media (max-width: 640px) {
+  .f2ppmp-nav-row { order: 2; }
+  .f2ppmp-import-row { order: 1; }
+}

@@ -8557,20 +8557,27 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
         (les 2 autres vues retirees, voir CLAUDE.md resolus du 04/08) - nom du mois complet
         toujours visible, navigation par flecheS precedent/suivant (avant : uniquement le
         calendrier natif via showPicker(), pas pratique a la souris) + bouton "Aujourd'hui". */}
-    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-      <div style={{display:"flex",alignItems:"center",gap:2}}>
-        <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
-        <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,width:150,flexShrink:0,border:"none",background:"none",cursor:"pointer"}}>
-          <span style={{fontSize:"clamp(13px,1.6vw,16px)",fontWeight:700,color:"var(--text-primary)",whiteSpace:"nowrap"}}>{MOIS_L[curMonth]} {curYear}</span>
-          <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
-        </button>
-        <button onClick={()=>setMonthOff(m=>m+1)} aria-label="Mois suivant" style={NAV_ARROW_STYLE}>›</button>
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {/* Import PDF au-dessus de la date sur mobile (19/08, Olivier), en
+          dessous sur desktop -- ordre visuel piloté par CSS (.f2ppmp-nav-row/
+          .f2ppmp-import-row, voir theme.css), le DOM/JSX ne bouge pas. */}
+      <div className="f2ppmp-nav-row" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:2}}>
+          <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
+          <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,width:150,flexShrink:0,border:"none",background:"none",cursor:"pointer"}}>
+            <span style={{fontSize:"clamp(13px,1.6vw,16px)",fontWeight:700,color:"var(--text-primary)",whiteSpace:"nowrap"}}>{MOIS_L[curMonth]} {curYear}</span>
+            <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
+          </button>
+          <button onClick={()=>setMonthOff(m=>m+1)} aria-label="Mois suivant" style={NAV_ARROW_STYLE}>›</button>
+        </div>
+        <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
       </div>
-      <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
-      {isOwnProfile && <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
-        const agCp=agent.immatriculation||agent.cp||agent.id;
-        api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
-      }}/>}
+      {isOwnProfile && <div className="f2ppmp-import-row">
+        <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
+          const agCp=agent.immatriculation||agent.cp||agent.id;
+          api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
+        }}/>
+      </div>}
     </div>
 
     <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToMonthDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
