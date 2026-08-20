@@ -68,6 +68,15 @@ const POSTES_PRCI = [
   {code:"ASSJ", label:"Adj DPX",     types:["J"]},
   {code:"PPRCI",label:"PPRCI",       types:["J","M","AM"]},
   {code:"AFOPR",label:"AFO PRCI",    types:["J"]},
+  // VM/CAF (19/08, demandé par Olivier) : ce sont des journées de travail à
+  // part entière (comptent normalement dans "Jours travaillés"), pas des
+  // absences -- corrigé après un premier essai erroné qui les traitait comme
+  // des codes équipe indépendants type Maladie/Absent. "Certificat d'Aptitude
+  // à la Fonction" (CAF) et "Visite médicale" (VM), même principe que
+  // PPRCI/PPAR : postes génériques, jamais liés à une habilitation précise
+  // (voir l'exemption dans getPostes plus bas).
+  {code:"VM",   label:"VM",          types:["J"]},
+  {code:"CAF",  label:"CAF",         types:["J"]},
 ];
 
 const POSTES_PAR = [
@@ -135,7 +144,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     const postes = tous_postes.filter(p => p.types.includes(type));
     if (habCodes.length === 0) return postes;
     return postes.filter(p =>
-      p.code === "PPRCI" || p.code === "PPAR" ||
+      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" ||
       habCodes.includes(CODE_VERS_HAB[p.code] || p.code)
     );
   };
