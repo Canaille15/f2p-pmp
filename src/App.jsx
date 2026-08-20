@@ -8550,7 +8550,6 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
         toujours visible, navigation par flecheS precedent/suivant (avant : uniquement le
         calendrier natif via showPicker(), pas pratique a la souris) + bouton "Aujourd'hui". */}
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-      <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
       <div style={{display:"flex",alignItems:"center",gap:2}}>
         <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
         <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",gap:4,border:"none",background:"none",cursor:"pointer"}}>
@@ -8559,6 +8558,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
         </button>
         <button onClick={()=>setMonthOff(m=>m+1)} aria-label="Mois suivant" style={NAV_ARROW_STYLE}>›</button>
       </div>
+      <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
       {isOwnProfile && <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
         const agCp=agent.immatriculation||agent.cp||agent.id;
         api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
