@@ -2232,7 +2232,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <input ref={dateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
       <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
         {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
-          <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #378ADD":"1.5px solid #cbd5e1",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"#fff",color:dayIdx===i?"#fff":isToday?"#0C447C":"#334155",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
+          <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #378ADD":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"var(--bg-card)",color:dayIdx===i?"#fff":isToday?"#0C447C":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
             {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
           </button>);})}
       </div>
@@ -11942,10 +11942,10 @@ export default function App(){
           étaient marginaux à 260px (repassaient sur 2 lignes selon le
           rendu des polices), 288px donne de la marge sans dépasser
           80vw sur mobile (maxWidth déjà en place). */}
-      <div style={{position:"relative",width:288,maxWidth:"80vw",height:"100%",background:"#fff",boxShadow:"4px 0 24px rgba(0,0,0,.15)",display:"flex",flexDirection:"column",padding:"16px 0",overflowY:"auto"}}>
-        <div style={{padding:"0 16px 12px",borderBottom:"1px solid #f1f5f9",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{fontSize:14,fontWeight:800,color:"#0f4c81"}}>F2P.PMP</div>
-          <button onClick={()=>setMenuOpen(false)} style={{border:"none",background:"none",cursor:"pointer",fontSize:18,color:"#94a3b8",padding:4}}>×</button>
+      <div style={{position:"relative",width:288,maxWidth:"80vw",height:"100%",background:"var(--bg-card)",boxShadow:"4px 0 24px rgba(0,0,0,.15)",display:"flex",flexDirection:"column",padding:"16px 0",overflowY:"auto"}}>
+        <div style={{padding:"0 16px 12px",borderBottom:"1px solid var(--border)",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{fontSize:14,fontWeight:800,color:"var(--brand-text)"}}>F2P.PMP</div>
+          <button onClick={()=>setMenuOpen(false)} style={{border:"none",background:"none",cursor:"pointer",fontSize:18,color:"var(--brand-subtitle)",padding:4}}>×</button>
         </div>
         {/* Menu réorganisé en 2 pavés + reste trié (15/08, demandé par Olivier
             — "sur le meme principa tu va metre le perso, cps et previonnelle
@@ -11966,10 +11966,10 @@ export default function App(){
         {(() => {
           const byKey = k => VIEWS.find(v => v.k === k);
           const renderPave = (key, label, icon, accentColor, accentBg, keys) => (
-            <div key={key} style={{ margin: "8px 12px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(15,23,42,.05)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 12px 9px", borderBottom: "1px solid #f1f5f9" }}>
+            <div key={key} style={{ margin: "8px 12px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(15,23,42,.05)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 12px 9px", borderBottom: "1px solid var(--border)" }}>
                 {icon}
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", letterSpacing: .7, textTransform: "uppercase" }}>{label}</span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: .7, textTransform: "uppercase" }}>{label}</span>
               </div>
               <div style={{ padding: 4 }}>
                 {keys.map(k => {
@@ -11982,7 +11982,7 @@ export default function App(){
                         display: "flex", alignItems: "center", gap: 10, border: "none",
                         background: actif ? accentBg : "transparent",
                         padding: "10px 8px", cursor: "pointer", fontSize: 14,
-                        fontWeight: actif ? 700 : 500, color: actif ? accentColor : "#1e293b",
+                        fontWeight: actif ? 700 : 500, color: actif ? accentColor : "var(--text-primary)",
                         textAlign: "left", width: "100%", borderRadius: 7,
                       }}>
                       {v.l}
@@ -11997,7 +11997,7 @@ export default function App(){
             if (!v) return null;
             const actif = view === k;
             const aDesEchanges = k === "echanges" && echangesOuvertesCount > 0;
-            return (<button key={k} onClick={() => { navigateToView(k); setMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: actif ? "#eff6ff" : (aDesEchanges ? "#fef3c7" : "transparent"), padding: "12px 16px", cursor: "pointer", fontSize: 14, fontWeight: actif ? 700 : 500, color: actif ? "#0f4c81" : "#1e293b", textAlign: "left", width: "100%" }}>
+            return (<button key={k} onClick={() => { navigateToView(k); setMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: actif ? "#eff6ff" : (aDesEchanges ? "#fef3c7" : "transparent"), padding: "12px 16px", cursor: "pointer", fontSize: 14, fontWeight: actif ? 700 : 500, color: actif ? "#0f4c81" : "var(--text-primary)", textAlign: "left", width: "100%" }}>
               {v.l}
               {aDesEchanges && <span style={{ marginLeft: "auto", background: "#dc2626", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{echangesOuvertesCount}</span>}
             </button>);
@@ -12009,7 +12009,7 @@ export default function App(){
           return (
             <>
               {renderPave("planning-group", "Planning",
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="#0f4c81"><path fillRule="evenodd" d="M5.75 2a.75.75 0 0 1 .75.75V4h7V2.75a.75.75 0 0 1 1.5 0V4h.25A2.75 2.75 0 0 1 18 6.75v8.5A2.75 2.75 0 0 1 15.25 18H4.75A2.75 2.75 0 0 1 2 15.25v-8.5A2.75 2.75 0 0 1 4.75 4H5V2.75A.75.75 0 0 1 5.75 2Zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75Z" clipRule="evenodd"/></svg>,
+                <svg width="14" height="14" viewBox="0 0 20 20" style={{fill:"var(--brand-text)"}}><path fillRule="evenodd" d="M5.75 2a.75.75 0 0 1 .75.75V4h7V2.75a.75.75 0 0 1 1.5 0V4h.25A2.75 2.75 0 0 1 18 6.75v8.5A2.75 2.75 0 0 1 15.25 18H4.75A2.75 2.75 0 0 1 2 15.25v-8.5A2.75 2.75 0 0 1 4.75 4H5V2.75A.75.75 0 0 1 5.75 2Zm-1 5.5c-.69 0-1.25.56-1.25 1.25v6.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-6.5c0-.69-.56-1.25-1.25-1.25H4.75Z" clipRule="evenodd"/></svg>,
                 "#0f4c81", "#eff6ff", ["personal", "global", "previsionnel"])}
               {renderPave("pdf-group", "Générateurs PDF",
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="#b45309">
@@ -12024,7 +12024,7 @@ export default function App(){
           );
         })()}
         <div style={{flex:1}}/>
-        <button onClick={()=>{setMenuOpen(false);handleLogout();}} style={{display:"flex",alignItems:"center",gap:10,border:"none",borderTop:"1px solid #f1f5f9",background:"transparent",padding:"14px 16px",cursor:"pointer",fontSize:14,fontWeight:600,color:"#ef4444",textAlign:"left",width:"100%"}}>
+        <button onClick={()=>{setMenuOpen(false);handleLogout();}} style={{display:"flex",alignItems:"center",gap:10,border:"none",borderTop:"1px solid var(--border)",background:"transparent",padding:"14px 16px",cursor:"pointer",fontSize:14,fontWeight:600,color:"#ef4444",textAlign:"left",width:"100%"}}>
           Déconnexion
         </button>
       </div>
