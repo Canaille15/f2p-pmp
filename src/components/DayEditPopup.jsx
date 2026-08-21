@@ -109,6 +109,25 @@ const POSTES_PAR = [
   {code:"PPAR", label:"PPAR", types:["J"]},
 ];
 
+// Regroupement des postes "Journée" en lignes (19/08, demandé par Olivier :
+// "sur la 1ere ligne [...] pauseur ccl, ajd prci, vgd, pausur par. en ligne
+// 2 asmte par, afo prci [...] ligne 3 pprci [...] ligne suivante, dpx prci,
+// dpx par, adj dpx [...] tu garde les nom deja mis avant") -- purement un
+// regroupement d'affichage, PAS une nouvelle liste de postes : chaque ligne
+// est filtrée depuis postesJ (déjà filtré par habilitation dans getPostes),
+// jamais depuis POSTES_PRCI/POSTES_PAR directement, donc un agent sans une
+// habilitation donnée continue de ne pas voir ce bouton précis, exactement
+// comme avant. 3 noms cités par Olivier n'existaient pas déjà dans la liste
+// (SD, Assistant PRCI, AFO PAR) -- volontairement absents ici, conformément
+// à "tu garde les nom deja mis avant" (aucun nouveau poste inventé).
+const POSTE_ROWS_J = [
+  ["PA1J","PA2J","PA3J","PARJ"], // Pauseur CCL / Pauseur Adjoint / Pauseur VGD / Pauseur PAR
+  ["ASMP","AFOPR"],              // ASMTE PAR / AFO PRCI
+  ["PPRCI","PPAR"],              // PPRCI / PPAR
+  ["DPXJ","DPXP","ASSJ"],        // DPX PRCI / DPX PAR / Adj DPX
+  ["VM","CAF","AY"],             // pas mentionnés par Olivier, gardés en dernière ligne
+];
+
 const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
 
 // jsCode canonique → code court local (sens inverse de convertirCodePosteVersJsCode).
@@ -816,15 +835,23 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
               }}>
                 Poste
               </div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                {postesJ.map(p => (
-                  <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
-                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
-                    fontSize:12, fontWeight:700,
-                    background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
-                    color: poste1 === p.code ? "#fff" : "#475569",
-                  }}>{p.label}</button>
-                ))}
+              <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {POSTE_ROWS_J.map((rowCodes,i) => {
+                  const rowPostes = rowCodes.map(c => postesJ.find(p => p.code === c)).filter(Boolean);
+                  if (rowPostes.length === 0) return null;
+                  return (
+                    <div key={i} style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                      {rowPostes.map(p => (
+                        <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                          padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                          fontSize:12, fontWeight:700,
+                          background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
+                          color: poste1 === p.code ? "#fff" : "#475569",
+                        }}>{p.label}</button>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
