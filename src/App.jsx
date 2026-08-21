@@ -2883,18 +2883,15 @@ const POSTE_REGISTRY = (() => {
 function computeDashboardTravail(agent, schedule, year){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const postes = {};
-  // dates (21/08, Olivier : "pourquoi je vois plus les dates des journnes
-  // non affectee") -- jusqu'ici seul lastDate (le plus récent) était calculé
-  // et affiché, jamais la liste complète des jours "non affecté" -- ajoutée
-  // ici pour lister chaque date individuellement dans le tableau de bord,
-  // pas seulement la dernière.
-  const sansPoste = { total:0, lastDate:null, dates:[] };
-  // Sous-ensemble de sansPoste qui exclut Formation — sert uniquement au
-  // message d'avertissement ci-dessous (sinon un jour de Formation semble à
-  // tort "sans poste précisé" alors qu'il est déjà listé comme tel juste
-  // au-dessus). sansPoste lui-même (avec Formation dedans) reste inchangé
-  // pour la répartition PRCI/PAR/Non affecté, qui doit continuer à faire 100%.
-  const sansPosteVrai = { total:0, lastDate:null };
+  // sansPosteVrai (21/08, Olivier : "ma journee de formation du 25 mars reste
+  // en non aaffecté. pk ?") -- jusqu'au 21/08 une Formation était comptée
+  // DEUX fois : dans sa propre carte "postes.FOR" ET dans "Non affecté" (pour
+  // que la répartition PRCI/PAR/Non affecté fasse 100%), ce qui la faisait
+  // apparaître à tort comme "non affectée" alors qu'elle est bien identifiée.
+  // Formation a désormais sa PROPRE catégorie dans la répartition (4 tuiles :
+  // PRCI/PAR/Formation/Non affecté) -- "Non affecté" ne représente plus QUE
+  // les jours réellement sans aucun poste précisé, jamais une Formation.
+  const sansPosteVrai = { total:0, lastDate:null, dates:[] };
   let totalTravail = 0;
   // Comptage global M/AM/N/J + FOR, tous postes confondus (+ jours sans poste
   // précisé) — distinct du détail par poste ci-dessous, jamais retiré.
@@ -2907,15 +2904,14 @@ function computeDashboardTravail(agent, schedule, year){
     totalTravail++;
     parShiftGlobal[eq]++;
     // Formation (17/07, demandé par Olivier) : garde sa propre ligne dans
-    // "postes" (total + dernière date, comme un vrai poste) MAIS reste aussi
-    // comptée dans sansPoste pour que la répartition PRCI/PAR/Non affecté
-    // continue de faire 100% (une formation n'est ni un poste PRCI ni PAR).
+    // "postes" (total + dernière date, comme un vrai poste) -- depuis le
+    // 21/08, sa propre catégorie dans la répartition (plus dans "Non
+    // affecté", voir commentaire sur sansPosteVrai ci-dessus), avec sa propre
+    // liste de dates (postes.FOR.dates) comme "Non affecté".
     if(eq==="FOR"){
-      sansPoste.total++;
-      sansPoste.dates.push({date:dk, motif:"Formation"});
-      if(!sansPoste.lastDate || dk > sansPoste.lastDate) sansPoste.lastDate = dk;
-      if(!postes.FOR) postes.FOR = { code:"FOR", label:"Formation", famille:"FOR", total:0, lastDate:null, parShift:{} };
+      if(!postes.FOR) postes.FOR = { code:"FOR", label:"Formation", famille:"FOR", total:0, lastDate:null, parShift:{}, dates:[] };
       postes.FOR.total++;
+      postes.FOR.dates.push(dk);
       if(!postes.FOR.lastDate || dk > postes.FOR.lastDate) postes.FOR.lastDate = dk;
       return;
     }
@@ -2943,10 +2939,8 @@ function computeDashboardTravail(agent, schedule, year){
       info = {...info, famille: agent?.famille || "PRCI"};
     }
     if(!info){
-      sansPoste.total++;
-      sansPoste.dates.push({date:dk, motif:null});
-      if(!sansPoste.lastDate || dk > sansPoste.lastDate) sansPoste.lastDate = dk;
       sansPosteVrai.total++;
+      sansPosteVrai.dates.push(dk);
       if(!sansPosteVrai.lastDate || dk > sansPosteVrai.lastDate) sansPosteVrai.lastDate = dk;
       return;
     }
@@ -2983,19 +2977,21 @@ function computeDashboardTravail(agent, schedule, year){
 
   const totalPRCI = Object.values(postes).filter(p=>p.famille==="PRCI").reduce((s,p)=>s+p.total,0);
   const totalPAR  = Object.values(postes).filter(p=>p.famille==="PAR").reduce((s,p)=>s+p.total,0);
-  const total = totalPRCI + totalPAR + sansPoste.total; // === totalTravail
+  const totalFormation = postes.FOR?.total || 0;
+  const total = totalPRCI + totalPAR + totalFormation + sansPosteVrai.total; // === totalTravail
   const pct = (n) => total>0 ? Math.round(n/total*1000)/10 : 0;
-  sansPoste.dates.sort((a,b)=> b.date.localeCompare(a.date)); // plus récent d'abord
+  sansPosteVrai.dates.sort((a,b)=> b.localeCompare(a)); // plus récent d'abord
+  if(postes.FOR) postes.FOR.dates.sort((a,b)=> b.localeCompare(a));
 
   return {
     totalTravail,
     postes: Object.values(postes).sort((a,b)=> b.total-a.total),
-    sansPoste,
     sansPosteVrai,
     repartition: {
       PRCI: { jours: totalPRCI, pct: pct(totalPRCI) },
+      Formation: { jours: totalFormation, pct: pct(totalFormation) },
       PAR:  { jours: totalPAR,  pct: pct(totalPAR) },
-      sansPoste: { jours: sansPoste.total, pct: pct(sansPoste.total) },
+      sansPoste: { jours: sansPosteVrai.total, pct: pct(sansPosteVrai.total) },
     },
     parShiftGlobal,
   };
@@ -3012,26 +3008,28 @@ function TravailDashboardContent({ data }) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-      {/* Répartition PRCI / PAR / Non affecté (= 100%) */}
-      <div style={{display:"flex",gap:8}}>
+      {/* Répartition PRCI / PAR / Formation / Non affecté (= 100%) --
+          Formation a sa PROPRE catégorie depuis le 21/08 (Olivier : "ma
+          journee de formation du 25 mars reste en non aaffecté. pk ?") --
+          avant, une Formation était comptée dans "Non affecté" en plus de sa
+          propre carte de détail plus bas, ce qui la faisait apparaître à
+          tort comme non identifiée alors qu'elle l'est parfaitement. */}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         {[
           {k:"PRCI", label:"PRCI", color:"#1d4ed8"},
           {k:"PAR",  label:"PAR",  color:"#065f46"},
+          {k:"Formation", label:"Formation", color:"#0891b2"},
           {k:"sansPoste", label:"Non affecté", color:"#475569"},
         ].map(({k,label,color})=>(
-          <div key={k} style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
+          <div key={k} style={{flex:"1 1 100px",background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
             <div style={{fontSize:11,fontWeight:700,color}}>{label}</div>
             <div style={{fontSize:20,fontWeight:900,color}}>{data.repartition[k].jours}</div>
             <div style={{fontSize:11,fontWeight:600,color:"#475569"}}>{data.repartition[k].pct}%</div>
-            {/* Date du dernier jour "Non affecté" (19/08, Olivier : "je vois
-                plus la date de la derniere journee non affecte") -- calculée
-                de longue date (sansPoste.lastDate) mais jamais affichée sur
-                cette tuile-ci, uniquement dans un message d'avertissement
-                séparé plus bas qui ne s'affiche pas si le seul jour "sans
-                poste" est en réalité une Formation (exclue de ce message-là,
-                voir sansPosteVrai) -- désormais toujours visible ici, sur le
-                même total que celui affiché juste au-dessus. */}
-            {k==="sansPoste"&&data.repartition.sansPoste.jours>0&&<div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginTop:2}}>dernier : {fmtDate(data.sansPoste.lastDate)}</div>}
+            {/* Date du dernier jour, sur "Non affecté" ET "Formation" (19/08
+                puis 21/08, Olivier) -- "Non affecté" ne représente plus QUE
+                les jours réellement sans poste précisé (sansPosteVrai). */}
+            {k==="sansPoste"&&data.repartition.sansPoste.jours>0&&<div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginTop:2}}>dernier : {fmtDate(data.sansPosteVrai.lastDate)}</div>}
+            {k==="Formation"&&data.repartition.Formation.jours>0&&<div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginTop:2}}>dernier : {fmtDate(data.postes.find(p=>p.code==="FOR")?.lastDate)}</div>}
           </div>
         ))}
       </div>
@@ -3079,28 +3077,35 @@ function TravailDashboardContent({ data }) {
         </div>
       )}
 
-      {/* Liste complète des dates "Non affecté" (21/08, Olivier : "pourquoi
-          je vois plus les dates des journnes non affectee" — jusqu'ici seule
-          la date la PLUS RÉCENTE était affichée, jamais la liste complète)
-          — regroupe Formation ET jours réellement sans poste, cohérent avec
-          la tuile "Non affecté" juste au-dessus qui compte déjà les deux
-          ensemble pour que la répartition PRCI/PAR/Non affecté fasse 100%. */}
-      {data.sansPoste.dates.length>0 && (
+      {/* Liste complète des dates de Formation (21/08, même demande que pour
+          "Non affecté" — le 21/08 plus tôt, Formation partageait encore cette
+          liste avec les jours vraiment non affectés ; depuis qu'elle a sa
+          propre catégorie ci-dessus, elle a aussi sa propre liste ici). */}
+      {(data.postes.find(p=>p.code==="FOR")?.dates?.length>0) && (
         <div style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
-          <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>📋 Journées non affectées ({data.sansPoste.dates.length})</div>
+          <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>📚 Journées de formation ({data.postes.find(p=>p.code==="FOR").dates.length})</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {data.sansPoste.dates.map((d,i)=>(
-              <div key={i} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10.5,fontWeight:600,color:"#334155"}}>
-                {fmtDate(d.date)}{d.motif&&<span style={{color:"#0891b2",fontWeight:700}}> · {d.motif}</span>}
-              </div>
+            {data.postes.find(p=>p.code==="FOR").dates.map((d,i)=>(
+              <div key={i} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10.5,fontWeight:600,color:"#334155"}}>{fmtDate(d)}</div>
             ))}
           </div>
         </div>
       )}
 
-      {data.sansPosteVrai.total>0 && (
-        <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
-          ⚠️ {data.sansPosteVrai.total} jour{data.sansPosteVrai.total>1?"s":""} travaillé{data.sansPosteVrai.total>1?"s":""} sans poste précisé (dernier : {fmtDate(data.sansPosteVrai.lastDate)}) — le poste n'a pas été renseigné dans le planning ce jour-là.
+      {/* Liste complète des dates "Non affecté" (21/08, Olivier : "pourquoi
+          je vois plus les dates des journnes non affectee" — jusqu'ici seule
+          la date la PLUS RÉCENTE était affichée, jamais la liste complète) --
+          ne représente plus que les jours réellement sans aucun poste
+          précisé (Formation a désormais sa propre liste juste au-dessus). */}
+      {data.sansPosteVrai.dates.length>0 && (
+        <div style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
+          <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>📋 Journées non affectées ({data.sansPosteVrai.dates.length})</div>
+          <div style={{fontSize:10.5,fontWeight:500,color:"#475569",marginBottom:8}}>Le poste n'a pas été renseigné dans le planning ces jours-là.</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {data.sansPosteVrai.dates.map((d,i)=>(
+              <div key={i} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10.5,fontWeight:600,color:"#334155"}}>{fmtDate(d)}</div>
+            ))}
+          </div>
         </div>
       )}
     </div>
