@@ -228,10 +228,11 @@ const MAPPING_JOURNEE = {
   PARJ: "PAPAUJ", DPXP: "PADPXJ", ASMP: "PAASMJ",
   PPRCI: "PPRCI",
   PPAR: "PPAR",
-  // VM/CAF (19/08) : déjà leur propre code canonique (comme PPRCI/PPAR),
+  // VM/CAF/AY (19/08) : déjà leur propre code canonique (comme PPRCI/PPAR),
   // identité volontaire -- voir DayEditPopup.jsx pour le contexte complet.
   VM: "VM",
   CAF: "CAF",
+  AY: "AY",
 };
 
 // Codes jsCode déjà canoniques (ceux que renvoie convertirCodePosteVersJsCode

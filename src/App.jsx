@@ -498,6 +498,13 @@ function deduireHoraireGeneriqueEquipe(codeEquipe) {
 // Retrouve le libellé lisible d'un poste (ex: "CCL", "AC PAR") à partir de son code jsCode (ex: "PICCL-")
 function getPosteLabelFromCode(jsCode) {
   if (!jsCode) return null;
+  // AY (19/08, demandé par Olivier) : volontairement PAS dans POSTES_JOURNEE
+  // -- cette table alimente aussi la construction des rangées de GlobalView
+  // (CPS Officiel ET Planning Prévisionnel, chemin partagé), et AY doit
+  // "rester à 100% dans le perso" (jamais y apparaître). Résolu ici en dur,
+  // uniquement pour ce lookup de label (utilisé uniquement par PersonalView
+  // et l'import perso, jamais par GlobalView).
+  if (jsCode === "AY") return "AY - Absence";
   const tousPostes3x8 = [...POSTES_PRCI_3x8, ...POSTES_PAR_3x8];
   const p3x8 = tousPostes3x8.find(p => p.M === jsCode || p.AM === jsCode || p.N === jsCode);
   if (p3x8) return p3x8.label;
@@ -2199,7 +2206,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:13,flex:1,minWidth:140,outline:"none"}}/>
       {!isPrevisionnel&&<button onClick={()=>setShowHistory(s=>!s)} style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,color:"#475569",background:showHistory?"#f1f5f9":"#fff",cursor:"pointer",flexShrink:0}}>🕓 Historique</button>}
       {cpsResult&&<span style={{fontSize:10,background:"#f0fdf4",color:"#16a34a",borderRadius:8,padding:"4px 10px",fontWeight:700}}>✅ {cpsResult.nb} agents · {cpsResult.date}</span>}
-      {!isPrevisionnel&&<label style={{cursor:uploading?"default":"pointer",flexShrink:0}}>
+      {/* Reste à droite sur ordi (ordre inversé demandé le 19/08), mais
+          repasse à gauche sur téléphone ("met le charguer de pdf a gauche
+          sur la vue tel dans cps") -- classe dédiée + order:-1 sous
+          @media(max-width:640px) dans theme.css, sans toucher au DOM/JSX
+          ni au reste de l'ordre desktop. */}
+      {!isPrevisionnel&&<label className="f2ppmp-cps-import" style={{cursor:uploading?"default":"pointer",flexShrink:0}}>
         <div style={{background:uploading?"#dc2626":"#0f4c81",color:"#fff",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5,transition:"background .3s"}}>
           {uploading?"⏳...":"📥 Importer feuille de présence"}
         </div>
@@ -2765,6 +2777,12 @@ const POSTE_REGISTRY = (() => {
   POSTES_JOURNEE.forEach(p=>{
     reg[p.jsCode] = {code:p.jsCode, label:p.label, famille:p.famille, shift:"J"};
   });
+  // AY (19/08) : enregistré séparément, jamais via POSTES_JOURNEE (voir
+  // commentaire sur getPosteLabelFromCode) -- c'est ce qui permet à
+  // computeDashboardTravail (perso uniquement) de lui donner sa propre
+  // section "AY - Absence" avec les dates, sans jamais risquer qu'il
+  // apparaisse comme rangée dans GlobalView (CPS Officiel/Prévisionnel).
+  reg["AY"] = {code:"AY", label:"AY - Absence", famille:"PRCI", shift:"J"};
   return reg;
 })();
 
@@ -2890,6 +2908,15 @@ function TravailDashboardContent({ data }) {
             <div style={{fontSize:11,fontWeight:700,color}}>{label}</div>
             <div style={{fontSize:20,fontWeight:900,color}}>{data.repartition[k].jours}</div>
             <div style={{fontSize:11,fontWeight:600,color:"#475569"}}>{data.repartition[k].pct}%</div>
+            {/* Date du dernier jour "Non affecté" (19/08, Olivier : "je vois
+                plus la date de la derniere journee non affecte") -- calculée
+                de longue date (sansPoste.lastDate) mais jamais affichée sur
+                cette tuile-ci, uniquement dans un message d'avertissement
+                séparé plus bas qui ne s'affiche pas si le seul jour "sans
+                poste" est en réalité une Formation (exclue de ce message-là,
+                voir sansPosteVrai) -- désormais toujours visible ici, sur le
+                même total que celui affiché juste au-dessus. */}
+            {k==="sansPoste"&&data.repartition.sansPoste.jours>0&&<div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginTop:2}}>dernier : {fmtDate(data.sansPoste.lastDate)}</div>}
           </div>
         ))}
       </div>

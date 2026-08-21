@@ -22,7 +22,6 @@ const CODES_REPOS = [
   { code:"CA",  label:"Congés",    color:"#eab308" },
   { code:"MA",  label:"Maladie",   color:"#dc2626" },
   { code:"VT",  label:"VT",        color:"#eab308" },
-  { code:"ABS", label:"Absent",    color:"#dc2626" },
   { code:"FOR", label:"Formation", color:"#b45309" },
 ];
 
@@ -77,6 +76,15 @@ const POSTES_PRCI = [
   // (voir l'exemption dans getPostes plus bas).
   {code:"VM",   label:"VM",          types:["J"]},
   {code:"CAF",  label:"CAF",         types:["J"]},
+  // AY (19/08, demandé par Olivier) : remplace le bouton "Absent" (ABS,
+  // section Repos/Absences, retiré) -- ancien "Absent" transformé en poste
+  // sous Journée, même principe que VM/CAF : compte comme jour travaillé.
+  // Contrainte explicite d'Olivier : "AY ne doit jamais apparaitre dans le
+  // previonnel. ca doit rester a 100% dans le perso" -- AY n'est donc PAS
+  // dans POSTES_JOURNEE (App.jsx, qui alimente aussi les rangées de
+  // GlobalView/CPS Officiel/Prévisionnel) : résolu à part (getPosteLabelFromCode,
+  // POSTE_REGISTRY), jamais par ce canal partagé.
+  {code:"AY",   label:"AY - Absence",types:["J"]},
 ];
 
 const POSTES_PAR = [
@@ -144,7 +152,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     const postes = tous_postes.filter(p => p.types.includes(type));
     if (habCodes.length === 0) return postes;
     return postes.filter(p =>
-      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" ||
+      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" ||
       habCodes.includes(CODE_VERS_HAB[p.code] || p.code)
     );
   };
