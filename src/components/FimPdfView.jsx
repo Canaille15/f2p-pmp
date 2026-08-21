@@ -116,13 +116,27 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
   // toujours "--" (jamais calculé), les droits n'y sont pas encore ouverts --
   // "tu mets juste les cases comme dans la fiche. les droits ne sont pas
   // ouvert."
-  const buildAnneeTable = (conf) => [year - 1, year, year + 1].map(y => {
+  // cumul (21/08, Olivier : "le cal cul de rp est faux [...] tu as fais 2
+  // calcul de rp . 1 jouste, 1 faux" -- le tableau 3 années de RP affichait
+  // un SOLDE (acquis-cumul) alors qu'un autre tableau juste au-dessus
+  // affichait déjà, correctement, le CUMUL -- 2 chiffres différents pour la
+  // même donnée). Pour l'année en cours, la colonne "année" affiche
+  // désormais RAW avant/fin (cumul, pas de soustraction de l'acquis) quand
+  // cumul=true (RP uniquement) -- RQ/RU restent en solde (cumul=false),
+  // conforme à la vraie fiche SNCF où seul RP est cumulatif. année-1/année+1
+  // gardent leur valeur déjà correcte (solde=0 si tout pris, sinon le reste)
+  // quel que soit le mode -- seul son LIBELLÉ change ("Cumul M-1"/"Cumul M"
+  // plutôt que "Solde début/fin de mois") pour rester cohérent avec la
+  // colonne "année" du même tableau.
+  const buildAnneeTable = (conf, cumul) => [year - 1, year, year + 1].map(y => {
     if (y === year + 1) return { annee: y, entitlement: null, soldeMMoins1: null, prisDuMois: null, soldeM: null, statique: true, futur: true };
     const d = computeCompteurAvecDetail(agent, schedule, agentProfiles, y, conf.codes, conf.reportKey, conf.acquisKey, conf.rollingAcquis);
     if (y === year) {
       const avant = d.tousJours.filter(x => x <= finMoisPrec).length;
       const fin = d.tousJours.filter(x => x <= finMois).length;
-      return { annee: y, entitlement: d.acquis, soldeMMoins1: d.acquis !== null ? d.acquis - avant : null, prisDuMois: fin - avant, soldeM: d.acquis !== null ? d.acquis - fin : null, statique: false };
+      const debut = cumul ? avant : (d.acquis !== null ? d.acquis - avant : null);
+      const finVal = cumul ? fin : (d.acquis !== null ? d.acquis - fin : null);
+      return { annee: y, entitlement: d.acquis, soldeMMoins1: debut, prisDuMois: fin - avant, soldeM: finVal, statique: false };
     }
     return { annee: y, entitlement: d.acquis, soldeMMoins1: d.solde, prisDuMois: 0, soldeM: d.solde, statique: true };
   });
@@ -243,10 +257,10 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
 
   return {
     finMois, finMoisPrec, congesParAnnee,
-    rp: { acquis: rpData.acquis, avant: rpAvant, duMois: rpFin - rpAvant, fin: rpFin, isolesMois, isolesAnnee: isolesCumul, parAnnee: buildAnneeTable(rpConf) },
+    rp: { acquis: rpData.acquis, avant: rpAvant, duMois: rpFin - rpAvant, fin: rpFin, isolesMois, isolesAnnee: isolesCumul, parAnnee: buildAnneeTable(rpConf, true) },
     vt: { aDuVT, acquis: vtData.entitlement, avant: vtAvant, duMois: vtFin - vtAvant, fin: vtFin },
-    ru: { acquis: ruData.acquis, avant: ruAvant, duMois: ruFin - ruAvant, fin: ruFin, parAnnee: buildAnneeTable(ruConf) },
-    rq: { acquis: rqData.acquis, avant: rqAvant, duMois: rqFin - rqAvant, fin: rqFin, parAnnee: buildAnneeTable(rqConf) },
+    ru: { acquis: ruData.acquis, avant: ruAvant, duMois: ruFin - ruAvant, fin: ruFin, parAnnee: buildAnneeTable(ruConf, true) },
+    rq: { acquis: rqData.acquis, avant: rqAvant, duMois: rqFin - rqAvant, fin: rqFin, parAnnee: buildAnneeTable(rqConf, false) },
     rn: rnReport, ty: tyReport, tq: tqReport, tc: tcReport,
     fetesATraiter, maladie: { mois: maladieMois, annee: maladieCumul },
     cet, joursMois,
@@ -382,47 +396,49 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
     ]
   );
 
-  // ── Repos — RP et VT en CUMUL (Cumul M-1 / pris de M / Cumul M), exactement
-  // comme le tableau "Repos" de la vraie fiche SNCF source (21/08, Olivier,
-  // en comparant à un vrai PDF officiel : "sur les rp fin juillet j'avais eu
-  // 90 rp en cumulé de l'annee. 9 pris sur aout. ca fait un total de 79 a fin
-  // aout. c'est ca que je veut voir sur le pdf. en cumul de m. comme sur la
-  // fiche que je t'avais donné en exemple" — la vraie fiche montre "Cumul
-  // M-1"/"Cumul M" qui s'additionnent (68+10=78 sur l'exemple), PAS un solde
-  // restant qui diminue. avant/duMois/fin sont déjà ce cumul (nombre de jours
-  // RP/VT réellement pris, filtré par date) -- il suffisait de ne plus les
-  // soustraire de l'acquis pour les afficher tels quels. RU reste en SOLDE
-  // (tableau séparé juste en dessous) : sur la vraie fiche, RU n'est PAS dans
-  // ce tableau "Repos" cumulatif, il apparaît à part ("Autres Compteurs") en
-  // solde M-1/acquis/pris/solde M -- exactement notre affichage actuel,
-  // inchangé.
+  // ── Repos — VT en CUMUL (Cumul M-1 / pris de M / Cumul M), exactement comme
+  // le tableau "Repos" de la vraie fiche SNCF source. RP n'est PLUS ici
+  // (21/08, Olivier : "tu as fais 2 calcul de rp . 1 jouste, 1 faux" -- RP
+  // était affiché ICI en cumul (correct) ET dans son propre tableau 3 années
+  // juste en dessous en solde (faux) : 2 chiffres différents pour la même
+  // donnée. RP vit désormais UNIQUEMENT dans son tableau 3 années, qui
+  // affiche maintenant lui aussi le cumul -- un seul calcul, un seul
+  // affichage). RU reste en SOLDE (son propre tableau 3 années, solde
+  // labels) : sur la vraie fiche, RU n'est pas dans ce tableau "Repos"
+  // cumulatif, il apparaît à part en solde M-1/acquis/pris/solde M.
   titreSection("REPOS");
   table(
     ["", "Cumul M-1", "Pris ce mois", "Cumul M"],
     [
-      [`Repos périodiques RP (${fmtNb(data.rp.acquis)})`, fmtNb(data.rp.avant), fmtNb(data.rp.duMois), fmtNb(data.rp.fin)],
       [`Temps partiel VT${data.vt.aDuVT ? ` (${fmtNb(data.vt.acquis)})` : ""}`, data.vt.aDuVT ? fmtNb(data.vt.avant) : "—", data.vt.aDuVT ? fmtNb(data.vt.duMois) : "—", data.vt.aDuVT ? fmtNb(data.vt.fin) : "—"],
     ],
     [(A4_W - marge * 2) * 0.42, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.194]
   );
-  txt(`RP isolés (ni veille ni lendemain en RP/RPP) — ce mois : ${data.rp.isolesMois}  ·  cumul annuel : ${data.rp.isolesAnnee}`, marge, y, { size: 8.3, color: rgb(0.42, 0.47, 0.55) });
-  y -= 18;
 
   // ── Tableaux 3 années (RP/RQ/RU), même structure que CONGÉS ci-dessus
   // (21/08, Olivier, en confirmant : "oui comme Congés") — année-1 : solde
   // statique (0 si tout pris, le reste sinon, déjà report-aware via
   // computeCompteurAvecDetail) ; année+1 : toujours "--", droits pas ouverts.
-  const anneeTable = (label, parAnnee) => table(
+  // rowLabels varie : RP en Cumul (M-1/M), RQ/RU en Solde (début/fin de mois)
+  // -- un seul jeu de libellés cohérent avec les valeurs réellement affichées
+  // dans la colonne "année" de CE tableau (21/08, même correctif que ci-dessus).
+  const anneeTable = (label, parAnnee, rowLabels = ["Solde début de mois", "Solde fin de mois"]) => table(
     ["", ...parAnnee.map(c => `${c.annee}${c.statique ? "" : " (mois en cours)"}`)],
     [
       [label, ...parAnnee.map(c => fmtNb(c.entitlement))],
-      ["Solde début de mois", ...parAnnee.map(c => fmtNb(c.soldeMMoins1))],
+      [rowLabels[0], ...parAnnee.map(c => fmtNb(c.soldeMMoins1))],
       ["Pris ce mois", ...parAnnee.map(c => (c.statique ? "—" : fmtNb(c.prisDuMois)))],
-      ["Solde fin de mois", ...parAnnee.map(c => fmtNb(c.soldeM))],
+      [rowLabels[1], ...parAnnee.map(c => fmtNb(c.soldeM))],
     ]
   );
-  anneeTable(`Repos périodiques RP (${fmtNb(data.rp.acquis)})`, data.rp.parAnnee);
-  anneeTable(`Repos suppl. RU (${fmtNb(data.ru.acquis)})`, data.ru.parAnnee);
+  anneeTable(`Repos périodiques RP (${fmtNb(data.rp.acquis)})`, data.rp.parAnnee, ["Cumul M-1", "Cumul M"]);
+  txt(`RP isolés (ni veille ni lendemain en RP/RPP) — ce mois : ${data.rp.isolesMois}  ·  cumul annuel : ${data.rp.isolesAnnee}`, marge, y, { size: 8.3, color: rgb(0.42, 0.47, 0.55) });
+  y -= 18;
+  // RU en Cumul aussi (21/08, Olivier, sur son vrai compte : "fin juillet
+  // j'avais pris 9 ru, pris 2 en aout . soit un total de 11 sur les 17
+  // acquis en debut annee" -- des chiffres cumulatifs, 9+2=11, comme pour
+  // RP -- même correctif, même raison).
+  anneeTable(`Repos suppl. RU (${fmtNb(data.ru.acquis)})`, data.ru.parAnnee, ["Cumul M-1", "Cumul M"]);
 
   // ── Temps acquis ──
   titreSection("TEMPS ACQUIS");
