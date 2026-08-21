@@ -10324,18 +10324,25 @@ function AnnuaireView({currentAgent,isAdmin,agents,cpsSchedule,cpsAleas}){
       <button onClick={recharger} style={{border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>Réessayer</button>
     </div>}
 
-    <div>
-      <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"#94a3b8",marginBottom:6,paddingLeft:2}}>Accès rapide</div>
-      {accesRapide.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(78px,1fr))",gap:8}}>
-        {accesRapide.map(a=>(
-          <a key={a.id} href={`tel:${a.numero}`} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,padding:"10px 4px",borderRadius:12,border:"1.5px solid #e2e8f0",background:"#fff",textDecoration:"none"}}>
-            <div style={{width:36,height:36,borderRadius:"50%",background:"#D85A30",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📞</div>
-            <span style={{fontSize:11,fontWeight:600,textAlign:"center",lineHeight:1.2,color:"#1e293b"}}>{a.libelle}</span>
-          </a>
-        ))}
-      </div>}
+    {/* Accès rapide, redesign 21/08 (Olivier : "ameliore le visuel des
+        numero rapide en haut") -- section désormais encartée comme le
+        reste de l'Annuaire (même carte blanche/bordure que Agents/UO),
+        pastilles agrandies avec dégradé + ombre légère plutôt qu'un aplat
+        de couleur plat, pour un rendu plus soigné. */}
+    <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:14}}>
+      <div style={{fontSize:11,fontWeight:700,letterSpacing:"0.04em",textTransform:"uppercase",color:"#94a3b8",marginBottom:10}}>📞 Accès rapide</div>
+      {accesRapide.length>0
+        ? <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(84px,1fr))",gap:10}}>
+            {accesRapide.map(a=>(
+              <a key={a.id} href={`tel:${a.numero}`} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"12px 6px",borderRadius:14,border:"1.5px solid #fed7aa",background:"#fff7ed",textDecoration:"none"}}>
+                <div style={{width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,#f97316,#c2410c)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,boxShadow:"0 2px 6px rgba(194,65,12,.35)"}}>📞</div>
+                <span style={{fontSize:11,fontWeight:700,textAlign:"center",lineHeight:1.25,color:"#7c2d12"}}>{a.libelle}</span>
+              </a>
+            ))}
+          </div>
+        : <div style={{fontSize:13,color:"#94a3b8"}}>Aucun numéro pour l'instant.</div>}
       {!gererAcces&&
-        <button onClick={()=>setGererAcces(true)} style={{border:"none",background:"none",color:"#0C447C",fontWeight:600,fontSize:12,cursor:"pointer",marginTop:8,padding:0}}>Gérer les numéros d'accès rapide</button>}
+        <button onClick={()=>setGererAcces(true)} style={{border:"none",background:"none",color:"#0C447C",fontWeight:600,fontSize:12,cursor:"pointer",marginTop:10,padding:0}}>Gérer les numéros d'accès rapide</button>}
       {gererAcces&&<div style={{marginTop:10,padding:12,borderRadius:12,border:"1.5px solid #e2e8f0",background:"#f8fafc"}}>
         <button onClick={()=>setNouvelAcces(true)} style={{display:"flex",alignItems:"center",gap:5,border:"none",background:"none",color:"#0C447C",fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:8,padding:0}}>+ Ajouter un numéro</button>
         {nouvelAcces&&<AccesRapideForm onCancel={()=>setNouvelAcces(false)} onSaved={()=>{setNouvelAcces(false);recharger();}}/>}
@@ -10370,81 +10377,120 @@ function AnnuaireView({currentAgent,isAdmin,agents,cpsSchedule,cpsAleas}){
       </button>
     </div>
 
-    {activeTab==="agents"&&<div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
-      <div style={{display:"flex",flexDirection:"column",gap:2}}>
-        {filtreAgents.map(a=>(
-          <div key={a.cp} style={{display:"flex",flexDirection:"column",gap:8,padding:"12px 4px",borderBottom:"1px solid #f1f5f9"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:16,color:"#1e293b"}}>{a.nom?.toUpperCase()} <span style={{fontWeight:500}}>{a.prenom}</span></div>
-                <div style={{fontSize:13,color:"#64748b",fontWeight:500}}>{a.fonction||a.grade||""}</div>
-              </div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                {a.telephone&&<a href={`tel:${a.telephone}`} style={{display:"flex",alignItems:"center",gap:7,textDecoration:"none",padding:"7px 12px",borderRadius:8,background:"#fef2f2",border:"1px solid #fecaca"}}>
-                  <IconTel size={15}/>
-                  <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{a.telephone}</span>
-                </a>}
-                {a.telephone&&<a href={`sms:${a.telephone}`} title="SMS" style={{display:"flex",alignItems:"center",justifyContent:"center",width:36,height:36,textDecoration:"none",borderRadius:8,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:16}}>💬</a>}
-                {a.email&&<a href={`mailto:${a.email}`} style={{display:"flex",alignItems:"center",gap:7,textDecoration:"none",padding:"7px 12px",borderRadius:8,background:"#eff6ff",border:"1px solid #bfdbfe"}}>
-                  <span style={{fontSize:15}}>✉️</span>
-                  <span style={{fontSize:14,fontWeight:700,color:"#1e293b"}}>{a.email}</span>
-                </a>}
-                {!a.telephone&&!a.email&&<span style={{fontSize:13,color:"#64748b",fontWeight:600}}>Non communiqué</span>}
-              </div>
-            </div>
-          </div>
-        ))}
-        {filtreAgents.length===0&&<div style={{fontSize:13,color:"#94a3b8"}}>Aucun agent trouvé.</div>}
-      </div>
+    {activeTab==="agents"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {filtreAgents.map(a=><AgentAnnuaireCard key={a.cp} agent={a}/>)}
+      {filtreAgents.length===0&&<div style={{fontSize:13,color:"#94a3b8",textAlign:"center",padding:"20px 0"}}>Aucun agent trouvé.</div>}
     </div>}
 
-    {activeTab==="uo"&&<div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
-      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
-        <button onClick={()=>setNouvelUo(true)} style={{display:"flex",alignItems:"center",gap:5,border:"none",background:"none",color:"#0C447C",fontWeight:700,fontSize:13,cursor:"pointer"}}>+ Ajouter un poste</button>
-      </div>
+    {activeTab==="uo"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <button onClick={()=>setNouvelUo(true)} style={{alignSelf:"flex-end",display:"flex",alignItems:"center",gap:5,border:"none",background:"none",color:"#0C447C",fontWeight:700,fontSize:13,cursor:"pointer",padding:0}}>+ Ajouter un poste</button>
       {nouvelUo&&<UoForm onCancel={()=>setNouvelUo(false)} onSaved={()=>{setNouvelUo(false);recharger();}}/>}
-      {filtreUo.length===0&&!nouvelUo&&<div style={{fontSize:13,color:"#94a3b8"}}>Aucun poste UO pour l'instant.</div>}
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {filtreUo.map(u=>editUoId===u.id
-          ? <UoForm key={u.id} initial={u} onCancel={()=>setEditUoId(null)} onSaved={()=>{setEditUoId(null);recharger();}} onDelete={()=>{if(window.confirm(`Supprimer le poste "${u.fonction}" ?`))api.annuaire.deleteUo(u.id).then(recharger);}}/>
-          : <div key={u.id} style={{padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
-              <div onClick={()=>toggleExpandUo(u.id)} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:13,color:"#1e293b"}}>{u.fonction}</div>
-                  <div style={{fontSize:12,color:"#64748b"}}><TitulaireUo uo={u} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/></div>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{display:"flex",alignItems:"center",gap:4,fontSize:12,fontWeight:700,color:"#0C447C",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:20,padding:"5px 10px",whiteSpace:"nowrap"}}>
-                    {expandedUo.includes(u.id)?"Masquer":"Voir les contacts"}
-                    <span style={{transform:expandedUo.includes(u.id)?"rotate(180deg)":"none",transition:"transform .15s",display:"inline-block"}}>▾</span>
-                  </span>
-                  <button onClick={(e)=>{e.stopPropagation();setEditUoId(u.id);}} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#64748b"}}>✎</button>
-                </div>
+      {filtreUo.length===0&&!nouvelUo&&<div style={{fontSize:13,color:"#94a3b8",textAlign:"center",padding:"20px 0"}}>Aucun poste UO pour l'instant.</div>}
+      {filtreUo.map(u=>{
+        if(editUoId===u.id) return <UoForm key={u.id} initial={u} onCancel={()=>setEditUoId(null)} onSaved={()=>{setEditUoId(null);recharger();}} onDelete={()=>{if(window.confirm(`Supprimer le poste "${u.fonction}" ?`))api.annuaire.deleteUo(u.id).then(recharger);}}/>;
+        // Numéro "principal" affiché en icône directe (21/08, Olivier : "on
+        // doit cliquer en premier sur voir le contact [...] amrlioer ca
+        // aussi" -- avant, AUCUN numéro n'était jamais visible/appelable
+        // sans cliquer "Contacts" pour déplier, contrairement aux agents qui
+        // ont désormais leurs icônes toujours visibles). "Détails" ne
+        // reste utile (et visible) que s'il y a plus d'un numéro ou une
+        // note -- sinon il ferait doublon avec les 2 icônes déjà présentes.
+        const telPrincipal=u.mobile_pro||u.mobile_perso||u.fixe;
+        const nbTels=[u.mobile_pro,u.mobile_perso,u.fixe].filter(Boolean).length;
+        const hasExtra=nbTels>1||(u.note&&u.note.trim());
+        const hasTel=!!telPrincipal, hasMail=!!u.email;
+        return <div key={u.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:"12px 14px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontWeight:700,fontSize:14,color:"#1e293b"}}>{u.fonction}</div>
+                <div style={{fontSize:12,color:"#64748b",marginTop:2}}><TitulaireUo uo={u} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/></div>
               </div>
-              {expandedUo.includes(u.id)&&<div style={{marginTop:10}}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:8}}>
-                  <ContactLigne label="Mobile pro" valeur={u.mobile_pro}/>
-                  <ContactLigne label="Mobile perso" valeur={u.mobile_perso}/>
-                  <ContactLigne label="Fixe" valeur={u.fixe}/>
-                  {u.email&&<a href={`mailto:${u.email}`} style={{display:"flex",alignItems:"center",gap:8,textDecoration:"none",padding:"7px 10px",borderRadius:8,background:"#eff6ff",border:"1px solid #bfdbfe"}}>
-                    <span style={{fontSize:15}}>✉️</span>
-                    <div>
-                      <div style={{fontSize:10,fontWeight:700,color:"#0C447C",textTransform:"uppercase",letterSpacing:"0.03em"}}>Email</div>
-                      <div style={{fontSize:13,fontWeight:700,color:"#1e293b",wordBreak:"break-all"}}>{u.email}</div>
-                    </div>
-                  </a>}
-                </div>
-                {!u.mobile_pro&&!u.mobile_perso&&!u.fixe&&!u.email&&<span style={{fontSize:12,color:"#64748b",fontWeight:500}}>Aucun contact renseigné</span>}
-                {u.note&&u.note.trim()&&<div style={{marginTop:10,padding:"8px 10px",borderRadius:8,background:"#fffbeb",borderLeft:"4px solid #f59e0b"}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.03em",marginBottom:2}}>📝 Note</div>
-                  <div style={{fontSize:13,color:"#1e293b",fontWeight:500}}>{u.note}</div>
-                </div>}
-              </div>}
+              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                <IconActionBtn href={`tel:${telPrincipal}`} active={hasTel} bg="#fef2f2" border="#fecaca" title="Appeler"><IconTel size={14}/></IconActionBtn>
+                <IconActionBtn href={`mailto:${u.email}`} active={hasMail} bg="#eff6ff" border="#bfdbfe" title="Email"><span style={{fontSize:13}}>✉️</span></IconActionBtn>
+                {hasExtra&&<button onClick={()=>toggleExpandUo(u.id)} title="Voir tous les contacts" style={{width:32,height:32,borderRadius:"50%",border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",fontSize:12,color:"#64748b",flexShrink:0}}>{expandedUo.includes(u.id)?"▴":"▾"}</button>}
+                <button onClick={()=>setEditUoId(u.id)} title="Modifier" style={{width:32,height:32,borderRadius:"50%",border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",fontSize:14,color:"#64748b",flexShrink:0}}>✎</button>
+              </div>
             </div>
-        )}
-      </div>
+            {(hasTel||hasMail)&&<div style={{fontSize:12,color:"#94a3b8",fontWeight:500,marginTop:6,display:"flex",gap:12,flexWrap:"wrap"}}>
+              {hasTel&&<span>{telPrincipal}</span>}
+              {hasMail&&<span style={{wordBreak:"break-all"}}>{u.email}</span>}
+            </div>}
+            {!hasTel&&!hasMail&&<div style={{fontSize:12,color:"#94a3b8",fontWeight:500,marginTop:6}}>Aucun contact renseigné</div>}
+            {expandedUo.includes(u.id)&&hasExtra&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #f1f5f9"}}>
+              <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.03em",marginBottom:8}}>Tous les contacts</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:8}}>
+                <ContactLigne label="Mobile pro" valeur={u.mobile_pro}/>
+                <ContactLigne label="Mobile perso" valeur={u.mobile_perso}/>
+                <ContactLigne label="Fixe" valeur={u.fixe}/>
+              </div>
+              {u.note&&u.note.trim()&&<div style={{marginTop:10,padding:"8px 10px",borderRadius:8,background:"#fffbeb",borderLeft:"4px solid #f59e0b"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#92400e",textTransform:"uppercase",letterSpacing:"0.03em",marginBottom:2}}>📝 Note</div>
+                <div style={{fontSize:13,color:"#1e293b",fontWeight:500}}>{u.note}</div>
+              </div>}
+            </div>}
+          </div>;
+      })}
     </div>}
   </div>);
+}
+
+// Palette déterministe pour les avatars agent (21/08, refonte Annuaire) --
+// même agent = toujours la même couleur, purement décoratif (identité
+// visuelle), sans lien avec la famille PRCI/PAR (non disponible ici).
+const AVATAR_PALETTE=["#0f4c81","#0d9488","#7c3aed","#c2410c","#be185d","#4338ca","#0891b2","#b45309","#15803d","#9333ea"];
+function avatarColor(str){
+  let h=0; for(let i=0;i<(str||"").length;i++) h=(h*31+str.charCodeAt(i))>>>0;
+  return AVATAR_PALETTE[h%AVATAR_PALETTE.length];
+}
+
+// Carte agent de l'Annuaire (21/08, refonte demandée par Olivier : "quand il
+// y a un mail, la fiche a les touche a des endroit differents [...] rends
+// le attractif, moderne et ergonomique — la c'est laid"). Avant : les
+// boutons contact (téléphone/SMS/email) étaient des pastilles pleine
+// largeur qui n'apparaissaient QUE si la donnée existait, avec flexWrap —
+// selon les combinaisons présentes/absentes d'un agent à l'autre, elles se
+// retrouvaient à des tailles et positions différentes (parfois sur la même
+// ligne que le nom, parfois sur une toute nouvelle ligne). Ici, la zone
+// d'action est TOUJOURS 3 icônes rondes aux mêmes 3 emplacements fixes pour
+// CHAQUE carte -- désactivée (grisée, non cliquable) quand la donnée
+// manque plutôt que retirée, donc jamais de décalage d'une carte à l'autre.
+// Composant défini au niveau racine du fichier (jamais à l'intérieur d'un
+// autre composant) -- règle du projet, sinon React recrée le composant à
+// chaque re-render du parent.
+// Bouton d'action rond (appeler/SMS/email), toujours au même endroit, actif
+// ou grisé selon que la donnée existe -- partagé par les cartes Agents ET
+// UO (21/08) pour garder un seul langage visuel cohérent dans tout l'Annuaire.
+function IconActionBtn({href,active,bg,border,title,children}){
+  return active
+    ? <a href={href} title={title} style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",background:bg,border:`1px solid ${border}`,flexShrink:0}}>{children}</a>
+    : <div title="Non renseigné" style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"#f8fafc",border:"1px solid #f1f5f9",opacity:.35,flexShrink:0}}>{children}</div>;
+}
+
+function AgentAnnuaireCard({ agent:a }){
+  const initiales=`${(a.prenom||"?")[0]||""}${(a.nom||"?")[0]||""}`.toUpperCase();
+  const couleur=avatarColor(`${a.nom}${a.prenom}`);
+  const hasTel=!!a.telephone, hasMail=!!a.email;
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:8,background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:"12px 14px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:38,height:38,borderRadius:"50%",background:couleur,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:13,flexShrink:0}}>{initiales}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:15,color:"#1e293b"}}>{a.nom?.toUpperCase()} <span style={{fontWeight:500}}>{a.prenom}</span></div>
+          <div style={{fontSize:12,color:"#64748b",fontWeight:500}}>{a.fonction||a.grade||""}</div>
+        </div>
+        <div style={{display:"flex",gap:6,flexShrink:0}}>
+          <IconActionBtn href={`tel:${a.telephone}`} active={hasTel} bg="#fef2f2" border="#fecaca" title="Appeler"><IconTel size={14}/></IconActionBtn>
+          <IconActionBtn href={`sms:${a.telephone}`} active={hasTel} bg="#f0fdf4" border="#bbf7d0" title="SMS"><span style={{fontSize:13}}>💬</span></IconActionBtn>
+          <IconActionBtn href={`mailto:${a.email}`} active={hasMail} bg="#eff6ff" border="#bfdbfe" title="Email"><span style={{fontSize:13}}>✉️</span></IconActionBtn>
+        </div>
+      </div>
+      {(hasTel||hasMail)&&<div style={{fontSize:12,color:"#94a3b8",fontWeight:500,paddingLeft:48,display:"flex",gap:12,flexWrap:"wrap"}}>
+        {hasTel&&<span>{a.telephone}</span>}
+        {hasMail&&<span style={{wordBreak:"break-all"}}>{a.email}</span>}
+      </div>}
+    </div>
+  );
 }
 
 function IconTel({size}){
