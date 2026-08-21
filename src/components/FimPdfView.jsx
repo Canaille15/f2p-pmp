@@ -473,8 +473,11 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
     ],
     [(A4_W - marge * 2) * 0.42, (A4_W - marge * 2) * 0.145, (A4_W - marge * 2) * 0.145, (A4_W - marge * 2) * 0.145, (A4_W - marge * 2) * 0.145]
   );
-  txt(`TY plafonné à ${minToHM(PLAFOND_32H_MIN)} (au-delà, à payer automatiquement) · Pauses figées validées ce mois : ${data.tc.pausesDuMois}`, marge, y, { size: 8.3, color: rgb(0.42, 0.47, 0.55) });
-  y -= 18;
+  // Note "TY plafonné.../Pauses figées ce mois" retirée (21/08, Olivier :
+  // "pas utile ici") -- le plafond TY est déjà rappelé contextuellement dans
+  // le module TY lui-même (badge "Plafond 32h00 · ATTEINT" quand pertinent),
+  // et le décompte mensuel des pauses figées vit déjà dans le module Pause
+  // Figée (regroupement par mois, 17/07) -- pas besoin de le dupliquer ici.
 
   // ── Fêtes à récupérer ──
   titreSection("FÉRIÉS À RÉCUPÉRER (en attente)");
