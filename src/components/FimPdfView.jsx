@@ -103,6 +103,30 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
     return { annee: y, entitlement: d.entitlement, soldeMMoins1: d.solde, prisDuMois: 0, soldeM: d.solde, statique: true };
   });
 
+  // ── Tableau 3 années (année-1/année/année+1), réutilisable pour RP/RQ/RU
+  // (21/08, Olivier, en confirmant vouloir "comme Congés" pour ces 3
+  // compteurs) — même principe exact que congesParAnnee ci-dessus : seule la
+  // colonne "année" reçoit un vrai découpage mensuel (solde début/pris/solde
+  // fin, par date réelle), les 2 autres années affichent un solde statique.
+  // "année-1" : si tout est déjà pris, solde=0 (comme dans l'exemple fourni
+  // par Olivier) ; s'il reste des jours, ils restent affichés tels quels --
+  // déjà garanti par computeCompteurAvecDetail (solde=acquis-total, et un
+  // report vers année+1 est déjà déduit de son propre calcul via reportKey,
+  // aucune logique de déduction supplémentaire à écrire ici). "année+1" :
+  // toujours "--" (jamais calculé), les droits n'y sont pas encore ouverts --
+  // "tu mets juste les cases comme dans la fiche. les droits ne sont pas
+  // ouvert."
+  const buildAnneeTable = (conf) => [year - 1, year, year + 1].map(y => {
+    if (y === year + 1) return { annee: y, entitlement: null, soldeMMoins1: null, prisDuMois: null, soldeM: null, statique: true, futur: true };
+    const d = computeCompteurAvecDetail(agent, schedule, agentProfiles, y, conf.codes, conf.reportKey, conf.acquisKey, conf.rollingAcquis);
+    if (y === year) {
+      const avant = d.tousJours.filter(x => x <= finMoisPrec).length;
+      const fin = d.tousJours.filter(x => x <= finMois).length;
+      return { annee: y, entitlement: d.acquis, soldeMMoins1: d.acquis !== null ? d.acquis - avant : null, prisDuMois: fin - avant, soldeM: d.acquis !== null ? d.acquis - fin : null, statique: false };
+    }
+    return { annee: y, entitlement: d.acquis, soldeMMoins1: d.solde, prisDuMois: 0, soldeM: d.solde, statique: true };
+  });
+
   // ── Repos : RP (+ RPP), avec sous-décompte "isolé" (ni la veille ni le
   // lendemain n'est aussi un RP/RPP) — calculé depuis le planning perso,
   // aucune règle SNCF externe (RD/RPSD/WE volontairement abandonnées).
@@ -219,10 +243,10 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
 
   return {
     finMois, finMoisPrec, congesParAnnee,
-    rp: { acquis: rpData.acquis, avant: rpAvant, duMois: rpFin - rpAvant, fin: rpFin, isolesMois, isolesAnnee: isolesCumul },
+    rp: { acquis: rpData.acquis, avant: rpAvant, duMois: rpFin - rpAvant, fin: rpFin, isolesMois, isolesAnnee: isolesCumul, parAnnee: buildAnneeTable(rpConf) },
     vt: { aDuVT, acquis: vtData.entitlement, avant: vtAvant, duMois: vtFin - vtAvant, fin: vtFin },
-    ru: { acquis: ruData.acquis, avant: ruAvant, duMois: ruFin - ruAvant, fin: ruFin },
-    rq: { acquis: rqData.acquis, avant: rqAvant, duMois: rqFin - rqAvant, fin: rqFin },
+    ru: { acquis: ruData.acquis, avant: ruAvant, duMois: ruFin - ruAvant, fin: ruFin, parAnnee: buildAnneeTable(ruConf) },
+    rq: { acquis: rqData.acquis, avant: rqAvant, duMois: rqFin - rqAvant, fin: rqFin, parAnnee: buildAnneeTable(rqConf) },
     rn: rnReport, ty: tyReport, tq: tqReport, tc: tcReport,
     fetesATraiter, maladie: { mois: maladieMois, annee: maladieCumul },
     cet, joursMois,
@@ -383,21 +407,30 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   );
   txt(`RP isolés (ni veille ni lendemain en RP/RPP) — ce mois : ${data.rp.isolesMois}  ·  cumul annuel : ${data.rp.isolesAnnee}`, marge, y, { size: 8.3, color: rgb(0.42, 0.47, 0.55) });
   y -= 18;
-  table(
-    ["", "Solde début de mois", "Pris ce mois", "Solde fin de mois"],
+
+  // ── Tableaux 3 années (RP/RQ/RU), même structure que CONGÉS ci-dessus
+  // (21/08, Olivier, en confirmant : "oui comme Congés") — année-1 : solde
+  // statique (0 si tout pris, le reste sinon, déjà report-aware via
+  // computeCompteurAvecDetail) ; année+1 : toujours "--", droits pas ouverts.
+  const anneeTable = (label, parAnnee) => table(
+    ["", ...parAnnee.map(c => `${c.annee}${c.statique ? "" : " (mois en cours)"}`)],
     [
-      [`Repos suppl. RU (${fmtNb(data.ru.acquis)})`, fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.avant : null), fmtNb(data.ru.duMois), fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.fin : null)],
-    ],
-    [(A4_W - marge * 2) * 0.42, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.194]
+      [label, ...parAnnee.map(c => fmtNb(c.entitlement))],
+      ["Solde début de mois", ...parAnnee.map(c => fmtNb(c.soldeMMoins1))],
+      ["Pris ce mois", ...parAnnee.map(c => (c.statique ? "—" : fmtNb(c.prisDuMois)))],
+      ["Solde fin de mois", ...parAnnee.map(c => fmtNb(c.soldeM))],
+    ]
   );
+  anneeTable(`Repos périodiques RP (${fmtNb(data.rp.acquis)})`, data.rp.parAnnee);
+  anneeTable(`Repos suppl. RU (${fmtNb(data.ru.acquis)})`, data.ru.parAnnee);
 
   // ── Temps acquis ──
   titreSection("TEMPS ACQUIS");
+  anneeTable(`Temps RQ, en jours (${fmtNb(data.rq.acquis)})`, data.rq.parAnnee);
   const hmRow = (label, r) => [label, minToHM(r.soldeMMoins1), minToHM(r.acquisDuMois), minToHM(r.prisDuMois), minToHM(r.soldeM)];
   table(
     ["", "Solde début de mois", "Acquis ce mois", "Pris ce mois", "Solde fin de mois"],
     [
-      [`Temps RQ, en jours (${fmtNb(data.rq.acquis)})`, fmtNb(data.rq.acquis !== null ? data.rq.acquis - data.rq.avant : null), "—", fmtNb(data.rq.duMois), fmtNb(data.rq.acquis !== null ? data.rq.acquis - data.rq.fin : null)],
       hmRow("Repos compensateur de nuit RN", data.rn),
       hmRow("Temps à compenser semestres précédents TY", data.ty),
       hmRow("Temps à compenser semestre en cours TQ", data.tq),
