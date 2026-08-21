@@ -8907,7 +8907,13 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
         </div>
         <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
       </div>
-      {isOwnProfile && <div className="f2ppmp-import-row" style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+      {/* 22/08 (Olivier : "dans la version tel met le bouton [export] a droite
+          d'import, sur la meme ligne") -- nowrap + overflow-x:auto sur ce
+          seul conteneur (jamais la page entière) pour garantir les 2
+          boutons sur une seule ligne même sur un petit écran, "Importer
+          bulletin de commande" étant intrinsèquement trop long pour
+          rétrécir sans devenir illisible. */}
+      {isOwnProfile && <div className="f2ppmp-import-row" style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"nowrap",overflowX:"auto",paddingBottom:2}}>
         <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
           const agCp=agent.immatriculation||agent.cp||agent.id;
           api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
