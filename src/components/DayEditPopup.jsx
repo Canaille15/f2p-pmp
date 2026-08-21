@@ -827,6 +827,19 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
           </div>
 
           {/* ── Poste journée ── */}
+          {/* Bug corrigé (21/08) : le regroupement en lignes POSTE_ROWS_J
+              (19/08, demandé par Olivier UNIQUEMENT pour "Journée") était
+              appliqué à tort aussi pour Matin/Soirée (isTravailJ couvre
+              M/AM/J, pas seulement J) -- POSTE_ROWS_J ne liste que des
+              codes de type J (Pauseur/DPX/PPRCI/PPAR/VM/CAF/AY), donc CCL/
+              ADJ/LNE/LNO/VGD/LC/AC1/AC2 (postes M/AM/N) disparaissaient
+              silencieusement du picker sous Matin/Soirée, même avec
+              l'habilitation correspondante -- signalé par Olivier (habilité
+              CCL, absent sous Matinée/Soirée). Le regroupement en lignes
+              reste réservé à type1==="J" ; M/AM gardent la liste plate
+              d'origine. Filet de sécurité ajouté en plus : un poste J
+              habilité mais absent de POSTE_ROWS_J (code futur jamais ajouté
+              à ce regroupement) reste affiché plutôt que de disparaître. */}
           {isTravailJ && postesJ.length > 0 && (
             <div>
               <div style={{
@@ -835,24 +848,54 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
               }}>
                 Poste
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                {POSTE_ROWS_J.map((rowCodes,i) => {
-                  const rowPostes = rowCodes.map(c => postesJ.find(p => p.code === c)).filter(Boolean);
-                  if (rowPostes.length === 0) return null;
-                  return (
-                    <div key={i} style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                      {rowPostes.map(p => (
-                        <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
-                          padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
-                          fontSize:12, fontWeight:700,
-                          background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
-                          color: poste1 === p.code ? "#fff" : "#475569",
-                        }}>{p.label}</button>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
+              {type1 === "J" ? (
+                <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                  {POSTE_ROWS_J.map((rowCodes,i) => {
+                    const rowPostes = rowCodes.map(c => postesJ.find(p => p.code === c)).filter(Boolean);
+                    if (rowPostes.length === 0) return null;
+                    return (
+                      <div key={i} style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                        {rowPostes.map(p => (
+                          <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                            padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                            fontSize:12, fontWeight:700,
+                            background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
+                            color: poste1 === p.code ? "#fff" : "#475569",
+                          }}>{p.label}</button>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const groupes = new Set(POSTE_ROWS_J.flat());
+                    const orphelins = postesJ.filter(p => !groupes.has(p.code));
+                    if (orphelins.length === 0) return null;
+                    return (
+                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                        {orphelins.map(p => (
+                          <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                            padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                            fontSize:12, fontWeight:700,
+                            background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
+                            color: poste1 === p.code ? "#fff" : "#475569",
+                          }}>{p.label}</button>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {postesJ.map(p => (
+                    <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                      padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                      fontSize:12, fontWeight:700,
+                      background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
+                      color: poste1 === p.code ? "#fff" : "#475569",
+                    }}>{p.label}</button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
