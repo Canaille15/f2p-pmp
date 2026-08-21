@@ -4238,6 +4238,115 @@ export function getPlanningRappel(schedule, agCp, date){
   return parts.length ? [...new Set(parts)].join(" + ") : null;
 }
 
+// Export planning perso en .ics (22/08, Olivier : "est que tu pense qu'il
+// est possible d'exporter le perso pour pouvoir l'importer dans un autre
+// agenda genre google ?" puis "export par mois et annee. et faut qu'on
+// puisse trouver la methode export import"). iCalendar (.ics) est le format
+// standard reconnu nativement en import direct par Google Calendar/Outlook/
+// Apple Calendar — génération 100% côté navigateur, aucun backend
+// nécessaire. `libelleJourExport` reprend le même principe que
+// `getPlanningRappel` ci-dessus (rejoué à chaque export depuis `schedule`,
+// jamais stocké), mais en substituant le vrai nom d'une fête (ex. "Lundi de
+// Pâques") à son seul code, et en ajoutant Formation/Grève — deux champs
+// indépendants (voir modules Formation et Grève) que getPlanningRappel ne
+// couvre pas puisqu'ils ne vivent jamais dans equipe/equipe2. La note perso
+// (`notePerso`) reste volontairement exclue : c'est une donnée privée par
+// nature, elle n'a pas vocation à partir dans un agenda externe.
+const GREVE_LABELS_EXPORT = { DA:"01h00 grève", DB:"1/2 journée grève", DC:"Journée grève" };
+function libelleJourExport(schedule, agCp, date){
+  const v = schedule?.[`${agCp}-${date}`];
+  if(!v) return null;
+  const OMIS = ["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF","CET"];
+  const describe = (code, jsCode) => {
+    if(!code) return null;
+    if(CODES_FETES[code]) return CODES_FETES[code];
+    const label = EQ_COLORS[code]?.label || code;
+    const poste = jsCode && !OMIS.includes(jsCode) ? (getPosteLabelFromCode(jsCode)||jsCode) : null;
+    return poste ? `${label} · ${poste}` : label;
+  };
+  const parts = [describe(v.equipe, v.jsCode), describe(v.equipe2, v.jsCode2)].filter(Boolean);
+  let s = [...new Set(parts)].join(" + ");
+  if(v.formation) s = (s?s+" + ":"")+`🎓 Formation : ${v.formation}`;
+  if(v.greve) s = (s?s+" + ":"")+`✊ ${GREVE_LABELS_EXPORT[v.greve]||v.greve}`;
+  return s || null;
+}
+function icsEscape(s){ return String(s).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n"); }
+function icsDate(dateKey){ return dateKey.replace(/-/g,""); }
+function icsNextDay(dateKey){
+  const d=new Date(dateKey+"T12:00:00");
+  d.setDate(d.getDate()+1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+// Parse "06h10–14h17" (ou "22h15–06h17", qui traverse minuit pour la Nuit)
+function icsParseHoraires(heures){
+  const m=/^(\d{2})h(\d{2})[\u2013-](\d{2})h(\d{2})$/.exec(heures||"");
+  if(!m) return null;
+  const [,h1,m1,h2,m2]=m.map((x,i)=>i===0?x:+x);
+  return { h1,m1,h2,m2, traverseMinuit: (h2*60+m2)<=(h1*60+m1) };
+}
+function genererICS(agent, schedule, joursTries){
+  const lignes=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//F2P.PMP//Export planning//FR","CALSCALE:GREGORIAN"];
+  const now=new Date();
+  const p2=n=>String(n).padStart(2,"0");
+  const dtstamp=`${now.getUTCFullYear()}${p2(now.getUTCMonth()+1)}${p2(now.getUTCDate())}T${p2(now.getUTCHours())}${p2(now.getUTCMinutes())}${p2(now.getUTCSeconds())}Z`;
+  const agCp=agent.immatriculation||agent.cp||agent.id;
+  joursTries.forEach(date=>{
+    const summary=libelleJourExport(schedule, agCp, date);
+    if(!summary) return;
+    const v=schedule[`${agCp}-${date}`];
+    const horaires=["M","AM","N","J"].includes(v.equipe) ? icsParseHoraires(EQ_COLORS[v.equipe]?.heures) : null;
+    lignes.push("BEGIN:VEVENT");
+    lignes.push(`UID:f2ppmp-${agCp}-${date}@f2p-pmp`);
+    lignes.push(`DTSTAMP:${dtstamp}`);
+    lignes.push(`SUMMARY:${icsEscape(summary)}`);
+    if(horaires){
+      const jourFin=horaires.traverseMinuit ? icsNextDay(date) : date;
+      lignes.push(`DTSTART:${icsDate(date)}T${p2(horaires.h1)}${p2(horaires.m1)}00`);
+      lignes.push(`DTEND:${icsDate(jourFin)}T${p2(horaires.h2)}${p2(horaires.m2)}00`);
+    } else {
+      lignes.push(`DTSTART;VALUE=DATE:${icsDate(date)}`);
+      lignes.push(`DTEND;VALUE=DATE:${icsDate(icsNextDay(date))}`);
+    }
+    lignes.push("END:VEVENT");
+  });
+  lignes.push("END:VCALENDAR");
+  return lignes.join("\r\n");
+}
+function joursDuMois(year,month){
+  const nb=new Date(year,month+1,0).getDate();
+  return Array.from({length:nb},(_,i)=>dKey(year,month+1,i+1));
+}
+function joursDeLannee(year){
+  let jours=[];
+  for(let m=0;m<12;m++) jours=jours.concat(joursDuMois(year,m));
+  return jours;
+}
+function ExportIcsButton({ agent, schedule, curMonth, curYear }){
+  const [ouvert,setOuvert]=useState(false);
+  const telecharger=(contenu,suffixeNom)=>{
+    const blob=new Blob([contenu],{type:"text/calendar;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const nom=`${(agent.nom||"AGENT").toUpperCase()}_Planning_${suffixeNom}.ics`;
+    const a=document.createElement("a");
+    a.href=url; a.download=nom;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  return(<div style={{display:"flex",flexDirection:"column",gap:6}}>
+    <button onClick={()=>setOuvert(o=>!o)} style={{display:"flex",alignItems:"center",gap:6,border:"1.5px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,14px)",fontWeight:700,alignSelf:"flex-start"}}>
+      📤 Exporter (.ics) {ouvert?"▴":"▾"}
+    </button>
+    {ouvert&&<div style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:12,display:"flex",flexDirection:"column",gap:8,background:"#fff"}}>
+      <button onClick={()=>{telecharger(genererICS(agent,schedule,joursDuMois(curYear,curMonth)),`${MOIS_L[curMonth]}${curYear}`);setOuvert(false);}} style={{textAlign:"left",border:"1px solid #e2e8f0",background:"#f8fafc",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,color:"#1e293b",padding:"8px 10px"}}>📅 Mois affiché ({MOIS_L[curMonth]} {curYear})</button>
+      <button onClick={()=>{telecharger(genererICS(agent,schedule,joursDeLannee(curYear)),`${curYear}`);setOuvert(false);}} style={{textAlign:"left",border:"1px solid #e2e8f0",background:"#f8fafc",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,color:"#1e293b",padding:"8px 10px"}}>🗓️ Année complète ({curYear})</button>
+      <div style={{fontSize:11,color:"#64748b",lineHeight:1.5,paddingTop:4,borderTop:"1px solid #f1f5f9"}}>
+        <b>Pour l'importer dans Google Calendar</b> : sur agenda.google.com (ordi), ⚙️ Paramètres → "Importer et exporter" → "Importer" → choisis le fichier .ics téléchargé.<br/>
+        <b>Sur iPhone (app Calendrier)</b> : ouvre le fichier .ics téléchargé → "Ajouter à..." → choisis ton agenda.
+      </div>
+    </div>}
+  </div>);
+}
+
 // cutoffDate (21/08, module FIM) : optionnel, mêmes principe et raison que
 // sur computeLedgerSolde ci-dessus — filtre à la fois les ajustements manuels
 // (par saisiLe) ET les pauses figées validées (par date_jour) avant de rejouer
@@ -8798,11 +8907,12 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
         </div>
         <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
       </div>
-      {isOwnProfile && <div className="f2ppmp-import-row">
+      {isOwnProfile && <div className="f2ppmp-import-row" style={{display:"flex",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
         <BulletinImportButton agentCp={agent.immatriculation||agent.cp||agent.id} onImported={()=>{
           const agCp=agent.immatriculation||agent.cp||agent.id;
           api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
         }}/>
+        <ExportIcsButton agent={agent} schedule={schedule} curMonth={curMonth} curYear={curYear}/>
       </div>}
     </div>
 
