@@ -8,6 +8,7 @@ import DemandeCongesView from "./components/DemandeCongesView";
 import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget, EpargneFetesCetWidget } from "./components/CetView";
 import CetPdfsView from "./components/CetPdfsView";
 import D2iView from "./components/D2iView";
+import FimPdfView from "./components/FimPdfView";
 import SignaturePad from "./components/SignaturePad";
 import FormationView from "./components/FormationView";
 import StatsEquipeView from "./components/StatsEquipeView";
@@ -300,7 +301,7 @@ const CODES_FETES = {
 };
 
 // Équipes avec flag prive et couleur agenda perso
-const EQUIPES = [
+export const EQUIPES = [
   // ── TRAVAIL — fond intense, texte blanc ──────────────────────────────────
   { code:"M",    label:"Matinée",    heures:"06h10–14h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
   { code:"AM",   label:"Soirée",     heures:"14h05–22h17", color:"#8B0000", textColor:"#fff", dot:"#fca5a5", prive:false, compteur:"travail", bg:"#8B0000" },
@@ -496,7 +497,7 @@ function deduireHoraireGeneriqueEquipe(codeEquipe) {
 }
 
 // Retrouve le libellé lisible d'un poste (ex: "CCL", "AC PAR") à partir de son code jsCode (ex: "PICCL-")
-function getPosteLabelFromCode(jsCode) {
+export function getPosteLabelFromCode(jsCode) {
   if (!jsCode) return null;
   // AY (19/08, demandé par Olivier) : volontairement PAS dans POSTES_JOURNEE
   // -- cette table alimente aussi la construction des rangées de GlobalView
@@ -1160,7 +1161,7 @@ const TODAY=`${_todayDate.getFullYear()}-${String(_todayDate.getMonth()+1).padSt
 
 const DAYS_L=["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
 const DAYS_S=["Di","Lu","Ma","Me","Je","Ve","Sa"];
-const MOIS_L=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+export const MOIS_L=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 // Boutons précédent/suivant à côté d'un titre de mois (Mon planning, CPS Officiel,
 // Planning Prévisionnel) -- 19/08, Olivier : "on les voit presque pas" (texte seul
 // sans fond, ni bordure). Vraie puce cliquable avec fond/bordure, plutôt qu'un
@@ -2563,7 +2564,7 @@ function firstDayOfMonth(year,month){
 // entre elles (jamais de noir/gris très foncé, pour que le sélecteur de
 // couleur natif du navigateur s'ouvre sur une zone vive du dégradé plutôt
 // que dans un coin sombre).
-const DEFAULT_COLORS = {
+export const DEFAULT_COLORS = {
   M:"#ff0000", AM:"#ff0000", N:"#ff0000", J:"#ff0000", JF:"#ff82e8",
   // RQ recoloré le 18/08 (Olivier, audit UI : "RU et RQ partagent exactement
   // la même couleur" — #ffde08/#ffe100 étaient quasi indiscernables sur une
@@ -3154,7 +3155,7 @@ function getJoursVTDemandeesAnnee(agent, agentProfiles, schedule, year){
 // Générique : jours d'un ensemble de codes équipe/équipe2 pour une année donnée
 // (réutilisé pour la numérotation RU/RQ/RP+RPP dans le planning perso, 04/08 —
 // même principe que getCongesBrutsAnnee).
-function getJoursCodesAnnee(agent, schedule, year, codes){
+export function getJoursCodesAnnee(agent, schedule, year, codes){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const jours = [];
   Object.entries(schedule).forEach(([k,v])=>{
@@ -3188,7 +3189,7 @@ function getJoursGreveAnnee(agent, schedule, year, code){
 // report). Historique et immuable comme le reste du planning perso : basé
 // uniquement sur les jours CA/CP réellement saisis, jamais recalculé si le
 // droit à congés change ensuite pour une année passée.
-function computeDashboardConges(agent, schedule, agentProfiles, year){
+export function computeDashboardConges(agent, schedule, agentProfiles, year){
   const profil = agentProfiles?.[agent?.id] || {};
   const entitlement = profil.congesEntitlement?.[year] ?? CONGES_ANNUELS_DEFAUT;
   const reportsCetteAnnee = profil.congesReports?.[year] || [];       // dates hors annee, comptees sur "year"
@@ -3316,7 +3317,7 @@ function computeDashboardConges(agent, schedule, agentProfiles, year){
 // (MaladiePertesSection ci-dessous, fusionnée dans "+ Ajouter une période"),
 // les autres compteurs (RP/RU/RQ/Congés) n'affichent qu'un rappel en lecture
 // seule, même principe que le récap CET (getCetTransfereJours).
-function getMaladiePerteJours(agentProfiles, agentId, compteur, annee){
+export function getMaladiePerteJours(agentProfiles, agentId, compteur, annee){
   const mvts = agentProfiles?.[agentId]?.maladiePertes || [];
   return mvts.filter(m=>m.compteur===compteur && m.annee===annee).reduce((s,m)=>s+(m.jours||0), 0);
 }
@@ -4034,7 +4035,7 @@ const TC_MIN_PAUSE   = 90;   // 1h30 créditées par pause figée validée
 // meme mecanisme avec le paiement aumatatique au dela") — au-delà, le
 // surplus n'est jamais ajouté au solde (à payer automatiquement/vérifier
 // en heures sup).
-const PLAFOND_32H_MIN = 1920;
+export const PLAFOND_32H_MIN = 1920;
 const TC_PLAFOND_MIN = PLAFOND_32H_MIN; // alias historique, TC préexistant
 
 // Solde en heures/minutes d'un journal d'ajustements manuels (utilisé par
@@ -4048,8 +4049,15 @@ const TC_PLAFOND_MIN = PLAFOND_32H_MIN; // alias historique, TC préexistant
 // remonté dans horsPlafond (même principe que le plafond TC sur les pauses
 // figées, computeDashboardTC) ; un retrait (delta négatif) n'est lui jamais
 // plafonné.
-function computeLedgerSolde(agentProfiles, agentId, ledgerKey, plafondMin){
-  const ledger = agentProfiles?.[agentId]?.[ledgerKey] || [];
+// cutoffDate (21/08, module FIM — Fiche Individuelle Mensuelle) : optionnel,
+// "YYYY-MM-DD" — ne prend en compte que les entrées saisies à cette date ou
+// avant (pour reconstituer le solde tel qu'il était à la fin d'un mois passé,
+// nécessaire pour un rapport archivable d'un mois révolu). Omis = comportement
+// inchangé (solde courant, tous les 10+ appels existants ne passent pas ce
+// paramètre).
+export function computeLedgerSolde(agentProfiles, agentId, ledgerKey, plafondMin, cutoffDate){
+  let ledger = agentProfiles?.[agentId]?.[ledgerKey] || [];
+  if(cutoffDate) ledger = ledger.filter(e=>(e.saisiLe||"")<=cutoffDate);
   const dernierSaisiLe = ledger.reduce((max,e)=> (!max || (e.saisiLe||"")>max) ? e.saisiLe : max, null);
   const trie = [...ledger].sort((a,b)=>(b.mois||"").localeCompare(a.mois||"") || (b.saisiLe||"").localeCompare(a.saisiLe||""));
   if(plafondMin==null){
@@ -4076,7 +4084,7 @@ function computeLedgerSolde(agentProfiles, agentId, ledgerKey, plafondMin){
 // module TQ) : aucun concept de semestre n'existait dans l'appli avant, ne
 // réutilise pas rollingAcquis (spécifique au modèle acquis-par-année de RQ,
 // un mécanisme différent du ledger continu utilisé ici).
-function getSemestreCourant(dateStr){
+export function getSemestreCourant(dateStr){
   const d = dateStr ? new Date(dateStr+"T12:00:00") : new Date();
   const annee = d.getFullYear();
   const numero = (d.getMonth() < 6) ? 1 : 2;
@@ -4144,7 +4152,7 @@ function minToHM(min){
 // Rappel du planning perso pour une date donnée (ex: "Matinée · CCL") — relu
 // EN DIRECT depuis schedule à chaque affichage, jamais stocké : si l'agent
 // complète une case vide après coup, le rappel se met à jour tout seul.
-function getPlanningRappel(schedule, agCp, date){
+export function getPlanningRappel(schedule, agCp, date){
   const v = schedule?.[`${agCp}-${date}`];
   if(!v || (!v.equipe && !v.equipe2)) return null;
   const OMIS = ["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"];
@@ -4158,7 +4166,12 @@ function getPlanningRappel(schedule, agCp, date){
   return parts.length ? [...new Set(parts)].join(" + ") : null;
 }
 
-function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year){
+// cutoffDate (21/08, module FIM) : optionnel, mêmes principe et raison que
+// sur computeLedgerSolde ci-dessus — filtre à la fois les ajustements manuels
+// (par saisiLe) ET les pauses figées validées (par date_jour) avant de rejouer
+// le solde plafonné, pour reconstituer le solde TC tel qu'il était à la fin
+// d'un mois passé. Omis = comportement inchangé.
+export function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year, cutoffDate){
   const agentId = agent?.id;
   const profil = agentProfiles?.[agentId] || {};
   const ledger = profil.tcLedger || [];
@@ -4185,10 +4198,11 @@ function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year){
     .filter(p => p.fia_done)
     .map(p => String(p.date_jour).slice(0,10));
 
-  const evenements = [
+  let evenements = [
     ...ledger.map(e=>({date:(e.mois||"0000-00")+"-01", type:"manuel", delta:e.deltaMinutes||0})),
     ...pausesValidees.map(d=>({date:d, type:"pause_validee"})),
   ].sort((a,b)=> a.date===b.date ? (a.type<b.type?-1:1) : a.date.localeCompare(b.date));
+  if(cutoffDate) evenements = evenements.filter(e=>e.date<=cutoffDate);
 
   let solde = 0;
   const detailPauses = {};
@@ -4224,7 +4238,7 @@ function computeDashboardTC(agent, schedule, agentProfiles, pausesData, year){
 // d'un flag "accorde" séparé : présence dans schedule = accordé). Compat
 // rétro : une ancienne entrée déjà écrite en VT avant cette refonte est donc
 // automatiquement traitée comme accordée ici (brut fait foi).
-function computeDashboardVT(agent, schedule, agentProfiles, year){
+export function computeDashboardVT(agent, schedule, agentProfiles, year){
   const profil = agentProfiles?.[agent?.id] || {};
   const entitlement = profil.vtEntitlement?.[year] ?? 0;
   const tracking = profil.vtTracking || {};
@@ -5048,7 +5062,7 @@ const NOTICE_TQ = [
   },
 ];
 
-const DETAIL_CONFIG = {
+export const DETAIL_CONFIG = {
   RP: { codes:["RP","RPP"], reportKey:"rpReports", acquisKey:"rpAcquis", rollingAcquis:false, label:"RP", icon:"🟢", gradientFrom:"#16a34a", gradientTo:"#15803d", bgLight:"#f0fdf4", borderLight:"#bbf7d0", accentDark:"#166534", accentColor:"#15803d" },
   RU: { codes:["RU"], reportKey:"ruReports", acquisKey:"ruAcquis", rollingAcquis:false, label:"RU", icon:"🟡", gradientFrom:"#d97706", gradientTo:"#b45309", bgLight:"#fffbeb", borderLight:"#fde68a", accentDark:"#92400e", accentColor:"#b45309" },
   // RQ recoloré le 18/08 (Olivier, suite à l'audit UI : "RU et RQ partagent
@@ -5098,7 +5112,7 @@ const DETAIL_CONFIG = {
 // report par date, juste un solde continu). _depth limite la remontée
 // récursive du solde roulant (protection anti-boucle, aucun agent n'aura de
 // données sur des dizaines d'années).
-function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis, _depth){
+export function computeCompteurAvecDetail(agent, schedule, agentProfiles, year, codes, reportKey, acquisKey, rollingAcquis, _depth){
   const depth = _depth || 0;
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const brut = [];
@@ -6715,7 +6729,7 @@ const MOIS_NOMS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Ao�
 // Mêmes règles exactes que l'ancienne FetesSection, juste extraites en fonction
 // pure pour que la carte "Fêtes" du panneau compteurs puisse calculer le nombre
 // de fêtes à traiter (pour la cloche) sans ouvrir la fenêtre.
-function computeFetesLignes(agent, schedule, agentProfiles, year){
+export function computeFetesLignes(agent, schedule, agentProfiles, year){
   const today = new Date().toISOString().slice(0,10);
   const fetesData = agentProfiles[agent?.id]?.fetesTracking?.[year] || {};
   const datesFetes = getDatesFetesAnnee(year);
@@ -11949,6 +11963,7 @@ export default function App(){
     {k:"conges",l:"🗓️ Demande de congés"},
     {k:"cetPdfs",l:"🏦 CET"},
     {k:"d2i",l:"✊ D2I"},
+    {k:"fim",l:"🗂️ Fiche Individuelle"},
     {k:"formation",l:`🎓 Formation${nbFormationsNonVues>0?` 🔔${nbFormationsNonVues}`:""}`},
     {k:"statsEquipe", l:"📊 Stat'Equip"},
     {k:"profil",  l:"👤 Mon profil"},
@@ -12138,7 +12153,7 @@ export default function App(){
                   <path d="M4 3a1 1 0 0 1 1-1h5.586a1 1 0 0 1 .707.293l3.414 3.414a1 1 0 0 1 .293.707V17a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3Z"/>
                   <path fill="#fff" d="M11 2.5V6a1 1 0 0 0 1 1h3.5L11 2.5Z"/>
                 </svg>,
-                "#b45309", "#fdf6ec", ["conges", "cetPdfs", "d2i"])}
+                "#b45309", "#fdf6ec", ["conges", "cetPdfs", "d2i", "fim"])}
               {REST_KEYS.map(renderFlat)}
               {renderFlat("profil")}
               {isAdmin && renderFlat("admin")}
@@ -12178,6 +12193,7 @@ export default function App(){
   {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="d2i"&&<D2iView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
+  {view==="fim"&&<FimPdfView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} schedule={schedule}/>}
   {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} currentUser={currentUser} agents={agents} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} refreshProfil={refreshMonProfil}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
