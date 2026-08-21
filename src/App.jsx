@@ -10395,8 +10395,14 @@ function AnnuaireView({currentAgent,isAdmin,agents,cpsSchedule,cpsAleas}){
         // ont désormais leurs icônes toujours visibles). "Détails" ne
         // reste utile (et visible) que s'il y a plus d'un numéro ou une
         // note -- sinon il ferait doublon avec les 2 icônes déjà présentes.
-        const telPrincipal=u.mobile_pro||u.mobile_perso||u.fixe;
-        const nbTels=[u.mobile_pro,u.mobile_perso,u.fixe].filter(Boolean).length;
+        // 22/08 (Olivier : "dans tout les numero de uo, il faut mettre les
+        // numero en 01 dans la touche en 1er") -- un numéro fixe "01..."
+        // (ligne de bureau du poste) doit passer devant les mobiles pro/perso
+        // dans le bouton principal, quel que soit le champ où il est saisi.
+        const tousTels=[u.mobile_pro,u.mobile_perso,u.fixe].filter(Boolean);
+        const tel01=tousTels.find(t=>t.replace(/[^0-9]/g,"").startsWith("01"));
+        const telPrincipal=tel01||u.mobile_pro||u.mobile_perso||u.fixe;
+        const nbTels=tousTels.length;
         const hasExtra=nbTels>1||(u.note&&u.note.trim());
         const hasTel=!!telPrincipal, hasMail=!!u.email;
         return <div key={u.id} style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:"12px 14px"}}>
@@ -10406,8 +10412,8 @@ function AnnuaireView({currentAgent,isAdmin,agents,cpsSchedule,cpsAleas}){
                 <div style={{fontSize:12,color:"#64748b",marginTop:2}}><TitulaireUo uo={u} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/></div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                <IconActionBtn href={`tel:${telPrincipal}`} active={hasTel} bg="#fef2f2" border="#fecaca" title="Appeler"><IconTel size={14}/></IconActionBtn>
-                <IconActionBtn href={`mailto:${u.email}`} active={hasMail} bg="#eff6ff" border="#bfdbfe" title="Email"><span style={{fontSize:13}}>✉️</span></IconActionBtn>
+                <IconActionBtn href={`tel:${telPrincipal}`} active={hasTel} bg="linear-gradient(135deg,#ef4444,#b91c1c)" title="Appeler">{c=><IconTel size={15} color={c}/>}</IconActionBtn>
+                <IconActionBtn href={`mailto:${u.email}`} active={hasMail} bg="linear-gradient(135deg,#3b82f6,#1d4ed8)" title="Email">{c=><IconMail size={14} color={c}/>}</IconActionBtn>
                 {hasExtra&&<button onClick={()=>toggleExpandUo(u.id)} title="Voir tous les contacts" style={{width:32,height:32,borderRadius:"50%",border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",fontSize:12,color:"#64748b",flexShrink:0}}>{expandedUo.includes(u.id)?"▴":"▾"}</button>}
                 <button onClick={()=>setEditUoId(u.id)} title="Modifier" style={{width:32,height:32,borderRadius:"50%",border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",fontSize:14,color:"#64748b",flexShrink:0}}>✎</button>
               </div>
@@ -10461,10 +10467,20 @@ function avatarColor(str){
 // Bouton d'action rond (appeler/SMS/email), toujours au même endroit, actif
 // ou grisé selon que la donnée existe -- partagé par les cartes Agents ET
 // UO (21/08) pour garder un seul langage visuel cohérent dans tout l'Annuaire.
-function IconActionBtn({href,active,bg,border,title,children}){
+// Contraste renforcé le 22/08 (Olivier : "les touche de l'annuaire sont peu
+// visible (tel, sms, mail)") -- l'essai du 21/08 (icône teintée sur fond
+// pastel assorti) manquait de contraste, surtout en petite taille sur
+// mobile. Remplacé par un vrai disque plein en dégradé + icône blanche pour
+// l'état actif (même traitement que les pastilles "Accès rapide" au-dessus,
+// qui elles avaient déjà ce contraste fort dès le 21/08) -- `children` est
+// désormais une fonction qui reçoit la couleur d'icône à utiliser (blanc sur
+// fond actif, gris moyen sur fond gris inactif), pour que l'icône ne soit
+// jamais de la même couleur que son propre fond.
+function IconActionBtn({href,active,bg,title,children}){
+  const couleurIcone=active?"#fff":"#94a3b8";
   return active
-    ? <a href={href} title={title} style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",background:bg,border:`1px solid ${border}`,flexShrink:0}}>{children}</a>
-    : <div title="Non renseigné" style={{width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"#f8fafc",border:"1px solid #f1f5f9",opacity:.35,flexShrink:0}}>{children}</div>;
+    ? <a href={href} title={title} style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",textDecoration:"none",background:bg,boxShadow:"0 2px 5px rgba(0,0,0,.2)",flexShrink:0}}>{children(couleurIcone)}</a>
+    : <div title="Non renseigné" style={{width:34,height:34,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",background:"#eef2f6",flexShrink:0}}>{children(couleurIcone)}</div>;
 }
 
 function AgentAnnuaireCard({ agent:a }){
@@ -10480,9 +10496,9 @@ function AgentAnnuaireCard({ agent:a }){
           <div style={{fontSize:12,color:"#64748b",fontWeight:500}}>{a.fonction||a.grade||""}</div>
         </div>
         <div style={{display:"flex",gap:6,flexShrink:0}}>
-          <IconActionBtn href={`tel:${a.telephone}`} active={hasTel} bg="#fef2f2" border="#fecaca" title="Appeler"><IconTel size={14}/></IconActionBtn>
-          <IconActionBtn href={`sms:${a.telephone}`} active={hasTel} bg="#f0fdf4" border="#bbf7d0" title="SMS"><span style={{fontSize:13}}>💬</span></IconActionBtn>
-          <IconActionBtn href={`mailto:${a.email}`} active={hasMail} bg="#eff6ff" border="#bfdbfe" title="Email"><span style={{fontSize:13}}>✉️</span></IconActionBtn>
+          <IconActionBtn href={`tel:${a.telephone}`} active={hasTel} bg="linear-gradient(135deg,#ef4444,#b91c1c)" title="Appeler">{c=><IconTel size={15} color={c}/>}</IconActionBtn>
+          <IconActionBtn href={`sms:${a.telephone}`} active={hasTel} bg="linear-gradient(135deg,#22c55e,#15803d)" title="SMS">{c=><IconSms size={14} color={c}/>}</IconActionBtn>
+          <IconActionBtn href={`mailto:${a.email}`} active={hasMail} bg="linear-gradient(135deg,#3b82f6,#1d4ed8)" title="Email">{c=><IconMail size={14} color={c}/>}</IconActionBtn>
         </div>
       </div>
       {(hasTel||hasMail)&&<div style={{fontSize:12,color:"#94a3b8",fontWeight:500,paddingLeft:48,display:"flex",gap:12,flexWrap:"wrap"}}>
@@ -10493,9 +10509,21 @@ function AgentAnnuaireCard({ agent:a }){
   );
 }
 
-function IconTel({size}){
+function IconTel({size,color}){
   const s=size||16;
-  return(<svg width={s} height={s} viewBox="0 0 24 24" fill="#D22B2B" style={{flexShrink:0}}><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.36 11.36 0 0 0 3.57.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.57 1 1 0 0 1-.24 1.01l-2.21 2.21z"/></svg>);
+  return(<svg width={s} height={s} viewBox="0 0 24 24" fill={color||"#D22B2B"} style={{flexShrink:0}}><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24 11.36 11.36 0 0 0 3.57.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.57 1 1 0 0 1-.24 1.01l-2.21 2.21z"/></svg>);
+}
+// SMS/email en SVG (22/08, remplace les emoji 💬✉️) -- un emoji garde
+// toujours ses propres couleurs fixes, impossible à éclaircir/foncer pour
+// rester lisible sur un fond coloré -- un vrai SVG peut prendre n'importe
+// quelle couleur (blanc sur fond plein ici), même logique que IconTel.
+function IconSms({size,color}){
+  const s=size||16;
+  return(<svg width={s} height={s} viewBox="0 0 24 24" fill={color||"#16a34a"} style={{flexShrink:0}}><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>);
+}
+function IconMail({size,color}){
+  const s=size||16;
+  return(<svg width={s} height={s} viewBox="0 0 24 24" fill={color||"#2563eb"} style={{flexShrink:0}}><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>);
 }
 
 function ContactLigne({label,valeur}){
