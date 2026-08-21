@@ -10,20 +10,32 @@
 import { useState, useMemo, useEffect } from "react";
 import api, { convertirCodePosteVersJsCode } from "../api/client";
 
+// Ordre d'affichage réorganisé le 19/08 (Olivier : "je veux que tri l'ordre
+// d'affichage des touches du pop up : 1ere ligne des repos absences ; rp,
+// rpp, ru, rq, rn, tc, ty nu. en 2 ligne [...] conges, fetes, fomation,
+// greve, maladie, vt" -- "sans rien casse car des agents ont deja acces a
+// leur compte") -- purement visuel : le rendu (plus bas, deux blocs
+// explicites au lieu d'un seul .map() filtré) impose l'ordre exact demandé,
+// cet array ne sert plus que de table de correspondance code→couleur
+// (via .find(), donc son propre ordre interne n'a aucun effet fonctionnel).
 const CODES_REPOS = [
   { code:"RP",  label:"RP",        color:"#16a34a" },
   { code:"RPP", label:"RPP",       color:"#0d9488" },
   { code:"RU",  label:"RU",        color:"#ca8a04" },
   { code:"RQ",  label:"RQ",        color:"#ca8a04" },
+  { code:"RN",  label:"RN",        color:"#4338ca" },
   { code:"TC",  label:"TC",        color:"#0284c7" },
   { code:"TY",  label:"TY",        color:"#0284c7" },
-  { code:"RN",  label:"RN",        color:"#4338ca" },
   { code:"NU",  label:"NU",        color:"#475569" },
   { code:"CA",  label:"Congés",    color:"#eab308" },
   { code:"MA",  label:"Maladie",   color:"#dc2626" },
   { code:"VT",  label:"VT",        color:"#eab308" },
   { code:"FOR", label:"Formation", color:"#b45309" },
 ];
+// Deux séquences explicites pour le rendu (voir plus bas) -- remplace
+// l'ancien .filter(r=>r.code!=="CA"&&r.code!=="VT").map(...) dont l'ordre
+// suivait simplement celui du tableau ci-dessus.
+const CODES_REPOS_LIGNE1 = ["RP","RPP","RU","RQ","RN","TC","TY","NU"];
 
 const CODES_TRAVAIL = [
   { code:"M",  label:"Matin",    heures:"06h10–14h17", color:"#8B0000" },
@@ -512,16 +524,28 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
             }}>
               Repos / Absences
             </div>
+            {/* Ligne 1 : RP, RPP, RU, RQ, RN, TC, TY, NU */}
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-              {CODES_REPOS.filter(r => r.code !== "CA" && r.code !== "VT").map(r => (
-                <button key={r.code} onClick={() => toggleType1(r.code)} style={{
-                  padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
-                  fontSize:12, fontWeight:700,
-                  background: type1 === r.code ? r.color : "#f1f5f9",
-                  color: type1 === r.code ? "#fff" : "#475569",
-                  transition:"all .1s",
-                }}>{r.label}</button>
-              ))}
+              {CODES_REPOS_LIGNE1.map(code => {
+                const r = CODES_REPOS.find(x => x.code === code);
+                return (
+                  <button key={r.code} onClick={() => toggleType1(r.code)} style={{
+                    padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                    fontSize:12, fontWeight:700,
+                    background: type1 === r.code ? r.color : "#f1f5f9",
+                    color: type1 === r.code ? "#fff" : "#475569",
+                    transition:"all .1s",
+                  }}>{r.label}</button>
+                );
+              })}
+            </div>
+            {/* Ligne 2 : Congés, Fêtes, Formation, Grève, Maladie, VT (19/08,
+                Olivier) -- Congés/VT gardent leur sous-menu Accordé/Demandé/
+                Refusé (06/08, voir plus bas), Fêtes/Grève leur propre popup
+                d'expansion (04/08), Formation/Maladie restent de simples
+                toggles directs (CODES_REPOS). Uniquement un réordonnancement
+                visuel, aucune de ces logiques n'a changé. */}
+            <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:5}}>
               {/* Congés (06/08) : bouton dédié avec sous-menu Accordé/Demandé/Refusé
                   — contrairement aux autres codes de CODES_REPOS ci-dessus (un seul
                   toggle direct), "Congés" a 3 états distincts. Seul "Accordé" écrit
@@ -542,6 +566,38 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   : congeStatut==="demande" ? "⏳ Congés · Demandé"
                   : congeStatut==="refuse" ? "✕ Congés · Refusé" : "Congés"}
               </button>
+              <button onClick={() => setShowFetes(v=>!v)} style={{
+                padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                fontSize:12, fontWeight:700,
+                background: showFetes || FETES.find(f=>f.code===type1) ? "#ec4899" : "#fdf2f8",
+                color: showFetes || FETES.find(f=>f.code===type1) ? "#fff" : "#9d174d",
+              }}>🩷 Fêtes</button>
+              {(() => { const r = CODES_REPOS.find(x => x.code === "FOR"); return (
+                <button onClick={() => toggleType1(r.code)} style={{
+                  padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                  fontSize:12, fontWeight:700,
+                  background: type1 === r.code ? r.color : "#f1f5f9",
+                  color: type1 === r.code ? "#fff" : "#475569",
+                  transition:"all .1s",
+                }}>{r.label}</button>
+              ); })()}
+              {/* Grève (04/08) : indépendant de type1, se combine avec n'importe
+                  quelle journée de travail — toggleGreve plutôt que toggleType1. */}
+              <button onClick={() => setShowGreve(v=>!v)} style={{
+                padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                fontSize:12, fontWeight:700,
+                background: showGreve || greve ? "#dc2626" : "#fef2f2",
+                color: showGreve || greve ? "#fff" : "#991b1b",
+              }}>✊ Grève{greve ? " · "+greve : ""}</button>
+              {(() => { const r = CODES_REPOS.find(x => x.code === "MA"); return (
+                <button onClick={() => toggleType1(r.code)} style={{
+                  padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                  fontSize:12, fontWeight:700,
+                  background: type1 === r.code ? r.color : "#f1f5f9",
+                  color: type1 === r.code ? "#fff" : "#475569",
+                  transition:"all .1s",
+                }}>{r.label}</button>
+              ); })()}
               {/* VT (06/08) : même sous-menu Accordé/Demandé/Refusé que Congés,
                   sur demande d'Olivier — "le même fonctionnement pour les
                   demande accord et refus". Seul "Accordé" écrit dans le
@@ -560,20 +616,6 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   : vtStatut==="demande" ? "⏳ VT · Demandé"
                   : vtStatut==="refuse" ? "✕ VT · Refusé" : "VT"}
               </button>
-              <button onClick={() => setShowFetes(v=>!v)} style={{
-                padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
-                fontSize:12, fontWeight:700,
-                background: showFetes || FETES.find(f=>f.code===type1) ? "#ec4899" : "#fdf2f8",
-                color: showFetes || FETES.find(f=>f.code===type1) ? "#fff" : "#9d174d",
-              }}>🩷 Fêtes</button>
-              {/* Grève (04/08) : indépendant de type1, se combine avec n'importe
-                  quelle journée de travail — toggleGreve plutôt que toggleType1. */}
-              <button onClick={() => setShowGreve(v=>!v)} style={{
-                padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
-                fontSize:12, fontWeight:700,
-                background: showGreve || greve ? "#dc2626" : "#fef2f2",
-                color: showGreve || greve ? "#fff" : "#991b1b",
-              }}>✊ Grève{greve ? " · "+greve : ""}</button>
             </div>
             {showGreve && (
               <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
