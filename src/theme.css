@@ -56,10 +56,4 @@ body { background: var(--bg-page); transition: background .15s; }
 @media (max-width: 640px) {
   .f2ppmp-nav-row { order: 2; }
   .f2ppmp-import-row { order: 1; }
-  /* CPS Officiel (19/08, Olivier : "met le charguer de pdf a gauche sur la
-     vue tel dans cps") -- l'ordre de la ligne d'outils a été inversé le
-     même jour (Import passé en dernier, tous écrans confondus) ; sur
-     téléphone seulement, le bouton d'import repasse en tête via `order`,
-     sans toucher à l'ordre desktop ni au DOM/JSX. */
-  .f2ppmp-cps-import { order: -1; }
 }

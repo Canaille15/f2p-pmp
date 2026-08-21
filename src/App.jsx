@@ -2192,32 +2192,35 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       </div>
     </div>}
 
-    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-      {/* Ordre inversé le 19/08 (Olivier : "inverse import et rechercher et
-          histirique et tous prci par") -- Tous/PRCI/PAR en tête, puis
-          Rechercher, Historique, et Import en dernier (le badge de résultat
-          reste juste avant lui, contextuellement lié). */}
-      <div style={{display:"flex",gap:3,background:"#f1f5f9",borderRadius:10,padding:3}}>
-        {[["ALL","Tous"],["PRCI","PRCI"],["PAR","PAR"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setFilterF(k)} style={{border:"none",borderRadius:8,padding:"6px 13px",cursor:"pointer",background:filterF===k?"#0C447C":"transparent",color:filterF===k?"#fff":"#475569",fontSize:12,fontWeight:filterF===k?700:600}}>{l}</button>
-        ))}
-      </div>
-      <input placeholder="🔍 Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}
-        style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:13,flex:1,minWidth:140,outline:"none"}}/>
-      {!isPrevisionnel&&<button onClick={()=>setShowHistory(s=>!s)} style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,color:"#475569",background:showHistory?"#f1f5f9":"#fff",cursor:"pointer",flexShrink:0}}>🕓 Historique</button>}
-      {cpsResult&&<span style={{fontSize:10,background:"#f0fdf4",color:"#16a34a",borderRadius:8,padding:"4px 10px",fontWeight:700}}>✅ {cpsResult.nb} agents · {cpsResult.date}</span>}
-      {/* Reste à droite sur ordi (ordre inversé demandé le 19/08), mais
-          repasse à gauche sur téléphone ("met le charguer de pdf a gauche
-          sur la vue tel dans cps") -- classe dédiée + order:-1 sous
-          @media(max-width:640px) dans theme.css, sans toucher au DOM/JSX
-          ni au reste de l'ordre desktop. */}
-      {!isPrevisionnel&&<label className="f2ppmp-cps-import" style={{cursor:uploading?"default":"pointer",flexShrink:0}}>
-        <div style={{background:uploading?"#dc2626":"#0f4c81",color:"#fff",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5,transition:"background .3s"}}>
-          {uploading?"⏳...":"📥 Importer feuille de présence"}
+    {/* Réorganisé le 19/08 (Olivier : "je veux tous prci par et rechercher
+        sur le meme ligne sous le bandeau, avec tous prci par a gauche et
+        rechercher a droite. et ensuite dans cps en 2eme ligne [...] import
+        pdf a gauche et historique a droite") -- 2 lignes explicites plutôt
+        qu'un seul flex qui s'enroule selon la largeur disponible : ligne 1
+        (filtre + recherche, CPS Officiel ET Planning Prévisionnel puisque
+        ce bloc n'est pas conditionné à isPrevisionnel) toujours affichée,
+        ligne 2 (import + historique, CPS Officiel seulement) uniquement
+        si !isPrevisionnel. */}
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:3,background:"#f1f5f9",borderRadius:10,padding:3}}>
+          {[["ALL","Tous"],["PRCI","PRCI"],["PAR","PAR"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setFilterF(k)} style={{border:"none",borderRadius:8,padding:"6px 13px",cursor:"pointer",background:filterF===k?"#0C447C":"transparent",color:filterF===k?"#fff":"#475569",fontSize:12,fontWeight:filterF===k?700:600}}>{l}</button>
+          ))}
         </div>
-        <input type="file" accept=".pdf,image/*" onChange={handleCpsImport} style={{display:"none"}} disabled={uploading}/>
-      </label>}
-
+        <input placeholder="🔍 Rechercher…" value={search} onChange={e=>setSearch(e.target.value)}
+          style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:13,flex:1,minWidth:140,outline:"none"}}/>
+      </div>
+      {!isPrevisionnel&&<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <label style={{cursor:uploading?"default":"pointer",flexShrink:0}}>
+          <div style={{background:uploading?"#dc2626":"#0f4c81",color:"#fff",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:5,transition:"background .3s"}}>
+            {uploading?"⏳...":"📥 Importer feuille de présence"}
+          </div>
+          <input type="file" accept=".pdf,image/*" onChange={handleCpsImport} style={{display:"none"}} disabled={uploading}/>
+        </label>
+        {cpsResult&&<span style={{fontSize:10,background:"#f0fdf4",color:"#16a34a",borderRadius:8,padding:"4px 10px",fontWeight:700}}>✅ {cpsResult.nb} agents · {cpsResult.date}</span>}
+        <button onClick={()=>setShowHistory(s=>!s)} style={{marginLeft:"auto",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 12px",fontSize:11,fontWeight:700,color:"#475569",background:showHistory?"#f1f5f9":"#fff",cursor:"pointer",flexShrink:0}}>🕓 Historique</button>
+      </div>}
     </div>
 
     {!isPrevisionnel&&showHistory&&<div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:12,padding:"12px 16px",display:"flex",flexDirection:"column",gap:8}}>
