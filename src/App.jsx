@@ -4112,21 +4112,31 @@ const TC_PLAFOND_MIN = PLAFOND_32H_MIN; // alias historique, TC préexistant
 // figées, computeDashboardTC) ; un retrait (delta négatif) n'est lui jamais
 // plafonné.
 // cutoffDate (21/08, module FIM — Fiche Individuelle Mensuelle) : optionnel,
-// "YYYY-MM-DD" — ne prend en compte que les entrées saisies à cette date ou
-// avant (pour reconstituer le solde tel qu'il était à la fin d'un mois passé,
-// nécessaire pour un rapport archivable d'un mois révolu). Omis = comportement
-// inchangé (solde courant, tous les 10+ appels existants ne passent pas ce
-// paramètre).
+// "YYYY-MM-DD" — ne prend en compte que les entrées dont le MOIS choisi par
+// l'agent (champ "mois", pas saisiLe) est à cette date ou avant, pour
+// reconstituer le solde tel qu'il était à la fin d'un mois passé. Corrigé le
+// 21/08 (Olivier : "quand je charge la situation a fin mars tout les
+// compteurs de rn, ty, tq sont a 0 [...] jai mis a jour janvier, avril et
+// mai. donc juin a 0 c'est pas possible") : filtrer sur saisiLe (la date
+// RÉELLE où l'agent a cliqué "ajouter") cassait tout rattrapage a posteriori
+// — un ajustement "saisi aujourd'hui" pour le mois de janvier a un saisiLe
+// d'aujourd'hui, largement après la fin mars, donc exclu à tort d'un rapport
+// de mars alors qu'il représente bel et bien janvier. Même principe déjà
+// utilisé (et correct) par computeDashboardTC juste plus bas, qui dérive
+// toujours sa date de tri/coupure du champ "mois", jamais de saisiLe.
+// Omis = comportement inchangé (solde courant, tous les 10+ appels existants
+// ne passent pas ce paramètre).
 export function computeLedgerSolde(agentProfiles, agentId, ledgerKey, plafondMin, cutoffDate){
   let ledger = agentProfiles?.[agentId]?.[ledgerKey] || [];
-  if(cutoffDate) ledger = ledger.filter(e=>(e.saisiLe||"")<=cutoffDate);
+  const moisDate = e => (e.mois||"0000-00")+"-01";
+  if(cutoffDate) ledger = ledger.filter(e=>moisDate(e)<=cutoffDate);
   const dernierSaisiLe = ledger.reduce((max,e)=> (!max || (e.saisiLe||"")>max) ? e.saisiLe : max, null);
   const trie = [...ledger].sort((a,b)=>(b.mois||"").localeCompare(a.mois||"") || (b.saisiLe||"").localeCompare(a.saisiLe||""));
   if(plafondMin==null){
     const solde = ledger.reduce((s,e)=>s+(e.deltaMinutes||0), 0);
     return { solde, ledger: trie, dernierSaisiLe, horsPlafond: 0 };
   }
-  const chrono = [...ledger].sort((a,b)=>(a.saisiLe||"").localeCompare(b.saisiLe||""));
+  const chrono = [...ledger].sort((a,b)=>moisDate(a).localeCompare(moisDate(b)) || (a.saisiLe||"").localeCompare(b.saisiLe||""));
   let solde = 0, horsPlafond = 0;
   chrono.forEach(e=>{
     const delta = e.deltaMinutes||0;

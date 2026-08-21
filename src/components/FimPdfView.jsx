@@ -182,10 +182,15 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
   // ── Temps acquis : RN / TY / TQ (soldes continus en heures/minutes, jamais
   // remis à zéro par année — le solde "à la fin du mois choisi" est
   // reconstitué via le nouveau paramètre cutoffDate de computeLedgerSolde).
+  // mvtsDuMois filtre désormais sur le champ "mois" choisi par l'agent, pas
+  // sur saisiLe (21/08, même correctif que computeLedgerSolde ci-dessus,
+  // même raison : un ajustement rattrapé aujourd'hui pour janvier a un
+  // saisiLe d'aujourd'hui, jamais "ce mois" au sens du rapport si le rapport
+  // porte sur janvier lui-même).
   const ledgerReport = (key, plafond) => {
     const avant = computeLedgerSolde(agentProfiles, agentId, key, plafond, finMoisPrec);
     const fin = computeLedgerSolde(agentProfiles, agentId, key, plafond, finMois);
-    const mvtsDuMois = (agentProfiles?.[agentId]?.[key] || []).filter(e => (e.saisiLe || "") > finMoisPrec && (e.saisiLe || "") <= finMois);
+    const mvtsDuMois = (agentProfiles?.[agentId]?.[key] || []).filter(e => e.mois === moisCleAnnee);
     const acquisDuMois = mvtsDuMois.filter(e => (e.deltaMinutes || 0) > 0).reduce((s, e) => s + e.deltaMinutes, 0);
     const prisDuMois = mvtsDuMois.filter(e => (e.deltaMinutes || 0) < 0).reduce((s, e) => s - e.deltaMinutes, 0);
     return { soldeMMoins1: avant.solde, acquisDuMois, prisDuMois, soldeM: fin.solde };
