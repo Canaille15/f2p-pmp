@@ -2875,7 +2875,12 @@ const POSTE_REGISTRY = (() => {
 function computeDashboardTravail(agent, schedule, year){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const postes = {};
-  const sansPoste = { total:0, lastDate:null };
+  // dates (21/08, Olivier : "pourquoi je vois plus les dates des journnes
+  // non affectee") -- jusqu'ici seul lastDate (le plus récent) était calculé
+  // et affiché, jamais la liste complète des jours "non affecté" -- ajoutée
+  // ici pour lister chaque date individuellement dans le tableau de bord,
+  // pas seulement la dernière.
+  const sansPoste = { total:0, lastDate:null, dates:[] };
   // Sous-ensemble de sansPoste qui exclut Formation — sert uniquement au
   // message d'avertissement ci-dessous (sinon un jour de Formation semble à
   // tort "sans poste précisé" alors qu'il est déjà listé comme tel juste
@@ -2899,6 +2904,7 @@ function computeDashboardTravail(agent, schedule, year){
     // continue de faire 100% (une formation n'est ni un poste PRCI ni PAR).
     if(eq==="FOR"){
       sansPoste.total++;
+      sansPoste.dates.push({date:dk, motif:"Formation"});
       if(!sansPoste.lastDate || dk > sansPoste.lastDate) sansPoste.lastDate = dk;
       if(!postes.FOR) postes.FOR = { code:"FOR", label:"Formation", famille:"FOR", total:0, lastDate:null, parShift:{} };
       postes.FOR.total++;
@@ -2928,6 +2934,7 @@ function computeDashboardTravail(agent, schedule, year){
     }
     if(!info){
       sansPoste.total++;
+      sansPoste.dates.push({date:dk, motif:null});
       if(!sansPoste.lastDate || dk > sansPoste.lastDate) sansPoste.lastDate = dk;
       sansPosteVrai.total++;
       if(!sansPosteVrai.lastDate || dk > sansPosteVrai.lastDate) sansPosteVrai.lastDate = dk;
@@ -2968,6 +2975,7 @@ function computeDashboardTravail(agent, schedule, year){
   const totalPAR  = Object.values(postes).filter(p=>p.famille==="PAR").reduce((s,p)=>s+p.total,0);
   const total = totalPRCI + totalPAR + sansPoste.total; // === totalTravail
   const pct = (n) => total>0 ? Math.round(n/total*1000)/10 : 0;
+  sansPoste.dates.sort((a,b)=> b.date.localeCompare(a.date)); // plus récent d'abord
 
   return {
     totalTravail,
@@ -3058,6 +3066,25 @@ function TravailDashboardContent({ data }) {
               </div>}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Liste complète des dates "Non affecté" (21/08, Olivier : "pourquoi
+          je vois plus les dates des journnes non affectee" — jusqu'ici seule
+          la date la PLUS RÉCENTE était affichée, jamais la liste complète)
+          — regroupe Formation ET jours réellement sans poste, cohérent avec
+          la tuile "Non affecté" juste au-dessus qui compte déjà les deux
+          ensemble pour que la répartition PRCI/PAR/Non affecté fasse 100%. */}
+      {data.sansPoste.dates.length>0 && (
+        <div style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
+          <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>📋 Journées non affectées ({data.sansPoste.dates.length})</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {data.sansPoste.dates.map((d,i)=>(
+              <div key={i} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10.5,fontWeight:600,color:"#334155"}}>
+                {fmtDate(d.date)}{d.motif&&<span style={{color:"#0891b2",fontWeight:700}}> · {d.motif}</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
