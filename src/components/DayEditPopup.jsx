@@ -88,6 +88,13 @@ const POSTES_PRCI = [
   // (voir l'exemption dans getPostes plus bas).
   {code:"VM",   label:"VM",          types:["J"]},
   {code:"CAF",  label:"CAF",         types:["J"]},
+  // Journée équipe (21/08, demandé par Olivier, juste avant AY) : même
+  // principe que VM/CAF/AY -- poste générique jamais lié à une habilitation
+  // précise, compte comme jour travaillé, jamais dans POSTES_JOURNEE (App.jsx)
+  // donc invisible en CPS Officiel/Planning Prévisionnel, comme AY -- "affecté
+  // comme ay pour les journee de travail caf et vm aussi" : famille recalculée
+  // à la volée depuis agent.famille dans computeDashboardTravail (App.jsx).
+  {code:"JEQ",  label:"Journée équipe", types:["J"]},
   // AY (19/08, demandé par Olivier) : remplace le bouton "Absent" (ABS,
   // section Repos/Absences, retiré) -- ancien "Absent" transformé en poste
   // sous Journée, même principe que VM/CAF : compte comme jour travaillé.
@@ -125,7 +132,7 @@ const POSTE_ROWS_J = [
   ["ASMP","AFOPR"],              // ASMTE PAR / AFO PRCI
   ["PPRCI","PPAR"],              // PPRCI / PPAR
   ["DPXJ","DPXP","ASSJ"],        // DPX PRCI / DPX PAR / Adj DPX
-  ["VM","CAF","AY"],             // pas mentionnés par Olivier, gardés en dernière ligne
+  ["VM","CAF","JEQ","AY"],       // JEQ (21/08) ajouté juste avant AY, comme demandé
 ];
 
 const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
@@ -183,7 +190,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     const postes = tous_postes.filter(p => p.types.includes(type));
     if (habCodes.length === 0) return postes;
     return postes.filter(p =>
-      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" ||
+      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" || p.code === "JEQ" ||
       habCodes.includes(CODE_VERS_HAB[p.code] || p.code)
     );
   };

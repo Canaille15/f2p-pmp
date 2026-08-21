@@ -506,6 +506,9 @@ export function getPosteLabelFromCode(jsCode) {
   // uniquement pour ce lookup de label (utilisé uniquement par PersonalView
   // et l'import perso, jamais par GlobalView).
   if (jsCode === "AY") return "AY - Absence";
+  // Journée équipe (21/08) : même raison qu'AY juste au-dessus -- jamais
+  // dans POSTES_JOURNEE, résolue ici en dur.
+  if (jsCode === "JEQ") return "Journée équipe";
   const tousPostes3x8 = [...POSTES_PRCI_3x8, ...POSTES_PAR_3x8];
   const p3x8 = tousPostes3x8.find(p => p.M === jsCode || p.AM === jsCode || p.N === jsCode);
   if (p3x8) return p3x8.label;
@@ -2860,6 +2863,11 @@ const POSTE_REGISTRY = (() => {
   // section "AY - Absence" avec les dates, sans jamais risquer qu'il
   // apparaisse comme rangée dans GlobalView (CPS Officiel/Prévisionnel).
   reg["AY"] = {code:"AY", label:"AY - Absence", famille:"PRCI", shift:"J"};
+  // Journée équipe (21/08, demandé par Olivier, ajoutée juste avant AY dans
+  // le picker) : même traitement que AY -- jamais via POSTES_JOURNEE, sa
+  // propre section dans "Jours travaillés", famille recalculée à la volée
+  // (voir traiter() plus bas).
+  reg["JEQ"] = {code:"JEQ", label:"Journée équipe", famille:"PRCI", shift:"J"};
   return reg;
 })();
 
@@ -2912,24 +2920,26 @@ function computeDashboardTravail(agent, schedule, year){
       return;
     }
     let info = jsCode ? POSTE_REGISTRY[jsCode] : null;
-    // AY/CAF/VM (21/08, demandé par Olivier) : POSTE_REGISTRY (et, pour
+    // AY/CAF/VM/JEQ (21/08, demandé par Olivier) : POSTE_REGISTRY (et, pour
     // CAF/VM, POSTES_JOURNEE dont il dérive) est un registre STATIQUE
     // (construit une fois, partagé par tous les agents) et ne peut donc pas
     // savoir de quelle famille est l'agent qui a réellement saisi ce jour --
-    // il fige famille:"PRCI" par défaut pour ces 3 postes génériques (aucun
-    // des 3 n'est lié à une habilitation précise, contrairement à un vrai
+    // il fige famille:"PRCI" par défaut pour ces 4 postes génériques (aucun
+    // des 4 n'est lié à une habilitation précise, contrairement à un vrai
     // poste PRCI/PAR). Ici, computeDashboardTravail reçoit l'agent réel : on
     // recalcule leur famille à la volée depuis agent.famille (même défaut
     // "PRCI" qu'ailleurs dans le code si absent, ex. DayEditPopup.jsx) plutôt
     // que de faire confiance à la valeur figée du registre -- "les journee
     // caf et vm doivent etre [comme] ay, affecté au[x] journee de travail
-    // dont depends l'agent". Comme ce calcul est refait à chaque affichage à
-    // partir du planning déjà enregistré, les CAF/VM/AY déjà saisis par des
-    // agents PAR se reclassent automatiquement en PAR sans qu'aucune donnée
-    // ne soit modifiée ni ressaisie. Volontairement limité à CE calcul (Jours
+    // dont depends l'agent" (JEQ, ajoutée le même jour juste avant AY dans le
+    // picker, reçoit le même traitement dès sa création). Comme ce calcul est
+    // refait à chaque affichage à partir du planning déjà enregistré, les
+    // CAF/VM/AY/JEQ déjà saisis par des agents PAR se reclassent
+    // automatiquement en PAR sans qu'aucune donnée ne soit modifiée ni
+    // ressaisie. Volontairement limité à CE calcul (Jours
     // travaillés) -- POSTES_JOURNEE lui-même n'est pas touché, CPS
     // Officiel/Planning Prévisionnel (qui le partagent) restent inchangés.
-    if(info && (jsCode==="AY" || jsCode==="CAF" || jsCode==="VM")){
+    if(info && (jsCode==="AY" || jsCode==="CAF" || jsCode==="VM" || jsCode==="JEQ")){
       info = {...info, famille: agent?.famille || "PRCI"};
     }
     if(!info){
