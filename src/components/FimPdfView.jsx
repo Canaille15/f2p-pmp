@@ -358,23 +358,38 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
     ]
   );
 
-  // ── Repos — 3 colonnes (Solde M-1 / Pris ce mois / Solde M), le droit
-  // annuel entre parenthèses dans le libellé (21/08, Olivier : "il me faut
-  // le soldes de m-1, acquis et nouveux total. et entre parenthese cest les
-  // acquis annuel" — reprend exactement le style de la vraie fiche SNCF
-  // source, ex. "repos périodiques RP (118)").
+  // ── Repos — RP et VT en CUMUL (Cumul M-1 / pris de M / Cumul M), exactement
+  // comme le tableau "Repos" de la vraie fiche SNCF source (21/08, Olivier,
+  // en comparant à un vrai PDF officiel : "sur les rp fin juillet j'avais eu
+  // 90 rp en cumulé de l'annee. 9 pris sur aout. ca fait un total de 79 a fin
+  // aout. c'est ca que je veut voir sur le pdf. en cumul de m. comme sur la
+  // fiche que je t'avais donné en exemple" — la vraie fiche montre "Cumul
+  // M-1"/"Cumul M" qui s'additionnent (68+10=78 sur l'exemple), PAS un solde
+  // restant qui diminue. avant/duMois/fin sont déjà ce cumul (nombre de jours
+  // RP/VT réellement pris, filtré par date) -- il suffisait de ne plus les
+  // soustraire de l'acquis pour les afficher tels quels. RU reste en SOLDE
+  // (tableau séparé juste en dessous) : sur la vraie fiche, RU n'est PAS dans
+  // ce tableau "Repos" cumulatif, il apparaît à part ("Autres Compteurs") en
+  // solde M-1/acquis/pris/solde M -- exactement notre affichage actuel,
+  // inchangé.
   titreSection("REPOS");
   table(
-    ["", "Solde début de mois", "Pris ce mois", "Solde fin de mois"],
+    ["", "Cumul M-1", "Pris ce mois", "Cumul M"],
     [
-      [`Repos périodiques RP (${fmtNb(data.rp.acquis)})`, fmtNb(data.rp.acquis !== null ? data.rp.acquis - data.rp.avant : null), fmtNb(data.rp.duMois), fmtNb(data.rp.acquis !== null ? data.rp.acquis - data.rp.fin : null)],
-      [`Repos suppl. RU (${fmtNb(data.ru.acquis)})`, fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.avant : null), fmtNb(data.ru.duMois), fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.fin : null)],
-      [`Temps partiel VT${data.vt.aDuVT ? ` (${fmtNb(data.vt.acquis)})` : ""}`, data.vt.aDuVT ? fmtNb(data.vt.acquis - data.vt.avant) : "—", data.vt.aDuVT ? fmtNb(data.vt.duMois) : "—", data.vt.aDuVT ? fmtNb(data.vt.acquis - data.vt.fin) : "—"],
+      [`Repos périodiques RP (${fmtNb(data.rp.acquis)})`, fmtNb(data.rp.avant), fmtNb(data.rp.duMois), fmtNb(data.rp.fin)],
+      [`Temps partiel VT${data.vt.aDuVT ? ` (${fmtNb(data.vt.acquis)})` : ""}`, data.vt.aDuVT ? fmtNb(data.vt.avant) : "—", data.vt.aDuVT ? fmtNb(data.vt.duMois) : "—", data.vt.aDuVT ? fmtNb(data.vt.fin) : "—"],
     ],
     [(A4_W - marge * 2) * 0.42, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.194]
   );
   txt(`RP isolés (ni veille ni lendemain en RP/RPP) — ce mois : ${data.rp.isolesMois}  ·  cumul annuel : ${data.rp.isolesAnnee}`, marge, y, { size: 8.3, color: rgb(0.42, 0.47, 0.55) });
   y -= 18;
+  table(
+    ["", "Solde début de mois", "Pris ce mois", "Solde fin de mois"],
+    [
+      [`Repos suppl. RU (${fmtNb(data.ru.acquis)})`, fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.avant : null), fmtNb(data.ru.duMois), fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.fin : null)],
+    ],
+    [(A4_W - marge * 2) * 0.42, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.194]
+  );
 
   // ── Temps acquis ──
   titreSection("TEMPS ACQUIS");
