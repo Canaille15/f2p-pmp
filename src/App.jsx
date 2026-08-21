@@ -2253,16 +2253,22 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           tactile, aucun moyen de changer de semaine sans passer par le
           sélecteur de date natif "moche et pas pratique". Décale weekOffset
           d'une semaine en gardant le même jour de la semaine sélectionné
-          (dayIdx inchangé), plutôt que de rejouer goToDay 7 fois. */}
+          (dayIdx inchangé), plutôt que de rejouer goToDay 7 fois.
+          Masqués sur téléphone (19/08, suite immédiate -- "les boutons pour
+          changer se semaines sont genant sur le tel") : le swipe tactile
+          (goToDay via swipeDay, déjà en place) reste le moyen de navigation
+          sur mobile, ces flèches redeviennent superflues et gênent — classe
+          dédiée + display:none sous le même breakpoint mobile déjà utilisé
+          ailleurs (theme.css), desktop inchangé. */}
       <div style={{display:"flex",alignItems:"center",gap:6}}>
-        <button onClick={()=>setWeekOffset(w=>w-1)} aria-label="Semaine précédente" style={NAV_ARROW_STYLE}>‹</button>
+        <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w-1)} aria-label="Semaine précédente" style={NAV_ARROW_STYLE}>‹</button>
         <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
           {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
             <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #378ADD":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"var(--bg-card)",color:dayIdx===i?"#fff":isToday?"#0C447C":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
               {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
             </button>);})}
         </div>
-        <button onClick={()=>setWeekOffset(w=>w+1)} aria-label="Semaine suivante" style={NAV_ARROW_STYLE}>›</button>
+        <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w+1)} aria-label="Semaine suivante" style={NAV_ARROW_STYLE}>›</button>
       </div>
     </div>
 

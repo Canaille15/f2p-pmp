@@ -56,4 +56,13 @@ body { background: var(--bg-page); transition: background .15s; }
 @media (max-width: 640px) {
   .f2ppmp-nav-row { order: 2; }
   .f2ppmp-import-row { order: 1; }
+  /* CPS Officiel/Planning Prévisionnel (19/08, Olivier : "les boutons pour
+     changer se semaines sont genant sur le tel [...] les garder en version
+     ordi et les supprimer sur les vues telephones") -- flèches ‹ › de
+     navigation semaine (GlobalView), masquées sur téléphone où le swipe
+     tactile fait déjà ce rôle ; desktop inchangé. */
+  /* !important nécessaire : NAV_ARROW_STYLE (App.jsx) pose display:"flex"
+     en style inline sur ces boutons, qui prime toujours sur une règle de
+     feuille de style externe sans !important. */
+  .f2ppmp-week-arrow { display: none !important; }
 }
