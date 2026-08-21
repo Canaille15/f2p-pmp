@@ -2905,7 +2905,21 @@ function computeDashboardTravail(agent, schedule, year){
       if(!postes.FOR.lastDate || dk > postes.FOR.lastDate) postes.FOR.lastDate = dk;
       return;
     }
-    const info = jsCode ? POSTE_REGISTRY[jsCode] : null;
+    let info = jsCode ? POSTE_REGISTRY[jsCode] : null;
+    // AY (21/08, demandé par Olivier) : POSTE_REGISTRY["AY"] est un registre
+    // STATIQUE (construit une fois, partagé par tous les agents) et ne peut
+    // donc pas savoir de quelle famille est l'agent qui a réellement saisi ce
+    // jour -- il fige famille:"PRCI" par défaut. Ici, computeDashboardTravail
+    // reçoit l'agent réel : on recalcule la famille d'AY à la volée depuis
+    // agent.famille (même défaut "PRCI" qu'ailleurs dans le code si absent,
+    // ex. DayEditPopup.jsx) plutôt que de faire confiance à la valeur figée du
+    // registre. Comme ce calcul est refait à chaque affichage à partir du
+    // planning déjà enregistré, les AY déjà saisis par des agents PAR se
+    // reclassent automatiquement en PAR sans qu'aucune donnée ne soit
+    // modifiée ni ressaisie ("Il faut que le calcul se refasse automatiquement").
+    if(info && jsCode==="AY"){
+      info = {...info, famille: agent?.famille || "PRCI"};
+    }
     if(!info){
       sansPoste.total++;
       if(!sansPoste.lastDate || dk > sansPoste.lastDate) sansPoste.lastDate = dk;
@@ -11525,9 +11539,17 @@ export default function App(){
       const me = mapped.find(a=>a.id===myId);
       if(me) setCurrentUser(prev=>{
         if(!prev) return prev;
-        if(prev.isAdmin===me.is_admin && prev.isAfo===me.is_afo) return prev;
-        return {...prev,isAdmin:me.is_admin,isAfo:me.is_afo};
+        if(prev.isAdmin===me.is_admin && prev.isAfo===me.is_afo && prev.agent?.famille===me.famille) return prev;
+        return {...prev,isAdmin:me.is_admin,isAfo:me.is_afo,agent:{...prev.agent,famille:me.famille}};
       });
+      // famille (21/08, correctif AY) : la réponse de connexion (login/register,
+      // authController.issueSession) n'a jamais renvoyé ce champ -- currentAgent
+      // (posé une seule fois à la connexion interactive, jamais repeuplé ensuite)
+      // pouvait donc rester famille-less indéfiniment pour une session déjà
+      // ouverte. Comme rechargerAgents() tourne déjà toutes les 45s ET juste
+      // après le login, ce correctif s'applique tout seul, sans reconnexion --
+      // exactement ce qu'Olivier demande ("le calcul se refasse automatiquement").
+      if(me) setCurrentAgent(prev=>(prev&&prev.id===me.id&&prev.famille!==me.famille)?{...prev,famille:me.famille}:prev);
     }).catch(e=>console.error("Erreur chargement agents:",e));
   };
   useEffect(()=>{

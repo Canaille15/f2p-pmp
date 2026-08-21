@@ -74,6 +74,19 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
   const { y: yPrec, m: mPrec } = moisPrecedent(year, monthIdx);
   const finMoisPrec = dateStr(yPrec, mPrec, finDeMois(yPrec, mPrec));
   const moisCleAnnee = `${year}-${pad2(monthIdx + 1)}`;
+  // Référence "mois clôturé" pour les Fêtes uniquement (21/08, Olivier :
+  // "les agents le feront apres le 31 mars... il faut que seul la fete 1
+  // apparaissent, celle du dernier trimestre 2025 sont soit prises soit
+  // payer") — le rapport d'un mois n'a de sens qu'une fois ce mois terminé,
+  // donc la comparaison "délai dépassé" (today > limiteDate) doit être faite
+  // avec le LENDEMAIN de la fin du mois choisi, pas le dernier jour lui-même :
+  // sinon une fête dont la limite tombe pile le dernier jour du mois (cas
+  // F8/F9/F0, limite 31/03 pour un rapport de mars) reste vue "en attente"
+  // au lieu de "payée automatiquement". N'affecte QUE ce paramètre —
+  // finMois/finMoisPrec restent inchangés pour tous les autres calculs
+  // (Congés/RP/RU/RQ/RN/TY/TQ/TC/Maladie), où "<=finMois" est déjà correct.
+  const { y: ySuiv, m: mSuiv } = monthIdx === 11 ? { y: year + 1, m: 0 } : { y: year, m: monthIdx + 1 };
+  const finMoisCloture = dateStr(ySuiv, mSuiv, 1);
 
   // ── Congés : 3 colonnes (année-1 / année / année+1), même structure que
   // la fiche source. Seule la colonne "année" (celle du mois choisi) reçoit
@@ -160,7 +173,7 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
   // à la fin du mois choisi (asOfDate=finMois), pas l'état d'aujourd'hui
   // (21/08, Olivier : "tu as mis des fetes restante actuelle comme si
   // j'etais en aout mais je veux les chiffres de mars").
-  const { lignes, fetesReportN1 } = computeFetesLignes(agent, schedule, agentProfiles, year, finMois);
+  const { lignes, fetesReportN1 } = computeFetesLignes(agent, schedule, agentProfiles, year, finMoisCloture);
   const toutesFetes = monthIdx < 3 ? [...lignes, ...fetesReportN1] : lignes;
   const fetesATraiter = toutesFetes.filter(f => f.statut === "attente");
 
