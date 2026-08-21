@@ -2906,18 +2906,24 @@ function computeDashboardTravail(agent, schedule, year){
       return;
     }
     let info = jsCode ? POSTE_REGISTRY[jsCode] : null;
-    // AY (21/08, demandé par Olivier) : POSTE_REGISTRY["AY"] est un registre
-    // STATIQUE (construit une fois, partagé par tous les agents) et ne peut
-    // donc pas savoir de quelle famille est l'agent qui a réellement saisi ce
-    // jour -- il fige famille:"PRCI" par défaut. Ici, computeDashboardTravail
-    // reçoit l'agent réel : on recalcule la famille d'AY à la volée depuis
-    // agent.famille (même défaut "PRCI" qu'ailleurs dans le code si absent,
-    // ex. DayEditPopup.jsx) plutôt que de faire confiance à la valeur figée du
-    // registre. Comme ce calcul est refait à chaque affichage à partir du
-    // planning déjà enregistré, les AY déjà saisis par des agents PAR se
-    // reclassent automatiquement en PAR sans qu'aucune donnée ne soit
-    // modifiée ni ressaisie ("Il faut que le calcul se refasse automatiquement").
-    if(info && jsCode==="AY"){
+    // AY/CAF/VM (21/08, demandé par Olivier) : POSTE_REGISTRY (et, pour
+    // CAF/VM, POSTES_JOURNEE dont il dérive) est un registre STATIQUE
+    // (construit une fois, partagé par tous les agents) et ne peut donc pas
+    // savoir de quelle famille est l'agent qui a réellement saisi ce jour --
+    // il fige famille:"PRCI" par défaut pour ces 3 postes génériques (aucun
+    // des 3 n'est lié à une habilitation précise, contrairement à un vrai
+    // poste PRCI/PAR). Ici, computeDashboardTravail reçoit l'agent réel : on
+    // recalcule leur famille à la volée depuis agent.famille (même défaut
+    // "PRCI" qu'ailleurs dans le code si absent, ex. DayEditPopup.jsx) plutôt
+    // que de faire confiance à la valeur figée du registre -- "les journee
+    // caf et vm doivent etre [comme] ay, affecté au[x] journee de travail
+    // dont depends l'agent". Comme ce calcul est refait à chaque affichage à
+    // partir du planning déjà enregistré, les CAF/VM/AY déjà saisis par des
+    // agents PAR se reclassent automatiquement en PAR sans qu'aucune donnée
+    // ne soit modifiée ni ressaisie. Volontairement limité à CE calcul (Jours
+    // travaillés) -- POSTES_JOURNEE lui-même n'est pas touché, CPS
+    // Officiel/Planning Prévisionnel (qui le partagent) restent inchangés.
+    if(info && (jsCode==="AY" || jsCode==="CAF" || jsCode==="VM")){
       info = {...info, famille: agent?.famille || "PRCI"};
     }
     if(!info){
