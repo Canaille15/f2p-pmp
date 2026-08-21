@@ -257,6 +257,15 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
       if (segments.some(s => s.texte === texte)) return; // évite le doublon (equipe===equipe2)
       segments.push({ texte, couleur: agentColors[code] || DEFAULT_COLORS[code] || "#64748b" });
     });
+    // Formation (21/08, Olivier : "dans l'utilisation, les formations [...]
+    // doivent apparaitre") -- periode INDÉPENDANTE de equipe/equipe2 (peut
+    // coexister avec une journée de travail, voir 09/08), jamais lue jusqu'ici
+    // dans cette boucle -- un jour de formation seule (ou combinée) restait
+    // affiché "—" dans le planning du mois. v.formation porte l'intitulé
+    // complet de la formation (pas juste "FOR"), affiché tel quel.
+    if (v?.formation) {
+      segments.push({ texte: `${EQ_LOOKUP.FOR?.label || "Formation"} · ${v.formation}`, couleur: agentColors.FOR || DEFAULT_COLORS.FOR || "#0dcbff" });
+    }
     joursMois.push({ date: d, jour: j, dowLabel: DOW[dow], segments });
   }
 
@@ -448,9 +457,14 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   // ── Temps acquis ──
   titreSection("TEMPS ACQUIS");
   anneeTable(`Temps RQ, en jours (${fmtNb(data.rq.acquis)})`, data.rq.parAnnee);
+  // Libellés de colonne raccourcis (21/08, Olivier : "regarde le chevauchement")
+  // -- "Solde début de mois" (19 car.) ne tenait pas dans une colonne à 14.5%
+  // de la largeur utile (~76pt), débordant sur la colonne suivante. Ce
+  // tableau a 5 colonnes (contre 4 pour Congés/RP/RQ/RU, dont les colonnes
+  // sont plus larges) -- seul celui-ci en avait besoin.
   const hmRow = (label, r) => [label, minToHM(r.soldeMMoins1), minToHM(r.acquisDuMois), minToHM(r.prisDuMois), minToHM(r.soldeM)];
   table(
-    ["", "Solde début de mois", "Acquis ce mois", "Pris ce mois", "Solde fin de mois"],
+    ["", "Solde début", "Acquis", "Pris", "Solde fin"],
     [
       hmRow("Repos compensateur de nuit RN", data.rn),
       hmRow("Temps à compenser semestres précédents TY", data.ty),
@@ -499,9 +513,14 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
     [(A4_W - marge * 2) * 0.7, (A4_W - marge * 2) * 0.3]
   );
 
-  // ── Page(s) suivante(s) : Planning du mois ──
-  page = doc.addPage([A4_W, A4_H]);
-  y = A4_H - marge;
+  // ── Planning du mois -- ne force plus systématiquement une nouvelle page
+  // (21/08, Olivier : "la mise page sur 3 feuilles") -- les tableaux 3
+  // années RP/RQ/RU ajoutés le même jour ont fait grossir le document, la
+  // page 1 se remplissait avant CET/Maladie (repoussés sur une page 2 quasi
+  // vide), puis cette page forçait TOUJOURS une 3e page pour le planning,
+  // même quand il restait largement la place. newPageIfNeeded ne saute que
+  // si la place manque vraiment (même mécanisme que le reste du document).
+  newPageIfNeeded(320);
   rect(0, y - 30, A4_W, 40, NAVY);
   txt(`PLANNING DU MOIS — ${moisLabel}`, marge, y - 16, { size: 12.5, bold: true, color: BLANC });
   y -= 48;
