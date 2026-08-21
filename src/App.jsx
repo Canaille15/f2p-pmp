@@ -694,7 +694,10 @@ function parseDeroulePrevisionnel(text) {
   // lieu de "RP PILNEX", ex. nuit "orpheline" — voir aussi le 2e passage plus
   // bas) — insère l'espace manquant avant parsing pour que les 2 codes soient
   // capturés comme 2 périodes distinctes, comme le format normal du document.
-  text = text.replace(/\b(RPP|RP|RU|RQ)(PI|PA)/g, "$1 $2");
+  // fix (21/08, roulement de Lionel CHENEVOTOT, poste AC1/AC2 PAR) : meme
+  // collage sans espace, mais avec le prefixe poste lui-meme deja corrompu
+  // "PA"->"PM" (voir canonAC plus bas) -- "RPPMC1X" (au lieu de "RP PAAC1X").
+  text = text.replace(/\b(RPP|RP|RU|RQ)(PI|PA|PM)/g, "$1 $2");
   const editionMatch = text.match(/Le\s*(\d{2})[/1](\d{2})[/1](\d{4})/i);
   const editionDate = editionMatch
     ? `${editionMatch[3]}-${editionMatch[2]}-${editionMatch[1]} 00:00:00`
@@ -710,7 +713,47 @@ function parseDeroulePrevisionnel(text) {
   // fix OCR (19/08, déroulé prévisionnel 2027 de Maxime CORDEAU) : le numéro
   // de jour peut aussi ressortir "io"→10, "ii"→11, "is"→15 (I/i→1, S/s→5,
   // O/o→0 combinés sur 2 caractères) — "o"/"O" n'était pas encore couvert.
-  const normaliseNum = n => n.replace(/[Ii]/g, "1").replace(/[Ss]/g, "5").replace(/[Oo]/g, "0");
+  // "L/l" (21/08, roulement Lionel CHENEVOTOT) : meme confusion visuelle
+  // avec le chiffre "1" (ex: "Ma il"→"Ma 11"), ajoutee au meme titre.
+  const normaliseNum = n => n.replace(/[IiLl]/g, "1").replace(/[Ss]/g, "5").replace(/[Oo]/g, "0");
+  const DEJA_VALIDE = /^(RPP|RP|RU|RQ|CA|C|DISPO|F[0-9V]|F-[A-Z]{2,}|PI[A-Z0-9-]{2,}|PA[A-Z0-9-]{2,}|PH[A-Z0-9-]{2,})$/;
+  // fix (21/08, roulement de Lionel CHENEVOTOT, poste AC1/AC2 PAR — 674911)
+  // : sur ce document, la paire "AA" de "PAAC1.../PAAC2..." se fusionne de
+  // facon tres inconsistante a l'extraction pdfjs — tour a tour "M" (PMC1-),
+  // "u"/"U" (Puc2X), "&" (P&AC2-), "4"/"5"/"À" (R4AC2-/P5ÀC1O), une
+  // seconde lettre "P" (PPAC1-), ou disparait entierement (cio→PAAC1O) —
+  // et le "P" initial lui-meme peut se lire "R" (RAAC1-) ou "e" (eucio).
+  // Trop de variantes distinctes pour un simple alias comme les autres fix
+  // OCR ci-dessous — plutot qu'enumerer chaque forme, reconnaissance ciblee
+  // sur ce SEUL domaine de codes (PAAC1-/O/X, PAAC2-/O/X, aucun autre poste
+  // PRCI/PAR n'a cette forme) : on retrouve le chiffre 1/2 (ou son glyphe
+  // confondu I/i/l/L) et le suffixe -/O/X, le "bruit AA" entre les deux
+  // etant simplement ignore quelle que soit sa forme. Ne s'applique QUE si
+  // digit ET suffixe sont tous deux retrouves avec confiance — sinon on
+  // laisse le jour non reconnu plutot que de deviner (ex: "PAAi" sans
+  // suffixe, "eucx" sans chiffre, restent non resolus).
+  const canonAC = (s) => {
+    if (!s) return null;
+    let t = s.replace(/^[Rr]/, "P").replace(/^[Ee]/, "P");
+    if (!/^P/.test(t)) {
+      if (/^[AaMmUu&45ÀÁPp]/.test(t)) t = "P" + t;
+      else if (/^[Cc]/.test(t)) t = "PAA" + t;
+      else return null;
+    }
+    let rest = t.slice(1);
+    rest = rest.replace(/^[AaMmUu&45ÀÁPp\\'’]{0,3}/, "");
+    rest = rest.replace(/^[Cc]?/, "");
+    const dm = rest.match(/^([12iIlL])/);
+    if (!dm) return null;
+    const digit = dm[1] === "2" ? "2" : "1";
+    rest = rest.slice(1).trim();
+    let suffix = null;
+    if (rest === "-" || rest === "–") suffix = "-";
+    else if (/^[Oo0]$/.test(rest)) suffix = "O";
+    else if (/^[Xx]$/.test(rest)) suffix = "X";
+    else return null;
+    return `PAAC${digit}${suffix}`;
+  };
   const normaliseCode = c => {
     if (!c) return null; c = c.trim();
     c = c.replace(/\bHP\b/g, "RP");
@@ -733,6 +776,13 @@ function parseDeroulePrevisionnel(text) {
     // (systematiquement suivi de "A2J" dans les 2 cas), meme categorie que
     // les autres fixups OCR ci-dessus.
     if (c === "PII" || c === "PPPA2J") c = "PIPA2J";
+    // fix (21/08) : si le code n'est toujours pas reconnu apres les fixups
+    // ci-dessus, tenter la reconnaissance ciblee AC1/AC2 (voir canonAC) —
+    // jamais declenchee sur un code deja valide (RP/RU/PICCL/etc.).
+    if (!DEJA_VALIDE.test(c)) {
+      const ac = canonAC(c);
+      if (ac) return ac;
+    }
     return c || null;
   };
   const getHoraires = eq => {
@@ -836,11 +886,28 @@ function parseDeroulePrevisionnel(text) {
   const CODE_VALID = /^(RPP|RP|RU|RQ|CA|C|DISPO|F[0-9V]|F-[A-Z]{2,}|PI[A-Z0-9-]{2,}|PA[A-Z0-9-]{2,}|PH[A-Z0-9-]{2,})$/;
   const SPECIAL = new Set(["RPP","RP","RU","RQ","CA","C","DISPO"]);
   // Numéro de jour : "\d+" pour le cas normal, ou 1-2 caractères parmi
-  // I/i/S/s/O/o/5 pour tolérer les glyphes corrompus multi-caractères
-  // ("io"→10, "ii"→11, "is"→15) en plus du cas 1 caractère déjà géré
-  // ("I"→1, "S"→5) — mesuré sans aucune régression sur 2 documents réels
-  // avant d'élargir (+4 jours sur un cas, 0 changement sur l'autre).
-  const DAY_RE = /(Je|Ve|Va|Sa|Di|Dl|Lu|Ma|Me)\s+(\d+|[IiSsOo5]{1,2})(?:\s+([A-Z][A-Z0-9-]+)(?:\s+([A-Z][A-Z0-9-]+))?)?/g;
+  // I/i/L/l/S/s/O/o/5 pour tolérer les glyphes corrompus multi-caractères
+  // ("io"→10, "ii"→11, "is"→15, "il"→11 depuis le 21/08) en plus du cas 1
+  // caractère déjà géré ("I"→1, "S"→5) — mesuré sans aucune régression sur
+  // 2 documents réels avant d'élargir (+4 jours sur un cas, 0 changement
+  // sur l'autre).
+  // fix (21/08, roulement Lionel CHENEVOTOT) : le token de code accepte
+  // désormais aussi les lettres MINUSCULES et l'apostrophe (ex: "PAAc1-",
+  // "PA'kc2-") — sur ce document, "AA"/casse se corrompt très fortement,
+  // et l'ancienne regex tout-majuscule tronquait le code au premier
+  // caractère minuscule (ex: "PAAc1-" capturé "PAA" seulement, invalide),
+  // au lieu de laisser normaliseCode/canonAC reconnaître le token complet.
+  // Lookahead négatif AVANT le groupe de code (sur le MÊME motif Abbr+Num,
+  // y compris ses glyphes confondus) : sans lui, élargir aux minuscules
+  // ferait avaler le prochain "Abbr Num" comme un faux code (ex: "Sa 5 Ve
+  // 5" → "Ve" capturé comme code de "Sa 5", perdant le vrai jour "Ve 5"
+  // qui suit) — vérifié précisément : régresse sans ce garde-fou, aucune
+  // régression avec.
+  const NOT_NEXT_DAY = "(?:Je|Ve|Va|Sa|Di|Dl|Lu|Ma|Me)\\s+(?:\\d+|[IiLlSsOo5]{1,2})";
+  const DAY_RE = new RegExp(
+    "(Je|Ve|Va|Sa|Di|Dl|Lu|Ma|Me)\\s+(\\d+|[IiLlSsOo5]{1,2})" +
+    "(?:\\s+(?!" + NOT_NEXT_DAY + ")([A-Za-z&\\\\ÀÁ4'’][A-Za-z0-9&\\\\ÀÁ4'’-]+)" +
+    "(?:\\s+(?!" + NOT_NEXT_DAY + ")([A-Za-z&\\\\ÀÁ4'’][A-Za-z0-9&\\\\ÀÁ4'’-]+))?)?", "g");
 
   const seen = new Set();
   const jours = [];
