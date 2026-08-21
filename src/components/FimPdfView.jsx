@@ -2,10 +2,10 @@ import { useState } from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import api from "../api/client";
 import {
-  MOIS_L, DETAIL_CONFIG, PLAFOND_32H_MIN, DEFAULT_COLORS,
+  MOIS_L, DETAIL_CONFIG, PLAFOND_32H_MIN, DEFAULT_COLORS, EQUIPES,
   computeDashboardConges, computeCompteurAvecDetail, computeDashboardVT,
   computeLedgerSolde, computeDashboardTC, computeFetesLignes,
-  getJoursCodesAnnee, getPlanningRappel,
+  getJoursCodesAnnee, getPosteLabelFromCode,
 } from "../App";
 import { computeDashboardCet } from "./CetView";
 
@@ -45,12 +45,26 @@ function fmtDateFr(iso) {
 // Hex ("#rrggbb") → rgb() pdf-lib, pour reprendre la palette de couleurs
 // personnalisée de l'agent (21/08, demandé par Olivier — "dans l'utilisation
 // tu peux reprendre le code couleur des agents pour un meilleur visuel").
-function hexToRgb(hex) {
-  if (!hex) return null;
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+function hexComponents(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
   if (!m) return null;
   const n = parseInt(m[1], 16);
-  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function hexToRgb(hex) {
+  const c = hexComponents(hex);
+  return c ? rgb(c.r / 255, c.g / 255, c.b / 255) : null;
+}
+// Chip coloré (fond = couleur du code, texte noir ou blanc selon la
+// luminosité) plutôt que du texte coloré sur fond blanc — corrige un vrai
+// souci de lisibilité signalé par Olivier ("le jaune est illisible" — RU
+// est jaune vif, illisible en simple texte sur blanc) et reste lisible pour
+// N'IMPORTE QUELLE couleur, quelle que soit sa palette perso. Formule YIQ
+// standard (perception de luminosité), seuil 0.6 = bascule noir/blanc.
+function texteContrasté(hex) {
+  const c = hexComponents(hex) || { r: 100, g: 116, b: 139 };
+  const yiq = (c.r * 299 + c.g * 587 + c.b * 114) / 1000;
+  return yiq >= 150 ? rgb(0.12, 0.12, 0.14) : rgb(1, 1, 1);
 }
 
 // ─── Calcul complet des données du mois choisi ─────────────────────────────
@@ -90,6 +104,11 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
   const decale = (d, delta) => { const dt = new Date(d + "T12:00:00"); dt.setDate(dt.getDate() + delta); return dt.toISOString().slice(0, 10); };
   const isoles = rpData.tousJours.filter(d => !estRPouRPP(decale(d, -1)) && !estRPouRPP(decale(d, 1)));
   const isolesMois = isoles.filter(d => d.slice(0, 7) === moisCleAnnee).length;
+  // "cumul annuel" = cumulé depuis janvier JUSQU'AU mois choisi, jamais toute
+  // l'année (21/08, Olivier : "si je demande mars je veux les infos de mars
+  // pas celle d'aout" — un rapport de mars ne doit jamais compter des RP
+  // isolés d'avril à décembre, qui n'existaient pas encore à cette date).
+  const isolesCumul = isoles.filter(d => d <= finMois).length;
 
   // ── Repos : VT (temps partiel) — vide/absent si l'agent n'en a pas.
   const vtData = computeDashboardVT(agent, schedule, agentProfiles, year);
@@ -137,45 +156,62 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
   const tcReport = { soldeMMoins1: tcAvant.solde, acquisDuMois: Math.max(0, ecartTC), prisDuMois: Math.max(0, -ecartTC), soldeM: tcFin.solde, pausesDuMois };
 
   // ── Fêtes à récupérer (statut "en attente" — acquise, pas encore traitée,
-  // ni payée, ni payée par anticipation) — état ACTUEL, pas un instantané
-  // historique du mois (l'appli ne conserve pas d'historique de statut).
-  const { lignes, fetesReportN1 } = computeFetesLignes(agent, schedule, agentProfiles, year);
+  // ni payée, ni payée par anticipation) — recalculé TEL QU'IL AURAIT ÉTÉ
+  // à la fin du mois choisi (asOfDate=finMois), pas l'état d'aujourd'hui
+  // (21/08, Olivier : "tu as mis des fetes restante actuelle comme si
+  // j'etais en aout mais je veux les chiffres de mars").
+  const { lignes, fetesReportN1 } = computeFetesLignes(agent, schedule, agentProfiles, year, finMois);
   const toutesFetes = monthIdx < 3 ? [...lignes, ...fetesReportN1] : lignes;
   const fetesATraiter = toutesFetes.filter(f => f.statut === "attente");
 
-  // ── Maladie
-  const maladieAnnee = getJoursCodesAnnee(agent, schedule, year, ["MA"]);
-  const maladieMois = maladieAnnee.filter(d => d.slice(0, 7) === moisCleAnnee).length;
+  // ── Maladie — "cumul annuel" = depuis janvier JUSQU'AU mois choisi (même
+  // principe que RP isolés ci-dessus, jamais toute l'année civile).
+  const maladieAnneeComplete = getJoursCodesAnnee(agent, schedule, year, ["MA"]);
+  const maladieCumul = maladieAnneeComplete.filter(d => d <= finMois).length;
+  const maladieMois = maladieAnneeComplete.filter(d => d.slice(0, 7) === moisCleAnnee).length;
 
   // ── CET (résumé, état actuel — pas de découpage mensuel, solde cumulatif
   // par nature depuis l'origine du module)
   const cet = computeDashboardCet(agentProfiles, agentId, year);
 
-  // ── Planning du mois (jour par jour) — couleur reprise de la palette
-  // personnalisée de l'agent (agentColors, même source que le calendrier
-  // "Mon planning"), avec repli sur la palette par défaut du code.
+  // ── Planning du mois (jour par jour) — un "segment" par code (equipe +
+  // equipe2, ex. RP + Nuit), chacun avec sa PROPRE couleur (21/08, Olivier :
+  // "le rp + nuit faut seperer le couleur") plutôt qu'une seule couleur pour
+  // toute la ligne. Couleur reprise de la palette personnalisée de l'agent
+  // (agentColors, même source que le calendrier "Mon planning"), avec repli
+  // sur la palette par défaut du code. Même logique que getPlanningRappel
+  // (App.jsx) pour le libellé + poste attaché, mais gardée séparée ici (pas
+  // fusionnée en une seule chaîne) pour permettre le rendu en 2 badges.
   const agentColors = agentProfiles?.[agentId]?.agentColors || {};
+  const EQ_LOOKUP = Object.fromEntries(EQUIPES.map(e => [e.code, e]));
+  const OMIS_POSTE = ["M", "AM", "N", "J", "RP", "RU", "RQ", "CA", "CP", "MA", "VT", "ABS", "FOR", "DISPO", "NU", "TC", "TY", "RN", "JF"];
   const nbJours = finDeMois(year, monthIdx);
   const DOW = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
   const joursMois = [];
   for (let j = 1; j <= nbJours; j++) {
     const d = dateStr(year, monthIdx, j);
     const v = schedule[`${agentId}-${d}`];
-    const rappel = getPlanningRappel(schedule, agentId, d);
-    const codePrincipal = v?.equipe || v?.equipe2 || null;
-    const couleur = codePrincipal ? (agentColors[codePrincipal] || DEFAULT_COLORS[codePrincipal] || null) : null;
     const dow = new Date(d + "T12:00:00").getDay();
-    joursMois.push({ date: d, jour: j, dowLabel: DOW[dow], rappel, couleur });
+    const segments = [];
+    [v?.equipe, v?.equipe2].forEach(code => {
+      if (!code) return;
+      const label = EQ_LOOKUP[code]?.label || code;
+      const poste = v.jsCode && !OMIS_POSTE.includes(v.jsCode) ? (getPosteLabelFromCode(v.jsCode) || v.jsCode) : null;
+      const texte = poste ? `${label} · ${poste}` : label;
+      if (segments.some(s => s.texte === texte)) return; // évite le doublon (equipe===equipe2)
+      segments.push({ texte, couleur: agentColors[code] || DEFAULT_COLORS[code] || "#64748b" });
+    });
+    joursMois.push({ date: d, jour: j, dowLabel: DOW[dow], segments });
   }
 
   return {
     finMois, finMoisPrec, congesParAnnee,
-    rp: { acquis: rpData.acquis, avant: rpAvant, duMois: rpFin - rpAvant, fin: rpFin, isolesMois, isolesAnnee: isoles.length },
+    rp: { acquis: rpData.acquis, avant: rpAvant, duMois: rpFin - rpAvant, fin: rpFin, isolesMois, isolesAnnee: isolesCumul },
     vt: { aDuVT, acquis: vtData.entitlement, avant: vtAvant, duMois: vtFin - vtAvant, fin: vtFin },
     ru: { acquis: ruData.acquis, avant: ruAvant, duMois: ruFin - ruAvant, fin: ruFin },
     rq: { acquis: rqData.acquis, avant: rqAvant, duMois: rqFin - rqAvant, fin: rqFin },
     rn: rnReport, ty: tyReport, tq: tqReport, tc: tcReport,
-    fetesATraiter, maladie: { mois: maladieMois, annee: maladieAnnee.length },
+    fetesATraiter, maladie: { mois: maladieMois, annee: maladieCumul },
     cet, joursMois,
   };
 }
@@ -225,6 +261,20 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   };
   const rect = (x, yy, w, h, color) => {
     page.drawRectangle({ x, y: yy, width: w, height: h, color });
+  };
+  // Badge coloré (fond plein + texte contrasté) pour un segment de planning
+  // (21/08 — "le rp + nuit faut seperer le couleur et le jaune est
+  // illisible") : chaque code a son propre badge, jamais du simple texte
+  // coloré sur fond blanc (illisible pour une couleur claire comme le jaune
+  // de RU, quelle que soit la palette perso de l'agent). Retourne le x de
+  // fin, pour enchaîner plusieurs badges sur la même ligne.
+  const drawBadge = (texte, x, yy, hex, size = 7) => {
+    const pad = 3.5;
+    const w = font.widthOfTextAtSize(texte, size) + pad * 2;
+    const h = size + 4.5;
+    page.drawRectangle({ x, y: yy - 2.5, width: w, height: h, color: hexToRgb(hex) || rgb(0.4, 0.44, 0.5) });
+    txt(texte, x + pad, yy, { size, color: texteContrasté(hex) });
+    return x + w;
   };
 
   // ── En-tête ──
@@ -295,16 +345,20 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
     ]
   );
 
-  // ── Repos ──
+  // ── Repos — 3 colonnes (Solde M-1 / Pris ce mois / Solde M), le droit
+  // annuel entre parenthèses dans le libellé (21/08, Olivier : "il me faut
+  // le soldes de m-1, acquis et nouveux total. et entre parenthese cest les
+  // acquis annuel" — reprend exactement le style de la vraie fiche SNCF
+  // source, ex. "repos périodiques RP (118)").
   titreSection("REPOS");
   table(
-    ["", "Acquis annuel", "Solde début de mois", "Pris ce mois", "Solde fin de mois"],
+    ["", "Solde début de mois", "Pris ce mois", "Solde fin de mois"],
     [
-      [`Repos périodiques RP`, fmtNb(data.rp.acquis), fmtNb(data.rp.acquis !== null ? data.rp.acquis - data.rp.avant : null), fmtNb(data.rp.duMois), fmtNb(data.rp.acquis !== null ? data.rp.acquis - data.rp.fin : null)],
-      [`Repos suppl. RU`, fmtNb(data.ru.acquis), fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.avant : null), fmtNb(data.ru.duMois), fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.fin : null)],
-      ["Temps partiel VT", data.vt.aDuVT ? fmtNb(data.vt.acquis) : "—", data.vt.aDuVT ? fmtNb(data.vt.acquis - data.vt.avant) : "—", data.vt.aDuVT ? fmtNb(data.vt.duMois) : "—", data.vt.aDuVT ? fmtNb(data.vt.acquis - data.vt.fin) : "—"],
+      [`Repos périodiques RP (${fmtNb(data.rp.acquis)})`, fmtNb(data.rp.acquis !== null ? data.rp.acquis - data.rp.avant : null), fmtNb(data.rp.duMois), fmtNb(data.rp.acquis !== null ? data.rp.acquis - data.rp.fin : null)],
+      [`Repos suppl. RU (${fmtNb(data.ru.acquis)})`, fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.avant : null), fmtNb(data.ru.duMois), fmtNb(data.ru.acquis !== null ? data.ru.acquis - data.ru.fin : null)],
+      [`Temps partiel VT${data.vt.aDuVT ? ` (${fmtNb(data.vt.acquis)})` : ""}`, data.vt.aDuVT ? fmtNb(data.vt.acquis - data.vt.avant) : "—", data.vt.aDuVT ? fmtNb(data.vt.duMois) : "—", data.vt.aDuVT ? fmtNb(data.vt.acquis - data.vt.fin) : "—"],
     ],
-    [(A4_W - marge * 2) * 0.32, (A4_W - marge * 2) * 0.17, (A4_W - marge * 2) * 0.17, (A4_W - marge * 2) * 0.17, (A4_W - marge * 2) * 0.17]
+    [(A4_W - marge * 2) * 0.42, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.193, (A4_W - marge * 2) * 0.194]
   );
   txt(`RP isolés (ni veille ni lendemain en RP/RPP) — ce mois : ${data.rp.isolesMois}  ·  cumul annuel : ${data.rp.isolesAnnee}`, marge, y, { size: 8.3, color: rgb(0.42, 0.47, 0.55) });
   y -= 18;
@@ -315,15 +369,15 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   table(
     ["", "Solde début de mois", "Acquis ce mois", "Pris ce mois", "Solde fin de mois"],
     [
-      ["Temps RQ (jours)", fmtNb(data.rq.acquis !== null ? data.rq.acquis - data.rq.avant : null), "—", fmtNb(data.rq.duMois), fmtNb(data.rq.acquis !== null ? data.rq.acquis - data.rq.fin : null)],
+      [`Temps RQ, en jours (${fmtNb(data.rq.acquis)})`, fmtNb(data.rq.acquis !== null ? data.rq.acquis - data.rq.avant : null), "—", fmtNb(data.rq.duMois), fmtNb(data.rq.acquis !== null ? data.rq.acquis - data.rq.fin : null)],
       hmRow("Repos compensateur de nuit RN", data.rn),
-      hmRow(`Temps à compenser semestres précédents TY (plafond ${minToHM(PLAFOND_32H_MIN)})`, data.ty),
+      hmRow("Temps à compenser semestres précédents TY", data.ty),
       hmRow("Temps à compenser semestre en cours TQ", data.tq),
       hmRow("Temps à compenser mois précédents TC", data.tc),
     ],
-    [(A4_W - marge * 2) * 0.36, (A4_W - marge * 2) * 0.16, (A4_W - marge * 2) * 0.16, (A4_W - marge * 2) * 0.16, (A4_W - marge * 2) * 0.16]
+    [(A4_W - marge * 2) * 0.42, (A4_W - marge * 2) * 0.145, (A4_W - marge * 2) * 0.145, (A4_W - marge * 2) * 0.145, (A4_W - marge * 2) * 0.145]
   );
-  txt(`Pauses figées validées ce mois : ${data.tc.pausesDuMois}`, marge, y, { size: 8.3, color: rgb(0.42, 0.47, 0.55) });
+  txt(`TY plafonné à ${minToHM(PLAFOND_32H_MIN)} (au-delà, à payer automatiquement) · Pauses figées validées ce mois : ${data.tc.pausesDuMois}`, marge, y, { size: 8.3, color: rgb(0.42, 0.47, 0.55) });
   y -= 18;
 
   // ── Fêtes à récupérer ──
@@ -380,8 +434,12 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
     const yy = yDepart - row * 15;
     if (row === 0 && col === 0) newPageIfNeeded(rowsParColonne * 15 + 20);
     txt(`${pad2(j.jour)} ${j.dowLabel}`, x, yy, { size: 8.2, bold: true });
-    const couleurRappel = j.rappel ? (hexToRgb(j.couleur) || GRIS_TXT) : rgb(0.6, 0.65, 0.7);
-    txt(j.rappel || "—", x + 56, yy, { size: 8.2, bold: !!j.rappel, color: couleurRappel });
+    if (j.segments.length === 0) {
+      txt("—", x + 56, yy, { size: 8.2, color: rgb(0.6, 0.65, 0.7) });
+    } else {
+      let bx = x + 56;
+      j.segments.forEach(seg => { bx = drawBadge(seg.texte, bx, yy, seg.couleur) + 4; });
+    }
   });
 
   // ── Note de bas de page, en pied de la toute dernière page (21/08 : placée
@@ -390,7 +448,7 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   // d'une page déjà pleine — un pied de page de document se met en fin de
   // document, pas au milieu d'un flux de contenu). ──
   const disclaimerLignes = wrapText(
-    "Document généré depuis F2P.PMP à partir des données saisies dans l'application — ne remplace pas la fiche officielle SNCF. Les soldes dépendent de la tenue à jour des compteurs par l'agent. Le statut des fériés reflète l'état actuel, pas nécessairement celui du mois consulté.",
+    "Document généré depuis F2P.PMP à partir des données saisies dans l'application — ne remplace pas la fiche officielle SNCF. Tous les soldes (dont le statut des fériés) sont reconstitués tels qu'ils auraient été à la fin du mois consulté. Seuls les droits annuels (RP/RU/VT/Congés/RQ) et le solde CET reflètent leur valeur actuelle, faute d'historique de leurs modifications — vérifier qu'ils étaient bien identiques à cette période si le mois consulté est ancien.",
     A4_W - marge * 2, font, 6.8
   );
   disclaimerLignes.forEach((ligne, i) => {

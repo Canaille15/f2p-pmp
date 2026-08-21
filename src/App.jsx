@@ -6729,8 +6729,18 @@ const MOIS_NOMS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Ao�
 // Mêmes règles exactes que l'ancienne FetesSection, juste extraites en fonction
 // pure pour que la carte "Fêtes" du panneau compteurs puisse calculer le nombre
 // de fêtes à traiter (pour la cloche) sans ouvrir la fenêtre.
-export function computeFetesLignes(agent, schedule, agentProfiles, year){
-  const today = new Date().toISOString().slice(0,10);
+// asOfDate (21/08, module FIM) : optionnel, "YYYY-MM-DD" — permet de
+// recalculer le statut de chaque fête TEL QU'IL AURAIT ÉTÉ évalué à cette
+// date précise (ex: fin d'un mois passé) plutôt qu'à la date réelle
+// d'aujourd'hui. Omis = comportement inchangé (tous les appels existants,
+// le vrai module Fêtes en temps réel compris, doivent toujours voir l'état
+// actuel réel). Olivier : "si je demande mars je veux les infos de mars pas
+// celle d'aout" — sans ce paramètre, un rapport pour un mois passé montrait
+// à tort l'état d'AUJOURD'HUI (une fête déjà réglée depuis apparaissait
+// encore "à traiter" si elle l'était encore au moment du rapport, ou
+// l'inverse).
+export function computeFetesLignes(agent, schedule, agentProfiles, year, asOfDate){
+  const today = asOfDate || new Date().toISOString().slice(0,10);
   const fetesData = agentProfiles[agent?.id]?.fetesTracking?.[year] || {};
   const datesFetes = getDatesFetesAnnee(year);
 
@@ -6765,7 +6775,15 @@ export function computeFetesLignes(agent, schedule, agentProfiles, year){
     const moisLim = parseInt(limiteDate.slice(5,7));
     const anneeLim = parseInt(limiteDate.slice(0,4));
     const debutRecherche = dateFete; // à partir du jour de la fête
-    const finRecherche = limiteDate;
+    // Bornée à asOfDate SEULEMENT si explicitement fourni (21/08, module
+    // FIM) : une case saisie après la date du rapport n'existait pas
+    // encore, de son point de vue — sinon un rapport de mars pouvait voir
+    // "prise" une fête réglée en juillet (déjà dans schedule au moment où
+    // le rapport est généré), alors qu'en mars ce n'était pas encore
+    // arrivé. Jamais appliqué en usage normal (asOfDate omis) : le module
+    // Fêtes en temps réel doit continuer à détecter une RC déjà planifiée
+    // à l'avance par l'agent, même après aujourd'hui.
+    const finRecherche = (asOfDate && asOfDate < limiteDate) ? asOfDate : limiteDate;
 
     let priseLe = null;
     let priseType = null;
@@ -6870,7 +6888,14 @@ export function computeFetesLignes(agent, schedule, agentProfiles, year){
     } else if(code === "VN"){
       motifReglementaire = "Les agents chôment le samedi veille de Noël lorsque cette fête tombe un dimanche. Ceux utilisés ou en RP bénéficient d'un RC dans le trimestre suivant. (Réf. GRH00143)";
     }
-    const priseLeFinal = override.priseLe !== undefined ? override.priseLe : priseLe;
+    // asOfDate (21/08, module FIM) : un override manuel (date de prise
+    // corrigée à la main, paiement anticipé confirmé) porte une vraie date
+    // réelle — si cette date est APRÈS le mois du rapport, elle n'était pas
+    // encore connue à ce moment-là, du point de vue de ce rapport (ex: une
+    // fête confirmée "vue sur la fiche de paie de juillet" ne doit jamais
+    // apparaître réglée dans un rapport de mars).
+    const priseLeBrut = override.priseLe !== undefined ? override.priseLe : priseLe;
+    const priseLeFinal = (asOfDate && priseLeBrut && priseLeBrut > asOfDate) ? null : priseLeBrut;
     const priseTypeFinal = override.priseType || priseType;
     const snoozeJusquau = override.snoozeJusquau || null;
 
@@ -6879,7 +6904,13 @@ export function computeFetesLignes(agent, schedule, agentProfiles, year){
     // confirmation n'a aucun effet sur le statut, juste un rappel visuel).
     // Annulable à tout moment, redonne alors le calcul normal.
     const paiementAnticipe = override.paiementAnticipe || null;
-    const estPayee = override.estPayee || !!paiementAnticipe?.moisVu || (!priseLeFinal && !estPerdue && today > limiteDate);
+    // override.estPayee n'a pas de date propre (pas de "moisVu" attaché) —
+    // on continue à lui faire confiance même pour un rapport historique
+    // (impossible de savoir QUAND il a été coché, risque d'un faux négatif
+    // pire qu'un faux positif ici). Seul paiementAnticipe.moisVu, qui porte
+    // une vraie date de confirmation, est borné par asOfDate.
+    const moisVuConnuAsOf = !asOfDate || !paiementAnticipe?.moisVu || `${paiementAnticipe.moisVu}-01` <= asOfDate;
+    const estPayee = override.estPayee || (!!paiementAnticipe?.moisVu && moisVuConnuAsOf) || (!priseLeFinal && !estPerdue && today > limiteDate);
     let moisPayeFinal = moisPaye, anneePayeFinal = anneePaye;
     if(paiementAnticipe?.moisVu){
       const [ay, am] = paiementAnticipe.moisVu.split("-").map(Number);
@@ -6917,7 +6948,7 @@ export function computeFetesLignes(agent, schedule, agentProfiles, year){
   const fetesDataN1 = agentProfiles[agent?.id]?.fetesTracking?.[yearMoins1] || {};
   const datesFetesN1 = getDatesFetesAnnee(yearMoins1);
   const limiteT4N1 = `${year}-03-31`; // fin du trimestre suivant T4 de N-1
-  const today2 = new Date().toISOString().slice(0,10);
+  const today2 = asOfDate || new Date().toISOString().slice(0,10);
 
   const fetesReportN1 = Object.entries(CODES_FETES).map(([code, label])=>{
     const dateFete = datesFetesN1[code];
@@ -6935,11 +6966,13 @@ export function computeFetesLignes(agent, schedule, agentProfiles, year){
     let priseLe = null;
     let priseType = null;
     // Chercher dans N-1 ET dans N (car la récup peut être prise en jan-mars N)
+    // Bornée à asOfDate si fourni, même raison que plus haut.
+    const finRechercheN1 = (asOfDate && asOfDate < limiteDate) ? asOfDate : limiteDate;
     Object.entries(schedule).forEach(([k,v])=>{
       if(!k.startsWith(agent.id+"-")) return;
       const dk = k.slice(agent.id.length+1);
       // Fenêtre : date fête → 31 mars N
-      if(dk < dateFete || dk > limiteDate) return;
+      if(dk < dateFete || dk > finRechercheN1) return;
       if(v?.equipe===code){ priseLe = dk; priseType = "code"; }
     });
     // Détection "RP quelconque dans le trimestre suivant" retirée (13/07,
