@@ -3172,29 +3172,6 @@ function getCongesDemandeesAnnee(agent, agentProfiles, schedule, year){
   return jours;
 }
 
-// Jours "Congé refusé" de l'année (13/08, même principe que
-// getCongesDemandeesAnnee ci-dessus — utilisé uniquement pour retrouver la
-// position exacte d'un jour reporté dans la série de l'année qui le
-// revendique, jamais pour afficher un badge : un jour refusé n'en a jamais
-// eu, voir DayEditPopup/App.jsx). Exclu aussi si finalement accordé entre-
-// temps (même garde que dans computeDashboardConges).
-function getCongesRefuseesAnnee(agent, agentProfiles, schedule, year){
-  const profil = agentProfiles?.[agent?.id] || {};
-  const tracking = profil.congesDemandes || {};
-  const start = `${year}-01-01`, end = `${year}-12-31`;
-  const jours = [];
-  Object.entries(tracking).forEach(([d,t])=>{
-    if(!t || t.statut!=="refuse") return;
-    if(d<start||d>end) return;
-    const entree = schedule[`${agent?.id}-${d}`];
-    const codeActuel = entree?.equipe || entree?.equipe2;
-    if(codeActuel==="CA"||codeActuel==="CP") return;
-    if(t.jourEtaitVide && codeActuel) return;
-    jours.push(d);
-  });
-  return jours;
-}
-
 // Jours "VT demandé" de l'année (06/08, même principe que
 // getCongesDemandeesAnnee — VT suit désormais le même cycle
 // Accordé/Demandé/Refusé que Congés, voir computeDashboardVT).
@@ -3208,27 +3185,6 @@ function getJoursVTDemandeesAnnee(agent, agentProfiles, schedule, year){
     if(d<start||d>end) return;
     const entree = schedule[`${agent?.id}-${d}`];
     const codeActuel = entree?.equipe || entree?.equipe2;
-    if(t.jourEtaitVide && codeActuel) return;
-    jours.push(d);
-  });
-  return jours;
-}
-
-// Jours "VT refusé" de l'année (22/08, même correctif que Congés/Audrey
-// BATY — un VT refusé occupe désormais aussi un rang dans la numérotation
-// locale, voir vtToutNumeros, pour ne plus jamais laisser un numéro
-// "évaporer" silencieusement).
-function getJoursVTRefuseesAnnee(agent, agentProfiles, schedule, year){
-  const profil = agentProfiles?.[agent?.id] || {};
-  const tracking = profil.vtTracking || {};
-  const start = `${year}-01-01`, end = `${year}-12-31`;
-  const jours = [];
-  Object.entries(tracking).forEach(([d,t])=>{
-    if(!t || t.statut!=="refuse") return;
-    if(d<start||d>end) return;
-    const entree = schedule[`${agent?.id}-${d}`];
-    const codeActuel = entree?.equipe || entree?.equipe2;
-    if(codeActuel==="VT") return;
     if(t.jourEtaitVide && codeActuel) return;
     jours.push(d);
   });
@@ -8708,37 +8664,31 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
     const demandes=getCongesDemandeesAnnee(agent,agentProfiles,schedule,curYear)
       .filter(d=>!reportsVersAnneePrec.includes(d))
       .map(d=>({date:d,statut:"demande"}));
-    // 22/08 (Olivier, cas réel signalé sur le compte d'Audrey BATY : "un
-    // conges refusé doit etre comptabilisé dans les jours [...] le conge ne
-    // doit pas sevaporer comme ca") : un jour refusé occupe désormais aussi
-    // un rang dans la série LOCALE (jusque-là seule la série `prevCombine`,
-    // utilisée pour positionner un report vers l'année suivante, incluait
-    // déjà les refusés — la série locale, elle, les ignorait complètement).
-    // Ce décalage faisait dériver silencieusement les 2 séries l'une de
-    // l'autre d'exactement 1 rang par refus non compté : le numéro local
-    // (ex. n°11) et le numéro du report vers l'année suivante (ex. n°13,
-    // calculé lui correctement) ne se suivaient plus — un numéro "manquait"
-    // entre les deux, sans qu'aucun jour ne l'occupe nulle part. Un jour
-    // refusé n'affiche toujours aucun badge propre (rien n'est écrit dans le
-    // planning perso pour un refus, voir Phase 1) — seul son rang dans la
-    // séquence compte, pour que les numéros suivants ne soient plus décalés.
-    const refusesLocal=getCongesRefuseesAnnee(agent,agentProfiles,schedule,curYear)
-      .filter(d=>!reportsVersAnneePrec.includes(d))
-      .map(d=>({date:d,statut:"refuse"}));
-    const combine=[...accordes,...demandes,...refusesLocal].sort((a,b)=>a.date<b.date?-1:1);
+    // 23/08 (Olivier, revenu sur le correctif du 22/08 après l'avoir vu en
+    // conditions réelles sur le compte d'Audrey BATY : "je veux que les
+    // conges note comme accordes est le bon numero (y compris les reports)
+    // sinon il ne vont pas piger [...] ce qui est sur le planning doit avoir
+    // le bon chiffre. il faut que tu trouve autre chose pour suivre le CA
+    // refusé") : un jour refusé N'occupe PLUS aucun rang dans la série —
+    // ni locale, ni pour positionner un report. Le correctif du 22/08
+    // (compter le refus comme un rang réservé mais invisible, "n°10 sauté")
+    // réglait bien l'incohérence entre les 2 séries, mais créait un nouveau
+    // problème côté lisibilité : un agent qui ne voit QUE les numéros
+    // affichés sur son planning (accordés + reportés) tombe sur une suite
+    // avec un trou (9 puis 11) sans comprendre pourquoi, puisque le refus
+    // n'a lui-même jamais de badge. La bonne source de suivi d'un refus
+    // reste la liste "❌ Refusées" du tableau de bord Congés (déjà
+    // existante, indépendante de cette numérotation) — pas une place réservée
+    // dans la séquence des numéros visibles sur le calendrier.
+    const combine=[...accordes,...demandes].sort((a,b)=>a.date<b.date?-1:1);
     const m={};
     combine.forEach((it,i)=>{ m[it.date]={numero:i+1,statut:it.statut}; });
     if(reportsVersAnneePrec.length){
       // Série complète de l'année qui revendique le report : accordés +
-      // demandés + refusés (13/08, "au cas où" — même règle "accordé OU
-      // demandé" que la numérotation locale, additionnée des refusés pour ne
-      // jamais sous-compter un cas limite où le report devient orphelin d'un
-      // jour finalement refusé). getCongesRefuseesAnnee/getCongesDemandeesAnnee
-      // n'affichent eux-mêmes jamais de badge — utilisés ici uniquement pour
-      // retrouver la bonne position chronologique.
+      // demandés SEULEMENT (23/08 — les refusés n'y comptent plus, voir
+      // commentaire ci-dessus, pour rester cohérent avec la série locale).
       const prevAccordes=computeCompteurAvecDetail(agent,schedule,agentProfiles,curYear-1,["CA","CP"],"congesReports",null,false).tousJours;
       const prevDemandes=getCongesDemandeesAnnee(agent,agentProfiles,schedule,curYear-1);
-      const prevRefuses=getCongesRefuseesAnnee(agent,agentProfiles,schedule,curYear-1);
       // Un report encore "Demandé" (pas accordé) est physiquement daté HORS de
       // curYear-1 (dans curYear) — invisible à getCongesDemandeesAnnee(curYear-1),
       // qui ne scanne que les dates physiquement dans cette année. Il doit
@@ -8751,7 +8701,7 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
         const estAccorde=v?.equipe==="CA"||v?.equipe==="CP"||v?.equipe2==="CA"||v?.equipe2==="CP";
         return !estAccorde;
       });
-      const prevCombine=[...prevAccordes,...prevDemandes,...prevRefuses,...reportsEncoreDemandes].sort();
+      const prevCombine=[...prevAccordes,...prevDemandes,...reportsEncoreDemandes].sort();
       reportsVersAnneePrec.forEach(d=>{
         if(!d.startsWith(String(curYear))) return;
         const idx=prevCombine.indexOf(d);
@@ -8836,24 +8786,17 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
   const vtToutNumeros=useMemo(()=>{
     const accordes=getJoursCodesAnnee(agent,schedule,curYear,["VT"]).map(d=>({date:d,statut:"accorde"}));
     const demandes=[...vtDemandeesSet].map(d=>({date:d,statut:"demande"}));
-    // 22/08, même correctif que congeToutNumeros ci-dessus (Congés) : un VT
-    // refusé occupe désormais aussi un rang, pour ne jamais laisser un
-    // numéro "évaporer" dans la série cumulative — jamais de badge propre
-    // pour un refus (vtDemandeesSet ne le contient pas, voir le rendu plus
-    // bas). Piège propre à VT (Congés numérote CHAQUE jour, pas seulement le
-    // dernier du mois) : si le refus tombe être le dernier événement
-    // chronologique d'un mois, "dernier du mois" doit rester déterminé par
-    // rapport au prochain événement VISIBLE (accordé/demandé), jamais par
-    // rapport au refus lui-même — sinon un refus en fin de mois masquerait
-    // à tort le numéro du dernier VT réellement affiché ce mois-là.
-    const refuses=getJoursVTRefuseesAnnee(agent,agentProfiles,schedule,curYear).map(d=>({date:d,statut:"refuse"}));
-    const combine=[...accordes,...demandes,...refuses].sort((a,b)=>a.date<b.date?-1:1);
+    // 23/08 (Olivier, revenu sur le correctif du 22/08 — voir congeToutNumeros
+    // ci-dessus pour Congés, même principe/même revirement) : un VT refusé
+    // n'occupe plus aucun rang dans la série — un agent qui ne voit que ce
+    // qui est réellement sur son planning doit tomber sur une suite continue,
+    // sans trou réservé à un refus invisible. Le suivi d'un VT refusé reste
+    // la liste "❌ Refusées" du tableau de bord VT (déjà existante).
+    const combine=[...accordes,...demandes].sort((a,b)=>a.date<b.date?-1:1);
     const m={};
     combine.forEach((it,i)=>{
-      if(it.statut==="refuse") return;
       const mois=it.date.slice(0,7);
-      const prochainVisible=combine.slice(i+1).find(x=>x.statut!=="refuse");
-      const moisSuivant=prochainVisible?.date.slice(0,7);
+      const moisSuivant=combine[i+1]?.date.slice(0,7);
       if(mois!==moisSuivant) m[it.date]={numero:i+1,statut:it.statut};
     });
     return m;
