@@ -530,6 +530,9 @@ export function getPosteLabelFromCode(jsCode) {
   // Journée équipe (21/08) : même raison qu'AY juste au-dessus -- jamais
   // dans POSTES_JOURNEE, résolue ici en dur.
   if (jsCode === "JEQ") return "Journée équipe";
+  // RFT SAM (23/08) : jamais dans POSTES_PAR_3x8 (voir POSTE_REGISTRY),
+  // résolu ici en dur -- son propre code sert déjà de libellé lisible.
+  if (jsCode === "RFT SAM") return "RFT SAM";
   const tousPostes3x8 = [...POSTES_PRCI_3x8, ...POSTES_PAR_3x8];
   const p3x8 = tousPostes3x8.find(p => p.M === jsCode || p.AM === jsCode || p.N === jsCode);
   if (p3x8) return p3x8.label;
@@ -2943,6 +2946,14 @@ const POSTE_REGISTRY = (() => {
   // propre section dans "Jours travaillés", famille recalculée à la volée
   // (voir traiter() plus bas).
   reg["JEQ"] = {code:"JEQ", label:"Journée équipe", famille:"PRCI", shift:"J"};
+  // RFT SAM (23/08, demandé par Olivier) : même principe qu'AY/JEQ --
+  // enregistré directement ici plutôt que dans POSTES_PAR_3x8 (qui alimente
+  // aussi les fiches UO de l'Annuaire et le sélecteur admin, hors de propos
+  // pour un poste occasionnel) -- lui donne sa propre section dans "Jours
+  // travaillés" avec les dates, sans effet de bord ailleurs. Toujours PAR
+  // (poste "Aide AC PAR"-like, jamais reclassé dynamiquement contrairement à
+  // AY/CAF/VM/JEQ/DISPO qui sont génériques toutes familles).
+  reg["RFT SAM"] = {code:"RFT SAM", label:"RFT SAM", famille:"PAR", shift:"AM"};
   return reg;
 })();
 
@@ -3010,7 +3021,10 @@ function computeDashboardTravail(agent, schedule, year){
     // ressaisie. Volontairement limité à CE calcul (Jours
     // travaillés) -- POSTES_JOURNEE lui-même n'est pas touché, CPS
     // Officiel/Planning Prévisionnel (qui le partagent) restent inchangés.
-    if(info && (jsCode==="AY" || jsCode==="CAF" || jsCode==="VM" || jsCode==="JEQ")){
+    // DISPO (23/08, même principe) : ajoutée comme poste "Journée" sélectionnable
+    // dans le perso, juste avant VM -- même registre statique donc même besoin
+    // de recalcul de famille à la volée.
+    if(info && (jsCode==="AY" || jsCode==="CAF" || jsCode==="VM" || jsCode==="JEQ" || jsCode==="DISPO")){
       info = {...info, famille: agent?.famille || "PRCI"};
     }
     if(!info){
@@ -9031,7 +9045,11 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
             const couleurNuit = getColor("N");
             const tcNuit = getTc("N");
             const posteNuitLabel = en?.jsCode2 ? (getPosteLabelFromCode(en.jsCode2) || en.jsCode2) : null;
-            const posteLabel = en?.jsCode && !["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF"].includes(en.jsCode) ? (getPosteLabelFromCode(en.jsCode) || en.jsCode) : null;
+            // "DISPO" retiré de ce blocklist le 23/08 (même raison que
+            // client.js/saveEntry) : c'est désormais un vrai jsCode de poste
+            // (nouveau bouton "Journée"), son libellé doit s'afficher comme
+            // celui de n'importe quel autre poste sous la case.
+            const posteLabel = en?.jsCode && !["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","NU","TC","TY","RN","JF"].includes(en.jsCode) ? (getPosteLabelFromCode(en.jsCode) || en.jsCode) : null;
 
             const isNuitSeuleCell = code === "N" && !en?.equipe2 && !en?.finNuit;
             return <div key={dk}

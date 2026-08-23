@@ -79,6 +79,14 @@ const POSTES_PRCI = [
   {code:"ASSJ", label:"Adj DPX",     types:["J"]},
   {code:"PPRCI",label:"PPRCI",       types:["J","M","AM"]},
   {code:"AFOPR",label:"AFO PRCI",    types:["J"]},
+  // DISPO (23/08, demandé par Olivier, juste avant VM) : même principe que
+  // VM/CAF/JEQ/AY -- poste générique jamais lié à une habilitation précise,
+  // compte comme jour travaillé ("ca doit etre compte comme un journee de
+  // travail"). Horaires réels confirmés par Olivier : 09h00-14h30 (cohérent
+  // avec la donnée CPS réelle de CAILLET Maxime, voir résolus du 23/08).
+  // Alimente aussi le comptage "Dispo" de Stat'Equip, en plus du signal CPS
+  // Officiel (equipe==="DISPO" réel), avec déduplication côté backend.
+  {code:"DISPO",label:"Dispo",       types:["J"]},
   // VM/CAF (19/08, demandé par Olivier) : ce sont des journées de travail à
   // part entière (comptent normalement dans "Jours travaillés"), pas des
   // absences -- corrigé après un premier essai erroné qui les traitait comme
@@ -109,6 +117,15 @@ const POSTES_PRCI = [
 const POSTES_PAR = [
   {code:"AC1",  label:"AC PAR",      types:["M","AM","N"]},
   {code:"AC2",  label:"Aide AC PAR", types:["M","AM","N"]},
+  // RFT SAM (23/08, demandé par Olivier) : "comme une soirée du samedi en
+  // Aide AC PAR mais avec des horaires différents" -- déjà reconnu comme
+  // code spécial à l'import CPS (jsCodeStartRe/jsCodeMatch, ligne "Divers")
+  // mais jamais sélectionnable dans le perso avant ce jour. Horaires réels
+  // vérifiés directement sur une donnée de production (SCHRAMM Camille,
+  // import CPS du 20/06/2026, cp 9104869X) : 13h00–20h45 -- Olivier pensait
+  // 13h00/21h00 (proche mais pas exact), voir HORAIRES_POSTE plus bas pour
+  // l'application automatique de cet horaire à la sélection.
+  {code:"RFTSAM",label:"RFT SAM",    types:["AM"]},
   {code:"ACXX", label:"CT Travaux",  types:["N"]},
   {code:"PARJ", label:"Pauseur PAR", types:["J"]},
   {code:"DPXP", label:"DPX PAR",     types:["J"]},
@@ -132,10 +149,23 @@ const POSTE_ROWS_J = [
   ["ASMP","AFOPR"],              // ASMTE PAR / AFO PRCI
   ["PPRCI","PPAR"],              // PPRCI / PPAR
   ["DPXJ","DPXP","ASSJ"],        // DPX PRCI / DPX PAR / Adj DPX
-  ["VM","CAF","JEQ","AY"],       // JEQ (21/08) ajouté juste avant AY, comme demandé
+  ["DISPO","VM","CAF","JEQ","AY"], // DISPO (23/08) ajouté juste avant VM, comme demandé
 ];
 
 const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
+
+// Horaires spécifiques à un poste précis, qui remplacent l'horaire générique
+// du type (HORAIRES_DEFAUT) à la sélection -- jusqu'ici aucun poste n'en
+// avait besoin (l'horaire restait un champ texte libre édité à la main).
+// RFT SAM (23/08) est le premier cas : horaire réel vérifié sur une donnée
+// de production (SCHRAMM Camille, 20/06/2026) plutôt que le standard AM.
+const HORAIRES_POSTE = {
+  "RFT SAM": "13h00–20h45",
+  // DISPO (23/08) : horaires réels confirmés par Olivier après vérification
+  // -- cohérent avec la donnée CPS réelle déjà rencontrée (CAILLET Maxime,
+  // "DISPO 09:00 - 14:30", voir résolus du 23/08).
+  "DISPO": "09h00–14h30",
+};
 
 // jsCode canonique → code court local (sens inverse de convertirCodePosteVersJsCode).
 // entry.jsCode/jsCode2 arrivent ici déjà sous forme canonique (App.jsx les convertit
@@ -167,6 +197,10 @@ const CODE_VERS_HAB = {
   // PAR
   "AC1":"PAAC1-", "AC2":"PAAC2-", "ACXX":"PAACXX", "PARJ":"PAPAUJ", "DPXP":"PADPXJ",
   "ASMP":"PAASMJ",
+  // RFT SAM (23/08) : "comme une soirée du samedi en Aide AC PAR", même
+  // habilitation requise que AC2 -- volontairement PAS dans l'exemption de
+  // getPostes (contrairement à VM/CAF/AY/JEQ/DISPO, génériques).
+  "RFTSAM":"PAAC2-",
 };
 
 export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesPrises, onSave, onDelete, onClose, onCongeStatutChange, onVtStatutChange }) {
@@ -190,7 +224,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     const postes = tous_postes.filter(p => p.types.includes(type));
     if (habCodes.length === 0) return postes;
     return postes.filter(p =>
-      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" || p.code === "JEQ" ||
+      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" || p.code === "JEQ" || p.code === "DISPO" ||
       habCodes.includes(CODE_VERS_HAB[p.code] || p.code)
     );
   };
@@ -325,6 +359,18 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const isTravailJ = type1 && ["M","AM","J"].includes(type1);
   const postesJ = isTravailJ ? getPostes(type1) : [];
   const postesN = getPostes("N");
+
+  // Choix d'un poste (jour) -- applique en plus l'horaire spécifique du
+  // poste (HORAIRES_POSTE) si ce poste en a un, sinon laisse l'horaire déjà
+  // saisi/généré par le type inchangé (comportement d'avant).
+  const choisirPoste1 = (code) => {
+    const next = poste1 === code ? "" : code;
+    setPoste1(next);
+    if (next) {
+      const canon = convertirCodePosteVersJsCode(next, type1);
+      if (canon && HORAIRES_POSTE[canon]) setHoraires1(HORAIRES_POSTE[canon]);
+    }
+  };
 
   const sauvegarder = () => {
     const newEntry = {
@@ -863,7 +909,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     return (
                       <div key={i} style={{display:"flex",flexWrap:"wrap",gap:5}}>
                         {rowPostes.map(p => (
-                          <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                          <button key={p.code} onClick={() => choisirPoste1(p.code)} style={{
                             padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                             fontSize:12, fontWeight:700,
                             background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
@@ -880,7 +926,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     return (
                       <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                         {orphelins.map(p => (
-                          <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                          <button key={p.code} onClick={() => choisirPoste1(p.code)} style={{
                             padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                             fontSize:12, fontWeight:700,
                             background: poste1 === p.code ? "#1e293b" : "#f1f5f9",
@@ -894,7 +940,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
               ) : (
                 <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                   {postesJ.map(p => (
-                    <button key={p.code} onClick={() => setPoste1(poste1===p.code?"":p.code)} style={{
+                    <button key={p.code} onClick={() => choisirPoste1(p.code)} style={{
                       padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                       fontSize:12, fontWeight:700,
                       background: poste1 === p.code ? "#1e293b" : "#f1f5f9",

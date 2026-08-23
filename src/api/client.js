@@ -221,6 +221,13 @@ const MAPPING_3X8 = {
   AC1:  { M: "PAAC1-", AM: "PAAC1O", N: "PAAC1X" },
   AC2:  { M: "PAAC2-", AM: "PAAC2O", N: "PAAC2X" },
   ACXX: { M: null, AM: null, N: "PAACXX" },
+  // RFT SAM (23/08) : poste occasionnel "renfort samedi", déjà reconnu
+  // comme code spécial à l'import CPS (App.jsx, jsCodeStartRe/jsCodeMatch)
+  // -- devient ici sélectionnable dans le perso, en Soirée uniquement
+  // (horaires réels 13h00-20h45, différents de l'AM standard Aide AC PAR).
+  // Le jsCode canonique garde volontairement l'espace ("RFT SAM"), identique
+  // à la donnée réelle déjà écrite par l'import CPS.
+  RFTSAM: { M: null, AM: "RFT SAM", N: null },
 };
 const MAPPING_JOURNEE = {
   PA1J: "PIPA1J", PA2J: "PIPA2J", PA3J: "PIPA3J",
@@ -235,6 +242,14 @@ const MAPPING_JOURNEE = {
   CAF: "CAF",
   AY: "AY",
   JEQ: "JEQ",
+  // DISPO (23/08) : même principe, identité -- réutilise volontairement le
+  // même jsCode "DISPO" déjà présent dans POSTES_JOURNEE (App.jsx, utilisé
+  // par la ligne "Disponibles" de CPS Officiel) pour la résolution du libellé
+  // -- sans risque de fuite : cette ligne CPS filtre sur equipe==="DISPO"
+  // (un champ équipe/shift, jamais "J"), jamais sur la présence du jsCode
+  // dans la table -- une saisie perso (equipe:"J", jsCode:"DISPO") ne peut
+  // donc jamais s'y confondre.
+  DISPO: "DISPO",
 };
 
 // Codes jsCode déjà canoniques (ceux que renvoie convertirCodePosteVersJsCode
@@ -357,7 +372,14 @@ result[`${row.agent_id || agentId}-${date}`] = {
       periodes.push({
         ordre: 1,
         code_equipe: entry.equipe,
-        code_poste: (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|DISPO|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !CANONICAL_JSCODES.has(entry.jsCode)) ? entry.jsCode : null,
+        // "DISPO" retiré de ce blocklist le 23/08 : n'a jamais été une vraie
+        // valeur d'equipe côté perso (equipe reste toujours M/AM/N/J/RP/...,
+        // jamais "DISPO" -- voir sauvegarder() dans DayEditPopup.jsx), donc
+        // ce blocage était mort pour son usage d'origine ; DISPO est
+        // désormais un vrai jsCode de poste (nouveau bouton "Journée",
+        // identité MAPPING_JOURNEE) qu'il ne faut plus filtrer ici, sous
+        // peine de perdre silencieusement code_poste à l'enregistrement.
+        code_poste: (entry.jsCode && entry.jsCode.length <= 10 && !/^(M|AM|N|J|RP|RU|RQ|CA|CP|MA|VT|ABS|FOR|NU|TC|TY|RN|JF)$/.test(entry.jsCode) && !CANONICAL_JSCODES.has(entry.jsCode)) ? entry.jsCode : null,
         heure_debut: entry.horaires ? entry.horaires.split('–')[0]?.trim().replace('h',':') : null,
         heure_fin:   entry.horaires ? entry.horaires.split('–')[1]?.trim().replace('h',':') : null,
         prive: entry.prive || false,

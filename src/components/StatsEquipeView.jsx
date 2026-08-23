@@ -441,22 +441,54 @@ function CoverageParAnneeTable({ data, anneeActuelle }) {
   );
 }
 
+// Dispo (16/08, étendu 23/08) — 2 sources désormais, toujours anonymes côté
+// affichage (aucun nom/CP, même pour la source "identifiée" côté backend --
+// voir statsEquipeController.js) :
+// - "identifie" : DISPO réel (CPS Officiel) + DISPO sélectionné dans le
+//   perso, dédupliqués entre eux par agent+date côté backend.
+// - "anonyme" : mécanisme d'origine, message libre CPS contenant "Dispo",
+//   structurellement jamais rattachable à un agent (agents_concernes vide).
 function DispoSection({ data }) {
   const [ouvert, setOuvert] = useState(false);
+  const identifie = data.identifie || { total: 0, parDate: [] };
+  const anonyme = data.anonyme || { total: 0, entries: [] };
   return (
     <div style={card}>
       <SectionHeader icon="📢" titre="Dispo" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} />
-      <Tuile label="Jours signalés" valeur={data.total} large />
+      <Tuile label="Jours signalés (total)" valeur={data.total} large />
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <Tuile label="Planning (CPS/perso)" valeur={identifie.total} />
+        <Tuile label="Message libre" valeur={anonyme.total} />
+      </div>
       <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
-        Journées où un agent présent est signalé dans le planning CPS Officiel "Dispo" par message libre — chiffre anonymisé, aucun nom (non attribuable de façon fiable).
+        Journées où un agent est disponible sans poste à tenir — soit détecté directement (DISPO réel importé en CPS Officiel, ou sélectionné dans le planning perso), soit signalé par message libre dans CPS Officiel. Chiffre toujours anonymisé, aucun nom.
       </div>
       {ouvert && (
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 3 }}>
-          {data.entries.map((e, i) => (
-            <div key={i} style={{ fontSize: 11.5, color: "#64748b", borderTop: "1px solid #f1f5f9", paddingTop: 4 }}>
-              {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          {identifie.parDate.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Planning (CPS/perso)</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {identifie.parDate.map((e, i) => (
+                  <div key={i} style={{ fontSize: 11.5, color: "#64748b", borderTop: "1px solid #f1f5f9", paddingTop: 4 }}>
+                    {fmtDate(e.date_jour)} — {e.nb} agent{e.nb > 1 ? "s" : ""}
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
+          )}
+          {anonyme.entries.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Message libre</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {anonyme.entries.map((e, i) => (
+                  <div key={i} style={{ fontSize: 11.5, color: "#64748b", borderTop: "1px solid #f1f5f9", paddingTop: 4 }}>
+                    {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

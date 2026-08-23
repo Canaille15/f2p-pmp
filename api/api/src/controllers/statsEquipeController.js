@@ -239,24 +239,68 @@ async function getStats(req, res) {
     );
     const habilitationsParPoste = habRows.map(r => ({ code_poste: r.code_poste, nbAgents: r.nbAgents }));
 
-    // ─── Dispo (#g, 16/08) — anonyme, jamais de nom d'agent ─────────────────
-    // Un agent présent un jour où tous les postes CPS sont déjà tenus se voit
-    // signalé par un message libre (cps_aleas type='message') contenant
-    // "Dispo" — comme agents_concernes est toujours vide pour ce type (voir
-    // App.jsx:1343), impossible d'attribuer ces jours à un agent précis. Sur
-    // demande explicite d'Olivier : total + dates seulement, jamais de nom.
-    const [dispoRows] = await pool.query(
+    // ─── Dispo (#g, 16/08 ; étendu 23/08) — toujours anonyme côté réponse,
+    // jamais de nom d'agent ni de CP exposé, même pour les 2 nouvelles
+    // sources ci-dessous (Stat'Equip reste "aucune donnée nominative n'y
+    // transite", principe établi depuis sa création). 3 sources désormais :
+    // (a) le mécanisme d'origine, message libre CPS (cps_aleas type='message',
+    //     motif contenant "dispo") — agents_concernes toujours vide pour ce
+    //     type (App.jsx:1343), structurellement impossible à dédupliquer par
+    //     agent, reste dans son propre bucket "anonyme" ;
+    // (b) DISPO réel importé en CPS Officiel (planning_cps.equipe='DISPO',
+    //     ex. CAILLET Maxime 24/08 — voir résolus du 23/08) ;
+    // (c) DISPO sélectionné dans le planning perso (23/08, nouveau poste
+    //     "Journée", planning_periode.code_poste='DISPO').
+    // (b) et (c) sont TOUS DEUX agent-identifiés (cp_agent+date) — dédupliqués
+    // entre eux via un Set avant comptage ("attention pas de doublon", un
+    // agent qui a lui-même saisi DISPO dans son perso ET dont le même jour
+    // est aussi réellement importé en CPS ne doit compter qu'une fois) puis
+    // agrégés en un total "identifié" (regroupé par date uniquement dans la
+    // réponse, jamais par agent) — distinct du bucket "anonyme" (a), qui ne
+    // peut structurellement pas être recoupé avec les 2 autres (aucun
+    // cp_agent dans cps_aleas pour ce type).
+    const [dispoAnonymeRows] = await pool.query(
       `SELECT date_jour, motif FROM cps_aleas
        WHERE type = 'message' AND LOWER(motif) LIKE '%dispo%' AND date_jour BETWEEN ? AND ?
        ORDER BY date_jour`,
       [from, to]
     );
+    const [dispoPersoRows] = await pool.query(
+      `SELECT pj.cp_agent AS cp_agent, pj.date_jour AS date_jour
+       FROM planning_jour pj JOIN planning_periode pp ON pp.planning_jour_id = pj.id
+       WHERE pp.code_equipe = 'J' AND pp.code_poste = 'DISPO' AND pj.date_jour BETWEEN ? AND ?`,
+      [from, to]
+    );
+    const [dispoCpsRows] = await pool.query(
+      `SELECT cp_agent, date_jour FROM planning_cps
+       WHERE equipe = 'DISPO' AND date_jour BETWEEN ? AND ?`,
+      [from, to]
+    );
+    const fmtD = (d) => d instanceof Date ? d.toISOString().slice(0,10) : d;
+    const dispoIdentifieSet = new Set(); // clé "cp|date", dédupliquée entre perso et CPS Officiel
+    [...dispoPersoRows, ...dispoCpsRows].forEach(r => {
+      dispoIdentifieSet.add(`${r.cp_agent}|${fmtD(r.date_jour)}`);
+    });
+    const dispoIdentifieParDate = {};
+    dispoIdentifieSet.forEach(k => {
+      const d = k.split('|')[1];
+      dispoIdentifieParDate[d] = (dispoIdentifieParDate[d] || 0) + 1;
+    });
     const dispo = {
-      total: dispoRows.length,
-      entries: dispoRows.map(r => ({
-        date_jour: r.date_jour instanceof Date ? r.date_jour.toISOString().slice(0,10) : r.date_jour,
-        motif: r.motif || null,
-      })),
+      total: dispoIdentifieSet.size + dispoAnonymeRows.length,
+      identifie: {
+        total: dispoIdentifieSet.size,
+        parDate: Object.entries(dispoIdentifieParDate)
+          .sort((a,b) => a[0] < b[0] ? -1 : 1)
+          .map(([date_jour, nb]) => ({ date_jour, nb })),
+      },
+      anonyme: {
+        total: dispoAnonymeRows.length,
+        entries: dispoAnonymeRows.map(r => ({
+          date_jour: fmtD(r.date_jour),
+          motif: r.motif || null,
+        })),
+      },
     };
 
     // ─── Réserve / Roulement — historique mensuel (#b,c,d, 16/08, ajusté le 17/08) ─
