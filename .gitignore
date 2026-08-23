@@ -24,3 +24,14 @@ check_*.js
 temp_*.txt
 *.note
 .env*
+
+# 24/08 -- renforce apres decouverte de 9 scripts ponctuels committes par
+# erreur avec un identifiant de connexion DB en clair (deja rotate, plus
+# actif, mais retire du depot). Ces prefixes couvrent les scripts
+# diagnostic/one-off comme ceux deja liste plus haut -- jamais l'appli
+# elle-meme, toujours verifie avant d'etendre une regle ici.
+patch_*.js
+utilitaire_*.js
+diagnostic_*.js
+run_*.js
+drop_*.js
