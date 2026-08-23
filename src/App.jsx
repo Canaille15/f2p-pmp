@@ -1532,9 +1532,18 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
   // jsCode des postes qui sont eux-memes des formations (regroupes dans le pave Formation)
   const jsCodesFormationPostes=new Set(["K-PAR","K-PRCI","F-PRCI","AFO PAR","AFOPRCI","F-PAR"]);
   const jsCodesJourneeSpecialePostes=new Set(["PPRCI","PPAR"]);
+  // fix (23/08, cas reel CAILLET Maxime, 24/08) : "DISPO" existe DEUX fois dans
+  // POSTES_JOURNEE (une entree litterale famille:"PRCI", non-principal, en plus
+  // de la construction dediee "Disponibles" juste plus bas) -- sans cette
+  // exclusion, un agent DISPO apparaissait deux fois : une fois dans la ligne
+  // "🟩 Disponibles" (le bon endroit), une fois de plus via cette boucle
+  // generique "postes non principaux PRCI" (etiquette "DISPO · DISPO [PRCI]",
+  // doublon). La ligne "Disponibles" ci-dessous reste la SEULE source pour ce
+  // code, quelle que soit la vraie famille de l'agent concerne.
+  const jsCodesDispoSpecial=new Set(["DISPO"]);
   // Postes journée non principaux PRCI (hors postes-formation)
   if(filterF!=="PAR"){
-    POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&!x.principal&&!jsCodesFormationPostes.has(x.jsCode)&&!jsCodesJourneeSpecialePostes.has(x.jsCode)).forEach(poste=>{
+    POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&!x.principal&&!jsCodesFormationPostes.has(x.jsCode)&&!jsCodesJourneeSpecialePostes.has(x.jsCode)&&!jsCodesDispoSpecial.has(x.jsCode)).forEach(poste=>{
       const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===poste.jsCode||en.poste===poste.label);});
       if(ags.length>0)diversRows.push({poste,jsCode:poste.jsCode,agents:ags,famille:"PRCI",isJournee:true,maxSlots:poste.maxSlots||99});
     });
@@ -2415,10 +2424,31 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
             </div>
             <div style={{flex:1,padding:"7px 12px",display:"flex",flexWrap:"wrap",gap:6,alignItems:"center",minHeight:46}}>
               {row.isDispo
-                ? row.agents.map(ag=>(<div key={ag.id} style={{display:"flex",alignItems:"center",gap:6,background:"#ecfdf5",border:"1.5px solid #6ee7b7",borderRadius:9,padding:"4px 9px"}}>
-                    <Av initials={ag.initials} size={22} famille={ag.famille}/>
-                    <div style={{fontSize:11,fontWeight:700,color:"#065f46"}}>{ag.prenom} {ag.nom}</div>
-                  </div>))
+                ? row.agents.map(ag=>{
+                    // fix (23/08, demande d'Olivier : "le bouton [...] doit aussi avoir
+                    // le bouton ajustement du poste complet") : la carte "Disponibles"
+                    // n'avait jusque-la aucun bouton 🔄 (echange/erreur CPS/message) --
+                    // ajoute ici, meme comportement que sur une carte de poste normale.
+                    // famille = celle REELLE de l'agent (ag.famille, jamais row.famille
+                    // qui vaut toujours null pour cette ligne) -- meme categorie de bug
+                    // deja rencontree et corrigee le 18/08 sur les lignes "FOR" (famille
+                    // null rejetee par la validation backend, "famille et type sont
+                    // requis").
+                    const aleaDispo=findAlea(cpsAleas,row.jsCode,dateKey,ag.famille);
+                    return(<div key={ag.id} style={{display:"flex",flexDirection:"column",gap:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,background:"#ecfdf5",border:"1.5px solid #6ee7b7",borderRadius:aleaDispo?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px"}}>
+                        <Av initials={ag.initials} size={22} famille={ag.famille}/>
+                        <div style={{fontSize:11,fontWeight:700,color:"#065f46"}}>{ag.prenom} {ag.nom}</div>
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                      </div>
+                      {aleaDispo?.type==="message"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"4px 9px"}}>
+                        <span style={{fontSize:12}}>📢</span>
+                        <div style={{fontSize:10,color:"#1d4ed8",flex:1,lineHeight:1.4}}>{aleaDispo.motif}</div>
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:aleaDispo})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
+                        <button onClick={()=>annulerAlea(aleaDispo.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button>
+                      </div>}
+                    </div>);
+                  })
                 : Array.from({length:row.maxSlots<99?row.maxSlots:Math.max(row.agents.length,1)},(_,si)=>{
                     const ag=row.agents[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
                     if(search&&ag&&!`${ag.prenom} ${ag.nom}`.toLowerCase().includes(search.toLowerCase()))return null;
