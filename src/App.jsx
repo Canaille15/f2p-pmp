@@ -364,6 +364,27 @@ const EQ_COLORS = Object.fromEntries(
 // ─── IMPORT BULLETIN DE COMMANDE / DÉROULÉ PRÉVISIONNEL ──────────────────────
 const BULLETIN_OCR_APIKEY = "K85147389088957";
 
+// Échelle de rendu adaptative pour l'OCR (23/08, cas réel : un "roulement"
+// scanné en une seule page à résolution native déjà élevée, ~1740x2508 —
+// le rendu à scale=3.0 fixe produisait une image ~5220x7524 (~39 mégapixels),
+// trop volumineuse pour OCR.space (échec systématique des 2 moteurs, "signal
+// is aborted without reason", confirmé en conditions réelles). scale=3.0
+// reste pertinent et inchangé pour un scan classique de résolution native
+// modeste (ex. une page A4 595x842 -> ~1785x2526 à 3x, jamais un problème
+// historiquement) — le vrai bug était l'absence de plafond, pas la valeur
+// 3.0 elle-même. Garde 3.0 pour les pages "normales", ne le réduit que
+// lorsque la page native est déjà grande, pour ne jamais dépasser maxDim
+// sur le plus grand côté. maxDim=2600 (abaissé de 3000 le 23/08, mesuré
+// insuffisant : 3000+JPEG q0.85 donnait encore 1.03 Mo sur le cas réel,
+// juste AU-DESSUS de la vraie limite du plan gratuit OCR.space — confirmée
+// exactement 1 Mo par fichier, documentation officielle) — vise une marge
+// de sécurité réelle plutôt que de coller pile à la limite.
+function computeOcrScale(page, maxDim = 2600) {
+  const native = page.getViewport({ scale: 1.0 });
+  const longSide = Math.max(native.width, native.height);
+  return Math.min(3.0, maxDim / longSide);
+}
+
 async function ocrSpaceRequest(imageB64, mimeType, engine, timeoutMs) {
   const form = new URLSearchParams();
   form.append("apikey", BULLETIN_OCR_APIKEY);
@@ -1087,6 +1108,17 @@ function BulletinImportButton({ agentCp, onImported }) {
             // PDF scanné sans texte natif -> fallback OCR page par page (rendu
             // client pdfjs-dist, voir handleCpsImport pour le detail de la
             // regression pdfjs-dist 6.x corrigee le 04/08 en figeant sur 4.0.379)
+            // fix (23/08, cas réel "Roulement 2026" — page unique scannée à
+            // résolution native déjà élevée, ~1740x2508) : même avec
+            // computeOcrScale plafonnant la résolution de rendu, l'export en
+            // PNG (sans perte) d'un contenu photographié/scanné — donc bruité,
+            // pas du texte vectoriel propre — restait trop volumineux pour
+            // OCR.space (rejeté en HTTP 413, "payload too large", confirmé en
+            // conditions réelles). Le JPEG (avec perte, conçu justement pour ce
+            // type de bruit photographique) réduit le poids de plusieurs
+            // dizaines de % à qualité équivalente pour l'OCR — canvas rempli
+            // en blanc avant le rendu (page.render ne peint que le contenu, un
+            // fond transparent JPEG deviendrait noir sans ce fillRect).
             const pdfjsLib = await import("pdfjs-dist");
             pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
             const raw = atob(b64); const bytes = new Uint8Array(raw.length);
@@ -1095,12 +1127,14 @@ function BulletinImportButton({ agentCp, onImported }) {
             const texts = [];
             for (let n = 1; n <= pdf.numPages; n++) {
               const page = await pdf.getPage(n);
-              const viewport = page.getViewport({ scale: 3.0 });
+              const viewport = page.getViewport({ scale: computeOcrScale(page) });
               const canvas = document.createElement("canvas");
               canvas.width = viewport.width; canvas.height = viewport.height;
-              await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
-              const pageB64 = canvas.toDataURL("image/png").split(",")[1];
-              texts.push(await ocrImageViaOcrSpace(pageB64, "image/png"));
+              const ctx2d = canvas.getContext("2d");
+              ctx2d.fillStyle = "#fff"; ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+              await page.render({ canvasContext: ctx2d, viewport }).promise;
+              const pageB64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
+              texts.push(await ocrImageViaOcrSpace(pageB64, "image/jpeg"));
             }
             text = texts.join("\n");
           }
@@ -1958,15 +1992,16 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
             const texts=[];
             for(let pageNum=1;pageNum<=numPages;pageNum++){
               const page=await pdf.getPage(pageNum);
-              const scale=3.0; // haute résolution pour meilleur OCR
+              const scale=computeOcrScale(page); // 3.0 par défaut, plafonné si la page native est déjà grande
               const viewport=page.getViewport({scale});
               const canvas=document.createElement("canvas");
               canvas.width=viewport.width;
               canvas.height=viewport.height;
               const ctx=canvas.getContext("2d");
+              ctx.fillStyle="#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
               await page.render({canvasContext:ctx,viewport}).promise;
-              const pageB64=canvas.toDataURL("image/png").split(",")[1];
-              const pageText=await ocrPage(pageB64,"image/png");
+              const pageB64=canvas.toDataURL("image/jpeg",0.85).split(",")[1];
+              const pageText=await ocrPage(pageB64,"image/jpeg");
               texts.push(pageText);
             }
             text=texts.join("\n");
