@@ -2,7 +2,7 @@ const pool = require('../config/db');
 
 async function lookupPoste(cp, date_jour) {
   let [[jour]] = await pool.query(
-    `SELECT pp.code_poste, pp.heure_debut, pp.heure_fin
+    `SELECT pp.code_poste, pp.code_equipe, pp.heure_debut, pp.heure_fin
      FROM planning_jour pj
      JOIN planning_periode pp ON pp.planning_jour_id = pj.id
      WHERE pj.cp_agent = ? AND pj.date_jour = ? AND pp.code_poste IS NOT NULL
@@ -12,7 +12,7 @@ async function lookupPoste(cp, date_jour) {
 
   if (!jour) {
     [[jour]] = await pool.query(
-      `SELECT pp.code_poste, pp.heure_debut, pp.heure_fin
+      `SELECT pp.code_poste, pp.code_equipe, pp.heure_debut, pp.heure_fin
        FROM planning_jour pj
        JOIN planning_periode pp ON pp.planning_jour_id = pj.id
        WHERE pj.cp_agent = ? AND pj.date_jour = DATE_SUB(?, INTERVAL 1 DAY)
@@ -22,6 +22,17 @@ async function lookupPoste(cp, date_jour) {
     );
   }
   return jour || null;
+}
+
+// Famille (PRCI/PAR) du demandeur au moment de la creation -- capturee une
+// fois pour toutes, comme code_poste/code_equipe/heures, pour reconstituer
+// plus tard (a la cloture, parfois des semaines apres) le code CPS exact
+// sans dependre de l'etat "actuel" de l'agent.
+async function lookupFamille(cp) {
+  const [[row]] = await pool.query(
+    `SELECT familles_hab FROM profil_agent WHERE cp_agent = ?`, [cp]
+  );
+  return (row && row.familles_hab) || 'PRCI';
 }
 
 // GET /api/echanges
@@ -75,14 +86,15 @@ async function createEchange(req, res) {
   try {
     const jour = await lookupPoste(cp, date_jour);
     if (!jour) return res.status(404).json({ error: 'Aucun poste précis trouvé dans ton planning pour cette date (jour de repos ou poste non renseigné).' });
+    const famille = await lookupFamille(cp);
 
     const creneauxStr = Array.isArray(creneaux_souhaites) ? creneaux_souhaites.join(',') : (creneaux_souhaites || null);
 
     const [result] = await pool.query(
       `INSERT INTO echange
-        (cp_demandeur, date_jour, code_poste, heure_debut, heure_fin, creneaux_souhaites, urgent, motif)
-       VALUES (?,?,?,?,?,?,?,?)`,
-      [cp, date_jour, jour.code_poste, jour.heure_debut, jour.heure_fin, creneauxStr, urgent ? 1 : 0, motif || null]
+        (cp_demandeur, date_jour, code_poste, code_equipe, famille, heure_debut, heure_fin, creneaux_souhaites, urgent, motif)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [cp, date_jour, jour.code_poste, jour.code_equipe, famille, jour.heure_debut, jour.heure_fin, creneauxStr, urgent ? 1 : 0, motif || null]
     );
     res.status(201).json({ message: 'Demande créée', id: result.insertId });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
@@ -103,20 +115,20 @@ async function updateEchange(req, res) {
     const creneauxStr = Array.isArray(creneaux_souhaites) ? creneaux_souhaites.join(',') : (creneaux_souhaites ?? echange.creneaux_souhaites);
 
     let nouvelleDate = echange.date_jour;
-    let codePoste = echange.code_poste, heureDebut = echange.heure_debut, heureFin = echange.heure_fin;
+    let codePoste = echange.code_poste, codeEquipe = echange.code_equipe, heureDebut = echange.heure_debut, heureFin = echange.heure_fin;
     let dateChangee = false;
 
     if (date_jour && date_jour !== echange.date_jour) {
       const jour = await lookupPoste(cp, date_jour);
       if (!jour) return res.status(404).json({ error: 'Aucun poste précis trouvé dans ton planning pour cette nouvelle date.' });
       nouvelleDate = date_jour;
-      codePoste = jour.code_poste; heureDebut = jour.heure_debut; heureFin = jour.heure_fin;
+      codePoste = jour.code_poste; codeEquipe = jour.code_equipe; heureDebut = jour.heure_debut; heureFin = jour.heure_fin;
       dateChangee = true;
     }
 
     await pool.query(
-      `UPDATE echange SET date_jour=?, code_poste=?, heure_debut=?, heure_fin=?, creneaux_souhaites=?, urgent=?, motif=? WHERE id=?`,
-      [nouvelleDate, codePoste, heureDebut, heureFin, creneauxStr,
+      `UPDATE echange SET date_jour=?, code_poste=?, code_equipe=?, heure_debut=?, heure_fin=?, creneaux_souhaites=?, urgent=?, motif=? WHERE id=?`,
+      [nouvelleDate, codePoste, codeEquipe, heureDebut, heureFin, creneauxStr,
        urgent !== undefined ? (urgent ? 1 : 0) : echange.urgent,
        motif !== undefined ? motif : echange.motif, id]
     );
@@ -153,10 +165,24 @@ async function toggleInteret(req, res) {
 }
 
 // POST /api/echanges/:id/cloturer
+// body: { cp_echange_avec, js_code? } -- js_code (24/08, demande d'Olivier :
+// "que les echanges de journee se note automatiquement dans le planning
+// cps") est calcule cote FRONTEND (convertirCodePosteVersJsCode, deja utilise
+// partout ailleurs pour cette traduction code_poste+code_equipe -> code CPS
+// canonique -- jamais duplique cote backend, pour ne jamais risquer une
+// derive entre les deux). S'il est fourni ET que la famille est connue
+// (capturee a la creation de la demande -- absente sur une demande ouverte
+// AVANT ce correctif, cree sans code_equipe/famille), un alea CPS "echange"
+// est cree automatiquement -- meme table, meme mecanisme, meme bouton
+// d'annulation (✕, ouvert a tout agent connecte) qu'un echange signale a la
+// main depuis CPS Officiel. Si js_code est absent (demande trop ancienne,
+// ou traduction impossible cote frontend) la cloture reste toujours
+// possible normalement, seul l'alea automatique est saute -- ne jamais
+// bloquer la cloture pour cette raison.
 async function cloturer(req, res) {
   const { id } = req.params;
   const cp = req.agent.cp;
-  const { cp_echange_avec } = req.body;
+  const { cp_echange_avec, js_code } = req.body;
   if (!cp_echange_avec) return res.status(400).json({ error: 'cp_echange_avec requis' });
   try {
     const [[echange]] = await pool.query('SELECT * FROM echange WHERE id = ?', [id]);
@@ -168,7 +194,29 @@ async function cloturer(req, res) {
       `UPDATE echange SET statut='cloturee', cp_echange_avec=?, cloturee_le=NOW() WHERE id=?`,
       [cp_echange_avec, id]
     );
-    res.json({ message: 'Demande clôturée' });
+
+    let aleaCree = false;
+    if (js_code && echange.famille) {
+      try {
+        const motif = echange.motif
+          ? `Échange (module Échanges) — ${echange.motif}`
+          : 'Échange conclu via le module Échanges';
+        await pool.query(
+          `INSERT INTO cps_aleas (js_code, date_jour, famille, type, agents_concernes, motif, signale_par)
+           VALUES (?,?,?,?,?,?,?)`,
+          [js_code, echange.date_jour, echange.famille, 'echange',
+           JSON.stringify([cp_echange_avec]), motif, cp]
+        );
+        aleaCree = true;
+      } catch (e) {
+        // Ne jamais faire echouer la cloture elle-meme pour ca -- l'agent
+        // recoit juste l'info que l'ecriture CPS automatique n'a pas pu se
+        // faire, il peut toujours l'indiquer lui-meme (comme avant).
+        console.error('Alea CPS automatique (cloture echange) :', e);
+      }
+    }
+
+    res.json({ message: 'Demande clôturée', alea_cps_cree: aleaCree });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 

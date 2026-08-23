@@ -10152,10 +10152,27 @@ function EchangesView({agents,currentAgent}){
     try{await api.echanges.delete(id);charger();}catch(e){alert(e.message||"Erreur.");}
   };
 
+  // 24/08 (demande d'Olivier : "que les echanges de journee se note
+  // automatiquement dans le planning cps") : si la demande porte assez
+  // d'info pour retrouver le code CPS exact (code_equipe/famille -- absents
+  // sur une demande deja ouverte avant ce correctif), la cloture ecrit
+  // automatiquement l'echange dans CPS Officiel (meme mecanisme qu'un
+  // echange signale a la main, meme bouton d'annulation ✕ ouvert a
+  // n'importe quel agent connecte -- pas seulement demandeur/accepteur).
+  // Sinon (vieille demande), on retombe sur l'ancien pense-bete manuel --
+  // jamais bloquant, la cloture elle-meme reste toujours possible.
   const cloturer=async(id)=>{
     if(!cloturantCp){alert("Choisis avec qui tu as échangé.");return;}
-    if(!window.confirm("Rappel : n'oublie pas d'indiquer cet échange dans le planning CPS officiel.\n\nConfirmer la clôture ?"))return;
-    try{await api.echanges.cloturer(id,cloturantCp);setCloturantId(null);setCloturantCp("");charger();}catch(e){alert(e.message||"Erreur.");}
+    const echange=echanges.find(e=>e.id===id);
+    const jsCode=echange&&echange.code_equipe
+      ? convertirCodePosteVersJsCode(echange.code_poste,echange.code_equipe)
+      : null;
+    const auto=!!(jsCode&&echange.famille);
+    const message=auto
+      ? "L'échange sera noté automatiquement dans le planning CPS Officiel (comme un échange signalé à la main, annulable par n'importe qui).\n\nConfirmer la clôture ?"
+      : "Cette demande est trop ancienne pour être notée automatiquement -- n'oublie pas de l'indiquer toi-même dans le planning CPS officiel.\n\nConfirmer la clôture ?";
+    if(!window.confirm(message))return;
+    try{await api.echanges.cloturer(id,cloturantCp,jsCode);setCloturantId(null);setCloturantCp("");charger();}catch(e){alert(e.message||"Erreur.");}
   };
 
   const STATUT_STYLE={

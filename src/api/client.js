@@ -794,10 +794,14 @@ export const echanges = {
     apiFetch(`/echanges/${id}/interet`, { method: 'POST' }),
 
   /** Clôturer la demande en précisant avec qui l'échange a eu lieu */
-  cloturer: (id, cpEchangeAvec) =>
+  // jsCode (24/08) : optionnel, calcule cote appelant via
+  // convertirCodePosteVersJsCode(echange.code_poste, echange.code_equipe) --
+  // si fourni, le backend cree automatiquement l'alea CPS "echange"
+  // correspondant (voir echangesController.cloturer).
+  cloturer: (id, cpEchangeAvec, jsCode) =>
     apiFetch(`/echanges/${id}/cloturer`, {
       method: 'POST',
-      body: JSON.stringify({ cp_echange_avec: cpEchangeAvec }),
+      body: JSON.stringify({ cp_echange_avec: cpEchangeAvec, js_code: jsCode || null }),
     }),
 
   /** Supprimer une demande (seul le demandeur, à tout moment) */
