@@ -280,6 +280,20 @@ export function convertirCodePosteVersJsCode(codePoste, equipe) {
   return null;
 }
 
+// resolveJsCode (24/08) : comme convertirCodePosteVersJsCode, mais avec un
+// repli -- cas reel trouve en testant le module Echanges (Olivier, poste
+// capture depuis un jour importe via "declare previsionnel") : certaines
+// sources ecrivent DEJA le code canonique tel quel dans planning_periode.
+// code_poste (ex: "PICCLO"), au lieu du code court local ("CCL") que
+// convertirCodePosteVersJsCode attend en entree -- elle renvoyait alors null
+// a tort (poste "trop ancien" affiche par erreur sur une demande flambant
+// neuve). Si la traduction normale echoue mais que la valeur fournie est
+// deja un vrai code canonique connu, on la garde telle quelle.
+export function resolveJsCode(codePoste, equipe) {
+  if (!codePoste) return null;
+  return convertirCodePosteVersJsCode(codePoste, equipe) || (CANONICAL_JSCODES.has(codePoste) ? codePoste : null);
+}
+
 export const planning = {
   /**
    * Charger tout le planning d'un agent
@@ -794,14 +808,17 @@ export const echanges = {
     apiFetch(`/echanges/${id}/interet`, { method: 'POST' }),
 
   /** Clôturer la demande en précisant avec qui l'échange a eu lieu */
-  // jsCode (24/08) : optionnel, calcule cote appelant via
-  // convertirCodePosteVersJsCode(echange.code_poste, echange.code_equipe) --
-  // si fourni, le backend cree automatiquement l'alea CPS "echange"
-  // correspondant (voir echangesController.cloturer).
-  cloturer: (id, cpEchangeAvec, jsCode) =>
+  // jsCode/famille (24/08) : optionnels, calcules cote appelant (voir
+  // EchangesView.cloturer) -- si jsCode est fourni, le backend cree
+  // automatiquement l'alea CPS "echange" correspondant (voir
+  // echangesController.cloturer). famille, si fournie, prend le pas sur
+  // celle capturee a la creation de la demande (celle du poste, deduite via
+  // POSTE_REGISTRY, est plus fiable que celle du demandeur pour un poste
+  // fixe -- evite un alea cree avec la mauvaise famille).
+  cloturer: (id, cpEchangeAvec, jsCode, famille) =>
     apiFetch(`/echanges/${id}/cloturer`, {
       method: 'POST',
-      body: JSON.stringify({ cp_echange_avec: cpEchangeAvec, js_code: jsCode || null }),
+      body: JSON.stringify({ cp_echange_avec: cpEchangeAvec, js_code: jsCode || null, famille: famille || null }),
     }),
 
   /** Supprimer une demande (seul le demandeur, à tout moment) */

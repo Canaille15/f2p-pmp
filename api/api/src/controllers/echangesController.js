@@ -182,7 +182,7 @@ async function toggleInteret(req, res) {
 async function cloturer(req, res) {
   const { id } = req.params;
   const cp = req.agent.cp;
-  const { cp_echange_avec, js_code } = req.body;
+  const { cp_echange_avec, js_code, famille } = req.body;
   if (!cp_echange_avec) return res.status(400).json({ error: 'cp_echange_avec requis' });
   try {
     const [[echange]] = await pool.query('SELECT * FROM echange WHERE id = ?', [id]);
@@ -195,8 +195,18 @@ async function cloturer(req, res) {
       [cp_echange_avec, id]
     );
 
+    // famille : celle du POSTE (deduite cote frontend via POSTE_REGISTRY,
+    // 24/08) est prioritaire sur celle du DEMANDEUR capturee a la creation
+    // -- cas reel trouve en testant : un poste fixe PRCI/PAR a une famille
+    // intrinseque et non ambigue (ex: PICCLO ne peut etre que PRCI), alors
+    // que profil_agent.familles_hab reflete la famille "principale" de
+    // l'agent, qui peut diverger dans de vrais cas (postes generiques
+    // multi-familles VM/DISPO/CAF/AY/JEQ, renfort occasionnel...). Sans ce
+    // repli, l'alea se serait cree avec la mauvaise famille et ne se serait
+    // jamais affiche sur le bon poste dans CPS Officiel.
+    const familleAlea = famille || echange.famille;
     let aleaCree = false;
-    if (js_code && echange.famille) {
+    if (js_code && familleAlea) {
       try {
         const motif = echange.motif
           ? `Échange (module Échanges) — ${echange.motif}`
@@ -204,7 +214,7 @@ async function cloturer(req, res) {
         await pool.query(
           `INSERT INTO cps_aleas (js_code, date_jour, famille, type, agents_concernes, motif, signale_par)
            VALUES (?,?,?,?,?,?,?)`,
-          [js_code, echange.date_jour, echange.famille, 'echange',
+          [js_code, echange.date_jour, familleAlea, 'echange',
            JSON.stringify([cp_echange_avec]), motif, cp]
         );
         aleaCree = true;

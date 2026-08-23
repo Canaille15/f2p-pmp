@@ -1,6 +1,6 @@
 import React from "react";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import api, { convertirCodePosteVersJsCode } from "./api/client";
+import api, { convertirCodePosteVersJsCode, resolveJsCode } from "./api/client";
 import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
 import DayEditPopup from "./components/DayEditPopup";
@@ -10164,15 +10164,29 @@ function EchangesView({agents,currentAgent}){
   const cloturer=async(id)=>{
     if(!cloturantCp){alert("Choisis avec qui tu as échangé.");return;}
     const echange=echanges.find(e=>e.id===id);
+    // resolveJsCode (24/08, cas reel signale par Olivier : "message trop
+    // ancienne" affiche a tort sur une demande flambant neuve) -- un jour
+    // capture depuis un planning importe via "declare previsionnel" a deja
+    // son code_poste au format canonique ("PICCLO") plutot que le code court
+    // local ("CCL") attendu par convertirCodePosteVersJsCode seule -- garde
+    // ce cas en plus du cas normal, jamais l'inverse.
     const jsCode=echange&&echange.code_equipe
-      ? convertirCodePosteVersJsCode(echange.code_poste,echange.code_equipe)
+      ? resolveJsCode(echange.code_poste,echange.code_equipe)
       : null;
-    const auto=!!(jsCode&&echange.famille);
+    // familleReelle (24/08, cas reel trouve en testant) : la famille du
+    // POSTE lui-meme (via POSTE_REGISTRY, deja construit ailleurs dans ce
+    // fichier -- non ambigue pour un poste fixe, ex: PICCLO est forcement
+    // PRCI) prime sur celle du DEMANDEUR capturee a la creation, qui peut
+    // diverger (postes generiques multi-familles, renfort occasionnel...).
+    // Sans ca, l'alea aurait pu se creer avec la mauvaise famille et ne
+    // jamais s'afficher sur le bon poste dans CPS Officiel.
+    const familleReelle=(jsCode&&POSTE_REGISTRY[jsCode]?.famille)||(echange&&echange.famille)||null;
+    const auto=!!(jsCode&&familleReelle);
     const message=auto
       ? "L'échange sera noté automatiquement dans le planning CPS Officiel (comme un échange signalé à la main, annulable par n'importe qui).\n\nConfirmer la clôture ?"
-      : "Cette demande est trop ancienne pour être notée automatiquement -- n'oublie pas de l'indiquer toi-même dans le planning CPS officiel.\n\nConfirmer la clôture ?";
+      : "Cette demande ne peut pas être notée automatiquement dans CPS Officiel (poste non reconnu ou demande trop ancienne) -- n'oublie pas de l'indiquer toi-même.\n\nConfirmer la clôture ?";
     if(!window.confirm(message))return;
-    try{await api.echanges.cloturer(id,cloturantCp,jsCode);setCloturantId(null);setCloturantCp("");charger();}catch(e){alert(e.message||"Erreur.");}
+    try{await api.echanges.cloturer(id,cloturantCp,jsCode,familleReelle);setCloturantId(null);setCloturantCp("");charger();}catch(e){alert(e.message||"Erreur.");}
   };
 
   const STATUT_STYLE={
