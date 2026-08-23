@@ -12524,8 +12524,25 @@ export default function App(){
               (déjà conditionné à isAdmin dans VIEWS). */}
         {(() => {
           const byKey = k => VIEWS.find(v => v.k === k);
+          // 24/08, bug reel signale par Olivier ("dans le lateral ca bug sur la
+          // version ordi, je vois plus le previsionnel et l'intitule planning
+          // est ecrase") : "overflow:hidden" sur ce conteneur (jamais
+          // fonctionnellement necessaire -- le contenu est toujours cense
+          // tenir exactement dans sa hauteur naturelle, jamais deborder) se
+          // heurtait a un bug de rendu navigateur reel et reproductible --
+          // confirme en conditions reelles (measure DOM) : le conteneur se
+          // figeait a une hauteur calculee pour MOINS d'elements que ceux
+          // reellement rendus (ex: pave "Planning" a 3 boutons mesure a la
+          // hauteur de ~2.2, scrollHeight=159 mais hauteur reelle=116 --
+          // meme symptome sur "Generateurs PDF", 4 boutons, jamais touche par
+          // le reste de la session -- confirme un bug structurel preexistant,
+          // pas quelque chose introduit par les changements DISPO/JEQ du
+          // jour). Retirer "overflow:hidden" (jamais indispensable ici, le
+          // padding de 4px autour des boutons les tient deja loin des coins
+          // arrondis) resout le probleme a la racine, verifie directement en
+          // DOM avant ce correctif.
           const renderPave = (key, label, icon, accentColor, accentBg, keys) => (
-            <div key={key} style={{ margin: "8px 12px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 2px rgba(15,23,42,.05)" }}>
+            <div key={key} style={{ margin: "8px 12px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 1px 2px rgba(15,23,42,.05)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 12px 9px", borderBottom: "1px solid var(--border)" }}>
                 {icon}
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: .7, textTransform: "uppercase" }}>{label}</span>

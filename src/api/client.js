@@ -492,12 +492,24 @@ result[`${row.agent_id || agentId}-${date}`] = {
       const p2 = periodes.find(p => p.note === 'debut_nuit');
       const horaires = p1.heure_debut ? (String(p1.heure_debut).slice(0,5).replace(':','h')+'–'+(p1.heure_fin||'').slice(0,5).replace(':','h')) : null;
       const isFinNuit = p1.note === 'fin_nuit';
+      // isPlaceholder (24/08, cas reel Olivier : nuit le 25/08 -> descente de
+      // nuit auto-cochee le 26/08 -> DISPO ajoute par-dessus le meme jour,
+      // meme periode) -- avant ce correctif, CE fichier nullait a tort
+      // equipe/jsCode des qu'une periode portait note='fin_nuit', MEME si
+      // cette periode portait aussi une vraie journee de travail (code_equipe
+      // 'M'/'AM'/'J', pas seulement le marqueur technique 'N'). getSchedule()
+      // ci-dessus (Mon planning) a toujours eu la bonne garde -- alignee ici :
+      // un jour "fin_nuit" n'est un simple repere technique (sans contenu
+      // reel) QUE si code_equipe vaut litteralement 'N' ET qu'il n'y a pas de
+      // vraie nuit en periode 2 -- sinon (ex: DISPO+finNuit) le contenu reel
+      // doit rester visible, ici comme dans le planning perso.
+      const isPlaceholder = (p1.note === 'fin_nuit' || p1.note === 'note_seule') && p1.code_equipe === 'N' && !p2;
       result[`${agentId}-${date}`] = {
-        equipe:   isFinNuit && !p2 ? null : (p1.code_equipe || null),
+        equipe:   isPlaceholder ? null : (p1.code_equipe || null),
         equipe2:  p2 ? 'N' : null,
-        jsCode:   isFinNuit && !p2 ? null : (convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe) || p1.code_poste || null),
+        jsCode:   isPlaceholder ? null : (convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe) || p1.code_poste || null),
         jsCode2:  p2 ? (convertirCodePosteVersJsCode(p2.code_poste, 'N') || p2.code_poste || null) : null,
-        horaires: isFinNuit ? null : horaires,
+        horaires: isPlaceholder ? null : horaires,
         prive:    false,
         finNuit:  isFinNuit,
       };
