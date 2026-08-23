@@ -2067,7 +2067,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         // Fusionner les lignes : si une ligne ne contient pas de debut d'horaire (HH:MM en debut/proche du debut)
         // et ne commence pas par un jsCode connu, on la rattache a la ligne precedente (cas OCR qui scinde
         // le jsCode+debut d'horaire d'un cote et la fin d'horaire+nom de l'autre cote)
-        const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)\b/;
+        const jsCodeStartRe=/^[#*€|]?\s*(PA[A-Z0-9]+-?|PI[A-Z0-9]+-?|SD%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM|DISPO)\b/;
         // Le marqueur de date "DU : JJ/MM/AAAA" signale toujours une transition de page/jour
         // reelle — jamais rattache a la ligne precedente, meme s'il ne matche ni jsCode ni
         // horaire complet (evite qu'il serve lui aussi de pont entre deux rangees).
@@ -2115,7 +2115,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // uniquement pour la detection du code, jamais pour le reste de la ligne (nom,
           // horaire...).
           const lineForJs=line.replace(/^(\s*)Pl(?=[A-Z])/,"$1PI");
-          const jsCodeMatch=lineForJs.match(/^[#*€|]?\s*(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|50%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM)/);
+          const jsCodeMatch=lineForJs.match(/^[#*€|]?\s*(PA[A-Z0-9]+-|PA[A-Z0-9]+\b|PI[A-Z0-9]+-|PI[A-Z0-9]+\b|SD%|50%|F-PRCI|AFOPRCI|CAF|PPRCI|PPAR|VM|AFO PAR|K-PAR|F-PAR|K-PRCI|A-PRCI|RFT SAM|RET SAM|DISPO)/);
           let jsCode=jsCodeMatch?jsCodeMatch[1]:null;
           if(jsCode==="50%") jsCode="SD%"; // fix OCR : S/D lus comme 5/0
           // fix extraction (17/08) : sur certaines occurrences, pdfjs ne separe pas le
@@ -2212,6 +2212,16 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // on ne regarde que la ligne courante pour eviter de capturer le mot-cle d'un autre agent
           if(/formation/i.test(line)) equipe="FOR";
           else if(/\bVM\b/.test(line)) equipe="VM";
+          // fix (23/08) : DISPO (agent present, aucun poste vacant a couvrir) n'a pas
+          // de suffixe -/O/X/J et n'apparait jamais sur la feuille avec un horaire fixe
+          // de vacation (ex: "09:00 - 14:30", horaire libre) — sans ce cas explicite, la
+          // classification par heure ci-dessus (hDebut) le range a tort dans M/AM/N selon
+          // l'heure de debut, avec jsCode reste a null avant l'ajout de DISPO aux regex
+          // ci-dessus. La ligne "Divers > Disponibles" de CPS Officiel (GlobalView) filtre
+          // strictement sur equipe==="DISPO" — sans ce override, l'agent devenait invisible
+          // partout (ni dans un poste fixe, faute de jsCode ; ni dans Disponibles, faute
+          // du bon equipe). Cas reel confirme : CAILLET Maxime, 24/08/2026.
+          if(jsCode==="DISPO") equipe="DISPO";
           const key=`${ag.id}-${lineDateStr}`;
           const existing=schedule[key];
           const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
