@@ -1559,7 +1559,16 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
     });
   }
   // Disponibles
-  const dispos=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.equipe==="DISPO";});
+  // 23/08 (suite) : la ligne ne reconnaissait que le DISPO REEL d'un import
+  // CPS (equipe==="DISPO", ecrit par handleCpsImport) -- un DISPO saisi
+  // directement dans le perso (equipe:"J", jsCode:"DISPO") n'y apparaissait
+  // jamais, y compris dans le Previsionnel (qui reutilise le perso des
+  // agents ayant partage_previsionnel=1). Etendu a jsCode==="DISPO" en plus
+  // -- sans risque de doublon : un import CPS reel pose TOUJOURS les deux
+  // (equipe ET jsCode a "DISPO" a la fois, voir l'override plus haut dans
+  // handleCpsImport), donc le OR ne fait que matcher deux fois le meme
+  // agent au sein du meme .filter(), jamais une deuxieme ligne.
+  const dispos=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.equipe==="DISPO"||en.jsCode==="DISPO");});
   if(dispos.length>0){
     diversRows.push({poste:{jsCode:"DISPO",label:"Disponibles",subtitle:""},jsCode:"DISPO",agents:dispos,famille:null,isDispo:true,maxSlots:99});
   }
@@ -1567,6 +1576,21 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
   const renfortsSamedi=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.jsCode==="RFT SAM";});
   if(renfortsSamedi.length>0){
     diversRows.push({poste:{jsCode:"RFT SAM",label:"Renfort samedi",subtitle:""},jsCode:"RFT SAM",agents:renfortsSamedi,famille:null,maxSlots:99});
+  }
+  // Journee equipe (JEQ, 23/08, demande par Olivier : "et pour journee
+  // d'equipe aussi") -- meme raisonnement que DISPO ci-dessus : un JEQ saisi
+  // dans le perso (equipe:"J", jsCode:"JEQ") n'apparaissait nulle part,
+  // POSTES_JOURNEE l'excluant deliberement (comme AY) pour ne jamais
+  // apparaitre comme poste UO fixe dans l'Annuaire (POSTES_JOURNEE alimente
+  // aussi ce selecteur, cf. ligne ~10420). Ligne dediee ici, en verifiant
+  // directement jsCode plutot que de l'ajouter a POSTES_JOURNEE -- meme
+  // principe que RFT SAM juste au-dessus. Contrairement a AY (qui doit
+  // "rester a 100% dans le perso", jamais touche ici), JEQ doit desormais
+  // apparaitre dans le Previsionnel comme n'importe quel autre poste
+  // generique.
+  const enJourneeEquipe=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.jsCode==="JEQ";});
+  if(enJourneeEquipe.length>0){
+    diversRows.push({poste:{jsCode:"JEQ",label:"Journée équipe",subtitle:""},jsCode:"JEQ",agents:enJourneeEquipe,famille:null,maxSlots:99});
   }
   // Formation — pave unique : badge generique FOR + tous les postes-formation (K-PAR, K-PRCI, F-PRCI...)
   const enFormation=agents.filter(a=>{
@@ -2456,7 +2480,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     const ag=row.agents[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
                     if(search&&ag&&!`${ag.prenom} ${ag.nom}`.toLowerCase().includes(search.toLowerCase()))return null;
                     const isForm=en?.equipe==="JF";const isMe=ag&&currentAgent?.id===ag.id;
-                    const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
+                    // row.famille||ag?.famille (23/08) : les postes generiques toutes
+                    // familles (DISPO/RFT SAM/JEQ...) ont row.famille=null -- sans ce
+                    // repli sur la vraie famille de l'agent, findAlea/setAleaTarget
+                    // envoyaient famille:null au backend (rejete, "famille et type sont
+                    // requis") des qu'un agent cliquait sur 🔄 pour ce genre de poste,
+                    // meme classe de bug deja corrigee pour "FOR" (18/08) et "Disponibles"
+                    // (23/08, branche isDispo) -- ici, corrige a la source pour toutes les
+                    // lignes qui passent par ce rendu par defaut (couvre aussi RFT SAM).
+                    const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille||ag?.famille);
                     if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <span style={{fontSize:16}}>⚠️</span>
@@ -2477,7 +2509,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         </div>
                         <div style={{fontSize:11,fontWeight:700,color:"#854d0e",paddingLeft:24}}>{nomsRemplacants||"?"}</div>
                         {alea.motif&&<div style={{fontSize:10,color:"#a16207",paddingLeft:24,fontStyle:"italic"}}>{alea.motif}</div>}
-                        <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button></div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button></div>
                       </div>);
                     }
                     if(ag&&isPrevisionnel){
@@ -2517,12 +2549,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         {row.isJourneeSpeciale?
                         <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>📝</button>
                         :
-                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
                       </div>
                       {alea?.type==="message"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"4px 9px"}}>
                         <span style={{fontSize:12}}>📢</span>
                         <div style={{fontSize:10,color:"#1d4ed8",flex:1,lineHeight:1.4}}>{alea.motif}</div>
-                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
                         <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button>
                       </div>}
                     </div>);
