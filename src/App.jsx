@@ -8999,7 +8999,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
     {typeof onOpenEchanges==="function"&&(echangesCount||0)>echangesDismissedCount&&<div style={{display:"flex",alignItems:"stretch",gap:6,border:"1.5px solid "+(echangesCount>0?"#fdba74":"#e2e8f0"),background:echangesCount>0?"#fef3c7":"#f8fafc",borderRadius:12,padding:"4px 4px 4px 16px"}}>
       <button onClick={onOpenEchanges} style={{display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",background:"none",cursor:"pointer",fontSize:14,fontWeight:700,color:"#1e293b",flex:1,padding:"8px 0",textAlign:"left"}}>
         <span>🔄 Échanges</span>
-        {echangesCount>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:10,padding:"2px 9px",fontSize:12,fontWeight:700,marginRight:8}}>{echangesCount}</span>}
+        {echangesCount>0&&<span style={{background:"#f59e0b",color:"#fff",borderRadius:10,padding:"2px 9px",fontSize:12,fontWeight:700,marginRight:8}}>{echangesCount}</span>}
       </button>
       <button onClick={()=>setEchangesDismissedCount(echangesCount||0)} title="Masquer ce bandeau" style={{border:"none",background:"none",cursor:"pointer",fontSize:17,color:"#94a3b8",padding:"0 10px"}}>✕</button>
     </div>}
@@ -12625,7 +12625,7 @@ export default function App(){
             const aDesEchanges = k === "echanges" && echangesOuvertesCount > 0;
             return (<button key={k} onClick={() => { navigateToView(k); setMenuOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: actif ? "#eff6ff" : (aDesEchanges ? "#fef3c7" : "transparent"), padding: "12px 16px", cursor: "pointer", fontSize: 14, fontWeight: actif ? 700 : 500, color: actif ? "#0f4c81" : "var(--text-primary)", textAlign: "left", width: "100%" }}>
               {v.l}
-              {aDesEchanges && <span style={{ marginLeft: "auto", background: "#dc2626", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{echangesOuvertesCount}</span>}
+              {aDesEchanges && <span style={{ marginLeft: "auto", background: "#f59e0b", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{echangesOuvertesCount}</span>}
             </button>);
           };
           // Trié alphabétiquement (Annuaire, Échanges, Formation), fixe : 3
