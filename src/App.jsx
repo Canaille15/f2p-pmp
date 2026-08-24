@@ -4532,7 +4532,7 @@ export function computeDashboardTC(agent, schedule, agentProfiles, pausesData, y
 
   let evenements = [
     ...ledger.map(e=>({date:(e.mois||"0000-00")+"-01", type:"manuel", delta:e.deltaMinutes||0})),
-    ...pausesValidees.map(p=>({date:p.moisEffectif+"-01", type:"pause_validee", dateJour:p.dateJour})),
+    ...pausesValidees.map(p=>({date:p.moisEffectif+"-01", type:"pause_validee", dateJour:p.dateJour, moisEffectif:p.moisEffectif})),
   ].sort((a,b)=> a.date===b.date
     ? (a.type!==b.type ? (a.type<b.type?-1:1) : (a.dateJour||"").localeCompare(b.dateJour||""))
     : a.date.localeCompare(b.date));
@@ -4547,7 +4547,7 @@ export function computeDashboardTC(agent, schedule, agentProfiles, pausesData, y
       const place = Math.max(0, TC_PLAFOND_MIN - solde);
       const ajoute = Math.min(TC_MIN_PAUSE, place);
       solde += ajoute;
-      detailPauses[ev.dateJour] = {ajoute, horsPlafond: TC_MIN_PAUSE-ajoute};
+      detailPauses[ev.dateJour] = {ajoute, horsPlafond: TC_MIN_PAUSE-ajoute, moisEffectif: ev.moisEffectif};
     }
   });
 
@@ -5181,16 +5181,33 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
                 <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>📋 Historique des pauses créditées ({pausesCreditees.length})</div>
                 {pausesCreditees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune pause figée validée pour l'instant — le détail de chaque pause (planning du jour, statut) est dans le module Pause Figée.</div> :
                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                    {pausesCreditees.map(([d,{ajoute,horsPlafond}])=>(
-                      <div key={d} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,
+                    {pausesCreditees.map(([d,{ajoute,horsPlafond,moisEffectif}])=>{
+                      // Mois de constatation affiché séparément de la date de la
+                      // pause (24/08, Olivier : "il faut garder la date la pause
+                      // figé. mais faut mettre aussi le mois ou c'est constater
+                      // quand le temps est acquis") — la date reste celle de la
+                      // pause elle-même (pour la retrouver dans le planning), le
+                      // crédit est explicitement rattaché au mois choisi par
+                      // l'agent, seulement affiché s'il diffère du mois de la
+                      // pause (sinon redondant).
+                      const moisPause = d.slice(0,7);
+                      const moisLabel = moisEffectif && moisEffectif!==moisPause
+                        ? `${MOIS_L[parseInt(moisEffectif.slice(5,7))-1]} ${moisEffectif.slice(0,4)}`
+                        : null;
+                      return(
+                      <div key={d} style={{display:"flex",flexDirection:"column",gap:2,
                         background:horsPlafond>0?"#fffbeb":"#f0fdfa",border:`1px solid ${horsPlafond>0?"#fde68a":"#99f6e4"}`,
                         borderRadius:7,padding:"7px 10px"}}>
-                        <span style={{fontSize:11,fontWeight:600,color:"#334155",textTransform:"capitalize"}}>{fmtDate(d)}</span>
-                        <span style={{fontSize:11,fontWeight:700,color:horsPlafond>0?"#92400e":"#0f766e"}}>
-                          +{minToHM(ajoute)}{horsPlafond>0&&<span style={{fontWeight:600}}> · ⚠️ {minToHM(horsPlafond)} hors plafond</span>}
-                        </span>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                          <span style={{fontSize:11,fontWeight:600,color:"#334155",textTransform:"capitalize"}}>{fmtDate(d)}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:horsPlafond>0?"#92400e":"#0f766e"}}>
+                            +{minToHM(ajoute)}{horsPlafond>0&&<span style={{fontWeight:600}}> · ⚠️ {minToHM(horsPlafond)} hors plafond</span>}
+                          </span>
+                        </div>
+                        {moisLabel&&<span style={{fontSize:10,fontWeight:600,color:"#0f766e"}}>💳 Acquis en {moisLabel} (mois de constatation)</span>}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>}
               </>);
             })()}
