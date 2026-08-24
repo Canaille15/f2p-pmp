@@ -3828,16 +3828,24 @@ function CongesDashboardModal({ agent, schedule, setSchedule, agentProfiles, set
               Olivier) — widget partagé, voir CetView.jsx EpargneCetWidget. */}
           <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source="CA" sourceLabel="mes congés" year={year} besoinValeur={false}/>
 
-          {/* Solde théorique (06/08, étendu le 13/08 aux demandes reportées) :
-              projection "si toutes les demandes en attente sont accordées" —
-              visible dès qu'il y a des demandes en cours (locales OU
-              reportées vers {year+1}, voir demandesReportees), jamais affecté
-              par les refus. */}
-          {(data.demandes.length+(data.demandesReportees||[]).length)>0 && (
+          {/* Solde théorique (06/08, étendu le 13/08 aux demandes reportées,
+              corrigé le 24/08 pour déduire aussi le CET) : projection "si
+              toutes les demandes en attente sont accordées" — visible dès
+              qu'il y a des demandes en cours (locales OU reportées vers
+              {year+1}, voir demandesReportees), jamais affecté par les
+              refus. Bug corrigé le 24/08 (signalé par Olivier) : ne
+              soustrayait pas les jours déjà transférés au CET, contrairement
+              à la carte "Restant" juste au-dessus qui le fait déjà — un agent
+              avec des jours épargnés au CET voyait ce bandeau surestimé
+              d'autant. */}
+          {(data.demandes.length+(data.demandesReportees||[]).length)>0 && (()=>{
+            const soldeTheoriqueAffiche = data.soldeTheorique - (cetTransfere?.total||0);
+            return (
             <div style={{background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:10,padding:"9px 12px",fontSize:11.5,fontWeight:600,color:"#1e40af"}}>
-              ⏳ {data.demandes.length+(data.demandesReportees||[]).length} jour{(data.demandes.length+(data.demandesReportees||[]).length)>1?"s":""} en attente d'accord — solde théorique si tout accordé : <strong style={{color:data.soldeTheorique<0?"#dc2626":"#1e40af",fontSize:13}}>{data.soldeTheorique}</strong>
+              ⏳ {data.demandes.length+(data.demandesReportees||[]).length} jour{(data.demandes.length+(data.demandesReportees||[]).length)>1?"s":""} en attente d'accord — solde théorique si tout accordé : <strong style={{color:soldeTheoriqueAffiche<0?"#dc2626":"#1e40af",fontSize:13}}>{soldeTheoriqueAffiche}</strong>
             </div>
-          )}
+            );
+          })()}
 
           {/* Jours pris jusqu'à une date choisie (aujourd'hui par défaut) */}
           <div style={{background:"#fefce8",border:"1.5px solid #fde68a",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
