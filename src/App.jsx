@@ -4419,8 +4419,25 @@ function joursDeLannee(year){
   for(let m=0;m<12;m++) jours=jours.concat(joursDuMois(year,m));
   return jours;
 }
+// joursEntre (24/08, demande d'Olivier : "une periode plus ou moins longue
+// qui pourrait couvrir des mois en cours ou finir en cours de mois plus
+// loin") -- periode libre Du/Au, en plus des 2 raccourcis "mois affiche" et
+// "annee complete" deja existants, jamais limitee a des bornes de mois/annee.
+function joursEntre(du,au){
+  const jours=[];
+  let d=new Date(du+"T12:00:00");
+  const fin=new Date(au+"T12:00:00");
+  while(d<=fin){
+    jours.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
+    d.setDate(d.getDate()+1);
+  }
+  return jours;
+}
 function ExportIcsButton({ agent, schedule, curMonth, curYear }){
   const [ouvert,setOuvert]=useState(false);
+  const [periodeDu,setPeriodeDu]=useState("");
+  const [periodeAu,setPeriodeAu]=useState("");
+  const [periodeErr,setPeriodeErr]=useState("");
   const telecharger=(contenu,suffixeNom)=>{
     const blob=new Blob([contenu],{type:"text/calendar;charset=utf-8"});
     const url=URL.createObjectURL(blob);
@@ -4437,6 +4454,27 @@ function ExportIcsButton({ agent, schedule, curMonth, curYear }){
     {ouvert&&<div style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:12,display:"flex",flexDirection:"column",gap:8,background:"#fff"}}>
       <button onClick={()=>{telecharger(genererICS(agent,schedule,joursDuMois(curYear,curMonth)),`${MOIS_L[curMonth]}${curYear}`);setOuvert(false);}} style={{textAlign:"left",border:"1px solid #e2e8f0",background:"#f8fafc",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,color:"#1e293b",padding:"8px 10px"}}>📅 Mois affiché ({MOIS_L[curMonth]} {curYear})</button>
       <button onClick={()=>{telecharger(genererICS(agent,schedule,joursDeLannee(curYear)),`${curYear}`);setOuvert(false);}} style={{textAlign:"left",border:"1px solid #e2e8f0",background:"#f8fafc",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,color:"#1e293b",padding:"8px 10px"}}>🗓️ Année complète ({curYear})</button>
+
+      {/* Période libre (24/08, demandé par Olivier) : Du/Au quelconques,
+          jamais bornés à un mois ou une année civile entière — peut démarrer
+          ou finir en plein milieu d'un mois, sur plusieurs années. */}
+      <div style={{borderTop:"1px solid #f1f5f9",paddingTop:8}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginBottom:6}}>🗂️ Période personnalisée</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <input type="date" value={periodeDu} onChange={e=>{setPeriodeDu(e.target.value);setPeriodeErr("");}}
+            style={{flex:1,minWidth:120,padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+          <input type="date" value={periodeAu} onChange={e=>{setPeriodeAu(e.target.value);setPeriodeErr("");}}
+            style={{flex:1,minWidth:120,padding:"7px 9px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:12}}/>
+        </div>
+        <button onClick={()=>{
+            if(!periodeDu||!periodeAu){setPeriodeErr("Choisis les 2 dates.");return;}
+            if(periodeAu<periodeDu){setPeriodeErr("La date de fin doit être après la date de début.");return;}
+            telecharger(genererICS(agent,schedule,joursEntre(periodeDu,periodeAu)),`${periodeDu}_au_${periodeAu}`);
+            setOuvert(false);setPeriodeDu("");setPeriodeAu("");
+          }} style={{marginTop:6,width:"100%",textAlign:"center",border:"1px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,padding:"7px 10px"}}>📤 Télécharger cette période</button>
+        {periodeErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:5}}>{periodeErr}</div>}
+      </div>
+
       <div style={{fontSize:11,color:"#64748b",lineHeight:1.5,paddingTop:4,borderTop:"1px solid #f1f5f9"}}>
         <b>Pour l'importer dans Google Calendar</b> : sur agenda.google.com (ordi), ⚙️ Paramètres → "Importer et exporter" → "Importer" → choisis le fichier .ics téléchargé.<br/>
         <b>Sur iPhone (app Calendrier)</b> : ouvre le fichier .ics téléchargé → "Ajouter à..." → choisis ton agenda.
