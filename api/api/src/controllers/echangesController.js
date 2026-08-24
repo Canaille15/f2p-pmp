@@ -35,6 +35,19 @@ async function lookupFamille(cp) {
   return (row && row.familles_hab) || 'PRCI';
 }
 
+// GET /api/echanges/poste-du-jour/:cp/:date -- expose lookupPoste() pour
+// n'importe quel agent (24/08, echange bilateral) : a la cloture, il faut
+// aussi savoir quel poste l'agent qui ACCEPTE l'echange cedait lui-meme ce
+// jour-la, pour creer le 2e alea symetrique (voir cloturer). Rien de plus
+// sensible que ce que CPS Officiel affiche deja publiquement a tous.
+async function posteDuJour(req, res) {
+  const { cp, date } = req.params;
+  try {
+    const jour = await lookupPoste(cp, date);
+    res.json(jour || null);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
 // GET /api/echanges
 async function getEchanges(req, res) {
   const cp = req.agent.cp;
@@ -182,7 +195,7 @@ async function toggleInteret(req, res) {
 async function cloturer(req, res) {
   const { id } = req.params;
   const cp = req.agent.cp;
-  const { cp_echange_avec, js_code, famille } = req.body;
+  const { cp_echange_avec, js_code, famille, js_code_reciproque, famille_reciproque } = req.body;
   if (!cp_echange_avec) return res.status(400).json({ error: 'cp_echange_avec requis' });
   try {
     const [[echange]] = await pool.query('SELECT * FROM echange WHERE id = ?', [id]);
@@ -226,7 +239,33 @@ async function cloturer(req, res) {
       }
     }
 
-    res.json({ message: 'Demande clôturée', alea_cps_cree: aleaCree });
+    // 2e alea, symetrique (24/08) : un VRAI echange est un TROC -- si
+    // cp_echange_avec avait lui-meme un poste ce jour-la (ex: il faisait la
+    // Soiree pendant que le demandeur faisait la Matinee), ce poste-la doit
+    // aussi passer au demandeur, sinon il reste "couvert par cp_echange_avec"
+    // dans CPS alors qu'il n'y est plus -- poste non couvert en pratique.
+    // Calcule cote frontend (meme resolveJsCode+POSTE_REGISTRY que le 1er
+    // cote), transmis ici optionnellement. Absent si cp_echange_avec n'avait
+    // aucun poste ce jour-la (l'ancien comportement, un seul cote, suffit).
+    let alea2Cree = false;
+    if (js_code_reciproque && famille_reciproque && js_code_reciproque !== js_code) {
+      try {
+        const motif2 = echange.motif
+          ? `Échange (module Échanges) — ${echange.motif}`
+          : 'Échange conclu via le module Échanges';
+        await pool.query(
+          `INSERT INTO cps_aleas (js_code, date_jour, famille, type, agents_concernes, motif, signale_par)
+           VALUES (?,?,?,?,?,?,?)`,
+          [js_code_reciproque, echange.date_jour, famille_reciproque, 'echange',
+           JSON.stringify([cp]), motif2, cp]
+        );
+        alea2Cree = true;
+      } catch (e) {
+        console.error('Alea CPS automatique (cloture echange, cote reciproque) :', e);
+      }
+    }
+
+    res.json({ message: 'Demande clôturée', alea_cps_cree: aleaCree, alea_cps_cree_reciproque: alea2Cree });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
@@ -246,5 +285,5 @@ async function deleteEchange(req, res) {
 
 module.exports = {
   getEchanges, getInteresses, createEchange, updateEchange,
-  toggleInteret, cloturer, deleteEchange
+  toggleInteret, cloturer, deleteEchange, posteDuJour
 };

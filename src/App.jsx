@@ -10181,12 +10181,31 @@ function EchangesView({agents,currentAgent}){
     // Sans ca, l'alea aurait pu se creer avec la mauvaise famille et ne
     // jamais s'afficher sur le bon poste dans CPS Officiel.
     const familleReelle=(jsCode&&POSTE_REGISTRY[jsCode]?.famille)||(echange&&echange.famille)||null;
+    // Cote reciproque (24/08, signale par Olivier : "si on echange nos
+    // journee il faut le message pour les 2 postes echanges [...] celui qui
+    // accepte de faire la matinee laisse sa place a l'autre pour faire sa
+    // soiree sinon il y a un poste non couvert") -- un vrai echange est un
+    // troc : si cloturantCp (celui avec qui l'echange a eu lieu) avait
+    // lui-meme un poste ce jour-la, ce poste doit aussi basculer vers le
+    // demandeur, sinon il reste affiche comme "couvert par cloturantCp" alors
+    // qu'il n'y est plus. Recherche best-effort (jamais bloquant).
+    let jsCode2=null, familleReelle2=null;
+    try{
+      const jourReciproque=await api.echanges.posteDuJour(cloturantCp,echange.date_jour);
+      if(jourReciproque&&jourReciproque.code_equipe){
+        jsCode2=resolveJsCode(jourReciproque.code_poste,jourReciproque.code_equipe);
+        familleReelle2=(jsCode2&&POSTE_REGISTRY[jsCode2]?.famille)||null;
+      }
+    }catch(e){/* best-effort, la cloture reste possible sans */}
     const auto=!!(jsCode&&familleReelle);
-    const message=auto
+    const auto2=!!(jsCode2&&familleReelle2&&jsCode2!==jsCode);
+    const message=auto&&auto2
+      ? "L'échange sera noté automatiquement dans le planning CPS Officiel pour LES DEUX postes échangés (le tien et celui de l'agent avec qui tu as échangé) -- comme un échange signalé à la main, annulable par n'importe qui.\n\nConfirmer la clôture ?"
+      : auto
       ? "L'échange sera noté automatiquement dans le planning CPS Officiel (comme un échange signalé à la main, annulable par n'importe qui).\n\nConfirmer la clôture ?"
       : "Cette demande ne peut pas être notée automatiquement dans CPS Officiel (poste non reconnu ou demande trop ancienne) -- n'oublie pas de l'indiquer toi-même.\n\nConfirmer la clôture ?";
     if(!window.confirm(message))return;
-    try{await api.echanges.cloturer(id,cloturantCp,jsCode,familleReelle);setCloturantId(null);setCloturantCp("");charger();}catch(e){alert(e.message||"Erreur.");}
+    try{await api.echanges.cloturer(id,cloturantCp,jsCode,familleReelle,auto2?jsCode2:null,auto2?familleReelle2:null);setCloturantId(null);setCloturantCp("");charger();}catch(e){alert(e.message||"Erreur.");}
   };
 
   const STATUT_STYLE={

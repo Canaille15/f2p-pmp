@@ -3,6 +3,7 @@ const c = require('../controllers/echangesController');
 const { authMiddleware } = require('../middleware/auth');
 
 router.get('/',                  authMiddleware, c.getEchanges);
+router.get('/poste-du-jour/:cp/:date', authMiddleware, c.posteDuJour);
 router.get('/:id/interesses',    authMiddleware, c.getInteresses);
 router.post('/',                 authMiddleware, c.createEchange);
 router.put('/:id',               authMiddleware, c.updateEchange);

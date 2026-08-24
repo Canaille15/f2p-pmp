@@ -815,11 +815,25 @@ export const echanges = {
   // celle capturee a la creation de la demande (celle du poste, deduite via
   // POSTE_REGISTRY, est plus fiable que celle du demandeur pour un poste
   // fixe -- evite un alea cree avec la mauvaise famille).
-  cloturer: (id, cpEchangeAvec, jsCode, famille) =>
+  // jsCode2/famille2 (24/08, echange bilateral) : le poste que cp_echange_avec
+  // cedait lui-meme ce jour-la (ex: il faisait la Soiree pendant que le
+  // demandeur faisait la Matinee) -- si fourni, cree un 2e alea CPS marquant
+  // CE poste comme desormais couvert par le demandeur. Necessaire pour un
+  // vrai troc : sans lui, le poste d'origine de cp_echange_avec resterait
+  // affiche comme "couvert par cp_echange_avec" alors qu'il n'y est plus.
+  cloturer: (id, cpEchangeAvec, jsCode, famille, jsCode2, famille2) =>
     apiFetch(`/echanges/${id}/cloturer`, {
       method: 'POST',
-      body: JSON.stringify({ cp_echange_avec: cpEchangeAvec, js_code: jsCode || null, famille: famille || null }),
+      body: JSON.stringify({
+        cp_echange_avec: cpEchangeAvec, js_code: jsCode || null, famille: famille || null,
+        js_code_reciproque: jsCode2 || null, famille_reciproque: famille2 || null,
+      }),
     }),
+
+  /** Le poste (code_poste/code_equipe/heures) d'un agent pour une date donnée,
+   *  tel qu'enregistré dans son planning perso -- utilisé à la clôture d'un
+   *  échange pour retrouver le poste réciproque de cp_echange_avec (24/08). */
+  posteDuJour: (cp, date) => apiFetch(`/echanges/poste-du-jour/${cp}/${date}`),
 
   /** Supprimer une demande (seul le demandeur, à tout moment) */
   delete: (id) =>
