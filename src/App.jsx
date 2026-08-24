@@ -11074,7 +11074,7 @@ function UoForm({initial,onCancel,onSaved,onDelete}){
     }catch(e){setErr(e.message||"Erreur");}
     setBusy(false);
   };
-  const champStyle={width:"100%",padding:"11px 13px",border:"1.5px solid #94a3b8",borderRadius:9,fontSize:15,color:"#1e293b",background:"#fff"};
+  const champStyle={width:"100%",padding:"11px 13px",border:"1.5px solid #e2e8f0",borderRadius:9,fontSize:15,color:"#1e293b",background:"#fff"};
   const labelStyle={fontSize:12,fontWeight:700,color:"#334155",marginBottom:4,display:"block"};
   return(<div style={{display:"flex",flexDirection:"column",gap:12,padding:"14px",borderRadius:12,border:"1.5px solid #cbd5e1",background:"#f8fafc",marginBottom:6}}>
     <div>

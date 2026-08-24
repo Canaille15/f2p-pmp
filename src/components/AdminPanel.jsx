@@ -519,6 +519,10 @@ function ModalModifier({ agent, onConfirm, onClose }) {
   const [habilitations, setHabilitations] = useState({}); // {code_poste:'HC'}
   const [habLoading, setHabLoading] = useState(true);
   const [habSaving, setHabSaving] = useState(false);
+  // Confirmation d'un changement de CP : panneau inline (24/08), plus un
+  // window.confirm() natif -- cohérent avec le reste du panneau Admin (ex.
+  // ModalDepart, "Suppression définitive"), même principe de gravité.
+  const [confirmCpChange, setConfirmCpChange] = useState(false);
   useEffect(() => {
     api.agents.getById(agent.cp).then(full => {
       setForm(p => ({ ...p, telephone: full?.telephone || "", email: full?.email || "" }));
@@ -539,7 +543,7 @@ function ModalModifier({ agent, onConfirm, onClose }) {
     if (!form.prenom.trim()) return setErr("Le prenom est obligatoire");
     if (!nouveauCp.trim()) return setErr("Le CP est obligatoire");
     const cpChange = nouveauCp.trim().toUpperCase() !== agent.cp;
-    if (cpChange && !window.confirm(`Changer le CP de ${agent.cp} vers ${nouveauCp.trim().toUpperCase()} ? Cette action met a jour toutes les donnees liees a cet agent.`)) return;
+    if (cpChange && !confirmCpChange) { setConfirmCpChange(true); return; }
     setErr("");
     setHabSaving(true);
     try {
@@ -559,7 +563,7 @@ function ModalModifier({ agent, onConfirm, onClose }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>CP SNCF</div>
-          <input value={nouveauCp} onChange={e => setNouveauCp(e.target.value)} style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}/>
+          <input value={nouveauCp} onChange={e => { setNouveauCp(e.target.value); setConfirmCpChange(false); }} style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}/>
         </div>
         {[
           { label: "Nom *", key: "nom", placeholder: "ex: DUPONT" },
@@ -661,10 +665,15 @@ function ModalModifier({ agent, onConfirm, onClose }) {
           </div>
         </div>
         {err && <div style={{ color: "#dc2626", fontSize: 12, fontWeight: 600 }}>! {err}</div>}
+        {confirmCpChange && (
+          <div style={{ fontSize: 11.5, color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 10px" }}>
+            ⚠️ Changer le CP de {agent.cp} vers {nouveauCp.trim().toUpperCase()} met à jour toutes les données liées à cet agent — clique à nouveau sur "Enregistrer" pour confirmer.
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
-          <button onClick={submit} disabled={habSaving} style={{ flex: 1, padding: "10px", background: "#1e293b", color: "#fff", border: "none", borderRadius: 8, cursor: habSaving ? "wait" : "pointer", fontWeight: 700 }}>
-            {habSaving ? "Enregistrement…" : "Enregistrer"}
+          <button onClick={submit} disabled={habSaving} style={{ flex: 1, padding: "10px", background: confirmCpChange ? "#dc2626" : "#1e293b", color: "#fff", border: "none", borderRadius: 8, cursor: habSaving ? "wait" : "pointer", fontWeight: 700 }}>
+            {habSaving ? "Enregistrement…" : confirmCpChange ? "Confirmer le changement de CP" : "Enregistrer"}
           </button>
         </div>
       </div>
