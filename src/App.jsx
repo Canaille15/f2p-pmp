@@ -2207,15 +2207,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // un agent bien present. Aucun vrai code ne se termine par un "F" seul,
           // retrait sans risque.
           if(/^(PA|PI)[A-Z]+F$/.test(jsCode)) jsCode=jsCode.slice(0,-1);
-          // fix extraction (25/08, par analogie avec le fixup "Fé" ci-dessus,
-          // pas encore verifie sur un vrai import) : Olivier decrit une
-          // annotation "Di" (variante Dimanche, meme code de poste mais
-          // horaire different — ex. PIVGDO le dimanche = 16h15-23h52) qui
-          // pourrait se coller au code sans espace comme "Fé" le fait deja
-          // ("PIVGDO Di" -> "PIVGDODI" au meme titre que "PIVGDO Fé" ->
-          // "PIVGDOF"). Si un vrai import confirme une autre forme, corriger
-          // ce fixup en consequence plutot que de le laisser tel quel.
-          if(/^(PA|PI)[A-Z]+DI$/.test(jsCode)) jsCode=jsCode.slice(0,-2);
+          // "Di" (annotation Dimanche a cote de PIVGDO) verifie le 25/08 sur un
+          // vrai import (page 6, "PIVGDO Di 16:15 - 23:52 CAILLET MAXIME [...]
+          // AC VGD") : contrairement a "Fé" qui se colle au code sans espace,
+          // "Di" reste un mot separe dans le texte reconstruit par
+          // clusterizeRowsByProximity (join(" ") systematique entre items) -
+          // jsCodeMatch capture donc deja "PIVGDO" proprement, "Di" n'entre
+          // jamais dans le code. Aucun fixup necessaire ici (un essai par
+          // analogie avec "Fé" avait ete ajoute par precaution avant cette
+          // verification, retire car il ne se declenchait jamais).
           if(jsCode==="PILND-") jsCode="PILNO-"; // fix OCR : D lu au lieu de O
           if(jsCode==="PIAOJX") jsCode="PIADJX"; // fix OCR : O lu au lieu de D
           // fix extraction (17/08) : un nom de famille en 2 mots (ex: "VICENTE CARREIRA",
