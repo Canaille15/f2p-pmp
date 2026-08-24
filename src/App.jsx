@@ -8594,8 +8594,20 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   return result;
 }
 
-function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,onOpenEchanges,onOpenFormation}){
-  const [echangesDismissedCount,setEchangesDismissedCount]=usePersist("echangesDismissedCount",0);
+function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,echangesOuvertesIds,onOpenEchanges,onOpenFormation}){
+  // echangesDismissedIds (24/08) : par identifiant de demande, pas par simple
+  // compte -- l'ancienne version (echangesDismissedCount) cachait le bandeau
+  // "pour toujours" tant que le nombre total de demandes ouvertes ne
+  // redepassait pas le chiffre au moment de la fermeture, meme des semaines
+  // apres, meme si c'est toujours la MEME demande jamais cloturee qui reste
+  // ouverte (signale par Olivier : demande bien ouverte en base, mais
+  // bandeau invisible sur son telephone). Fermer ne masque plus desormais
+  // que les demandes precises deja vues -- une demande encore ouverte reste
+  // affichee tant qu'elle n'a pas ete individuellement fermee, et une
+  // NOUVELLE demande (id different) reactive toujours le bandeau meme si le
+  // total redescend au meme chiffre qu'avant.
+  const [echangesDismissedIds,setEchangesDismissedIds]=usePersist("echangesDismissedIds",[]);
+  const echangesVisibles=(echangesOuvertesIds||[]).filter(id=>!echangesDismissedIds.includes(id));
   const [showHab,setShowHab]=useState(false);
   const [showHabRoul,setShowHabRoul]=useState(false);
   const [dayPopup,setDayPopup]=useState(null); // {dk, entry}
@@ -8996,12 +9008,12 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
     {/* ── BANDEAU PROFIL ÉTENDU ── */}
    
 <AgentHeader agent={agent} profile={profile} compteurYear={compteurYear} setCompteurYear={setCompteurYear} onImportDP={onImportDP} onCouleurs={()=>setShowColorPicker(true)} onHabilitations={()=>setShowHab(true)} onRoulementChange={r=>setProfile({roulement:r})} onReservisteChange={v=>setProfile({isReserve:v})} isOwnProfile={isOwnProfile}/>
-    {typeof onOpenEchanges==="function"&&(echangesCount||0)>echangesDismissedCount&&<div style={{display:"flex",alignItems:"stretch",gap:6,border:"1.5px solid "+(echangesCount>0?"#fdba74":"#e2e8f0"),background:echangesCount>0?"#fef3c7":"#f8fafc",borderRadius:12,padding:"4px 4px 4px 16px"}}>
+    {typeof onOpenEchanges==="function"&&echangesVisibles.length>0&&<div style={{display:"flex",alignItems:"stretch",gap:6,border:"1.5px solid #fdba74",background:"#fef3c7",borderRadius:12,padding:"4px 4px 4px 16px"}}>
       <button onClick={onOpenEchanges} style={{display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",background:"none",cursor:"pointer",fontSize:14,fontWeight:700,color:"#1e293b",flex:1,padding:"8px 0",textAlign:"left"}}>
         <span>🔄 Échanges</span>
-        {echangesCount>0&&<span style={{background:"#f59e0b",color:"#fff",borderRadius:10,padding:"2px 9px",fontSize:12,fontWeight:700,marginRight:8}}>{echangesCount}</span>}
+        <span style={{background:"#f59e0b",color:"#fff",borderRadius:10,padding:"2px 9px",fontSize:12,fontWeight:700,marginRight:8}}>{echangesVisibles.length}</span>
       </button>
-      <button onClick={()=>setEchangesDismissedCount(echangesCount||0)} title="Masquer ce bandeau" style={{border:"none",background:"none",cursor:"pointer",fontSize:17,color:"#94a3b8",padding:"0 10px"}}>✕</button>
+      <button onClick={()=>setEchangesDismissedIds(prev=>[...new Set([...prev,...echangesVisibles])])} title="Masquer ce bandeau" style={{border:"none",background:"none",cursor:"pointer",fontSize:17,color:"#94a3b8",padding:"0 10px"}}>✕</button>
     </div>}
     {/* En-tete simplifiee (04/08, demande par Olivier) : plus de bascule Mois/Semaine/Planning
         (les 2 autres vues retirees, voir CLAUDE.md resolus du 04/08) - nom du mois complet
@@ -11981,10 +11993,21 @@ export default function App(){
   },[currentUser?.agent?.id]); // eslint-disable-line
 
   const [echangesOuvertesCount,setEchangesOuvertesCount]=useState(0);
+  // echangesOuvertesIds (24/08) : liste des id, pas juste le total -- permet
+  // au bandeau "Echanges" (PersonalView) de retenir la fermeture PAR demande
+  // precise plutot que par simple nombre. Bug corrige : avec un compteur nu,
+  // fermer le bandeau une fois qu'une demande X est ouverte le cachait POUR
+  // TOUJOURS tant que le nombre total ne redepassait pas ce chiffre -- meme
+  // des semaines plus tard, avec cette meme demande X toujours ouverte et
+  // jamais cloturee (signale par Olivier : "je le vois pas sur le compte
+  // test... sur mon tel", alors qu'une vraie demande etait bien ouverte).
+  const [echangesOuvertesIds,setEchangesOuvertesIds]=useState([]);
   const rechargerEchangesCount=()=>{
     if(!currentUser?.agent?.id) return;
     api.echanges.getAll().then(rows=>{
-      setEchangesOuvertesCount((rows||[]).filter(r=>r.statut==="ouverte").length);
+      const ouvertes=(rows||[]).filter(r=>r.statut==="ouverte");
+      setEchangesOuvertesCount(ouvertes.length);
+      setEchangesOuvertesIds(ouvertes.map(r=>r.id));
     }).catch(()=>{});
   };
   useEffect(()=>{
@@ -12675,6 +12698,7 @@ export default function App(){
         isAdmin={isAdmin}
         currentUser={currentUser}
         echangesCount={echangesOuvertesCount}
+        echangesOuvertesIds={echangesOuvertesIds}
         onOpenEchanges={()=>navigateToView("echanges")}
         onOpenFormation={()=>navigateToView("formation")}/>}
       {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
