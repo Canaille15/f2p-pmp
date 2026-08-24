@@ -5020,6 +5020,22 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
     }));
   };
 
+  // Archivage manuel (24/08, demandé par Olivier : "il faut trouver un
+  // syteme d'archivage des jour sans perte de calcul actuel [...] le bouton
+  // archiver") — purement un repli d'AFFICHAGE : rien n'est supprimé, le
+  // solde (data.solde, calculé plus haut par computeDashboardTC) continue de
+  // rejouer TOUT l'historique exactement comme avant, aucun risque de
+  // désynchronisation. Seuls les mouvements (ledger manuel + crédits de
+  // pause, listés par mois de constatation) antérieurs ou égaux au mois
+  // choisi se replient dans une section fermée par défaut, pour que la
+  // liste reste courte après plusieurs années au lieu de grossir sans fin.
+  const archiveCutoff = agentProfiles[agent.id]?.tcArchiveCutoff || null; // "YYYY-MM"
+  const [archiveMoisInput, setArchiveMoisInput] = useState(()=>new Date().toISOString().slice(0,7));
+  const setArchiveCutoff = (val) => {
+    setAgentProfiles(prev=>({...prev, [agent.id]:{ ...(prev[agent.id]||{}), tcArchiveCutoff: val }}));
+  };
+  const estArchive = (mois) => !!(archiveCutoff && mois && mois<=archiveCutoff);
+
   const [nouvelleDate, setNouvelleDate] = useState("");
   const [ajoutErr, setAjoutErr] = useState("");
   // Erreur visible sur une action réseau échouée (ajustement, écriture/retrait
@@ -5122,6 +5138,29 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
               Olivier) — widget partagé, voir CetView.jsx EpargneCetWidget. */}
           <EpargneCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} source="TC" sourceLabel="mon TC" year={year} besoinValeur={true}/>
 
+          {/* Archivage (24/08) : voir explication détaillée à la déclaration
+              de archiveCutoff plus haut. */}
+          <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
+            <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:4}}>🗄️ Archivage</div>
+            {archiveCutoff ? (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>
+                  Archivé jusqu'à {MOIS_L[parseInt(archiveCutoff.slice(5,7))-1]} {archiveCutoff.slice(0,4)} inclus — le solde reste exact, seuls les mouvements plus anciens sont repliés ci-dessous.
+                </span>
+                <button onClick={()=>setArchiveCutoff(null)} style={{background:"none",border:"1px solid #cbd5e1",borderRadius:7,padding:"5px 10px",cursor:"pointer",fontSize:11,fontWeight:700,color:"#475569",flexShrink:0}}>✕ Tout désarchiver</button>
+              </div>
+            ) : (
+              <>
+                <div style={{fontSize:10,color:"#64748b",marginBottom:6}}>Replie les mouvements jusqu'au mois choisi dans une section fermée, pour garder la liste courte après plusieurs années — rien n'est supprimé, le solde reste calculé à l'identique.</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  <input type="month" value={archiveMoisInput} onChange={e=>setArchiveMoisInput(e.target.value)}
+                    style={{padding:"6px 8px",border:"1.5px solid #cbd5e1",borderRadius:8,fontSize:12,fontWeight:600}}/>
+                  <button onClick={()=>{if(archiveMoisInput) setArchiveCutoff(archiveMoisInput);}} style={{background:"#475569",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>📦 Archiver jusqu'à ce mois</button>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Journal d'ajustements manuels — remplace l'ancien "solde de
               départ" : modulable à tout moment, pas de remise à zéro. */}
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
@@ -5162,24 +5201,35 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
                 })),
               ].sort((a,b)=> b.mois.localeCompare(a.mois) || (a.type<b.type?-1:1));
               if(mouvements.length===0) return null;
+              const renderMouvement = (m,i)=>{
+                const [an,mo] = m.mois.split("-").map(Number);
+                return(
+                  <div key={m.type+"-"+(m.id||m.dateJour)+"-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,
+                    background:m.type==="pause"?"#f0fdfa":"#f8fafc",border:`1px solid ${m.type==="pause"?"#99f6e4":"#e2e8f0"}`,borderRadius:7,padding:"7px 10px"}}>
+                    <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>
+                      {mo?`${MOIS_L[mo-1]} ${an}`:"—"}
+                      {m.type==="pause"&&<span style={{fontWeight:500,color:"#0f766e"}}> · pause du {fmtDate(m.dateJour)}</span>}
+                    </span>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:12,fontWeight:800,color:m.delta<0?"#dc2626":m.type==="pause"?"#0f766e":"#16a34a"}}>{m.delta<0?"−":"+"}{minToHM(Math.abs(m.delta)).replace("-","")}</span>
+                      {m.type==="manuel"&&<button onClick={()=>retirerLedger(m.id)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕</button>}
+                    </div>
+                  </div>
+                );
+              };
+              const actifs = mouvements.filter(m=>!estArchive(m.mois));
+              const archives = mouvements.filter(m=>estArchive(m.mois));
               return(
                 <div style={{display:"flex",flexDirection:"column",gap:5,marginTop:10}}>
-                  {mouvements.map((m,i)=>{
-                    const [an,mo] = m.mois.split("-").map(Number);
-                    return(
-                      <div key={m.type+"-"+(m.id||m.dateJour)+"-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,
-                        background:m.type==="pause"?"#f0fdfa":"#f8fafc",border:`1px solid ${m.type==="pause"?"#99f6e4":"#e2e8f0"}`,borderRadius:7,padding:"7px 10px"}}>
-                        <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>
-                          {mo?`${MOIS_L[mo-1]} ${an}`:"—"}
-                          {m.type==="pause"&&<span style={{fontWeight:500,color:"#0f766e"}}> · pause du {fmtDate(m.dateJour)}</span>}
-                        </span>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:12,fontWeight:800,color:m.delta<0?"#dc2626":m.type==="pause"?"#0f766e":"#16a34a"}}>{m.delta<0?"−":"+"}{minToHM(Math.abs(m.delta)).replace("-","")}</span>
-                          {m.type==="manuel"&&<button onClick={()=>retirerLedger(m.id)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕</button>}
-                        </div>
+                  {actifs.map(renderMouvement)}
+                  {archives.length>0 && (
+                    <details style={{marginTop:4}}>
+                      <summary style={{fontSize:11,fontWeight:700,color:"#64748b",cursor:"pointer",padding:"4px 0"}}>🗄️ Mouvements archivés ({archives.length})</summary>
+                      <div style={{display:"flex",flexDirection:"column",gap:5,marginTop:6}}>
+                        {archives.map(renderMouvement)}
                       </div>
-                    );
-                  })}
+                    </details>
+                  )}
                 </div>
               );
             })()}
@@ -5201,38 +5251,50 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
           <div>
             {(()=>{
               const pausesCreditees = Object.entries(data.detailPauses).sort(([a],[b])=>b.localeCompare(a));
+              const renderPause = ([d,{ajoute,horsPlafond,moisEffectif}])=>{
+                // Mois de constatation affiché séparément de la date de la
+                // pause (24/08, Olivier : "il faut garder la date la pause
+                // figé. mais faut mettre aussi le mois ou c'est constater
+                // quand le temps est acquis") — la date reste celle de la
+                // pause elle-même (pour la retrouver dans le planning), le
+                // crédit est explicitement rattaché au mois choisi par
+                // l'agent, seulement affiché s'il diffère du mois de la
+                // pause (sinon redondant).
+                const moisPause = d.slice(0,7);
+                const moisLabel = moisEffectif && moisEffectif!==moisPause
+                  ? `${MOIS_L[parseInt(moisEffectif.slice(5,7))-1]} ${moisEffectif.slice(0,4)}`
+                  : null;
+                return(
+                <div key={d} style={{display:"flex",flexDirection:"column",gap:2,
+                  background:horsPlafond>0?"#fffbeb":"#f0fdfa",border:`1px solid ${horsPlafond>0?"#fde68a":"#99f6e4"}`,
+                  borderRadius:7,padding:"7px 10px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                    <span style={{fontSize:11,fontWeight:600,color:"#334155",textTransform:"capitalize"}}>{fmtDate(d)}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:horsPlafond>0?"#92400e":"#0f766e"}}>
+                      +{minToHM(ajoute)}{horsPlafond>0&&<span style={{fontWeight:600}}> · ⚠️ {minToHM(horsPlafond)} hors plafond</span>}
+                    </span>
+                  </div>
+                  {moisLabel&&<span style={{fontSize:10,fontWeight:600,color:"#0f766e"}}>💳 Acquis en {moisLabel} (mois de constatation)</span>}
+                </div>
+                );
+              };
+              const pausesActives = pausesCreditees.filter(([d,{moisEffectif}])=>!estArchive(moisEffectif||d.slice(0,7)));
+              const pausesArchivees = pausesCreditees.filter(([d,{moisEffectif}])=>estArchive(moisEffectif||d.slice(0,7)));
               return(<>
                 <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:8}}>📋 Historique des pauses créditées ({pausesCreditees.length})</div>
-                {pausesCreditees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune pause figée validée pour l'instant — le détail de chaque pause (planning du jour, statut) est dans le module Pause Figée.</div> :
+                {pausesCreditees.length===0 ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucune pause figée validée pour l'instant — le détail de chaque pause (planning du jour, statut) est dans le module Pause Figée.</div> : <>
                   <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                    {pausesCreditees.map(([d,{ajoute,horsPlafond,moisEffectif}])=>{
-                      // Mois de constatation affiché séparément de la date de la
-                      // pause (24/08, Olivier : "il faut garder la date la pause
-                      // figé. mais faut mettre aussi le mois ou c'est constater
-                      // quand le temps est acquis") — la date reste celle de la
-                      // pause elle-même (pour la retrouver dans le planning), le
-                      // crédit est explicitement rattaché au mois choisi par
-                      // l'agent, seulement affiché s'il diffère du mois de la
-                      // pause (sinon redondant).
-                      const moisPause = d.slice(0,7);
-                      const moisLabel = moisEffectif && moisEffectif!==moisPause
-                        ? `${MOIS_L[parseInt(moisEffectif.slice(5,7))-1]} ${moisEffectif.slice(0,4)}`
-                        : null;
-                      return(
-                      <div key={d} style={{display:"flex",flexDirection:"column",gap:2,
-                        background:horsPlafond>0?"#fffbeb":"#f0fdfa",border:`1px solid ${horsPlafond>0?"#fde68a":"#99f6e4"}`,
-                        borderRadius:7,padding:"7px 10px"}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                          <span style={{fontSize:11,fontWeight:600,color:"#334155",textTransform:"capitalize"}}>{fmtDate(d)}</span>
-                          <span style={{fontSize:11,fontWeight:700,color:horsPlafond>0?"#92400e":"#0f766e"}}>
-                            +{minToHM(ajoute)}{horsPlafond>0&&<span style={{fontWeight:600}}> · ⚠️ {minToHM(horsPlafond)} hors plafond</span>}
-                          </span>
-                        </div>
-                        {moisLabel&&<span style={{fontSize:10,fontWeight:600,color:"#0f766e"}}>💳 Acquis en {moisLabel} (mois de constatation)</span>}
+                    {pausesActives.map(renderPause)}
+                  </div>
+                  {pausesArchivees.length>0 && (
+                    <details style={{marginTop:6}}>
+                      <summary style={{fontSize:11,fontWeight:700,color:"#64748b",cursor:"pointer",padding:"4px 0"}}>🗄️ Pauses archivées ({pausesArchivees.length})</summary>
+                      <div style={{display:"flex",flexDirection:"column",gap:5,marginTop:6}}>
+                        {pausesArchivees.map(renderPause)}
                       </div>
-                      );
-                    })}
-                  </div>}
+                    </details>
+                  )}
+                </>}
               </>);
             })()}
           </div>

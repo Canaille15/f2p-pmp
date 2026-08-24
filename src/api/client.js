@@ -584,6 +584,7 @@ export const profil = {
       congesDemandes:           extra.congesDemandes          || {},
       tcAjustementManuel:       extra.tcAjustementManuel      || {},
       tcLedger:                 extra.tcLedger                || [],
+      tcArchiveCutoff:          extra.tcArchiveCutoff         ?? null,
       tyLedger:                 extra.tyLedger                || [],
       rnLedger:                 extra.rnLedger                || [],
       tqLedger:                 extra.tqLedger                || [],
@@ -629,7 +630,7 @@ export const profil = {
       'congesEntitlement','congesReports','ruReports','rpReports','rqReports','rnReports',
       'tcReports','tyReports','rpAcquis','ruAcquis','rqAcquis','rnAcquis','tcAcquis','tyAcquis',
       'vtEntitlement','vtTracking','vtReports','congesDemandes','tcAjustementManuel',
-      'tcLedger','tyLedger','rnLedger','tqLedger','tqTransferts','bilanGlobalDureeJourMin','cetLedger','compteursOrdre',
+      'tcLedger','tcArchiveCutoff','tyLedger','rnLedger','tqLedger','tqTransferts','bilanGlobalDureeJourMin','cetLedger','compteursOrdre',
       'vtModuleActif','signatureDataUrl','formationsPersoDeclarees','formationNotifications',
       'maladiePertes',
     ];
