@@ -9206,7 +9206,11 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
           api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
         }}/>
         <ExportIcsButton agent={agent} schedule={schedule} curMonth={curMonth} curYear={curYear}/>
-        <button onClick={()=>setShowRemplissage(true)} style={{display:"flex",alignItems:"center",gap:6,border:"1.5px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,14px)",fontWeight:700,alignSelf:"flex-start",whiteSpace:"nowrap",flexShrink:0}}>
+        {/* Taille alignée sur BulletinImportButton (24/08, Olivier : "le
+            bouton [...] est trop grand et ecrase les autres" sur tel) --
+            l'ancien style (padding 7/14, fontSize clamp 12-14px) était
+            nettement plus large que ses 2 voisins de la même ligne. */}
+        <button onClick={()=>setShowRemplissage(true)} style={{flexShrink:0,display:"flex",alignItems:"center",gap:5,border:"1.5px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:10,padding:"8px 12px",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>
           🗂️ Remplissage rapide
         </button>
       </div>}
