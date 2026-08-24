@@ -9,6 +9,21 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
+// no-store sur tout /api (24/08) : Express pose un ETag faible par defaut sur
+// chaque reponse JSON -- sans Cache-Control explicite, certains navigateurs
+// (Safari/iOS en tete, heuristique de fraicheur bien plus agressive que
+// Chrome desktop) peuvent servir une reponse GET depuis leur cache local
+// plutot que de revalider en reseau, y compris juste apres un PUT/POST qui
+// vient de modifier cette meme ressource -- aucune relation d'invalidation
+// automatique entre les deux URLs distinctes en HTTP standard. Symptome reel
+// observe par Olivier (Pause Figee, module TC) : une pause tout juste
+// validee "repassait en attente" apres avoir choisi le mois de constatation
+// -- vérifié en base que l'ecriture elle-meme etait bien correcte a chaque
+// etape, seul l'AFFICHAGE (donc la lecture GET suivante) redevenait faux.
+// Toute donnee de cette API est par nature dynamique et privee (jamais
+// destinee a etre mise en cache) -- no-store elimine cette classe de bug
+// d'un coup, pour tous les modules, pas seulement Pause Figee.
+app.use('/api', (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 app.use('/api', apiLimiter);
 
 app.use('/api/auth',          require('./src/routes/auth'));
