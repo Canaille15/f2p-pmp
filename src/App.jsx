@@ -6150,7 +6150,15 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
           {/* Mini-calendrier multi-jours (13/08, demandé par Olivier) : pour
               les jours dispersés dans un même mois (ex. "tous les repos du
               mois") que Du/Au ne peut pas couvrir en une fois. Widget autonome
-              — jamais le vrai calendrier "Mon planning". */}
+              — jamais le vrai calendrier "Mon planning".
+              Retiré pour RP/RU le 24/08 (Étape 3 du module "Remplissage
+              rapide", confirmé par Olivier une fois l'Étape 2 en place) —
+              devenu strictement redondant avec son propre sélecteur "type de
+              journée" (RemplissageMasseView.jsx), qui fait exactement la même
+              chose en mieux (regroupé avec les postes de travail, la même
+              écriture bulk-fill). Maladie/RQ/RN/TY gardent ce widget intact,
+              jamais couverts par Remplissage rapide. */}
+          {label!=="RP" && label!=="RU" && (
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>+ Sélectionner des jours (dispersés)</div>
             <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
@@ -6195,6 +6203,7 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
             {selectErr && <div style={{fontSize:11,fontWeight:600,color:"#dc2626",marginTop:6}}>{selectErr}</div>}
             {selectOk && <div style={{fontSize:11,fontWeight:600,color:"#16a34a",marginTop:6}}>✓ {selectOk}</div>}
           </div>
+          )}
 
           {data.donnesAnneePrecedente.length>0 && (
             <div style={{fontSize:11,fontWeight:500,color:"#334155",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px"}}>
