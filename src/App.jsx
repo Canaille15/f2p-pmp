@@ -285,6 +285,21 @@ const POSTES_JOURNEE = [
   { jsCode:"DISPO",   label:"DISPO",             subtitle:"Disponible",      horaires:"Variable",     famille:"PRCI", maxSlots:99, allowFormation:false, pause:null,          principal:false },
 ];
 
+// Rappel d'horaire du dimanche (25/08, demandé par Olivier) : Aide AC PAR
+// (PAAC2O) et AC VGD (PIVGDO) gardent le même code de poste le dimanche que
+// la semaine, mais leur horaire réel diffère souvent ce jour-là -- PAS
+// toujours ("de temps en temps le dimanche peut etre sur les horaires de
+// semaine. mais le code du poste semble rester identique"), donc jamais un
+// remplissage automatique silencieux de l'horaire (qui serait parfois faux) :
+// juste un simple rappel affiché sous le code, purement informatif. Si
+// l'horaire réel d'un dimanche précis diffère de ce rappel, l'agent note
+// l'exception via sa note perso (mécanisme déjà existant). AC PAR (PAAC1O)
+// volontairement absent -- "on garde ce qui a deja ete fait. c'etait bon."
+const HORAIRES_DIMANCHE_RAPPEL = {
+  "PAAC2O": "Dim : 15h58–00h00",
+  "PIVGDO": "Dim : 16h15–23h52",
+};
+
 // Codes fêtes légales SNCF
 const CODES_FETES = {
   "F1":"1er Janvier",
@@ -2192,6 +2207,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // un agent bien present. Aucun vrai code ne se termine par un "F" seul,
           // retrait sans risque.
           if(/^(PA|PI)[A-Z]+F$/.test(jsCode)) jsCode=jsCode.slice(0,-1);
+          // fix extraction (25/08, par analogie avec le fixup "Fé" ci-dessus,
+          // pas encore verifie sur un vrai import) : Olivier decrit une
+          // annotation "Di" (variante Dimanche, meme code de poste mais
+          // horaire different — ex. PIVGDO le dimanche = 16h15-23h52) qui
+          // pourrait se coller au code sans espace comme "Fé" le fait deja
+          // ("PIVGDO Di" -> "PIVGDODI" au meme titre que "PIVGDO Fé" ->
+          // "PIVGDOF"). Si un vrai import confirme une autre forme, corriger
+          // ce fixup en consequence plutot que de le laisser tel quel.
+          if(/^(PA|PI)[A-Z]+DI$/.test(jsCode)) jsCode=jsCode.slice(0,-2);
           if(jsCode==="PILND-") jsCode="PILNO-"; // fix OCR : D lu au lieu de O
           if(jsCode==="PIAOJX") jsCode="PIADJX"; // fix OCR : O lu au lieu de D
           // fix extraction (17/08) : un nom de famille en 2 mots (ex: "VICENTE CARREIRA",
@@ -9403,6 +9427,7 @@ justifyContent: "flex-start",
                 {code==="VT"&&vtToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{vtToutNumeros[dk].numero}</span>}
                 {code==="MA"&&maNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{maNumeros[dk]}</span>}
                 {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
+                {dow===0&&en?.jsCode&&HORAIRES_DIMANCHE_RAPPEL[en.jsCode]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:700,display:"block",whiteSpace:"normal"}}>{HORAIRES_DIMANCHE_RAPPEL[en.jsCode]}</span>}
                 {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
               </div>}
 
