@@ -5143,22 +5143,46 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
                 style={{padding:"6px 8px",border:"1.5px solid #bae6fd",borderRadius:8,fontSize:12,fontWeight:600}}/>
               <button onClick={ajouterLedger} style={{background:"#0369a1",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:700}}>Ajouter</button>
             </div>
-            {data.ledger.length>0 && (
-              <div style={{display:"flex",flexDirection:"column",gap:5,marginTop:10}}>
-                {data.ledger.map(e=>{
-                  const [an,mo] = (e.mois||"").split("-").map(Number);
-                  return(
-                    <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px"}}>
-                      <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>{mo?`${MOIS_L[mo-1]} ${an}`:"—"}</span>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:12,fontWeight:800,color:e.deltaMinutes<0?"#dc2626":"#16a34a"}}>{e.deltaMinutes<0?"−":"+"}{minToHM(Math.abs(e.deltaMinutes)).replace("-","")}</span>
-                        <button onClick={()=>retirerLedger(e.id)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕</button>
+            {(()=>{
+              // Liste fusionnée par mois (24/08, Olivier : "ajoute sur septembre
+              // le temps ajouté (comme aout +10h00 septembre en dessous +01h30)
+              // [...] sans que ca fasse doublon") — les ajustements manuels ET
+              // les credits de pause figée (déjà rattachés à leur mois de
+              // constatation, voir plus haut) apparaissent désormais dans la
+              // MÊME liste triée par mois, pour voir en un coup d'œil la
+              // progression mois par mois du solde. Les ajustements manuels
+              // restent seuls modifiables ici (✕) ; un crédit de pause reste
+              // géré depuis le module Pause Figée (jamais dupliqué : c'est la
+              // MÊME info que "Historique des pauses créditées" ci-dessous,
+              // simplement regroupée ici par mois plutôt que par date de pause).
+              const mouvements = [
+                ...data.ledger.map(e=>({type:"manuel", mois:e.mois||"", delta:e.deltaMinutes||0, id:e.id})),
+                ...Object.entries(data.detailPauses).map(([d,{ajoute,moisEffectif}])=>({
+                  type:"pause", mois:moisEffectif||d.slice(0,7), delta:ajoute, dateJour:d,
+                })),
+              ].sort((a,b)=> b.mois.localeCompare(a.mois) || (a.type<b.type?-1:1));
+              if(mouvements.length===0) return null;
+              return(
+                <div style={{display:"flex",flexDirection:"column",gap:5,marginTop:10}}>
+                  {mouvements.map((m,i)=>{
+                    const [an,mo] = m.mois.split("-").map(Number);
+                    return(
+                      <div key={m.type+"-"+(m.id||m.dateJour)+"-"+i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,
+                        background:m.type==="pause"?"#f0fdfa":"#f8fafc",border:`1px solid ${m.type==="pause"?"#99f6e4":"#e2e8f0"}`,borderRadius:7,padding:"7px 10px"}}>
+                        <span style={{fontSize:11,fontWeight:600,color:"#334155"}}>
+                          {mo?`${MOIS_L[mo-1]} ${an}`:"—"}
+                          {m.type==="pause"&&<span style={{fontWeight:500,color:"#0f766e"}}> · pause du {fmtDate(m.dateJour)}</span>}
+                        </span>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:12,fontWeight:800,color:m.delta<0?"#dc2626":m.type==="pause"?"#0f766e":"#16a34a"}}>{m.delta<0?"−":"+"}{minToHM(Math.abs(m.delta)).replace("-","")}</span>
+                          {m.type==="manuel"&&<button onClick={()=>retirerLedger(m.id)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",fontSize:11,fontWeight:700,textDecoration:"underline"}}>✕</button>}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Forcer une prise de TC */}
