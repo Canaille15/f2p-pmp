@@ -480,6 +480,27 @@ result[`${row.agent_id || agentId}-${date}`] = {
       method: 'POST',
       body: JSON.stringify({ entries, source_type: sourceType || 'bulletin' }),
     }),
+  /** Module "Remplissage rapide" (24/08) : écrit le même poste/vacation sur
+   *  une liste de dates en un seul appel — jours déjà occupés ignorés (voir
+   *  planningController.bulkFill), jamais d'écrasement. */
+  bulkFill: (agentId, { dates, codeEquipe, codePoste, horaires }) =>
+    apiFetch(`/planning/${agentId}/bulk-fill`, {
+      method: 'POST',
+      body: JSON.stringify({
+        dates, code_equipe: codeEquipe, code_poste: codePoste || null,
+        heure_debut: horaires ? horaires.split('–')[0]?.trim().replace('h',':') : null,
+        heure_fin:   horaires ? horaires.split('–')[1]?.trim().replace('h',':') : null,
+      }),
+    }),
+  /** Efface le planning perso sur une période, avec sauvegarde pour annulation. */
+  bulkClear: (agentId, dateFrom, dateTo) =>
+    apiFetch(`/planning/${agentId}/bulk-clear`, {
+      method: 'POST',
+      body: JSON.stringify({ date_from: dateFrom, date_to: dateTo }),
+    }),
+  /** Annule un effacement en masse (tant qu'il n'a jamais été annulé). */
+  bulkClearUndo: (agentId, batchId) =>
+    apiFetch(`/planning/${agentId}/bulk-clear/${batchId}/undo`, { method: 'POST' }),
   /**
    * Charger le planning PUBLIC de tous les agents sur une periode
    * (pour le Planning Previsionnel Partage)

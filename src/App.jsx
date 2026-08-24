@@ -4,6 +4,7 @@ import api, { convertirCodePosteVersJsCode, resolveJsCode } from "./api/client";
 import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
 import DayEditPopup from "./components/DayEditPopup";
+import RemplissageMasseModal from "./components/RemplissageMasseView";
 import DemandeCongesView from "./components/DemandeCongesView";
 import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget, EpargneFetesCetWidget } from "./components/CetView";
 import CetPdfsView from "./components/CetPdfsView";
@@ -8800,6 +8801,7 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
   };
   const swipeMonth=useSwipeHandlers(()=>setMonthOff(m=>m+1),()=>setMonthOff(m=>m-1));
   const [showColorPicker,setShowColorPicker]=useState(false);
+  const [showRemplissage,setShowRemplissage]=useState(false);
   // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate.
   // Source unique de vérité : agentProfiles[agent.id].agentColors — plus d'état
   // parallèle séparé (l'ancien `agentCouleurs` dupliqué au niveau App a été
@@ -9204,8 +9206,12 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
           api.planning.getSchedule(agCp).then(entries=>{ if (entries) setSchedule(prev=>reconcileSchedule(prev, agCp, entries)); });
         }}/>
         <ExportIcsButton agent={agent} schedule={schedule} curMonth={curMonth} curYear={curYear}/>
+        <button onClick={()=>setShowRemplissage(true)} style={{display:"flex",alignItems:"center",gap:6,border:"1.5px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,14px)",fontWeight:700,alignSelf:"flex-start",whiteSpace:"nowrap",flexShrink:0}}>
+          🗂️ Remplissage rapide
+        </button>
       </div>}
     </div>
+    {showRemplissage && <RemplissageMasseModal agent={agent} agentProfiles={agentProfiles} schedule={schedule} setSchedule={setSchedule} onClose={()=>setShowRemplissage(false)}/>}
 
     <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToMonthDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
     {/* ── VUE MOIS (seule vue restante depuis le 04/08, voir CLAUDE.md) ── */}

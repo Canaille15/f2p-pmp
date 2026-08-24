@@ -65,7 +65,7 @@ const FETES = [
   {code:"JF",label:"Fête SNCF"},
 ];
 
-const POSTES_PRCI = [
+export const POSTES_PRCI = [
   {code:"CCL",  label:"CCL",         types:["M","AM","N"]},
   {code:"ADJ",  label:"Adj CCL",     types:["M","AM","N"]},
   {code:"LNE",  label:"AC LNE",      types:["M","AM","N"]},
@@ -114,7 +114,7 @@ const POSTES_PRCI = [
   {code:"AY",   label:"AY - Absence",types:["J"]},
 ];
 
-const POSTES_PAR = [
+export const POSTES_PAR = [
   {code:"AC1",  label:"AC PAR",      types:["M","AM","N"]},
   {code:"AC2",  label:"Aide AC PAR", types:["M","AM","N"]},
   // RFT SAM (23/08, demandé par Olivier) : "comme une soirée du samedi en
@@ -152,14 +152,14 @@ const POSTE_ROWS_J = [
   ["DISPO","VM","CAF","JEQ","AY"], // DISPO (23/08) ajouté juste avant VM, comme demandé
 ];
 
-const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
+export const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
 
 // Horaires spécifiques à un poste précis, qui remplacent l'horaire générique
 // du type (HORAIRES_DEFAUT) à la sélection -- jusqu'ici aucun poste n'en
 // avait besoin (l'horaire restait un champ texte libre édité à la main).
 // RFT SAM (23/08) est le premier cas : horaire réel vérifié sur une donnée
 // de production (SCHRAMM Camille, 20/06/2026) plutôt que le standard AM.
-const HORAIRES_POSTE = {
+export const HORAIRES_POSTE = {
   "RFT SAM": "13h00–20h45",
   // DISPO (23/08) : horaires réels confirmés par Olivier après vérification
   // -- cohérent avec la donnée CPS réelle déjà rencontrée (CAILLET Maxime,
@@ -189,7 +189,7 @@ const versCodeCourt = (jsCode) => (jsCode ? (CANONIQUE_VERS_COURT[jsCode] || jsC
 // réellement enregistré dans les habilitations (AgentHeader.jsx / backend).
 // PPRCI et PPAR sont volontairement absents : toujours proposés sans
 // condition d'habilitation (poste générique de famille).
-const CODE_VERS_HAB = {
+export const CODE_VERS_HAB = {
   // PRCI
   "CCL":"PICCL", "ADJ":"PIADJ", "LNE":"PILNE", "LNO":"PILNO", "VGD":"PIVGD", "LC":"PILCL",
   "PA1J":"PIPA1J", "PA2J":"PIPA2J", "PA3J":"PIPA3J", "DPXJ":"PIDPXJ", "ASSJ":"PIASSJ",
@@ -202,6 +202,29 @@ const CODE_VERS_HAB = {
   // getPostes (contrairement à VM/CAF/AY/JEQ/DISPO, génériques).
   "RFTSAM":"PAAC2-",
 };
+
+// getPostesPourAgent (24/08, nouveau module "Remplissage rapide") : copie
+// autonome de la logique déjà utilisée en interne par ce popup (filtrage par
+// habilitation, exemption des postes génériques) -- dupliquée plutôt que
+// factorée pour ne courir AUCUN risque sur ce composant existant et déjà
+// éprouvé (consigne explicite d'Olivier : "tu prends le moins de risque de
+// casse rien"). Si les deux versions doivent un jour diverger, ce sera un
+// choix délibéré, pas un accident de refactor.
+export function getPostesPourAgent(agent, agentProfiles, type) {
+  if (!["M","AM","N","J"].includes(type)) return [];
+  const agKey = agent?.immatriculation || agent?.cp || agent?.id;
+  const profile = agentProfiles?.[agKey] || {};
+  const famille = agent?.famille || "PRCI";
+  const tous_postes = famille === "PAR" ? [...POSTES_PAR, ...POSTES_PRCI] : [...POSTES_PRCI, ...POSTES_PAR];
+  const habs = profile.habilitations || {};
+  const habCodes = Array.isArray(habs) ? habs.map(h => h.code_poste) : Object.entries(habs).filter(([,v]) => v === "HC").map(([k]) => k);
+  const postes = tous_postes.filter(p => p.types.includes(type));
+  if (habCodes.length === 0) return postes;
+  return postes.filter(p =>
+    p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" || p.code === "JEQ" || p.code === "DISPO" ||
+    habCodes.includes(CODE_VERS_HAB[p.code] || p.code)
+  );
+}
 
 export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesPrises, onSave, onDelete, onClose, onCongeStatutChange, onVtStatutChange }) {
 
