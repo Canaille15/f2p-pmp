@@ -482,14 +482,17 @@ result[`${row.agent_id || agentId}-${date}`] = {
     }),
   /** Module "Remplissage rapide" (24/08) : écrit le même poste/vacation sur
    *  une liste de dates en un seul appel — jours déjà occupés ignorés (voir
-   *  planningController.bulkFill), jamais d'écrasement. */
-  bulkFill: (agentId, { dates, codeEquipe, codePoste, horaires }) =>
+   *  planningController.bulkFill), jamais d'écrasement, SAUF si overwrite
+   *  est passé à true (uniquement Congés "Accordé" en masse — même règle
+   *  que le popup de saisie normal, qui écrase volontairement). */
+  bulkFill: (agentId, { dates, codeEquipe, codePoste, horaires, overwrite }) =>
     apiFetch(`/planning/${agentId}/bulk-fill`, {
       method: 'POST',
       body: JSON.stringify({
         dates, code_equipe: codeEquipe, code_poste: codePoste || null,
         heure_debut: horaires ? horaires.split('–')[0]?.trim().replace('h',':') : null,
         heure_fin:   horaires ? horaires.split('–')[1]?.trim().replace('h',':') : null,
+        overwrite: !!overwrite,
       }),
     }),
   /** Efface le planning perso sur une période, avec sauvegarde pour annulation. */

@@ -9217,7 +9217,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
         </button>
       </div>}
     </div>
-    {showRemplissage && <RemplissageMasseModal agent={agent} agentProfiles={agentProfiles} schedule={schedule} setSchedule={setSchedule} onClose={()=>setShowRemplissage(false)}/>}
+    {showRemplissage && <RemplissageMasseModal agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} schedule={schedule} setSchedule={setSchedule} onClose={()=>setShowRemplissage(false)}/>}
 
     <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToMonthDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
     {/* ── VUE MOIS (seule vue restante depuis le 04/08, voir CLAUDE.md) ── */}

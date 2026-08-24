@@ -1,13 +1,23 @@
 // ─── RemplissageMasseView.jsx ──────────────────────────────────────────────
-// Module "Remplissage rapide" (24/08, demandé par Olivier) — Étape 1 : postes
-// de travail uniquement, en bloc autonome (RP/RU/Maladie viendront ensuite,
-// une fois celui-ci éprouvé — "tu prends le moins de risque du casse rien").
+// Module "Remplissage rapide" (24/08, demandé par Olivier).
+// Étape 1 (livrée) : postes de travail, en bloc autonome.
+// Étape 2 (24/08, même jour) : RP, RU et Congés (Accordé/Demandé/Refusé)
+// ajoutés au même sélecteur -- "j'aimerais que ce module puisse gerer la
+// saisie des poste de travail. et aussi des rp, RU [...] tout au meme
+// endroit". RP/RU réutilisent tel quel l'endpoint bulk-fill déjà construit
+// (juste un code_equipe fixe, sans poste). Congés est structurellement à
+// part : "Demandé"/"Refusé" n'écrivent JAMAIS dans le planning perso (même
+// principe que le popup de saisie normal, DayEditPopup/onCongeStatutChange)
+// -- seul "Accordé" écrit dans le planning, et l'ÉCRASE volontairement
+// (règle déjà établie pour Congés partout ailleurs dans l'appli), d'où le
+// paramètre overwrite:true réservé à ce seul cas dans tout ce module.
 //
 // Deux besoins distincts, dans la même fenêtre :
-//  A) Remplir plusieurs jours d'un coup — un agent peu habilité (ex: un seul
-//     poste) coche vacation + poste, puis les jours concernés sur l'année
-//     (même mini-calendrier que RP/RU, copié à l'identique plutôt que
-//     factoré, pour ne courir aucun risque sur ces modules déjà éprouvés).
+//  A) Remplir plusieurs jours d'un coup — un agent choisit un type de
+//     journée (Poste de travail / RP / RU / Congés) puis coche tous les
+//     jours concernés sur l'année, même dispersés (même mini-calendrier que
+//     RP/RU, copié à l'identique plutôt que factoré, pour ne courir aucun
+//     risque sur ces modules déjà éprouvés).
 //  B) Effacer le planning sur une période — pour pouvoir recommencer une
 //     année déjà partiellement saisie sans que le remplissage en masse ne
 //     bute sur des jours déjà occupés. Toujours réversible (sauvegarde
@@ -26,6 +36,19 @@ const VACATIONS = [
   { code:"J",  label:"Journée" },
 ];
 
+const TYPES_JOURNEE = [
+  { code:"poste",  label:"Poste de travail" },
+  { code:"rp",     label:"RP" },
+  { code:"ru",     label:"RU" },
+  { code:"conges", label:"Congés" },
+];
+
+const CONGES_STATUTS = [
+  { code:"accorde", label:"✓ Accordé" },
+  { code:"demande", label:"⏳ Demandé" },
+  { code:"refuse",  label:"✕ Refusé" },
+];
+
 const MOIS_L = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
 function joursDuMois(year, monthNum) {
@@ -39,13 +62,19 @@ function fmtDateCourt(dk) {
   return new Date(dk+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});
 }
 
-export default function RemplissageMasseModal({ agent, agentProfiles, schedule, setSchedule, onClose }) {
+export default function RemplissageMasseModal({ agent, agentProfiles, setAgentProfiles, schedule, setSchedule, onClose }) {
   const agCp = agent?.immatriculation || agent?.cp || agent?.id;
 
   // ── Section A : remplissage en masse ──────────────────────────────────
+  const [typeJournee, setTypeJournee] = useState("poste");
   const [vacation, setVacation] = useState("M");
   const [posteCode, setPosteCode] = useState("");
+  const [congeStatut, setCongeStatut] = useState("");
   const postesDispo = getPostesPourAgent(agent, agentProfiles, vacation);
+
+  const changerType = (t) => {
+    setTypeJournee(t); setPosteCode(""); setCongeStatut(""); setJoursSelect([]); setFillMsg(null);
+  };
 
   const [miniMonth, setMiniMonth] = useState(()=>{
     const now = new Date();
@@ -63,25 +92,82 @@ export default function RemplissageMasseModal({ agent, agentProfiles, schedule, 
     if (m<1) { m=12; y--; } else if (m>12) { m=1; y++; }
     setMiniMonth(`${y}-${String(m).padStart(2,"0")}`);
   };
+
+  // Congés : aucun des 3 statuts (Accordé/Demandé/Refusé) ne suit la règle
+  // habituelle "on saute les jours déjà occupés" -- Accordé écrase toujours
+  // volontairement (règle déjà établie ailleurs dans l'appli pour Congés),
+  // Demandé/Refusé ne touchent jamais au planning donc le contenu existant
+  // n'a aucune importance. Tous les jours restent donc sélectionnables.
+  const griserSiOccupe = typeJournee !== "conges";
+
   const toggleJourSelect = (dk, occupe) => {
-    if (occupe) return;
+    if (occupe && griserSiOccupe) return;
     setFillMsg(null);
     setJoursSelect(prev => prev.includes(dk) ? prev.filter(x=>x!==dk) : [...prev, dk].sort());
   };
 
+  // Prêt à afficher le calendrier : un poste doit être choisi pour "Poste de
+  // travail", un statut pour "Congés" -- RP/RU n'ont besoin de rien de plus.
+  const pretPourCalendrier =
+    typeJournee==="poste" ? !!posteCode :
+    typeJournee==="conges" ? !!congeStatut :
+    true;
+
   const remplir = async () => {
-    if (joursSelect.length===0 || !posteCode) return;
+    if (joursSelect.length===0) return;
+    if (typeJournee==="poste" && !posteCode) return;
+    if (typeJournee==="conges" && !congeStatut) return;
     setFillBusy(true); setFillMsg(null);
-    const canon = convertirCodePosteVersJsCode(posteCode, vacation);
-    const horaires = (canon && HORAIRES_POSTE[canon]) || HORAIRES_DEFAUT[vacation] || null;
+
+    // Congés Demandé/Refusé : n'écrit jamais dans le planning perso (même
+    // principe que le popup de saisie normal, onCongeStatutChange) -- pur
+    // ajout côté profil, sauvegardé automatiquement par l'effet générique
+    // agentProfiles déjà en place, aucun appel serveur planning nécessaire.
+    if (typeJournee==="conges" && (congeStatut==="demande" || congeStatut==="refuse")) {
+      const todayIso = new Date().toISOString().slice(0,10);
+      setAgentProfiles(prev => {
+        const currMap = prev[agent.id]?.congesDemandes || {};
+        const nextMap = {...currMap};
+        joursSelect.forEach(dk => {
+          const v = schedule[`${agCp}-${dk}`];
+          const jourEtaitVide = !(v && (v.equipe || v.equipe2));
+          const curr = currMap[dk];
+          nextMap[dk] = congeStatut==="demande"
+            ? { statut:"demande", dateDemande: curr?.dateDemande || todayIso, jourEtaitVide }
+            : { statut:"refuse", dateDemande: curr?.dateDemande||null, dateRefus: todayIso, jourEtaitVide };
+        });
+        return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes: nextMap}};
+      });
+      setFillMsg({ ok:true, text: `✓ ${joursSelect.length} jour${joursSelect.length>1?"s":""} ${congeStatut==="demande"?"demandé":"marqué refusé"}${joursSelect.length>1?"s":""} -- rien n'est écrit dans le planning, suivi dans le module Congés.` });
+      setJoursSelect([]);
+      setFillBusy(false);
+      return;
+    }
+
+    // Poste de travail / RP / RU / Congés-Accordé : écriture réelle dans le
+    // planning perso via le même endpoint bulk-fill pour les 4 cas.
+    let codeEquipe, codePoste=null, horaires=null, jsCode=null, overwrite=false;
+    if (typeJournee==="poste") {
+      codeEquipe = vacation; codePoste = posteCode;
+      jsCode = convertirCodePosteVersJsCode(posteCode, vacation);
+      horaires = (jsCode && HORAIRES_POSTE[jsCode]) || HORAIRES_DEFAUT[vacation] || null;
+    } else if (typeJournee==="rp") {
+      codeEquipe = "RP";
+    } else if (typeJournee==="ru") {
+      codeEquipe = "RU";
+    } else { // conges + accorde
+      codeEquipe = "CA"; overwrite = true;
+    }
+
     try {
-      const res = await api.planning.bulkFill(agCp, { dates: joursSelect, codeEquipe: vacation, codePoste: posteCode, horaires });
+      const res = await api.planning.bulkFill(agCp, { dates: joursSelect, codeEquipe, codePoste, horaires, overwrite });
       // Mise à jour optimiste locale des jours réellement appliqués — les
-      // "ignorés" (déjà occupés entre-temps) restent inchangés dans schedule.
+      // "ignorés" (déjà occupés entre-temps, jamais le cas pour Congés
+      // Accordé puisque overwrite=true) restent inchangés dans schedule.
       setSchedule(prev => {
         const next = {...prev};
         (res.appliques||[]).forEach(d => {
-          next[`${agCp}-${d}`] = { equipe: vacation, jsCode: canon || posteCode, horaires, prive: vacation!=="M"&&vacation!=="AM"&&vacation!=="N"&&vacation!=="J" };
+          next[`${agCp}-${d}`] = { equipe: codeEquipe, jsCode: jsCode || codePoste, horaires, prive: !["M","AM","N","J","CA"].includes(codeEquipe) };
         });
         return next;
       });
@@ -103,13 +189,21 @@ export default function RemplissageMasseModal({ agent, agentProfiles, schedule, 
   const [clearMsg, setClearMsg] = useState(null);
   const [lastBatch, setLastBatch] = useState(null); // {batchId, nb, removed:{key:entry}}
 
+  // Un jour est "affecté" par l'effacement s'il porte autre chose qu'une
+  // note perso -- poste/RP/RU/Congés (equipe/equipe2), descente de nuit
+  // seule (finNuit), grève ou formation. La note perso, elle, n'est jamais
+  // comptée ici : elle survit toujours à l'effacement (voir bulkClear côté
+  // serveur, 24/08), donc un jour qui n'a QUE ça ne doit ni apparaître dans
+  // l'aperçu ni être retiré de l'affichage local après confirmation.
+  const estAffecte = (v) => !!(v && (v.equipe || v.equipe2 || v.finNuit || v.greve || v.formation));
+
   const compterJoursOccupes = () => {
     let n = 0;
     Object.entries(schedule||{}).forEach(([k,v]) => {
       if (!k.startsWith(agCp+"-")) return;
       const dk = k.slice(agCp.length+1);
       if (dk<clearFrom || dk>clearTo) return;
-      if (v && (v.equipe || v.equipe2)) n++;
+      if (estAffecte(v)) n++;
     });
     return n;
   };
@@ -134,13 +228,19 @@ export default function RemplissageMasseModal({ agent, agentProfiles, schedule, 
       if (!k.startsWith(agCp+"-")) return;
       const dk = k.slice(agCp.length+1);
       if (dk<clearFrom || dk>clearTo) return;
-      if (v && (v.equipe || v.equipe2)) removed[k] = v;
+      if (estAffecte(v)) removed[k] = v;
     });
     try {
       const res = await api.planning.bulkClear(agCp, clearFrom, clearTo);
       setSchedule(prev => {
         const next = {...prev};
-        Object.keys(removed).forEach(k => delete next[k]);
+        Object.keys(removed).forEach(k => {
+          // Une note perso survit à l'effacement (backend, 24/08) — le jour
+          // n'est jamais totalement retiré de l'affichage local s'il en
+          // portait une, seul son contenu de travail est vidé.
+          if (removed[k].notePerso) next[k] = { notePerso: removed[k].notePerso };
+          else delete next[k];
+        });
         return next;
       });
       setLastBatch({ batchId: res.batch_id, nb: res.nb_effaces, removed });
@@ -181,32 +281,65 @@ export default function RemplissageMasseModal({ agent, agentProfiles, schedule, 
           {/* ── Section A ── */}
           <div>
             <div style={{fontSize:13,fontWeight:800,color:"#1e293b",marginBottom:2}}>Remplir plusieurs jours</div>
-            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Choisis un poste et une vacation, puis coche tous les jours concernés — même dispersés sur l'année. Les jours déjà occupés ne sont jamais écrasés.</div>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Choisis un type de journée, puis coche tous les jours concernés — même dispersés sur l'année.</div>
 
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
-              {VACATIONS.map(v => (
-                <button key={v.code} onClick={()=>{setVacation(v.code);setPosteCode("");}}
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+              {TYPES_JOURNEE.map(t => (
+                <button key={t.code} onClick={()=>changerType(t.code)}
                   style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
-                    background:vacation===v.code?"#0f4c81":"#f1f5f9",color:vacation===v.code?"#fff":"#334155"}}>
-                  {v.label}
+                    background:typeJournee===t.code?"#0369a1":"#e0f2fe",color:typeJournee===t.code?"#fff":"#0369a1"}}>
+                  {t.label}
                 </button>
               ))}
             </div>
 
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-              {postesDispo.length===0
-                ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucun poste habilité pour cette vacation.</div>
-                : postesDispo.map(p => (
-                  <button key={p.code} onClick={()=>setPosteCode(posteCode===p.code?"":p.code)}
+            {typeJournee==="poste" && (<>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
+                {VACATIONS.map(v => (
+                  <button key={v.code} onClick={()=>{setVacation(v.code);setPosteCode("");}}
                     style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
-                      background:posteCode===p.code?"#1e293b":"#f1f5f9",color:posteCode===p.code?"#fff":"#334155"}}>
-                    {p.label}
+                      background:vacation===v.code?"#0f4c81":"#f1f5f9",color:vacation===v.code?"#fff":"#334155"}}>
+                    {v.label}
                   </button>
-                ))
-              }
-            </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                {postesDispo.length===0
+                  ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucun poste habilité pour cette vacation.</div>
+                  : postesDispo.map(p => (
+                    <button key={p.code} onClick={()=>setPosteCode(posteCode===p.code?"":p.code)}
+                      style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                        background:posteCode===p.code?"#1e293b":"#f1f5f9",color:posteCode===p.code?"#fff":"#334155"}}>
+                      {p.label}
+                    </button>
+                  ))
+                }
+              </div>
+            </>)}
 
-            {posteCode && (<>
+            {typeJournee==="conges" && (
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                {CONGES_STATUTS.map(s => (
+                  <button key={s.code} onClick={()=>setCongeStatut(congeStatut===s.code?"":s.code)}
+                    style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                      background:congeStatut===s.code?"#eab308":"#fef9c3",color:congeStatut===s.code?"#fff":"#854d0e"}}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {typeJournee==="conges" && congeStatut==="accorde" && (
+              <div style={{fontSize:10,fontWeight:600,color:"#b45309",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
+                ⚠️ Accordé écrase le contenu existant des jours cochés (même règle que la saisie normale d'un congé).
+              </div>
+            )}
+            {typeJournee==="conges" && (congeStatut==="demande"||congeStatut==="refuse") && (
+              <div style={{fontSize:10,fontWeight:600,color:"#0369a1",background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
+                ℹ️ N'écrit rien dans le planning — retrouve le suivi dans le module Congés.
+              </div>
+            )}
+
+            {pretPourCalendrier && (<>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                 <button onClick={()=>changerMiniMois(-1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#0f4c81",padding:"2px 8px",fontWeight:700}}>‹</button>
                 <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{MOIS_L[miniMonthNum-1]} {miniYear}</span>
@@ -221,11 +354,13 @@ export default function RemplissageMasseModal({ agent, agentProfiles, schedule, 
                   const day = i+1;
                   const dk = `${miniYear}-${String(miniMonthNum).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
                   const v = schedule[`${agCp}-${dk}`];
-                  const occupe = !!(v && (v.equipe || v.equipe2));
+                  const occupeReel = !!(v && (v.equipe || v.equipe2));
+                  const occupe = occupeReel && griserSiOccupe;
                   const isSel = joursSelect.includes(dk);
                   return (
                     <button key={dk} onClick={()=>toggleJourSelect(dk,occupe)} disabled={occupe}
-                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":occupe?"#e2e8f0":"#cbd5e1"}`,
+                      title={occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
+                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":occupe?"#e2e8f0":occupeReel?"#fde68a":"#cbd5e1"}`,
                         borderRadius:6,background:isSel?"#0f4c81":occupe?"#f1f5f9":"#fff",
                         color:isSel?"#fff":occupe?"#cbd5e1":"#334155",
                         fontSize:11,fontWeight:700,cursor:occupe?"default":"pointer",
@@ -249,7 +384,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, schedule, 
           {/* ── Section B ── */}
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:16}}>
             <div style={{fontSize:13,fontWeight:800,color:"#991b1b",marginBottom:2}}>⚠️ Effacer le planning</div>
-            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Pour recommencer une période déjà saisie. Toujours annulable juste après.</div>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Pour recommencer une période déjà saisie. Toujours annulable juste après. Les notes perso ne sont jamais effacées.</div>
 
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
               <input type="date" value={clearFrom} onChange={e=>{setClearFrom(e.target.value);setClearMsg(null);}}

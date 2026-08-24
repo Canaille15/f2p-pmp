@@ -107,7 +107,7 @@ async function bulkFill(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { dates, code_equipe, code_poste, heure_debut, heure_fin } = req.body;
+  const { dates, code_equipe, code_poste, heure_debut, heure_fin, overwrite } = req.body;
   if (!Array.isArray(dates) || dates.length === 0) return res.status(400).json({ error: 'Dates requises' });
   if (!code_equipe) return res.status(400).json({ error: 'code_equipe requis' });
   const prive = CODES_PUBLICS.has(code_equipe) ? 0 : 1;
@@ -116,14 +116,21 @@ async function bulkFill(req, res) {
   try {
     await conn.beginTransaction();
     for (const date of dates) {
-      const [[occupe]] = await conn.query(
-        `SELECT pp.id FROM planning_jour pj
-         JOIN planning_periode pp ON pp.planning_jour_id = pj.id AND pp.ordre = 1
-         WHERE pj.cp_agent = ? AND pj.date_jour = ? AND pp.code_equipe IS NOT NULL
-           AND NOT (pp.code_equipe = 'N' AND pp.note IN ('fin_nuit','note_seule'))`,
-        [cp, date]
-      );
-      if (occupe) { ignores.push(date); continue; }
+      // overwrite (24/08, Congés "Accordé" en masse) : SEUL cas de tout ce
+      // module qui écrase volontairement -- même règle que le popup de
+      // saisie normal (le choix "Accordé" d'un congé écrase toujours ce qui
+      // était déjà là, contrairement à RP/RU/postes de travail). false par
+      // défaut, comportement inchangé pour tous les autres appelants.
+      if (!overwrite) {
+        const [[occupe]] = await conn.query(
+          `SELECT pp.id FROM planning_jour pj
+           JOIN planning_periode pp ON pp.planning_jour_id = pj.id AND pp.ordre = 1
+           WHERE pj.cp_agent = ? AND pj.date_jour = ? AND pp.code_equipe IS NOT NULL
+             AND NOT (pp.code_equipe = 'N' AND pp.note IN ('fin_nuit','note_seule'))`,
+          [cp, date]
+        );
+        if (occupe) { ignores.push(date); continue; }
+      }
       await conn.query(
         `INSERT INTO planning_jour (cp_agent, date_jour, source) VALUES (?,?,'manuel')
          ON DUPLICATE KEY UPDATE source='manuel', modifie_le=NOW()`,
@@ -177,6 +184,7 @@ async function bulkClear(req, res) {
       [cp, date_from, date_to, jours.length]
     );
     const batchId = batchResult.insertId;
+    let nbReellementEffaces = 0;
     for (const j of jours) {
       const [periodes] = await conn.query(
         `SELECT ordre, code_equipe, code_poste, heure_debut, heure_fin, prive, note, note_perso
@@ -186,11 +194,32 @@ async function bulkClear(req, res) {
         `INSERT INTO planning_bulk_clear_detail (batch_id, date_jour, source, periodes_json) VALUES (?,?,?,?)`,
         [batchId, j.date_jour, j.source, JSON.stringify(periodes)]
       );
+      // Note perso jamais effacée par ce dispositif (24/08, demandé par
+      // Olivier) : si une des périodes du jour en porte une, le jour est
+      // réduit au même placeholder "note_seule" déjà utilisé partout
+      // ailleurs dans l'appli (equipe='N', note='note_seule') au lieu
+      // d'être supprimé en entier -- travail/RP/RU/descente de nuit
+      // disparaissent, la note reste.
+      const noteConservee = periodes.find(p => p.note_perso);
+      // Un jour qui n'avait déjà qu'une note (rien d'autre) ressort de ce
+      // traitement strictement identique à avant -- un vrai no-op, à ne pas
+      // compter dans "nb_effaces" (sinon incohérent avec l'aperçu affiché
+      // avant confirmation, qui exclut déjà ce cas).
+      const estNoteSeuleNoOp = periodes.length === 1 && periodes[0].code_equipe === 'N' && periodes[0].note === 'note_seule' && periodes[0].note_perso;
+      if (!estNoteSeuleNoOp) nbReellementEffaces++;
       await conn.query('DELETE FROM planning_periode WHERE planning_jour_id=?', [j.id]);
+      if (noteConservee) {
+        await conn.query(
+          `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
+           VALUES (?,1,'N',NULL,NULL,NULL,0,'note_seule',?)`,
+          [j.id, noteConservee.note_perso]
+        );
+      } else {
+        await conn.query('DELETE FROM planning_jour WHERE id=?', [j.id]);
+      }
     }
-    await conn.query(`DELETE FROM planning_jour WHERE cp_agent=? AND date_jour BETWEEN ? AND ?`, [cp, date_from, date_to]);
     await conn.commit();
-    res.json({ message: 'Planning effacé', nb_effaces: jours.length, batch_id: batchId });
+    res.json({ message: 'Planning effacé', nb_effaces: nbReellementEffaces, batch_id: batchId });
   } catch (e) {
     await conn.rollback();
     console.error(e); res.status(500).json({ error: 'Erreur serveur' });
