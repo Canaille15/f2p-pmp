@@ -225,10 +225,10 @@ async function cloturer(req, res) {
           ? `Échange (module Échanges) — ${echange.motif}`
           : 'Échange conclu via le module Échanges';
         await pool.query(
-          `INSERT INTO cps_aleas (js_code, date_jour, famille, type, agents_concernes, motif, signale_par)
-           VALUES (?,?,?,?,?,?,?)`,
+          `INSERT INTO cps_aleas (js_code, date_jour, famille, type, agents_concernes, motif, signale_par, echange_id)
+           VALUES (?,?,?,?,?,?,?,?)`,
           [js_code, echange.date_jour, familleAlea, 'echange',
-           JSON.stringify([cp_echange_avec]), motif, cp]
+           JSON.stringify([cp_echange_avec]), motif, cp, id]
         );
         aleaCree = true;
       } catch (e) {
@@ -254,10 +254,10 @@ async function cloturer(req, res) {
           ? `Échange (module Échanges) — ${echange.motif}`
           : 'Échange conclu via le module Échanges';
         await pool.query(
-          `INSERT INTO cps_aleas (js_code, date_jour, famille, type, agents_concernes, motif, signale_par)
-           VALUES (?,?,?,?,?,?,?)`,
+          `INSERT INTO cps_aleas (js_code, date_jour, famille, type, agents_concernes, motif, signale_par, echange_id)
+           VALUES (?,?,?,?,?,?,?,?)`,
           [js_code_reciproque, echange.date_jour, famille_reciproque, 'echange',
-           JSON.stringify([cp]), motif2, cp]
+           JSON.stringify([cp]), motif2, cp, id]
         );
         alea2Cree = true;
       } catch (e) {
@@ -278,8 +278,16 @@ async function deleteEchange(req, res) {
     if (!echange) return res.status(404).json({ error: 'Demande introuvable' });
     if (echange.cp_demandeur !== cp) return res.status(403).json({ error: 'Seul le demandeur peut supprimer cette demande' });
 
+    // Suppression en cascade des aleas CPS crees automatiquement a la
+    // cloture (24/08, demande d'Olivier : "lorsqu'une demande d'echange est
+    // annulé il faut aussi annulé automatiquement le message qui avait ete
+    // creer dans cps") -- une demande cloturee peut avoir cree 1 ou 2 aleas
+    // (voir cloturer(), champ echange_id qui les relie). Si la demande
+    // n'avait jamais ete cloturee (ou que l'ecriture CPS avait echoue),
+    // aucun alea n'a ce echange_id -- suppression sans effet, jamais bloquant.
+    const [aleasSupprimes] = await pool.query('DELETE FROM cps_aleas WHERE echange_id=?', [id]);
     await pool.query('DELETE FROM echange WHERE id=?', [id]);
-    res.json({ message: 'Demande supprimée' });
+    res.json({ message: 'Demande supprimée', aleas_cps_supprimes: aleasSupprimes.affectedRows });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
