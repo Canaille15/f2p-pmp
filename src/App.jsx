@@ -4511,14 +4511,31 @@ export function computeDashboardTC(agent, schedule, agentProfiles, pausesData, y
   // en ordre chronologique réel tous les ajustements manuels jamais saisis
   // (tagués par mois, pour repère seulement) et toutes les pauses figées
   // validées de tous les temps — le plafond de 32h dépend de cet ordre.
+  //
+  // moisEffectif (24/08, bug signalé par Olivier) : le crédit +1h30 doit
+  // compter sur le MOIS DE CONSTATATION (mois_fia, choisi par l'agent quand
+  // il vérifie que la pause est bien apparue quelque part — ex: une pause du
+  // 12 janvier constatée en mars doit créditer TC en mars, pas en janvier).
+  // Avant ce correctif, le classement chronologique (donc le mois où le
+  // crédit "arrive" dans le solde, y compris pour la Fiche Individuelle
+  // Mensuelle qui filtre par cutoffDate) se basait à tort sur date_jour (le
+  // jour de la pause elle-même) plutôt que sur mois_fia. Repli sur le mois de
+  // date_jour uniquement si mois_fia n'a jamais été renseigné (validation
+  // ancienne, ou agent qui a coché "Vérifié" sans encore choisir de mois).
   const pausesValidees = (pausesData||[])
     .filter(p => p.fia_done)
-    .map(p => String(p.date_jour).slice(0,10));
+    .map(p => {
+      const dateJour = String(p.date_jour).slice(0,10);
+      const moisEffectif = p.mois_fia ? String(p.mois_fia).slice(0,7) : dateJour.slice(0,7);
+      return { dateJour, moisEffectif };
+    });
 
   let evenements = [
     ...ledger.map(e=>({date:(e.mois||"0000-00")+"-01", type:"manuel", delta:e.deltaMinutes||0})),
-    ...pausesValidees.map(d=>({date:d, type:"pause_validee"})),
-  ].sort((a,b)=> a.date===b.date ? (a.type<b.type?-1:1) : a.date.localeCompare(b.date));
+    ...pausesValidees.map(p=>({date:p.moisEffectif+"-01", type:"pause_validee", dateJour:p.dateJour})),
+  ].sort((a,b)=> a.date===b.date
+    ? (a.type!==b.type ? (a.type<b.type?-1:1) : (a.dateJour||"").localeCompare(b.dateJour||""))
+    : a.date.localeCompare(b.date));
   if(cutoffDate) evenements = evenements.filter(e=>e.date<=cutoffDate);
 
   let solde = 0;
@@ -4530,7 +4547,7 @@ export function computeDashboardTC(agent, schedule, agentProfiles, pausesData, y
       const place = Math.max(0, TC_PLAFOND_MIN - solde);
       const ajoute = Math.min(TC_MIN_PAUSE, place);
       solde += ajoute;
-      detailPauses[ev.date] = {ajoute, horsPlafond: TC_MIN_PAUSE-ajoute};
+      detailPauses[ev.dateJour] = {ajoute, horsPlafond: TC_MIN_PAUSE-ajoute};
     }
   });
 
