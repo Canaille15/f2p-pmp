@@ -5,22 +5,34 @@ import api from "../api/client";
 // Deux espaces bien séparés (refonte 25/08, demandé par Olivier : "j'aimerai
 // mieux séparer la parti afo de l'agent formateur, de la partie formation
 // personnel de l'agent qui peux aussi etre AFO par ailleurs") :
-//  - "Mes formations" (tous les agents, y compris les AFO) : UNIQUEMENT le
-//    côté agent -- archive perso (sessions AFO où l'agent est inscrit comme
+//  - FormationView (export par défaut, tous les agents) : UNIQUEMENT le côté
+//    agent -- archive perso (sessions AFO où l'agent est inscrit comme
 //    PARTICIPANT + formations auto-déclarées). Plus aucune trace du rôle
 //    formateur ici, même pour un AFO.
-//  - "Espace AFO" (réservé aux agents is_afo) : tout le rôle formateur
-//    regroupé au même endroit, en 3 sous-onglets -- "Tes sessions" (celles où
-//    l'agent enseigne), "Gestion" (catalogue, création/lancement de
-//    sessions), "Stats". Tous les AFO ont les mêmes droits (pas de
-//    hiérarchie), voir CLAUDE.md / plan du module.
+//  - AfoView (export nommé, réservé aux agents is_afo) : tout le rôle
+//    formateur, en 3 sous-onglets -- "Tes sessions" (celles où l'agent
+//    enseigne), "Gestion" (catalogue, création/lancement de sessions),
+//    "Stats". Tous les AFO ont les mêmes droits (pas de hiérarchie).
 //
-// Point de conception central : l'inscription à une session AFO écrit "FOR"
-// dans le planning perso de l'agent au moment du lancement — mais l'agent
-// reste seul maître de son planning (peut le modifier normalement). Si son
-// planning divergence ensuite, la vue "Gestion" affiche son nom barré plutôt
-// que de faire confiance à une donnée qui n'est plus à jour (voir
-// getSessionDetail côté backend, calculé à la lecture, jamais stocké).
+// 2e refonte, même jour (25/08) : d'abord un seul module avec 2 onglets
+// internes ("Mes formations" / "Espace AFO"), Olivier a ensuite proposé
+// mieux -- "ce serait pas mieux que le lateral soit un module AFO -
+// formation. et que la tuile formation reste le module des formation perso"
+// -- promu en 2 VUES SÉPARÉES du lateral (comme Admin, isAfo && au lieu d'un
+// onglet caché), App.jsx s'en charge (VIEWS "formation"/"afo", isAfo &&
+// renderFlat("afo")). Les deux vues restent dans le MÊME fichier (pas de
+// nouveau fichier séparé) : elles partagent une grosse surface de petits
+// helpers (NAVY/AMBRE, StatutBadge, RosterLignes, ChoixLibre, styles...) --
+// les dupliquer dans 2 fichiers aurait fait courir un risque de drift bien
+// plus grand que le risque (nul ici, même fichier) d'un import circulaire.
+//
+// Point de conception central (inchangé) : l'inscription à une session AFO
+// écrit "FOR" dans le planning perso de l'agent au moment du lancement —
+// mais l'agent reste seul maître de son planning (peut le modifier
+// normalement). Si son planning diverge ensuite, la vue "Gestion" affiche
+// son nom barré plutôt que de faire confiance à une donnée qui n'est plus à
+// jour (voir getSessionDetail côté backend, calculé à la lecture, jamais
+// stocké).
 // ─────────────────────────────────────────────────────────────────────────
 
 const AMBRE = { from: "#b45309", to: "#92400e", bgLight: "#fffbeb", borderLight: "#fde68a", accentDark: "#78350f" };
@@ -116,78 +128,62 @@ const btnSecondary = { background: "#f1f5f9", color: "#64748b", border: "none", 
 
 // ─── COMPOSANT RACINE ───────────────────────────────────────────────────────
 
-export default function FormationView({ currentAgent, currentUser, agents, agentProfiles, setAgentProfiles, refreshSchedule, refreshProfil }) {
+export default function FormationView({ currentAgent, agentProfiles, setAgentProfiles, refreshSchedule }) {
   const agentId = currentAgent?.immatriculation || currentAgent?.cp || currentAgent?.id;
-  const isAfo = currentUser?.isAfo || false;
-  const [tab, setTab] = useState("mes");
-  const [afoSubTab, setAfoSubTab] = useState("sessions");
-  // Permet a "Tes sessions" (dans Espace AFO) d'ouvrir directement le detail
-  // d'une session (via SessionDetailModal, cote Gestion) sans faire chercher
-  // l'AFO dans la liste globale — demande explicite d'Olivier (10/08) : trop
-  // de sous-menus, trop dur de retrouver ses propres journees de formateur.
-  const [pendingSessionId, setPendingSessionId] = useState(null);
-  const goToSession = (id) => { setPendingSessionId(id); setTab("afo"); setAfoSubTab("gestion"); };
-
-  const tabs = [
-    { k: "mes", label: "📖 Mes formations" },
-    ...(isAfo ? [{ k: "afo", label: "🎓 Espace AFO" }] : []),
-  ];
-  const afoSubTabs = [
-    { k: "sessions", label: "👨‍🏫 Tes sessions" },
-    { k: "gestion", label: "📋 Gestion" },
-    { k: "stats", label: "📊 Stats" },
-  ];
-  useEffect(() => { if (!isAfo && tab !== "mes") setTab("mes"); }, [isAfo]); // eslint-disable-line
 
   return (
     <div style={{ padding: "12px", maxWidth: 1000, margin: "0 auto", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>🎓 Formation</div>
-        <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>
-          {isAfo ? "Ton archive personnelle, et ton rôle de formateur, bien séparés" : "Tes formations suivies"}
-        </div>
+        <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>Tes formations suivies</div>
+      </div>
+      <MesFormationsTab agentId={agentId} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
+    </div>
+  );
+}
+
+// ─── ESPACE AFO — vue séparée du lateral (25/08, voir en-tête du fichier) ───
+export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }) {
+  const agentId = currentAgent?.immatriculation || currentAgent?.cp || currentAgent?.id;
+  const [afoSubTab, setAfoSubTab] = useState("sessions");
+  // Permet a "Tes sessions" d'ouvrir directement le detail d'une session (via
+  // SessionDetailModal, cote Gestion) sans faire chercher la session dans la
+  // liste globale — demande explicite d'Olivier (10/08) : trop de
+  // sous-menus, trop dur de retrouver ses propres journees de formateur.
+  const [pendingSessionId, setPendingSessionId] = useState(null);
+  const goToSession = (id) => { setPendingSessionId(id); setAfoSubTab("gestion"); };
+
+  const afoSubTabs = [
+    { k: "sessions", label: "👨‍🏫 Tes sessions" },
+    { k: "gestion", label: "📋 Gestion" },
+    { k: "stats", label: "📊 Stats" },
+  ];
+
+  return (
+    <div style={{ padding: "12px", maxWidth: 1000, margin: "0 auto", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>🎓 Espace AFO</div>
+        <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>Ton rôle de formateur</div>
       </div>
 
-      {tabs.length > 1 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-          {tabs.map(t => (
-            <button key={t.k} onClick={() => setTab(t.k)}
+      <div style={{ background: NAVY.bgLight, border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 14, padding: 14 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+          {afoSubTabs.map(t => (
+            <button key={t.k} onClick={() => setAfoSubTab(t.k)}
               style={{
-                padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer",
-                fontSize: 13, fontWeight: 700,
-                background: tab === t.k ? "#1e293b" : "#f1f5f9",
-                color: tab === t.k ? "#fff" : "#64748b",
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12.5, fontWeight: 700,
+                background: afoSubTab === t.k ? NAVY.from : "#fff",
+                color: afoSubTab === t.k ? "#fff" : NAVY.accentDark,
               }}>
               {t.label}
             </button>
           ))}
         </div>
-      )}
-
-      {tab === "mes" && (
-        <MesFormationsTab agentId={agentId} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
-      )}
-
-      {tab === "afo" && isAfo && (
-        <div style={{ background: NAVY.bgLight, border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 14, padding: 14 }}>
-          <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-            {afoSubTabs.map(t => (
-              <button key={t.k} onClick={() => setAfoSubTab(t.k)}
-                style={{
-                  padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                  fontSize: 12.5, fontWeight: 700,
-                  background: afoSubTab === t.k ? NAVY.from : "#fff",
-                  color: afoSubTab === t.k ? "#fff" : NAVY.accentDark,
-                }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          {afoSubTab === "sessions" && <MesSessionsFormateurTab agentId={agentId} onGoToSession={goToSession} />}
-          {afoSubTab === "gestion" && <GestionTab agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
-          {afoSubTab === "stats" && <StatsTab />}
-        </div>
-      )}
+        {afoSubTab === "sessions" && <MesSessionsFormateurTab agentId={agentId} onGoToSession={goToSession} />}
+        {afoSubTab === "gestion" && <GestionTab agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
+        {afoSubTab === "stats" && <StatsTab />}
+      </div>
     </div>
   );
 }

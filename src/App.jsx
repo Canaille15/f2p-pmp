@@ -11,7 +11,7 @@ import CetPdfsView from "./components/CetPdfsView";
 import D2iView from "./components/D2iView";
 import FimPdfView from "./components/FimPdfView";
 import SignaturePad from "./components/SignaturePad";
-import FormationView from "./components/FormationView";
+import FormationView, { AfoView } from "./components/FormationView";
 import StatsEquipeView from "./components/StatsEquipeView";
 
 
@@ -12743,6 +12743,11 @@ export default function App(){
     {k:"formation",l:`🎓 Formation${nbFormationsNonVues>0?` 🔔${nbFormationsNonVues}`:""}`},
     {k:"statsEquipe", l:"📊 Stat'Equip"},
     {k:"profil",  l:"👤 Mon profil"},
+    // AFO (25/08) : promu en vue séparée du lateral, comme Admin (Olivier :
+    // "ce serait pas mieux que le lateral soit un module AFO - formation. et
+    // que la tuile formation reste le module des formation perso") -- voir
+    // en-tête de FormationView.jsx pour le détail de cette 2e refonte.
+    ...(isAfo ? [{k:"afo", l:"🎓 AFO"}] : []),
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
 
@@ -12949,6 +12954,7 @@ export default function App(){
                 "#b45309", "#fdf6ec", ["conges", "cetPdfs", "d2i", "fim"])}
               {REST_KEYS.map(renderFlat)}
               {renderFlat("profil")}
+              {isAfo && renderFlat("afo")}
               {isAdmin && renderFlat("admin")}
             </>
           );
@@ -12988,7 +12994,8 @@ export default function App(){
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="d2i"&&<D2iView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="fim"&&<FimPdfView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} schedule={schedule}/>}
-  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} currentUser={currentUser} agents={agents} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} refreshProfil={refreshMonProfil}/>}
+  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule}/>}
+  {view==="afo"&&<AfoView currentAgent={currentAgent||currentUser?.agent} agents={agents} refreshProfil={refreshMonProfil} refreshSchedule={refreshMonSchedule}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onAddAgent={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
