@@ -106,6 +106,12 @@ async function create(req, res) {
   const { cp, nom, prenom, grade, poste, famille, is_reserve, is_afo } = req.body;
   if (!cp || !nom || !prenom)
     return res.status(400).json({ error: 'CP, nom et prénom sont obligatoires' });
+  // agent.grade est NOT NULL en base -- le formulaire Admin envoie toujours
+  // une valeur par défaut ("CO5"), donc ce cas n'est normalement jamais
+  // atteignable depuis l'UI, mais un appel API direct sans grade plantait
+  // en 500 générique au lieu d'un message clair (trouvé le 25/08).
+  if (!grade)
+    return res.status(400).json({ error: 'Le grade est obligatoire' });
 
   // Initiales automatiques
   const initiales = (prenom[0] + (nom.replace(/[\s-]/g, '')[0] || '')).toUpperCase();

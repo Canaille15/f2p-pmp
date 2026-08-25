@@ -216,6 +216,7 @@ export default function StatsEquipeView() {
               <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} sousLabel="compte à part" />
               <Tuile label="Encadrement" valeur={data.headcounts.totalEncadrement} sousLabel="DPX / Adj DPX — compte à part" />
               <Tuile label="AFO" valeur={data.headcounts.totalAfo} sousLabel="toutes catégories confondues" />
+              <Tuile label="ASFP" valeur={data.headcounts.totalAsfp} sousLabel="Assistant Formation Pro — compte à part" />
               <Tuile label="Temps partiel" valeur={fmtPct(data.headcounts.pctTempsPartiel)} sousLabel={`${data.headcounts.nbTempsPartiel} agent(s) · Temps plein ${fmtPct(pctTempsPlein)}`} />
             </div>
             {/* Par grade (18/08, demande d'Olivier : "decompté les Cadre Op

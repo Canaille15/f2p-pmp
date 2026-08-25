@@ -128,7 +128,15 @@ async function getStats(req, res) {
     );
     const encadrementSet = new Set(encadrementRows.map(r => r.cp_agent));
     const totalEncadrement = encadrementSet.size;
-    const totalAfo = ageRows.filter(r => r.is_afo).length;
+    // ASFP (25/08, agent générique "Assistant Formation Professionnel",
+    // demande d'Olivier : "il ne faut pas l'ajouter au nombre des AFO. Mais
+    // le decompter a part") -- is_afo=1 comme un vrai AFO (pour rester
+    // sélectionnable comme formateur), mais exclu explicitement du total
+    // "nombre des AFO" ci-dessous, compté séparément (totalAsfp). Reste
+    // visible avec sa propre ligne dans "📊 Stats → Par AFO" (module AFO,
+    // jamais filtré, pas concerné par cette exclusion).
+    const totalAfo = ageRows.filter(r => r.is_afo && r.cp !== 'ASFP').length;
+    const totalAsfp = ageRows.filter(r => r.is_afo && r.cp === 'ASFP').length;
 
     // ─── Grades (18/08, demande d'Olivier : "decompté les Cadre Op [...]
     // les Maitrises [...] et Maytises 2", puis en suite immédiate : "affine
@@ -380,7 +388,7 @@ async function getStats(req, res) {
     const pctTempsPartiel = totalAgents > 0 ? Math.round((nbTempsPartiel / totalAgents) * 1000) / 10 : 0;
 
     res.json({
-      headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, totalCadreOp, totalMaitrise, totalMaitrise2, nbTempsPartiel, pctTempsPartiel },
+      headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, totalAsfp, totalCadreOp, totalMaitrise, totalMaitrise2, nbTempsPartiel, pctTempsPartiel },
       gradesDetail,
       ageMoyenHorsReserve,
       coverageReserve,
