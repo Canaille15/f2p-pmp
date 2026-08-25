@@ -101,6 +101,13 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   const [joursSelect, setJoursSelect] = useState([]);
   const [fillBusy, setFillBusy] = useState(false);
   const [fillMsg, setFillMsg] = useState(null); // {ok:bool, text}
+  // Historique des vagues déjà appliquées dans CETTE session du popup (25/08,
+  // demandé par Olivier -- enchaîner plusieurs types à la suite : Matinées,
+  // puis sans repasser par une validation globale, les RP, etc.). Chaque
+  // "Remplir" continue d'écrire IMMÉDIATEMENT en base, exactement comme avant
+  // (aucun ralentissement sur une vague d'un seul type) -- ceci n'est qu'un
+  // rappel visuel de ce qui a déjà été committé, pas un panier à valider.
+  const [sessionWaves, setSessionWaves] = useState([]);
 
   const [miniYear, miniMonthNum] = miniMonth.split("-").map(Number);
   const miniDaysInMonth = joursDuMois(miniYear, miniMonthNum);
@@ -161,6 +168,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
         return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes: nextMap}};
       });
       setFillMsg({ ok:true, text: `✓ ${joursSelect.length} jour${joursSelect.length>1?"s":""} ${congeStatut==="demande"?"demandé":"marqué refusé"}${joursSelect.length>1?"s":""} -- rien n'est écrit dans le planning, suivi dans le module Congés.` });
+      setSessionWaves(prev => [...prev, { id:Date.now(), label:`Congés (${congeStatut==="demande"?"Demandé":"Refusé"})`, count:joursSelect.length }]);
       setJoursSelect([]);
       setFillBusy(false);
       return;
@@ -169,16 +177,18 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     // Poste de travail / RP / RU / Congés-Accordé : écriture réelle dans le
     // planning perso via le même endpoint bulk-fill pour les 4 cas.
     let codeEquipe, codePoste=null, horaires=null, jsCode=null, overwrite=false;
+    let waveLabel = "RP";
     if (typeJournee==="poste") {
       codeEquipe = vacation; codePoste = posteCode;
       jsCode = convertirCodePosteVersJsCode(posteCode, vacation);
       horaires = (jsCode && HORAIRES_POSTE[jsCode]) || HORAIRES_DEFAUT[vacation] || null;
+      waveLabel = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}`;
     } else if (typeJournee==="rp") {
-      codeEquipe = "RP";
+      codeEquipe = "RP"; waveLabel = "RP";
     } else if (typeJournee==="ru") {
-      codeEquipe = "RU";
+      codeEquipe = "RU"; waveLabel = "RU";
     } else { // conges + accorde
-      codeEquipe = "CA"; overwrite = true;
+      codeEquipe = "CA"; overwrite = true; waveLabel = "Congés (Accordé)";
     }
 
     try {
@@ -193,6 +203,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
         });
         return next;
       });
+      if (res.nb_appliques>0) setSessionWaves(prev => [...prev, { id:Date.now(), label:waveLabel, count:res.nb_appliques }]);
       setJoursSelect([]);
       setFillMsg({ ok:true, text: `✓ ${res.nb_appliques} jour${res.nb_appliques>1?"s":""} rempli${res.nb_appliques>1?"s":""}${res.ignores?.length ? ` · ${res.ignores.length} déjà occupé${res.ignores.length>1?"s":""} (ignoré${res.ignores.length>1?"s":""})` : ""}.` });
     } catch(e) {
@@ -307,8 +318,8 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
 
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
               {TYPES_JOURNEE.map(t => (
-                <button key={t.code} onClick={()=>changerType(t.code)}
-                  style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                <button key={t.code} onClick={()=>changerType(t.code)} disabled={fillBusy}
+                  style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                     background:typeJournee===t.code?"#0369a1":"#e0f2fe",color:typeJournee===t.code?"#fff":"#0369a1"}}>
                   {t.label}
                 </button>
@@ -318,8 +329,8 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
             {typeJournee==="poste" && (<>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
                 {VACATIONS.map(v => (
-                  <button key={v.code} onClick={()=>{setVacation(v.code);setPosteCode("");}}
-                    style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                  <button key={v.code} onClick={()=>{setVacation(v.code);setPosteCode("");}} disabled={fillBusy}
+                    style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                       background:vacation===v.code?"#0f4c81":"#f1f5f9",color:vacation===v.code?"#fff":"#334155"}}>
                     {v.label}
                   </button>
@@ -329,8 +340,8 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                 {postesDispo.length===0
                   ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucun poste habilité pour cette vacation.</div>
                   : postesDispo.map(p => (
-                    <button key={p.code} onClick={()=>setPosteCode(posteCode===p.code?"":p.code)}
-                      style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                    <button key={p.code} onClick={()=>setPosteCode(posteCode===p.code?"":p.code)} disabled={fillBusy}
+                      style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                         background:posteCode===p.code?"#1e293b":"#f1f5f9",color:posteCode===p.code?"#fff":"#334155"}}>
                       {p.label}
                     </button>
@@ -342,8 +353,8 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
             {typeJournee==="conges" && (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
                 {CONGES_STATUTS.map(s => (
-                  <button key={s.code} onClick={()=>setCongeStatut(congeStatut===s.code?"":s.code)}
-                    style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,
+                  <button key={s.code} onClick={()=>setCongeStatut(congeStatut===s.code?"":s.code)} disabled={fillBusy}
+                    style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                       background:congeStatut===s.code?"#eab308":"#fef9c3",color:congeStatut===s.code?"#fff":"#854d0e"}}>
                     {s.label}
                   </button>
@@ -387,12 +398,12 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   const codeDeja = v?.equipe || v?.equipe2 || null;
                   const couleurDeja = codeDeja ? (agentColors[codeDeja] || DEFAULT_COLORS[codeDeja] || "#e2e8f0") : "#e2e8f0";
                   return (
-                    <button key={dk} onClick={()=>toggleJourSelect(dk,occupe)} disabled={occupe}
+                    <button key={dk} onClick={()=>toggleJourSelect(dk,occupe)} disabled={occupe||fillBusy}
                       title={occupe ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
                       style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":occupe?couleurDeja:occupeReel?"#fde68a":"#cbd5e1"}`,
                         borderRadius:6,background:isSel?"#0f4c81":occupe?"#f1f5f9":"#fff",
-                        color:isSel?"#fff":occupe?"#cbd5e1":"#334155",
-                        fontSize:11,fontWeight:700,cursor:occupe?"default":"pointer",
+                        color:isSel?"#fff":occupe?"#cbd5e1":"#334155",opacity:fillBusy&&!occupe?.5:1,
+                        fontSize:11,fontWeight:700,cursor:(occupe||fillBusy)?"default":"pointer",
                         display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
                       {day}
                     </button>
@@ -408,6 +419,22 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
               </div>
             </>)}
             {fillMsg && <div style={{fontSize:11,fontWeight:600,color:fillMsg.ok?"#16a34a":"#dc2626",marginTop:8}}>{fillMsg.text}</div>}
+
+            {/* Historique des vagues déjà appliquées cette session -- rappel
+                visuel, jamais un panier à valider : chaque vague listée ici
+                est déjà écrite en base au moment où elle apparaît. */}
+            {sessionWaves.length>0 && (
+              <div style={{marginTop:10,paddingTop:10,borderTop:"1px dashed #e2e8f0"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:5}}>✓ Vagues déjà appliquées cette session</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {sessionWaves.map(w => (
+                    <span key={w.id} style={{fontSize:10,fontWeight:600,color:"#166534",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:6,padding:"3px 7px"}}>
+                      {w.label} — {w.count}j
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Section B ── */}
