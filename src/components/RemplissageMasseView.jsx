@@ -51,6 +51,24 @@ const CONGES_STATUTS = [
 
 const MOIS_L = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
+// Liseré coloré sur les jours grisés (25/08, demandé par Olivier : "les
+// journee grisé pourrais avoir un liseré colore autour de la case. avec la
+// couleur par defaut du type de journee deja saisie ou selon le couleur
+// personnalisé par l'agent") -- copie DÉLIBÉRÉE (pas un import) de
+// App.jsx/DEFAULT_COLORS : App.jsx importe déjà ce module (RemplissageMasseView),
+// un import inverse créerait une dépendance circulaire entre les deux fichiers
+// -- exactement le bug déjà rencontré sur ce projet le 21/08 (FimPdfView.jsx,
+// "Cannot access 'X' before initialization"). La couleur personnalisée de
+// l'agent (agentProfiles[agCp]?.agentColors), elle, est déjà disponible sans
+// risque : agentProfiles est déjà une prop de ce composant.
+const DEFAULT_COLORS = {
+  M:"#ff0000", AM:"#ff0000", N:"#ff0000", J:"#ff0000", JF:"#ff82e8",
+  RP:"#16a34a", RPP:"#67bf15", RU:"#ffde08", RQ:"#ff00aa", TC:"#7c3aed", TY:"#a855f7", RN:"#4338ca",
+  NU:"#64748b", CA:"#f5e900", CP:"#f5e900",
+  MA:"#dc2626", ABS:"#b91c1c", VT:"#f59e0b", VM:"#6b7280",
+  FOR:"#0dcbff", DISPO:"#059669", NOTE:"#0080ff", GREVE:"#1d51a5",
+};
+
 function joursDuMois(year, monthNum) {
   return new Date(year, monthNum, 0).getDate();
 }
@@ -99,6 +117,10 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   // Demandé/Refusé ne touchent jamais au planning donc le contenu existant
   // n'a aucune importance. Tous les jours restent donc sélectionnables.
   const griserSiOccupe = typeJournee !== "conges";
+  // Palette personnalisée de l'agent (25/08, pour le liseré des jours
+  // grisés) -- même clé que schedule (agCp), déjà disponible via la prop
+  // agentProfiles.
+  const agentColors = agentProfiles?.[agCp]?.agentColors || {};
 
   const toggleJourSelect = (dk, occupe) => {
     if (occupe && griserSiOccupe) return;
@@ -357,10 +379,17 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   const occupeReel = !!(v && (v.equipe || v.equipe2));
                   const occupe = occupeReel && griserSiOccupe;
                   const isSel = joursSelect.includes(dk);
+                  // 25/08 (Olivier) : un jour grisé garde un liseré coloré
+                  // rappelant ce qui l'occupe déjà -- couleur personnalisée
+                  // de l'agent en priorité, sinon la couleur par défaut du
+                  // type de journée (equipe, ou equipe2 pour le cas rare
+                  // "nuit seule"/"congé seule" où equipe est vide).
+                  const codeDeja = v?.equipe || v?.equipe2 || null;
+                  const couleurDeja = codeDeja ? (agentColors[codeDeja] || DEFAULT_COLORS[codeDeja] || "#e2e8f0") : "#e2e8f0";
                   return (
                     <button key={dk} onClick={()=>toggleJourSelect(dk,occupe)} disabled={occupe}
-                      title={occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
-                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":occupe?"#e2e8f0":occupeReel?"#fde68a":"#cbd5e1"}`,
+                      title={occupe ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
+                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":occupe?couleurDeja:occupeReel?"#fde68a":"#cbd5e1"}`,
                         borderRadius:6,background:isSel?"#0f4c81":occupe?"#f1f5f9":"#fff",
                         color:isSel?"#fff":occupe?"#cbd5e1":"#334155",
                         fontSize:11,fontWeight:700,cursor:occupe?"default":"pointer",
