@@ -103,6 +103,12 @@ export const POSTES_PRCI = [
   // comme ay pour les journee de travail caf et vm aussi" : famille recalculée
   // à la volée depuis agent.famille dans computeDashboardTravail (App.jsx).
   {code:"JEQ",  label:"Journée équipe", types:["J"]},
+  // EIA (25/08, demandé par Olivier, juste après Journée équipe) : même
+  // principe que CAF -- poste générique jamais lié à une habilitation
+  // précise, compte comme jour travaillé, famille recalculée à la volée
+  // depuis agent.famille dans computeDashboardTravail (App.jsx), comme
+  // VM/CAF/AY/JEQ.
+  {code:"EIA",  label:"EIA",          types:["J"]},
   // AY (19/08, demandé par Olivier) : remplace le bouton "Absent" (ABS,
   // section Repos/Absences, retiré) -- ancien "Absent" transformé en poste
   // sous Journée, même principe que VM/CAF : compte comme jour travaillé.
@@ -149,7 +155,7 @@ const POSTE_ROWS_J = [
   ["ASMP","AFOPR"],              // ASMTE PAR / AFO PRCI
   ["PPRCI","PPAR"],              // PPRCI / PPAR
   ["DPXJ","DPXP","ASSJ"],        // DPX PRCI / DPX PAR / Adj DPX
-  ["DISPO","VM","CAF","JEQ","AY"], // DISPO (23/08) ajouté juste avant VM, comme demandé
+  ["DISPO","VM","CAF","JEQ","EIA","AY"], // DISPO (23/08) ajouté juste avant VM ; EIA (25/08) ajouté juste après JEQ, comme demandé
 ];
 
 export const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
@@ -221,7 +227,7 @@ export function getPostesPourAgent(agent, agentProfiles, type) {
   const postes = tous_postes.filter(p => p.types.includes(type));
   if (habCodes.length === 0) return postes;
   return postes.filter(p =>
-    p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" || p.code === "JEQ" || p.code === "DISPO" ||
+    p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" || p.code === "JEQ" || p.code === "DISPO" || p.code === "EIA" ||
     habCodes.includes(CODE_VERS_HAB[p.code] || p.code)
   );
 }
@@ -247,7 +253,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     const postes = tous_postes.filter(p => p.types.includes(type));
     if (habCodes.length === 0) return postes;
     return postes.filter(p =>
-      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" || p.code === "JEQ" || p.code === "DISPO" ||
+      p.code === "PPRCI" || p.code === "PPAR" || p.code === "VM" || p.code === "CAF" || p.code === "AY" || p.code === "JEQ" || p.code === "DISPO" || p.code === "EIA" ||
       habCodes.includes(CODE_VERS_HAB[p.code] || p.code)
     );
   };

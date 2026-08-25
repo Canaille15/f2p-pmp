@@ -271,6 +271,17 @@ const POSTES_JOURNEE = [
   { jsCode:"F-PRCI",  label:"K-PRCI",          subtitle:"Formation PRCI", horaires:"09h00–17h45", famille:"PRCI", maxSlots:6, allowFormation:false, pause:"12h00–13h00", principal:false },
   { jsCode:"AFOPRCI", label:"AFO PRCI",         horaires:"09h00–16h45", famille:"PRCI", maxSlots:2, allowFormation:false, pause:"12h00–13h00",  principal:false },
   { jsCode:"CAF",     label:"CAF",              subtitle:"Certificat d'Aptitude à la Fonction", horaires:"09h00–14h30", famille:"PRCI", maxSlots:1, allowFormation:false, pause:null, principal:false },
+  // EIA (25/08, demandé par Olivier, juste après Journée équipe dans le
+  // picker) : "tu fait le decompte comme caf" -- même structure que CAF,
+  // même traitement partout où CAF est traité (POSTE_REGISTRY auto-construit
+  // via POSTES_JOURNEE.forEach, getPosteLabelFromCode, CPS Officiel/Planning
+  // Prévisionnel via GlobalView). famille:"PRCI" ici n'est qu'un défaut
+  // statique -- computeDashboardTravail la recalcule à la volée depuis
+  // agent.famille (voir le jsCode==="EIA" ajouté à cette condition), "affecté
+  // la journnee dans les compteur de l'agent selon son equipe, par ou prci
+  // tel que prevu dans sa fiche". Horaires "Variable" faute de valeur
+  // précisée par Olivier -- à corriger s'il en donne une.
+  { jsCode:"EIA",     label:"EIA",              horaires:"Variable", famille:"PRCI", maxSlots:1, allowFormation:false, pause:null, principal:false },
   { jsCode:"PPRCI",   label:"PPRCI",            horaires:"09h00–16h45", famille:"PRCI", maxSlots:1, allowFormation:false, pause:null,           principal:false },
   { jsCode:"VM",      label:"VM",               subtitle:"Visite médicale", horaires:"Variable", famille:"PRCI", maxSlots:99, allowFormation:false, pause:null, principal:false },
   { jsCode:"PAPAUJ",  label:"Pauseur PAR",      horaires:"09h00–17h45", famille:"PAR",  maxSlots:1, allowFormation:false, pause:"12h45–13h45",  principal:true  },
@@ -3088,7 +3099,7 @@ function computeDashboardTravail(agent, schedule, year){
     // DISPO (23/08, même principe) : ajoutée comme poste "Journée" sélectionnable
     // dans le perso, juste avant VM -- même registre statique donc même besoin
     // de recalcul de famille à la volée.
-    if(info && (jsCode==="AY" || jsCode==="CAF" || jsCode==="VM" || jsCode==="JEQ" || jsCode==="DISPO")){
+    if(info && (jsCode==="AY" || jsCode==="CAF" || jsCode==="VM" || jsCode==="JEQ" || jsCode==="DISPO" || jsCode==="EIA")){
       info = {...info, famille: agent?.famille || "PRCI"};
     }
     if(!info){

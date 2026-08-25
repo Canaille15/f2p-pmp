@@ -80,6 +80,7 @@ const JSCODE_TO_POSTE = {
   "F-PRCI": { label: "K-PRCI", service: "Journée" },
   "AFOPRCI": { label: "AFO PRCI", service: "Journée" },
   "CAF": { label: "CAF", service: "Journée" },
+  "EIA": { label: "EIA", service: "Journée" },
   "PPRCI": { label: "PPRCI", service: "Journée" },
   "VM": { label: "VM", service: "Journée" },
   "K-PRCI": { label: "K-PRCI", service: "Journée" },

@@ -242,6 +242,8 @@ const MAPPING_JOURNEE = {
   CAF: "CAF",
   AY: "AY",
   JEQ: "JEQ",
+  // EIA (25/08) : même principe que CAF, identité.
+  EIA: "EIA",
   // DISPO (23/08) : même principe, identité -- réutilise volontairement le
   // même jsCode "DISPO" déjà présent dans POSTES_JOURNEE (App.jsx, utilisé
   // par la ligne "Disponibles" de CPS Officiel) pour la résolution du libellé
