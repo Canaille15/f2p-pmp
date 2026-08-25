@@ -255,13 +255,15 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   // ── Initialisation ────────────────────────────────────────────────────────
   // N seule (equipe="N" sans equipe2) = nuit du soir → typeN="N", type1=null
   // N avec equipe2="N" = journée + nuit → type1=entry.equipe (M/AM/J), typeN="N"
+  // 25/08 : equipe2 peut aussi valoir "CA"/"CP" (Congé remplaçant la nuit,
+  // ex RP+Congé) → typeN="CA", même emplacement/rendu que la Nuit.
   // Sinon : type1=entry.equipe, typeN=null
 
   // Nuit seule = equipe="N" sans journée (equipe2=null OU equipe2="N" avec equipe="N")
   const isNuitSeule = entry?.equipe === "N" && (entry?.equipe2 === "N" || !entry?.equipe2);
 
   const initType1 = isNuitSeule ? null : (entry?.equipe || null);
-  const initTypeN = (entry?.equipe2 === "N" || isNuitSeule) ? "N" : null;
+  const initTypeN = isNuitSeule ? "N" : (entry?.equipe2 || null);
   const initPoste1 = isNuitSeule ? "" : (versCodeCourt(entry?.jsCode) || "");
   const initPosteN = isNuitSeule ? (versCodeCourt(entry?.jsCode) || "") : (versCodeCourt(entry?.jsCode2) || "");
   const initHoraires = isNuitSeule ? "" : (entry?.horaires || "");
@@ -379,6 +381,32 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     }
   };
 
+  // Congé combiné à un repos (25/08, Olivier) : "un rp suivi d'un congé
+  // [...] en fait le conge remplace la nuit qu'il aurait faire et qu'il a
+  // posé" -- automatique selon la combinaison, sans bouton supplémentaire
+  // ("selon la combine, ca se fait automatiquement") : si le créneau
+  // principal porte déjà un de ces codes, "Congés · Accordé" route le Congé
+  // dans le 2e créneau (equipe2, même emplacement que Nuit ↓) au lieu de
+  // remplacer le créneau principal -- la journée RP/RU/... reste inchangée.
+  const REPOS_POUR_CONGE_EQUIPE2 = ["RP","RPP","RU","RQ","TC","TY","RN","VT"];
+  const congeAccorde = type1 === "CA" || typeN === "CA";
+  const accorderConge = () => {
+    setCongeStatut(null);
+    setShowConges(false);
+    if (REPOS_POUR_CONGE_EQUIPE2.includes(type1)) {
+      // Toggle : reclique "Accordé" pour retirer le Congé, sans toucher au
+      // repos principal.
+      setTypeN(prev => prev === "CA" ? null : "CA");
+      setPosteN("");
+      return;
+    }
+    toggleType1("CA");
+    // Un Congé qui prend le créneau principal ne doit jamais coexister avec
+    // un Congé déjà routé dans le 2e créneau (double-comptage) -- revient à
+    // une vraie Nuit dans ce cas, comme avant le 25/08.
+    if (typeN === "CA") setTypeN("N");
+  };
+
   const isTravailJ = type1 && ["M","AM","J"].includes(type1);
   const postesJ = isTravailJ ? getPostes(type1) : [];
   const postesN = getPostes("N");
@@ -401,7 +429,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
       jsCode:     isTravailJ ? (poste1 || null) : null,
       horaires:   horaires1 || null,
       equipe2:    typeN || null,
-      jsCodeNuit: typeN ? (posteN || null) : null,
+      jsCodeNuit: typeN === "N" ? (posteN || null) : null,
       prive:      (type1===null&&typeN==="N") ? false : !["M","AM","N","J","JF","FOR","DISPO",
                     ...FETES.map(f=>f.code)].includes(type1),
       finNuit:    finNuit,
@@ -474,13 +502,22 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   {type1}{poste1 ? " · "+(tous_postes.find(p=>p.code===poste1)?.label||poste1) : ""}
                 </span>
               )}
-              {typeN && (
+              {typeN === "N" && (
                 <span style={{
                   background:"#1e293b", color:"#fff",
                   fontSize:10, fontWeight:700,
                   padding:"2px 7px", borderRadius:5,
                 }}>
                   Nuit{posteN ? " · "+(tous_postes.find(p=>p.code===posteN)?.label||posteN) : ""} ↓
+                </span>
+              )}
+              {typeN === "CA" && (
+                <span style={{
+                  background:"#eab308", color:"#fff",
+                  fontSize:10, fontWeight:700,
+                  padding:"2px 7px", borderRadius:5,
+                }}>
+                  🏖️ Congé (nuit) ↓
                 </span>
               )}
               {greve && (
@@ -650,14 +687,14 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
               <button onClick={() => setShowConges(v=>!v)} style={{
                 padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                 fontSize:12, fontWeight:700,
-                background: type1==="CA" ? "#eab308"
+                background: congeAccorde ? "#eab308"
                   : congeStatut==="demande" ? "#fef3c7"
                   : congeStatut==="refuse" ? "#fef2f2" : "#f1f5f9",
-                color: type1==="CA" ? "#fff"
+                color: congeAccorde ? "#fff"
                   : congeStatut==="demande" ? "#92400e"
                   : congeStatut==="refuse" ? "#991b1b" : "#475569",
               }}>
-                {type1==="CA" ? "Congés · Accordé"
+                {congeAccorde ? "Congés · Accordé"
                   : congeStatut==="demande" ? "⏳ Congés · Demandé"
                   : congeStatut==="refuse" ? "✕ Congés · Refusé" : "Congés"}
               </button>
@@ -773,12 +810,12 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
             {showConges && (
               <div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
-                  <button onClick={() => { toggleType1("CA"); setCongeStatut(null); setShowConges(false); }} style={{
+                  <button onClick={accorderConge} style={{
                     padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                     fontSize:12, fontWeight:700,
-                    background: type1==="CA" ? "#16a34a" : "#f0fdf4",
-                    color: type1==="CA" ? "#fff" : "#166534",
-                  }}>✓ Accordé</button>
+                    background: congeAccorde ? "#16a34a" : "#f0fdf4",
+                    color: congeAccorde ? "#fff" : "#166534",
+                  }}>✓ Accordé{REPOS_POUR_CONGE_EQUIPE2.includes(type1) ? " (soir)" : ""}</button>
                   <button onClick={() => { toggleCongeStatut("demande"); setShowConges(false); }} style={{
                     padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                     fontSize:12, fontWeight:700,
@@ -999,7 +1036,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
           )}
 
           {/* ── Poste de nuit ── */}
-          {typeN && postesN.length > 0 && (
+          {typeN === "N" && postesN.length > 0 && (
             <div>
               <div style={{
                 fontSize:10, color:"#94a3b8", fontWeight:700,

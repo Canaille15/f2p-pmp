@@ -339,9 +339,16 @@ export const planning = {
       const isPlaceholder = (p1.note === 'fin_nuit' || p1.note === 'note_seule') && p1.code_equipe === 'N' && !p2;
       result[`${agentId}-${date}`] = {
         equipe:   isPlaceholder ? null : (p1.code_equipe || null),
-        equipe2:  p2 ? 'N' : null,
+        // equipe2 (25/08, Congé combinable) : la periode 2 (note='debut_nuit',
+        // simple marqueur technique de "deuxieme periode du jour") peut
+        // desormais porter autre chose qu'une vraie Nuit -- CA/CP quand
+        // l'agent remplace la nuit qu'il aurait faite par un conge. On lit
+        // toujours le vrai code_equipe stocke plutot que de le figer a 'N'.
+        equipe2:  p2 ? (p2.code_equipe || 'N') : null,
         jsCode:   isPlaceholder ? null : (convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe) || p1.code_poste || null),
-        jsCode2:  p2 ? (convertirCodePosteVersJsCode(p2.code_poste, 'N') || p2.code_poste || null) : null,
+        // jsCode2 : un poste n'a de sens que pour une vraie Nuit -- un Congé
+        // en periode 2 n'a jamais de poste associe.
+        jsCode2:  (p2 && p2.code_equipe === 'N') ? (convertirCodePosteVersJsCode(p2.code_poste, 'N') || p2.code_poste || null) : null,
         horaires: isPlaceholder ? null : horaires,
         prive:    !!p1.prive,
         finNuit:  isFinNuit,
@@ -401,18 +408,24 @@ result[`${row.agent_id || agentId}-${date}`] = {
         note_perso: entry.notePerso || null,
       });
     }
-    // Periode nuit ce soir (si equipe2=N)
-    if (entry.equipe2 === 'N') {
-      const estPeriodeUnique = periodes.length === 0; // cas "nuit seule" : pas de journée avant
+    // Periode 2 du jour (25/08, Congé combinable) : soit une vraie Nuit
+    // (equipe2='N', comportement d'origine, horaires fixes 22:15-06:17), soit
+    // un Congé qui la remplace (equipe2='CA'/'CP', demande d'Olivier : "le
+    // conge remplace la nuit qu'il aurait faire" -- ex RP le jour + Congé ce
+    // soir-la au lieu de la nuit prevue). Un Congé n'a jamais de poste ni
+    // d'horaire propre, contrairement a une vraie Nuit.
+    if (entry.equipe2 === 'N' || entry.equipe2 === 'CA' || entry.equipe2 === 'CP') {
+      const estNuit = entry.equipe2 === 'N';
+      const estPeriodeUnique = periodes.length === 0; // cas "seule" : pas de journée avant
       periodes.push({
         ordre: periodes.length + 1,
-        code_equipe: 'N',
-        code_poste: (entry.jsCode2 && !CANONICAL_JSCODES.has(entry.jsCode2)) ? entry.jsCode2 : null,
-        heure_debut: '22:15',
-        heure_fin: '06:17',
+        code_equipe: entry.equipe2,
+        code_poste: estNuit ? ((entry.jsCode2 && !CANONICAL_JSCODES.has(entry.jsCode2)) ? entry.jsCode2 : null) : null,
+        heure_debut: estNuit ? '22:15' : null,
+        heure_fin: estNuit ? '06:17' : null,
         prive: false,
         note: 'debut_nuit',
-        // Si nuit seule, cette periode fait office de periode N°1 : elle doit
+        // Si periode unique, elle fait office de periode N°1 : elle doit
         // porter la note (sinon la note n'a nulle part ou etre sauvegardee).
         ...(estPeriodeUnique ? {note_perso: entry.notePerso || null} : {}),
       });
@@ -544,9 +557,11 @@ result[`${row.agent_id || agentId}-${date}`] = {
       const isPlaceholder = (p1.note === 'fin_nuit' || p1.note === 'note_seule') && p1.code_equipe === 'N' && !p2;
       result[`${agentId}-${date}`] = {
         equipe:   isPlaceholder ? null : (p1.code_equipe || null),
-        equipe2:  p2 ? 'N' : null,
+        // Meme generalisation que getSchedule() ci-dessus (25/08) : la
+        // periode 2 peut porter CA/CP (conge a la place de la nuit).
+        equipe2:  p2 ? (p2.code_equipe || 'N') : null,
         jsCode:   isPlaceholder ? null : (convertirCodePosteVersJsCode(p1.code_poste, p1.code_equipe) || p1.code_poste || null),
-        jsCode2:  p2 ? (convertirCodePosteVersJsCode(p2.code_poste, 'N') || p2.code_poste || null) : null,
+        jsCode2:  (p2 && p2.code_equipe === 'N') ? (convertirCodePosteVersJsCode(p2.code_poste, 'N') || p2.code_poste || null) : null,
         horaires: isPlaceholder ? null : horaires,
         prive:    false,
         finNuit:  isFinNuit,

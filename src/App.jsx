@@ -300,6 +300,13 @@ const HORAIRES_DIMANCHE_RAPPEL = {
   "PIVGDO": "Dim : 16h15–23h52",
 };
 
+// Congé combiné à un repos (25/08) : même liste que DayEditPopup.jsx
+// (REPOS_POUR_CONGE_EQUIPE2) -- quand le créneau principal porte un de ces
+// codes, le Congé (accordé OU en attente) se rend en bas de case (position
+// du "2e créneau", celle de Nuit) plutôt qu'en zone 1 -- "meme regle pour
+// les demandés aussi" (Olivier, 25/08).
+const REPOS_AVEC_CONGE_SOIR = ["RP","RPP","RU","RQ","TC","TY","RN","VT"];
+
 // Codes fêtes légales SNCF
 const CODES_FETES = {
   "F1":"1er Janvier",
@@ -3312,7 +3319,11 @@ function getCongesDemandeesAnnee(agent, agentProfiles, schedule, year){
     if(d<start||d>end) return;
     const entree = schedule[`${agent?.id}-${d}`];
     const codeActuel = entree?.equipe || entree?.equipe2;
-    if(t.jourEtaitVide && codeActuel) return;
+    // 25/08 : un repos de REPOS_AVEC_CONGE_SOIR (RP/RU/RQ/TC/TY/RN/RPP/VT)
+    // ne détache jamais le suivi -- c'est justement la combinaison voulue
+    // (le Congé remplace la nuit à côté de ce repos), pas un jour "résolu
+    // autrement".
+    if(t.jourEtaitVide && codeActuel && !REPOS_AVEC_CONGE_SOIR.includes(codeActuel)) return;
     jours.push(d);
   });
   return jours;
@@ -3429,7 +3440,9 @@ export function computeDashboardConges(agent, schedule, agentProfiles, year){
     if(d < start || d > end) return;
     const entree = schedule[`${agent.id}-${d}`];
     const codeActuel = entree?.equipe || entree?.equipe2;
-    if(t.jourEtaitVide && codeActuel) return; // etait vide a la demande/refus, rempli depuis -> perime
+    // 25/08 : idem getCongesDemandeesAnnee -- un repos de REPOS_AVEC_CONGE_SOIR
+    // ne détache jamais (combinaison voulue, pas un jour résolu autrement).
+    if(t.jourEtaitVide && codeActuel && !REPOS_AVEC_CONGE_SOIR.includes(codeActuel)) return; // etait vide a la demande/refus, rempli depuis -> perime
     if(t.statut==="demande"){
       if(brut.includes(d)) return; // deja accorde -> compte via brut, pas ici
       // 13/08 (Olivier) : deja revendique par l'annee precedente (report sur
@@ -4151,7 +4164,9 @@ function computeRefusConges(agent, schedule, agentProfiles, year){
     const codeActuel = entree?.equipe || entree?.equipe2;
     const estAccorde = entree?.equipe==="CA"||entree?.equipe==="CP"||entree?.equipe2==="CA"||entree?.equipe2==="CP";
     if(estAccorde) return; // accorde entre-temps (typé directement CA/CP dans le planning)
-    if(t.jourEtaitVide && codeActuel) return; // etait vide au refus, rempli depuis par autre chose -> perime
+    // 25/08 : idem getCongesDemandeesAnnee -- pas de détachement si le
+    // créneau principal est un repos de REPOS_AVEC_CONGE_SOIR.
+    if(t.jourEtaitVide && codeActuel && !REPOS_AVEC_CONGE_SOIR.includes(codeActuel)) return; // etait vide au refus, rempli depuis par autre chose -> perime
     refus.push({
       date:d, dateDemande:t.dateDemande||null, dateRefus:t.dateRefus||null,
       talonStatut:t.talonStatut||null, dateTalonDemande:t.dateTalonDemande||null, dateTalonRecu:t.dateTalonRecu||null,
@@ -9373,8 +9388,12 @@ justifyContent: "flex-start",
                   et à Refusé, jamais affiché ici — juste un suivi dans le
                   popup Congés). Numéro entre parenthèses : même série
                   cumulative que les congés accordés (congeToutNumeros
-                  ci-dessus), ne change pas quand le jour bascule en accordé. */}
-              {isOwnProfile&&congeToutNumeros[dk]?.statut==="demande"&&<div style={{
+                  ci-dessus), ne change pas quand le jour bascule en accordé.
+                  25/08 : exclu ici si le créneau principal est un repos de
+                  REPOS_AVEC_CONGE_SOIR -- affiché en bas de case à la place
+                  (ZONE 3bis, même position que le Congé accordé), "même
+                  règle pour les demandés aussi". */}
+              {isOwnProfile&&congeToutNumeros[dk]?.statut==="demande"&&!REPOS_AVEC_CONGE_SOIR.includes(code)&&<div style={{
                 background:getColor("CA"), color:getTc("CA"),
                 border:`1.5px dashed ${getTc("CA")}`,
                 borderRadius:5, padding:"2px 6px",
@@ -9458,6 +9477,45 @@ justifyContent: "flex-start",
               }}>
                 <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Nuit</span>
                 {(code==="N"?posteLabel:posteNuitLabel)&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
+              </div>}
+
+              {/* ZONE 3bis — Congé remplaçant la nuit (25/08, demandé par
+                  Olivier : "le conge remplace la nuit qu'il aurait faire"
+                  -- ex RP/RU le jour + Congé accordé au lieu de la nuit
+                  prévue). Même emplacement (bas de case) que Nuit, jamais les
+                  deux en même temps (equipe2 ne vaut qu'une chose à la fois)
+                  -- "cela symbolise que le CA est a suivre les autres jours
+                  et vient en remplacement d'une nuit". Numéroté comme le CA
+                  seul (congeToutNumeros compte déjà equipe2, voir
+                  computeCompteurAvecDetail), sur demande explicite. */}
+              {isOwnProfile&&(en?.equipe2==="CA"||en?.equipe2==="CP")&&showData&&<div style={{
+                background:getColor("CA"), color:getTc("CA"),
+                borderRadius:5, padding:"2px 5px",
+                fontSize:"clamp(7px,2.3vw,10px)", fontWeight:700, lineHeight:1.35,
+                display:"flex", flexDirection:"column",
+                minWidth:0,
+              }}>
+                <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>🏖️ {en.equipe2}</span>
+                {congeToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeToutNumeros[dk].numero}{congeToutNumeros[dk].anneeReport?` (${congeToutNumeros[dk].anneeReport})`:""}</span>}
+              </div>}
+
+              {/* ZONE 3ter — Congé demandé, en bas comme son pendant accordé
+                  (25/08, "tu prends les meme regle pour les demandés aussi") —
+                  même badge en pointillé que la version zone 1 plus haut,
+                  déplacé ici uniquement quand le créneau principal est un
+                  repos de REPOS_AVEC_CONGE_SOIR (sinon reste en zone 1). Exclu
+                  si equipe2 est déjà accordé (ZONE 3bis ci-dessus), cas
+                  normalement jamais simultané en pratique. */}
+              {isOwnProfile&&congeToutNumeros[dk]?.statut==="demande"&&REPOS_AVEC_CONGE_SOIR.includes(code)&&en?.equipe2!=="CA"&&en?.equipe2!=="CP"&&showData&&<div style={{
+                background:getColor("CA"), color:getTc("CA"),
+                border:`1.5px dashed ${getTc("CA")}`,
+                borderRadius:5, padding:"2px 5px",
+                fontSize:"clamp(7px,2.3vw,10px)", fontWeight:700, lineHeight:1.35,
+                display:"flex", flexDirection:"column",
+                minWidth:0,
+              }}>
+                <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>⏳ CA</span>
+                <span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeToutNumeros[dk].numero}{congeToutNumeros[dk].anneeReport?` (${congeToutNumeros[dk].anneeReport})`:""}</span>
               </div>}
 
               {/* Pastilles RC fêtes */}
