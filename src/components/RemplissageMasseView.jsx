@@ -90,7 +90,21 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   const [congeStatut, setCongeStatut] = useState("");
   const postesDispo = getPostesPourAgent(agent, agentProfiles, vacation);
 
-  const changerType = (t) => {
+  // 25/08 (Olivier, après avoir testé en réel) : sélectionner des jours puis
+  // changer de type sans jamais cliquer "+ Remplir" faisait perdre la
+  // sélection en silence -- "je saisie des jours de travail. je passe sur
+  // les rp et plus rien de visible". Cohérent avec sa toute première demande
+  // ("sans valider changer pour saisir d'un coup les rp à la suite") : une
+  // sélection en attente est désormais appliquée AUTOMATIQUEMENT avant de
+  // basculer sur le nouveau type, plutôt que d'exiger un clic "+ Remplir"
+  // que rien ne rend visuellement indispensable. Si l'écriture échoue
+  // (réseau), on reste sur le type actuel, sélection intacte, message
+  // d'erreur affiché -- jamais de bascule silencieuse sur un échec.
+  const changerType = async (t) => {
+    if (joursSelect.length>0 && !fillBusy) {
+      const ok = await remplir();
+      if (!ok) return;
+    }
     setTypeJournee(t); setPosteCode(""); setCongeStatut(""); setJoursSelect([]); setFillMsg(null);
   };
 
@@ -143,9 +157,9 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     true;
 
   const remplir = async () => {
-    if (joursSelect.length===0) return;
-    if (typeJournee==="poste" && !posteCode) return;
-    if (typeJournee==="conges" && !congeStatut) return;
+    if (joursSelect.length===0) return false;
+    if (typeJournee==="poste" && !posteCode) return false;
+    if (typeJournee==="conges" && !congeStatut) return false;
     setFillBusy(true); setFillMsg(null);
 
     // Congés Demandé/Refusé : n'écrit jamais dans le planning perso (même
@@ -171,7 +185,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       setSessionWaves(prev => [...prev, { id:Date.now(), label:`Congés (${congeStatut==="demande"?"Demandé":"Refusé"})`, count:joursSelect.length }]);
       setJoursSelect([]);
       setFillBusy(false);
-      return;
+      return true;
     }
 
     // Poste de travail / RP / RU / Congés-Accordé : écriture réelle dans le
@@ -206,8 +220,10 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       if (res.nb_appliques>0) setSessionWaves(prev => [...prev, { id:Date.now(), label:waveLabel, count:res.nb_appliques }]);
       setJoursSelect([]);
       setFillMsg({ ok:true, text: `✓ ${res.nb_appliques} jour${res.nb_appliques>1?"s":""} rempli${res.nb_appliques>1?"s":""}${res.ignores?.length ? ` · ${res.ignores.length} déjà occupé${res.ignores.length>1?"s":""} (ignoré${res.ignores.length>1?"s":""})` : ""}.` });
+      return true;
     } catch(e) {
       setFillMsg({ ok:false, text: e.message || "Erreur lors du remplissage. Réessaie." });
+      return false;
     } finally {
       setFillBusy(false);
     }
