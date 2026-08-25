@@ -185,11 +185,22 @@ async function bulkClear(req, res) {
     );
     const batchId = batchResult.insertId;
     let nbReellementEffaces = 0;
+    let nbProteges = 0;
     for (const j of jours) {
       const [periodes] = await conn.query(
         `SELECT ordre, code_equipe, code_poste, heure_debut, heure_fin, prive, note, note_perso
          FROM planning_periode WHERE planning_jour_id=?`, [j.id]
       );
+      // Congé ACCORDÉ (CA/CP, y compris en 2e créneau -- voir "un Congé peut
+      // remplacer la Nuit", 25/08) jamais effacé par ce dispositif, même
+      // dans la période choisie -- demande explicite d'Olivier : l'accord
+      // représente un engagement réel, distinct d'un simple jour de travail
+      // qu'on veut recommencer. Jour entièrement ignoré (ni sauvegardé pour
+      // annulation, ni touché) -- rien n'y change, rien à restaurer.
+      if (periodes.some(p => p.code_equipe === 'CA' || p.code_equipe === 'CP')) {
+        nbProteges++;
+        continue;
+      }
       await conn.query(
         `INSERT INTO planning_bulk_clear_detail (batch_id, date_jour, source, periodes_json) VALUES (?,?,?,?)`,
         [batchId, j.date_jour, j.source, JSON.stringify(periodes)]
@@ -219,7 +230,7 @@ async function bulkClear(req, res) {
       }
     }
     await conn.commit();
-    res.json({ message: 'Planning effacé', nb_effaces: nbReellementEffaces, batch_id: batchId });
+    res.json({ message: 'Planning effacé', nb_effaces: nbReellementEffaces, nb_proteges: nbProteges, batch_id: batchId });
   } catch (e) {
     await conn.rollback();
     console.error(e); res.status(500).json({ error: 'Erreur serveur' });

@@ -321,13 +321,46 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   // serveur, 24/08), donc un jour qui n'a QUE ça ne doit ni apparaître dans
   // l'aperçu ni être retiré de l'affichage local après confirmation.
   const estAffecte = (v) => !!(v && (v.equipe || v.equipe2 || v.finNuit || v.greve || v.formation));
+  // 25/08 (Olivier) : "il faut que ca efface ce qui est dans le planning
+  // sauf les conges accordés et demandés" -- un Congé ACCORDÉ (CA/CP écrit
+  // dans le planning, même en 2e créneau -- voir "un Congé peut remplacer
+  // la Nuit", 25/08) n'est jamais effacé par ce module, même dans la
+  // période choisie. Protection dupliquée côté backend (source de vérité
+  // réelle, `bulkClear` skip désormais ces jours) -- ce calcul frontend ne
+  // sert qu'à l'aperçu avant confirmation.
+  const estCongeAccorde = (v) => !!(v && (v.equipe==="CA"||v.equipe==="CP"||v.equipe2==="CA"||v.equipe2==="CP"));
+
+  // Dates protégées dans la période [clearFrom,clearTo] choisie -- Congé
+  // Accordé (ci-dessus) OU Congé Demandé. Un Congé Demandé n'écrit jamais
+  // dans le planning perso (même principe que le popup normal), donc il
+  // n'a structurellement rien à effacer -- listé ici uniquement pour
+  // l'afficher explicitement dans le message de confirmation, comme
+  // demandé ("si tu trouve ce genre de jour tu precise qu'il resteront
+  // dans le planning").
+  const joursProtegesRange = () => {
+    const set = new Set();
+    Object.entries(schedule||{}).forEach(([k,v]) => {
+      if (!k.startsWith(agCp+"-")) return;
+      const dk = k.slice(agCp.length+1);
+      if (dk<clearFrom || dk>clearTo) return;
+      if (estCongeAccorde(v)) set.add(dk);
+    });
+    const demandes = agentProfiles?.[agent.id]?.congesDemandes || {};
+    Object.entries(demandes).forEach(([dk,d]) => {
+      if (dk<clearFrom || dk>clearTo) return;
+      if (d?.statut==="demande") set.add(dk);
+    });
+    return set;
+  };
 
   const compterJoursOccupes = () => {
+    const proteges = joursProtegesRange();
     let n = 0;
     Object.entries(schedule||{}).forEach(([k,v]) => {
       if (!k.startsWith(agCp+"-")) return;
       const dk = k.slice(agCp.length+1);
       if (dk<clearFrom || dk>clearTo) return;
+      if (proteges.has(dk)) return;
       if (estAffecte(v)) n++;
     });
     return n;
@@ -338,8 +371,10 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     if (!clearFrom || !clearTo) { setClearMsg({ok:false,text:"Choisis les 2 dates."}); return; }
     if (clearTo<clearFrom) { setClearMsg({ok:false,text:"La date de fin doit être après la date de début."}); return; }
     const n = compterJoursOccupes();
-    if (n===0) { setClearMsg({ok:false,text:"Aucun jour saisi dans cette période."}); return; }
-    setClearConfirm({ count:n });
+    const nbProteges = joursProtegesRange().size;
+    if (n===0 && nbProteges===0) { setClearMsg({ok:false,text:"Aucun jour saisi dans cette période."}); return; }
+    if (n===0) { setClearMsg({ok:false,text:`Aucun jour à effacer dans cette période -- ${nbProteges} jour${nbProteges>1?"s":""} de congé accordé ou demandé, jamais touché${nbProteges>1?"s":""} par ce module.`}); return; }
+    setClearConfirm({ count:n, nbProteges });
   };
 
   const confirmerEffacement = async () => {
@@ -348,11 +383,13 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     // instantanée côté UI sans attendre un rechargement complet — la vraie
     // source de vérité pour l'annulation reste le backend (bulkClearUndo),
     // ceci n'est qu'un raccourci d'affichage.
+    const proteges = joursProtegesRange();
     const removed = {};
     Object.entries(schedule||{}).forEach(([k,v]) => {
       if (!k.startsWith(agCp+"-")) return;
       const dk = k.slice(agCp.length+1);
       if (dk<clearFrom || dk>clearTo) return;
+      if (proteges.has(dk)) return;
       if (estAffecte(v)) removed[k] = v;
     });
     try {
@@ -370,7 +407,8 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       });
       setLastBatch({ batchId: res.batch_id, nb: res.nb_effaces, removed });
       setClearConfirm(null);
-      setClearMsg({ ok:true, text:`✓ ${res.nb_effaces} jour${res.nb_effaces>1?"s":""} effacé${res.nb_effaces>1?"s":""}.` });
+      const nbProtegesReel = res.nb_proteges||0;
+      setClearMsg({ ok:true, text:`✓ ${res.nb_effaces} jour${res.nb_effaces>1?"s":""} effacé${res.nb_effaces>1?"s":""}.${nbProtegesReel>0?` ${nbProtegesReel} jour${nbProtegesReel>1?"s":""} de congé accordé conservé${nbProtegesReel>1?"s":""} (jamais touché${nbProtegesReel>1?"s":""}).`:""}` });
     } catch(e) {
       setClearMsg({ ok:false, text: e.message || "Erreur lors de l'effacement. Réessaie." });
     } finally {
@@ -560,7 +598,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
           {/* ── Section B ── */}
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:16}}>
             <div style={{fontSize:13,fontWeight:800,color:"#991b1b",marginBottom:2}}>⚠️ Effacer le planning</div>
-            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Pour recommencer une période déjà saisie. Toujours annulable juste après. Les notes perso ne sont jamais effacées.</div>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Pour recommencer une période déjà saisie. Toujours annulable juste après. Les notes perso et les congés accordés ou demandés ne sont jamais effacés.</div>
 
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
               <input type="date" value={clearFrom} onChange={e=>{setClearFrom(e.target.value);setClearMsg(null);}}
@@ -578,6 +616,11 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
               <div style={{background:"#fef2f2",border:"1.5px solid #fca5a5",borderRadius:10,padding:"12px 14px"}}>
                 <div style={{fontSize:12,fontWeight:800,color:"#991b1b",marginBottom:8}}>
                   ⚠️ {clearConfirm.count} jour{clearConfirm.count>1?"s":""} seront effacés, du {fmtDateCourt(clearFrom)} au {fmtDateCourt(clearTo)}.
+                  {clearConfirm.nbProteges>0 && (
+                    <div style={{marginTop:6,fontWeight:600,color:"#166534"}}>
+                      ℹ️ {clearConfirm.nbProteges} jour{clearConfirm.nbProteges>1?"s":""} de congé accordé ou demandé dans cette période ne {clearConfirm.nbProteges>1?"seront":"sera"} pas touché{clearConfirm.nbProteges>1?"s":""} — il{clearConfirm.nbProteges>1?"s":""} reste{clearConfirm.nbProteges>1?"nt":""} dans le planning.
+                    </div>
+                  )}
                 </div>
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>setClearConfirm(null)} disabled={clearBusy}
