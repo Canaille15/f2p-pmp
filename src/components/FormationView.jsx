@@ -2,12 +2,18 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import api from "../api/client";
 
 // ─── Module Formation ───────────────────────────────────────────────────────
-// Deux volets dans un seul composant :
-//  - "Mes formations" (tous les agents, y compris les AFO) : archive perso
-//    (sessions AFO où l'agent est inscrit + formations auto-déclarées).
-//  - "Gestion (AFO)" / "Stats (AFO)" (réservé aux agents is_afo) : catalogue,
-//    sessions, lancement, statistiques. Tous les AFO ont les mêmes droits
-//    (pas de hiérarchie), voir CLAUDE.md / plan du module.
+// Deux espaces bien séparés (refonte 25/08, demandé par Olivier : "j'aimerai
+// mieux séparer la parti afo de l'agent formateur, de la partie formation
+// personnel de l'agent qui peux aussi etre AFO par ailleurs") :
+//  - "Mes formations" (tous les agents, y compris les AFO) : UNIQUEMENT le
+//    côté agent -- archive perso (sessions AFO où l'agent est inscrit comme
+//    PARTICIPANT + formations auto-déclarées). Plus aucune trace du rôle
+//    formateur ici, même pour un AFO.
+//  - "Espace AFO" (réservé aux agents is_afo) : tout le rôle formateur
+//    regroupé au même endroit, en 3 sous-onglets -- "Tes sessions" (celles où
+//    l'agent enseigne), "Gestion" (catalogue, création/lancement de
+//    sessions), "Stats". Tous les AFO ont les mêmes droits (pas de
+//    hiérarchie), voir CLAUDE.md / plan du module.
 //
 // Point de conception central : l'inscription à une session AFO écrit "FOR"
 // dans le planning perso de l'agent au moment du lancement — mais l'agent
@@ -114,16 +120,22 @@ export default function FormationView({ currentAgent, currentUser, agents, agent
   const agentId = currentAgent?.immatriculation || currentAgent?.cp || currentAgent?.id;
   const isAfo = currentUser?.isAfo || false;
   const [tab, setTab] = useState("mes");
-  // Permet a "Mes formations" d'ouvrir directement le detail d'une session
-  // (via SessionDetailModal, cote Gestion) sans faire chercher l'AFO dans la
-  // liste globale — demande explicite d'Olivier (10/08) : trop de sous-menus,
-  // trop dur de retrouver ses propres journees de formateur.
+  const [afoSubTab, setAfoSubTab] = useState("sessions");
+  // Permet a "Tes sessions" (dans Espace AFO) d'ouvrir directement le detail
+  // d'une session (via SessionDetailModal, cote Gestion) sans faire chercher
+  // l'AFO dans la liste globale — demande explicite d'Olivier (10/08) : trop
+  // de sous-menus, trop dur de retrouver ses propres journees de formateur.
   const [pendingSessionId, setPendingSessionId] = useState(null);
-  const goToSession = (id) => { setPendingSessionId(id); setTab("gestion"); };
+  const goToSession = (id) => { setPendingSessionId(id); setTab("afo"); setAfoSubTab("gestion"); };
 
   const tabs = [
     { k: "mes", label: "📖 Mes formations" },
-    ...(isAfo ? [{ k: "gestion", label: "🎓 Gestion (AFO)" }, { k: "stats", label: "📊 Stats (AFO)" }] : []),
+    ...(isAfo ? [{ k: "afo", label: "🎓 Espace AFO" }] : []),
+  ];
+  const afoSubTabs = [
+    { k: "sessions", label: "👨‍🏫 Tes sessions" },
+    { k: "gestion", label: "📋 Gestion" },
+    { k: "stats", label: "📊 Stats" },
   ];
   useEffect(() => { if (!isAfo && tab !== "mes") setTab("mes"); }, [isAfo]); // eslint-disable-line
 
@@ -132,7 +144,7 @@ export default function FormationView({ currentAgent, currentUser, agents, agent
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>🎓 Formation</div>
         <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>
-          {isAfo ? "Ton archive personnelle, et la gestion des formations en tant qu'AFO" : "Tes formations suivies"}
+          {isAfo ? "Ton archive personnelle, et ton rôle de formateur, bien séparés" : "Tes formations suivies"}
         </div>
       </div>
 
@@ -153,17 +165,36 @@ export default function FormationView({ currentAgent, currentUser, agents, agent
       )}
 
       {tab === "mes" && (
-        <MesFormationsTab agentId={agentId} isAfo={isAfo} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} onGoToSession={goToSession} />
+        <MesFormationsTab agentId={agentId} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
       )}
-      {tab === "gestion" && isAfo && <GestionTab agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
-      {tab === "stats" && isAfo && <StatsTab />}
+
+      {tab === "afo" && isAfo && (
+        <div style={{ background: NAVY.bgLight, border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 14, padding: 14 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+            {afoSubTabs.map(t => (
+              <button key={t.k} onClick={() => setAfoSubTab(t.k)}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                  fontSize: 12.5, fontWeight: 700,
+                  background: afoSubTab === t.k ? NAVY.from : "#fff",
+                  color: afoSubTab === t.k ? "#fff" : NAVY.accentDark,
+                }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {afoSubTab === "sessions" && <MesSessionsFormateurTab agentId={agentId} onGoToSession={goToSession} />}
+          {afoSubTab === "gestion" && <GestionTab agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
+          {afoSubTab === "stats" && <StatsTab />}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── MES FORMATIONS (tous les agents) ──────────────────────────────────────
+// ─── MES FORMATIONS (tous les agents, uniquement le côté participant) ──────
 
-function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, refreshSchedule, onGoToSession }) {
+function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSchedule }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -178,13 +209,6 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
 
   const perso = agentProfiles[agentId]?.formationsPersoDeclarees || [];
   const notifications = agentProfiles[agentId]?.formationNotifications || [];
-
-  // Sessions ou l'agent enseigne (AFO) — mises en avant tout en haut, pour
-  // ne plus avoir a les chercher dans la liste globale de Gestion (AFO).
-  const sessionsFormateur = useMemo(
-    () => sessions.filter(s => s.est_formateur).sort((x, y) => (y.date_session || "").localeCompare(x.date_session || "")),
-    [sessions]
-  );
 
   // 10/08 (Olivier, simplifié après un second retour — "c'est peu utile
   // d'attendre la date, vu que l'agent peut se remettre sur une des
@@ -218,38 +242,6 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
   return (
     <div>
       {err && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 10 }}>⚠️ {err}</div>}
-
-      {/* 10/08 (Olivier) : section toujours affichée pour un AFO, même sans
-          aucune session à enseigner — un état vide explicite "tranche" mieux
-          visuellement les deux rôles (formateur / participant) que de faire
-          disparaître le bloc entier, ce qui donnait l'impression que le
-          reste de la page (archive perso) était la seule chose qui existe. */}
-      {isAfo && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f", marginBottom: 8 }}>👨‍🏫 Tes sessions formateur</div>
-          {sessionsFormateur.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: "#475569", fontStyle: "italic", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px" }}>
-              Aucune session en tant que formateur pour l'instant.
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {sessionsFormateur.map(s => (
-                <div key={s.id} onClick={() => onGoToSession(s.id)}
-                  style={{ cursor: "pointer", background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
-                    <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
-                    <RosterLignes session={s} agentId={agentId} />
-                  </div>
-                  <StatutBadge session={s} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {isAfo && <div style={{ fontSize: 13, fontWeight: 800, color: "#78350f", marginBottom: 8 }}>🧑‍🎓 Tes formations suivies</div>}
 
       <button onClick={() => setShowDeclare(v => !v)} style={{ ...btnPrimary(AMBRE), marginBottom: 14 }}>
         {showDeclare ? "✕ Annuler" : "+ Déclarer une formation suivie"}
@@ -316,6 +308,57 @@ function MesFormationsTab({ agentId, isAfo, agentProfiles, setAgentProfiles, ref
               <button onClick={() => retirerPerso(it.id)} style={{ marginTop: 8, background: "none", border: "none", color: "#64748b", fontSize: 11, cursor: "pointer", padding: 0 }}>
                 🗑 Retirer de l'archive
               </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ESPACE AFO — Tes sessions (côté formateur) ─────────────────────────────
+// Extrait de "Mes formations" le 25/08 (refonte de séparation AFO/perso) --
+// vivait auparavant en haut du même onglet que l'archive perso, mélangeant
+// les deux rôles sur un même écran. Composant autonome avec son propre fetch
+// (même endpoint que MesFormationsTab, getMesSessions) plutôt que de faire
+// remonter les données via des props partagées entre les deux onglets --
+// aucun risque de régression sur "Mes formations" en la retravaillant.
+function MesSessionsFormateurTab({ agentId, onGoToSession }) {
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    api.formation.getMesSessions().then(rows => setSessions(rows || [])).catch(() => setErr("Impossible de charger tes sessions"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const sessionsFormateur = useMemo(
+    () => sessions.filter(s => s.est_formateur).sort((x, y) => (y.date_session || "").localeCompare(x.date_session || "")),
+    [sessions]
+  );
+
+  if (loading) return <div style={{ textAlign: "center", color: "#64748b", padding: 30 }}>Chargement...</div>;
+
+  return (
+    <div>
+      {err && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 10 }}>⚠️ {err}</div>}
+      {sessionsFormateur.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: "#475569", fontStyle: "italic", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px" }}>
+          Aucune session en tant que formateur pour l'instant.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {sessionsFormateur.map(s => (
+            <div key={s.id} onClick={() => onGoToSession(s.id)}
+              style={{ cursor: "pointer", background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
+                <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
+                <RosterLignes session={s} agentId={agentId} />
+              </div>
+              <StatutBadge session={s} />
             </div>
           ))}
         </div>
