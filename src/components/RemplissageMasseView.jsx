@@ -12,6 +12,17 @@
 // (règle déjà établie pour Congés partout ailleurs dans l'appli), d'où le
 // paramètre overwrite:true réservé à ce seul cas dans tout ce module.
 //
+// Étape 3 (25/08, même jour, corrigée en 2 temps après retour terrain) :
+// modèle "panier" -- un agent peut passer de Poste de travail à RP, RU ou
+// Congés autant de fois qu'il veut, chaque changement met simplement de
+// côté (jamais d'écriture serveur) la sélection en cours, et un seul bouton
+// final "✅ Tout remplir" écrit tout le lot en une action. Demande d'origine :
+// "en saisie multiple [...] pouvoir passer des saisies de poste de travail
+// à rp ru ou congés et de faire remplir à la fin". Un premier essai
+// (chaque type validé immédiatement au changement) s'est révélé incomplet
+// -- ne couvrait que l'intention côté vitesse d'un seul type, pas le vrai
+// besoin d'accumuler across les 4 boutons avant de valider une seule fois.
+//
 // Deux besoins distincts, dans la même fenêtre :
 //  A) Remplir plusieurs jours d'un coup — un agent choisit un type de
 //     journée (Poste de travail / RP / RU / Congés) puis coche tous les
@@ -84,29 +95,21 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   const agCp = agent?.immatriculation || agent?.cp || agent?.id;
 
   // ── Section A : remplissage en masse ──────────────────────────────────
+  // 25/08 (Olivier, précisé après un premier essai "aussi rapide que
+  // maintenant" jugé insuffisant) : "ce que je t'avais demandé c'etait
+  // justement en saisie multiple de pouvoir passe des saisie des poste de
+  // travail a rp ru ou conges et de faire remplir a la fin" -- confirmé
+  // valable pour les 4 boutons, pas seulement à l'intérieur de "Poste de
+  // travail". Vrai modèle "panier" : chaque changement de type/vacation/
+  // poste/statut congés met de côté (sans écrire en base) la sélection en
+  // cours dans `panier`, et un seul bouton final "✅ Tout remplir" écrit
+  // tout le lot en une seule action utilisateur -- plus aucune écriture
+  // intermédiaire au fil des changements.
   const [typeJournee, setTypeJournee] = useState("poste");
   const [vacation, setVacation] = useState("M");
   const [posteCode, setPosteCode] = useState("");
   const [congeStatut, setCongeStatut] = useState("");
   const postesDispo = getPostesPourAgent(agent, agentProfiles, vacation);
-
-  // 25/08 (Olivier, après avoir testé en réel) : sélectionner des jours puis
-  // changer de type sans jamais cliquer "+ Remplir" faisait perdre la
-  // sélection en silence -- "je saisie des jours de travail. je passe sur
-  // les rp et plus rien de visible". Cohérent avec sa toute première demande
-  // ("sans valider changer pour saisir d'un coup les rp à la suite") : une
-  // sélection en attente est désormais appliquée AUTOMATIQUEMENT avant de
-  // basculer sur le nouveau type, plutôt que d'exiger un clic "+ Remplir"
-  // que rien ne rend visuellement indispensable. Si l'écriture échoue
-  // (réseau), on reste sur le type actuel, sélection intacte, message
-  // d'erreur affiché -- jamais de bascule silencieuse sur un échec.
-  const changerType = async (t) => {
-    if (joursSelect.length>0 && !fillBusy) {
-      const ok = await remplir();
-      if (!ok) return;
-    }
-    setTypeJournee(t); setPosteCode(""); setCongeStatut(""); setJoursSelect([]); setFillMsg(null);
-  };
 
   const [miniMonth, setMiniMonth] = useState(()=>{
     const now = new Date();
@@ -115,13 +118,69 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   const [joursSelect, setJoursSelect] = useState([]);
   const [fillBusy, setFillBusy] = useState(false);
   const [fillMsg, setFillMsg] = useState(null); // {ok:bool, text}
-  // Historique des vagues déjà appliquées dans CETTE session du popup (25/08,
-  // demandé par Olivier -- enchaîner plusieurs types à la suite : Matinées,
-  // puis sans repasser par une validation globale, les RP, etc.). Chaque
-  // "Remplir" continue d'écrire IMMÉDIATEMENT en base, exactement comme avant
-  // (aucun ralentissement sur une vague d'un seul type) -- ceci n'est qu'un
-  // rappel visuel de ce qui a déjà été committé, pas un panier à valider.
+  // Le lot en attente : une entrée par vague mise de côté (type + config +
+  // dates), jamais encore écrite en base -- purement local tant que
+  // "✅ Tout remplir" n'a pas été cliqué.
+  const [panier, setPanier] = useState([]); // [{id,type,label,dates,write}]
+  // Historique des vagues réellement écrites cette session (après un "Tout
+  // remplir" réussi) -- rappel visuel de ce qui est déjà en base, distinct
+  // du panier (encore en attente).
   const [sessionWaves, setSessionWaves] = useState([]);
+
+  // Construit l'entrée correspondant à la sélection EN COURS (jamais celle
+  // déjà dans le panier) -- retourne null si rien à mettre de côté.
+  const construireEntreeCourante = () => {
+    if (joursSelect.length===0) return null;
+    const id = Date.now()+Math.random();
+    const dates = [...joursSelect];
+    if (typeJournee==="poste") {
+      if (!posteCode) return null;
+      const jsCode = convertirCodePosteVersJsCode(posteCode, vacation);
+      const horaires = (jsCode && HORAIRES_POSTE[jsCode]) || HORAIRES_DEFAUT[vacation] || null;
+      const label = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}`;
+      return { id, type:"poste", label, dates, write:{ kind:"planning", codeEquipe:vacation, codePoste:posteCode, jsCode, horaires, overwrite:false } };
+    }
+    if (typeJournee==="rp") return { id, type:"rp", label:"RP", dates, write:{ kind:"planning", codeEquipe:"RP", codePoste:null, jsCode:null, horaires:null, overwrite:false } };
+    if (typeJournee==="ru") return { id, type:"ru", label:"RU", dates, write:{ kind:"planning", codeEquipe:"RU", codePoste:null, jsCode:null, horaires:null, overwrite:false } };
+    // conges
+    if (!congeStatut) return null;
+    if (congeStatut==="accorde") return { id, type:"conges", label:"Congés (Accordé)", dates, write:{ kind:"planning", codeEquipe:"CA", codePoste:null, jsCode:null, horaires:null, overwrite:true } };
+    return { id, type:"conges", label:`Congés (${congeStatut==="demande"?"Demandé":"Refusé"})`, dates, write:{ kind:"conges", statut:congeStatut } };
+  };
+
+  // Met de côté la sélection en cours dans le panier (aucune écriture
+  // réseau) et vide la sélection -- appelé automatiquement à chaque
+  // changement de type/vacation/poste/statut, jamais besoin d'y penser.
+  const ajouterAuLot = () => {
+    const entree = construireEntreeCourante();
+    if (!entree) return;
+    setPanier(prev => [...prev, entree]);
+    setJoursSelect([]); setFillMsg(null);
+  };
+  const retirerDuLot = (id) => setPanier(prev => prev.filter(e=>e.id!==id));
+
+  const changerType = (t) => {
+    if (fillBusy) return;
+    ajouterAuLot();
+    setTypeJournee(t); setPosteCode(""); setCongeStatut(""); setJoursSelect([]); setFillMsg(null);
+  };
+  const choisirVacation = (code) => {
+    if (fillBusy) return;
+    if (code!==vacation) ajouterAuLot();
+    setVacation(code); setPosteCode("");
+  };
+  const choisirPoste = (code) => {
+    if (fillBusy) return;
+    const nouveau = posteCode===code ? "" : code;
+    if (nouveau!==posteCode) ajouterAuLot();
+    setPosteCode(nouveau);
+  };
+  const choisirCongeStatut = (code) => {
+    if (fillBusy) return;
+    const nouveau = congeStatut===code ? "" : code;
+    if (nouveau!==congeStatut) ajouterAuLot();
+    setCongeStatut(nouveau);
+  };
 
   const [miniYear, miniMonthNum] = miniMonth.split("-").map(Number);
   const miniDaysInMonth = joursDuMois(miniYear, miniMonthNum);
@@ -142,9 +201,13 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   // grisés) -- même clé que schedule (agCp), déjà disponible via la prop
   // agentProfiles.
   const agentColors = agentProfiles?.[agCp]?.agentColors || {};
+  // Dates déjà mises de côté dans une AUTRE vague du panier -- grisées elles
+  // aussi (peu importe le type actuellement affiché) pour ne jamais pouvoir
+  // sélectionner deux fois le même jour dans deux vagues différentes.
+  const panierDates = new Set(panier.flatMap(e=>e.dates));
 
   const toggleJourSelect = (dk, occupe) => {
-    if (occupe && griserSiOccupe) return;
+    if (occupe) return;
     setFillMsg(null);
     setJoursSelect(prev => prev.includes(dk) ? prev.filter(x=>x!==dk) : [...prev, dk].sort());
   };
@@ -156,60 +219,33 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     typeJournee==="conges" ? !!congeStatut :
     true;
 
-  const remplir = async () => {
-    if (joursSelect.length===0) return false;
-    if (typeJournee==="poste" && !posteCode) return false;
-    if (typeJournee==="conges" && !congeStatut) return false;
-    setFillBusy(true); setFillMsg(null);
-
-    // Congés Demandé/Refusé : n'écrit jamais dans le planning perso (même
-    // principe que le popup de saisie normal, onCongeStatutChange) -- pur
-    // ajout côté profil, sauvegardé automatiquement par l'effet générique
-    // agentProfiles déjà en place, aucun appel serveur planning nécessaire.
-    if (typeJournee==="conges" && (congeStatut==="demande" || congeStatut==="refuse")) {
+  // Écriture réelle d'UNE entrée du panier -- appelée en boucle par
+  // remplirTout(), jamais directement depuis un bouton (plus aucune
+  // écriture immédiate au fil de la saisie, tout passe par le lot).
+  const ecrireEntree = async (entree) => {
+    if (entree.write.kind==="conges") {
+      // Demandé/Refusé : n'écrit jamais dans le planning perso (même
+      // principe que le popup de saisie normal, onCongeStatutChange) --
+      // pur ajout côté profil, aucun appel serveur planning nécessaire.
       const todayIso = new Date().toISOString().slice(0,10);
       setAgentProfiles(prev => {
         const currMap = prev[agent.id]?.congesDemandes || {};
         const nextMap = {...currMap};
-        joursSelect.forEach(dk => {
+        entree.dates.forEach(dk => {
           const v = schedule[`${agCp}-${dk}`];
           const jourEtaitVide = !(v && (v.equipe || v.equipe2));
           const curr = currMap[dk];
-          nextMap[dk] = congeStatut==="demande"
+          nextMap[dk] = entree.write.statut==="demande"
             ? { statut:"demande", dateDemande: curr?.dateDemande || todayIso, jourEtaitVide }
             : { statut:"refuse", dateDemande: curr?.dateDemande||null, dateRefus: todayIso, jourEtaitVide };
         });
         return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes: nextMap}};
       });
-      setFillMsg({ ok:true, text: `✓ ${joursSelect.length} jour${joursSelect.length>1?"s":""} ${congeStatut==="demande"?"demandé":"marqué refusé"}${joursSelect.length>1?"s":""} -- rien n'est écrit dans le planning, suivi dans le module Congés.` });
-      setSessionWaves(prev => [...prev, { id:Date.now(), label:`Congés (${congeStatut==="demande"?"Demandé":"Refusé"})`, count:joursSelect.length }]);
-      setJoursSelect([]);
-      setFillBusy(false);
-      return true;
+      return { ok:true, appliques:entree.dates.length, ignores:0 };
     }
-
-    // Poste de travail / RP / RU / Congés-Accordé : écriture réelle dans le
-    // planning perso via le même endpoint bulk-fill pour les 4 cas.
-    let codeEquipe, codePoste=null, horaires=null, jsCode=null, overwrite=false;
-    let waveLabel = "RP";
-    if (typeJournee==="poste") {
-      codeEquipe = vacation; codePoste = posteCode;
-      jsCode = convertirCodePosteVersJsCode(posteCode, vacation);
-      horaires = (jsCode && HORAIRES_POSTE[jsCode]) || HORAIRES_DEFAUT[vacation] || null;
-      waveLabel = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}`;
-    } else if (typeJournee==="rp") {
-      codeEquipe = "RP"; waveLabel = "RP";
-    } else if (typeJournee==="ru") {
-      codeEquipe = "RU"; waveLabel = "RU";
-    } else { // conges + accorde
-      codeEquipe = "CA"; overwrite = true; waveLabel = "Congés (Accordé)";
-    }
-
+    const { codeEquipe, codePoste, jsCode, horaires, overwrite } = entree.write;
     try {
-      const res = await api.planning.bulkFill(agCp, { dates: joursSelect, codeEquipe, codePoste, horaires, overwrite });
-      // Mise à jour optimiste locale des jours réellement appliqués — les
-      // "ignorés" (déjà occupés entre-temps, jamais le cas pour Congés
-      // Accordé puisque overwrite=true) restent inchangés dans schedule.
+      const res = await api.planning.bulkFill(agCp, { dates: entree.dates, codeEquipe, codePoste, horaires, overwrite });
       setSchedule(prev => {
         const next = {...prev};
         (res.appliques||[]).forEach(d => {
@@ -217,15 +253,55 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
         });
         return next;
       });
-      if (res.nb_appliques>0) setSessionWaves(prev => [...prev, { id:Date.now(), label:waveLabel, count:res.nb_appliques }]);
-      setJoursSelect([]);
-      setFillMsg({ ok:true, text: `✓ ${res.nb_appliques} jour${res.nb_appliques>1?"s":""} rempli${res.nb_appliques>1?"s":""}${res.ignores?.length ? ` · ${res.ignores.length} déjà occupé${res.ignores.length>1?"s":""} (ignoré${res.ignores.length>1?"s":""})` : ""}.` });
-      return true;
+      return { ok:true, appliques:res.nb_appliques, ignores:res.ignores?.length||0 };
     } catch(e) {
-      setFillMsg({ ok:false, text: e.message || "Erreur lors du remplissage. Réessaie." });
-      return false;
-    } finally {
-      setFillBusy(false);
+      return { ok:false, error: e.message || "Erreur réseau" };
+    }
+  };
+
+  // Bouton final unique : ajoute la sélection en cours au lot (si elle
+  // n'y est pas déjà), vérifie qu'aucune date ne se retrouve dans 2 vagues
+  // différentes (Olivier, tout premier message : "il faut verifier pour
+  // eviter d'ecraser des jours deja saisie"), puis écrit tout le lot en
+  // une seule action utilisateur.
+  const remplirTout = async () => {
+    setFillMsg(null);
+    const derniere = construireEntreeCourante();
+    const aTraiter = derniere ? [...panier, derniere] : [...panier];
+    if (aTraiter.length===0) return;
+
+    const parDate = {};
+    aTraiter.forEach(e => e.dates.forEach(d => { (parDate[d] = parDate[d]||[]).push(e.label); }));
+    const conflits = Object.entries(parDate).filter(([,labels])=>labels.length>1);
+    if (conflits.length>0) {
+      const detail = conflits.slice(0,3).map(([d,labels])=>`${fmtDateCourt(d)} (${labels.join(" + ")})`).join(", ");
+      setFillMsg({ ok:false, text:`⚠️ ${conflits.length} jour${conflits.length>1?"s":""} en double entre plusieurs vagues du lot -- ${detail}${conflits.length>3?"…":""}. Retire le doublon d'une des vagues avant de continuer.` });
+      return;
+    }
+
+    setFillBusy(true);
+    let totalAppliques = 0, totalIgnores = 0;
+    const nouvellesWaves = [];
+    const echecs = [];
+    for (const entree of aTraiter) {
+      const res = await ecrireEntree(entree);
+      if (res.ok) {
+        totalAppliques += res.appliques;
+        totalIgnores += res.ignores||0;
+        if (res.appliques>0) nouvellesWaves.push({ id:Date.now()+Math.random(), label:entree.label, count:res.appliques });
+      } else {
+        echecs.push(entree);
+      }
+    }
+    if (nouvellesWaves.length>0) setSessionWaves(prev => [...prev, ...nouvellesWaves]);
+    setPanier(echecs); // les vagues échouées (réseau) restent dans le lot pour réessai
+    setJoursSelect([]);
+    setFillBusy(false);
+
+    if (echecs.length>0) {
+      setFillMsg({ ok:false, text:`⚠️ ${totalAppliques} jour${totalAppliques>1?"s":""} rempli${totalAppliques>1?"s":""}, mais ${echecs.length} vague${echecs.length>1?"s":""} en échec (réseau) -- reste${echecs.length>1?"nt":""} dans le lot, réessaie.` });
+    } else {
+      setFillMsg({ ok:true, text:`✓ ${totalAppliques} jour${totalAppliques>1?"s":""} rempli${totalAppliques>1?"s":""} au total${totalIgnores>0?` · ${totalIgnores} déjà occupé${totalIgnores>1?"s":""} (ignoré${totalIgnores>1?"s":""})`:""}.` });
     }
   };
 
@@ -330,7 +406,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
           {/* ── Section A ── */}
           <div>
             <div style={{fontSize:13,fontWeight:800,color:"#1e293b",marginBottom:2}}>Remplir plusieurs jours</div>
-            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Choisis un type de journée, puis coche tous les jours concernés — même dispersés sur l'année.</div>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Choisis un type de journée, coche les jours concernés, puis change de type autant de fois que tu veux (Poste, RP, RU, Congés) — rien n'est écrit tant que tu n'as pas cliqué "✅ Tout remplir".</div>
 
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
               {TYPES_JOURNEE.map(t => (
@@ -345,7 +421,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
             {typeJournee==="poste" && (<>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
                 {VACATIONS.map(v => (
-                  <button key={v.code} onClick={()=>{setVacation(v.code);setPosteCode("");}} disabled={fillBusy}
+                  <button key={v.code} onClick={()=>choisirVacation(v.code)} disabled={fillBusy}
                     style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                       background:vacation===v.code?"#0f4c81":"#f1f5f9",color:vacation===v.code?"#fff":"#334155"}}>
                     {v.label}
@@ -356,7 +432,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                 {postesDispo.length===0
                   ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucun poste habilité pour cette vacation.</div>
                   : postesDispo.map(p => (
-                    <button key={p.code} onClick={()=>setPosteCode(posteCode===p.code?"":p.code)} disabled={fillBusy}
+                    <button key={p.code} onClick={()=>choisirPoste(p.code)} disabled={fillBusy}
                       style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                         background:posteCode===p.code?"#1e293b":"#f1f5f9",color:posteCode===p.code?"#fff":"#334155"}}>
                       {p.label}
@@ -369,7 +445,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
             {typeJournee==="conges" && (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
                 {CONGES_STATUTS.map(s => (
-                  <button key={s.code} onClick={()=>setCongeStatut(congeStatut===s.code?"":s.code)} disabled={fillBusy}
+                  <button key={s.code} onClick={()=>choisirCongeStatut(s.code)} disabled={fillBusy}
                     style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                       background:congeStatut===s.code?"#eab308":"#fef9c3",color:congeStatut===s.code?"#fff":"#854d0e"}}>
                     {s.label}
@@ -404,21 +480,26 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   const dk = `${miniYear}-${String(miniMonthNum).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
                   const v = schedule[`${agCp}-${dk}`];
                   const occupeReel = !!(v && (v.equipe || v.equipe2));
-                  const occupe = occupeReel && griserSiOccupe;
+                  const occupeDb = occupeReel && griserSiOccupe;
+                  const enAttenteLot = panierDates.has(dk);
+                  const occupe = occupeDb || enAttenteLot;
                   const isSel = joursSelect.includes(dk);
                   // 25/08 (Olivier) : un jour grisé garde un liseré coloré
                   // rappelant ce qui l'occupe déjà -- couleur personnalisée
                   // de l'agent en priorité, sinon la couleur par défaut du
                   // type de journée (equipe, ou equipe2 pour le cas rare
-                  // "nuit seule"/"congé seule" où equipe est vide).
+                  // "nuit seule"/"congé seule" où equipe est vide). Un jour
+                  // déjà mis de côté dans une autre vague du lot (pas encore
+                  // en base) a son propre style ambre, distinct du gris "déjà
+                  // en base", pour qu'on comprenne pourquoi il est bloqué.
                   const codeDeja = v?.equipe || v?.equipe2 || null;
                   const couleurDeja = codeDeja ? (agentColors[codeDeja] || DEFAULT_COLORS[codeDeja] || "#e2e8f0") : "#e2e8f0";
                   return (
                     <button key={dk} onClick={()=>toggleJourSelect(dk,occupe)} disabled={occupe||fillBusy}
-                      title={occupe ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
-                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":occupe?couleurDeja:occupeReel?"#fde68a":"#cbd5e1"}`,
-                        borderRadius:6,background:isSel?"#0f4c81":occupe?"#f1f5f9":"#fff",
-                        color:isSel?"#fff":occupe?"#cbd5e1":"#334155",opacity:fillBusy&&!occupe?.5:1,
+                      title={occupeDb ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : enAttenteLot ? "Jour déjà dans une autre vague du lot — retire-le de cette vague si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
+                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":occupeDb?couleurDeja:enAttenteLot?"#f59e0b":occupeReel?"#fde68a":"#cbd5e1"}`,
+                        borderRadius:6,background:isSel?"#0f4c81":occupeDb?"#f1f5f9":enAttenteLot?"#fffbeb":"#fff",
+                        color:isSel?"#fff":occupeDb?"#cbd5e1":enAttenteLot?"#b45309":"#334155",opacity:fillBusy&&!occupe?.5:1,
                         fontSize:11,fontWeight:700,cursor:(occupe||fillBusy)?"default":"pointer",
                         display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
                       {day}
@@ -428,17 +509,40 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
               </div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8,gap:8}}>
                 <span style={{fontSize:11,fontWeight:600,color:"#475569"}}>{joursSelect.length} jour{joursSelect.length>1?"s":""} sélectionné{joursSelect.length>1?"s":""}</span>
-                <button onClick={remplir} disabled={joursSelect.length===0||fillBusy}
-                  style={{background:(joursSelect.length===0||fillBusy)?"#cbd5e1":"#0f4c81",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:(joursSelect.length===0||fillBusy)?"default":"pointer",fontSize:12,fontWeight:700}}>
-                  {fillBusy?"⏳...":"+ Remplir"}
+                <button onClick={ajouterAuLot} disabled={joursSelect.length===0||fillBusy}
+                  style={{background:(joursSelect.length===0||fillBusy)?"#cbd5e1":"#e0f2fe",color:(joursSelect.length===0||fillBusy)?"#fff":"#0369a1",border:"none",borderRadius:8,padding:"7px 14px",cursor:(joursSelect.length===0||fillBusy)?"default":"pointer",fontSize:12,fontWeight:700}}>
+                  + Ajouter cette vague au lot
                 </button>
               </div>
             </>)}
+
+            {/* Le lot en attente -- rien n'est encore écrit en base, chaque
+                vague reste modifiable/retirable jusqu'au clic final. */}
+            {panier.length>0 && (
+              <div style={{marginTop:10,paddingTop:10,borderTop:"1px dashed #fde68a"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#b45309",marginBottom:5}}>🧺 Lot en attente ({panier.reduce((s,e)=>s+e.dates.length,0)} jour{panier.reduce((s,e)=>s+e.dates.length,0)>1?"s":""})</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {panier.map(e => (
+                    <span key={e.id} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:600,color:"#92400e",background:"#fffbeb",border:"1px solid #fde68a",borderRadius:6,padding:"3px 4px 3px 7px"}}>
+                      {e.label} — {e.dates.length}j
+                      <button onClick={()=>retirerDuLot(e.id)} disabled={fillBusy} style={{background:"none",border:"none",cursor:fillBusy?"default":"pointer",color:"#b45309",fontSize:12,fontWeight:800,padding:"0 2px",lineHeight:1}}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(panier.length>0 || joursSelect.length>0) && (
+              <button onClick={remplirTout} disabled={fillBusy}
+                style={{marginTop:10,width:"100%",background:fillBusy?"#cbd5e1":"#16a34a",color:"#fff",border:"none",borderRadius:8,padding:"10px 14px",cursor:fillBusy?"default":"pointer",fontSize:13,fontWeight:800}}>
+                {fillBusy?"⏳ Écriture en cours...":`✅ Tout remplir (${panier.reduce((s,e)=>s+e.dates.length,0)+joursSelect.length} jour${panier.reduce((s,e)=>s+e.dates.length,0)+joursSelect.length>1?"s":""})`}
+              </button>
+            )}
             {fillMsg && <div style={{fontSize:11,fontWeight:600,color:fillMsg.ok?"#16a34a":"#dc2626",marginTop:8}}>{fillMsg.text}</div>}
 
-            {/* Historique des vagues déjà appliquées cette session -- rappel
-                visuel, jamais un panier à valider : chaque vague listée ici
-                est déjà écrite en base au moment où elle apparaît. */}
+            {/* Historique des vagues réellement écrites cette session (après
+                un "Tout remplir" réussi) -- distinct du panier ci-dessus,
+                qui lui n'est jamais encore en base. */}
             {sessionWaves.length>0 && (
               <div style={{marginTop:10,paddingTop:10,borderTop:"1px dashed #e2e8f0"}}>
                 <div style={{fontSize:10,fontWeight:700,color:"#94a3b8",marginBottom:5}}>✓ Vagues déjà appliquées cette session</div>
