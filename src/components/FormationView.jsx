@@ -485,7 +485,9 @@ function CatalogueSection({ catalogue, loading, onChange }) {
         return (
           <div key={cat} style={{ marginBottom: 18 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>{cat}</div>
-            <div style={{ border: "1.5px solid var(--border)", borderRadius: 10, overflow: "hidden", overflowX: "auto" }}>
+
+            {/* Desktop/tablette : vraie grille de colonnes (masquée sous 640px, voir theme.css) */}
+            <div className="f2ppmp-cat-desktop" style={{ border: "1.5px solid var(--border)", borderRadius: 10, overflow: "hidden", overflowX: "auto" }}>
               <div style={{ minWidth: 420 }}>
                 <div style={{ display: "grid", gridTemplateColumns: CAT_COLS, gap: 8, padding: "8px 12px", background: "var(--bg-page)", fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: .3, borderBottom: "1.5px solid var(--border)" }}>
                   <span>Intitulé</span><span>Durée</span><span>Format</span><span>Statut</span><span>Actions</span>
@@ -507,6 +509,32 @@ function CatalogueSection({ catalogue, loading, onChange }) {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Mobile (<640px, 26/08 -- Olivier : "la vue telephone est pas
+                tres lisible les colonne sont pas aligné [...] il faut
+                glisser pour tout voir" -- 5 colonnes fixes ne rentrent pas
+                sur un ecran etroit sans scroll horizontal) : cartes
+                empilees, jamais de scroll horizontal, meme comportement au
+                clic (ouvre CouvertureModal). */}
+            <div className="f2ppmp-cat-mobile" style={{ flexDirection: "column", gap: 8 }}>
+              {items.map(f => (
+                <div key={f.id} onClick={() => setCouvertureId(f.id)}
+                  style={{ background: "var(--bg-card)", border: "1.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", cursor: "pointer", opacity: f.statut === "archive" ? 0.55 : 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{f.intitule}{f.obligatoire ? " ⭐" : ""}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: f.statut === "archive" ? "var(--text-muted)" : "#15803d", whiteSpace: "nowrap" }}>{f.statut === "archive" ? "Archivée" : "Active"}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>{[f.duree, f.format].filter(Boolean).join(" · ") || "—"}</div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                    <button onClick={() => { setEdit(f); setShowForm(true); }} title="Modifier" style={{ ...btnSecondary, padding: "5px 10px", fontSize: 12 }}>✏️ Modifier</button>
+                    <button onClick={() => api.formation.updateCatalogue(f.id, { statut: f.statut === "archive" ? "actif" : "archive" }).then(onChange)}
+                      title={f.statut === "archive" ? "Réactiver" : "Archiver"} style={{ ...btnSecondary, padding: "5px 10px", fontSize: 12 }}>
+                      {f.statut === "archive" ? "↺ Réactiver" : "📦 Archiver"}
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         );

@@ -65,4 +65,13 @@ body { background: var(--bg-page); transition: background .15s; }
      en style inline sur ces boutons, qui prime toujours sur une règle de
      feuille de style externe sans !important. */
   .f2ppmp-week-arrow { display: none !important; }
+  /* Module AFO -- Catalogue (26/08, Olivier : "la vue telephone est pas
+     tres lisible les colonne sont pas aligné [...] il faut glisser pour
+     tout voir de gauche a droite") -- la grille en 5 colonnes fixes livrée
+     le jour même ne rentre pas sur un écran étroit sans scroll horizontal.
+     Bascule vers des cartes empilées sous ce même breakpoint mobile,
+     desktop/tablette inchangé (voir FormationView.jsx, CatalogueSection). */
+  .f2ppmp-cat-desktop { display: none !important; }
+  .f2ppmp-cat-mobile { display: flex !important; }
 }
+.f2ppmp-cat-mobile { display: none; }
