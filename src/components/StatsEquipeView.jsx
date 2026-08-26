@@ -136,7 +136,18 @@ function SectionHeader({ icon, titre, ouvert, onToggle, labelOuvert = "Voir le d
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px 10px" }}>
       <div style={{ ...sectionTitle, marginBottom: 0, flex: "1 1 180px", minWidth: 0 }}>{icon} {titre}</div>
-      <button onClick={onToggle} style={{ background: "none", border: "none", cursor: "pointer", color: NAVY.from, fontSize: 12, fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap", padding: 0 }}>
+      {/* 27/08 (test réel en mode sombre) : NAVY.from (#0f4c81) utilisé ici
+          en simple COULEUR DE TEXTE sur fond transparent (donc celui de la
+          carte) -- devient illisible une fois la carte passée en sombre
+          (texte bleu-marine sur fond bleu-marine, exactement le piège déjà
+          documenté le 19/08 sur l'accent "actif" ailleurs dans l'appli).
+          var(--accent-active) existe précisément pour ce cas -- clair en
+          mode clair (même #0a3a63/proche), éclairci en mode sombre. Les
+          autres usages de NAVY.from dans ce fichier (boutons année/tri,
+          lignes 203/323/327 plus haut) restent inchangés : c'est un
+          remplissage plein avec texte blanc, toujours lisible sur les deux
+          thèmes. */}
+      <button onClick={onToggle} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent-active)", fontSize: 12, fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap", padding: 0 }}>
         {ouvert ? `▲ ${labelFerme}` : `▼ ${labelOuvert}`}
       </button>
     </div>
@@ -153,8 +164,16 @@ function completerAvecPostesConnus(rows) {
 
 function fmtPct(v) { return `${v}%`; }
 
-const card = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: "14px 16px", boxShadow: "0 1px 3px rgba(0,0,0,.05)" };
-const sectionTitle = { fontSize: 14, fontWeight: 800, color: "#1e293b", marginBottom: 10 };
+// 27/08 -- retrofit mode sombre (Olivier : "faut le mode sombre pour sat
+// equipe et verifie bien que tu les testes soit lisible en sombre") -- ce
+// fichier n'avait jamais été touché lors du chantier dark-mode du 19/08 ni
+// de ses suites (0 occurrence de `var(--` avant ce jour). Même convention
+// que les autres modules déjà retrofités (FormationView.jsx 25/08) :
+// fond/bordure/texte neutres → tokens theme.css, les "îlots" pastel
+// auto-suffisants (ligne d'année en cours surlignée plus bas, voir
+// CoverageParAnneeTable) gardent leurs couleurs fixes, jamais touchées.
+const card = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", boxShadow: "0 1px 3px var(--shadow-card)" };
+const sectionTitle = { fontSize: 14, fontWeight: 800, color: "var(--text-primary)", marginBottom: 10 };
 
 export default function StatsEquipeView() {
   const [year, setYear] = useState(new Date().getFullYear());
@@ -183,8 +202,8 @@ export default function StatsEquipeView() {
     <div style={{ padding: "12px", maxWidth: 1000, margin: "0 auto", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>📊 Stat'Equip</div>
-          <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>Statistiques d'équipe — {year}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>📊 Stat'Equip</div>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>Statistiques d'équipe — {year}</div>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {availableYears.map(y => (
@@ -192,8 +211,8 @@ export default function StatsEquipeView() {
               style={{
                 padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
                 fontSize: 12.5, fontWeight: 700,
-                background: year === y ? NAVY.from : "#f1f5f9",
-                color: year === y ? "#fff" : "#64748b",
+                background: year === y ? NAVY.from : "var(--bg-page)",
+                color: year === y ? "#fff" : "var(--text-secondary)",
               }}>
               {y}
             </button>
@@ -203,7 +222,7 @@ export default function StatsEquipeView() {
 
       {err && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 14 }}>⚠️ {err}</div>}
       {loading ? (
-        <div style={{ textAlign: "center", color: "#64748b", padding: 40 }}>Chargement...</div>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 40 }}>Chargement...</div>
       ) : !data ? null : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
@@ -237,8 +256,8 @@ export default function StatsEquipeView() {
                 (valeur de la tuile), le détail équipe/réserve régionale est
                 ajouté en sous-label, même principe que "Agents équipe"
                 au-dessus. */}
-            <div style={{ borderTop: "1px solid #f1f5f9", marginTop: 14, paddingTop: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04, marginBottom: 8 }}>Par grade</div>
+            <div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: .04, marginBottom: 8 }}>Par grade</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
                 <Tuile label="Cadre Op (CP6/CO6)" valeur={data.gradesDetail.cadreOp.total} sousLabel={`dont ${data.gradesDetail.cadreOp.equipe} équipe · ${data.gradesDetail.cadreOp.reserve} réserve régionale`} />
                 <Tuile label="Maîtrise (CP5/CO5)" valeur={data.gradesDetail.maitrise.total} sousLabel={`dont ${data.gradesDetail.maitrise.equipe} équipe · ${data.gradesDetail.maitrise.reserve} réserve régionale`} />
@@ -257,7 +276,7 @@ export default function StatsEquipeView() {
               exactement les mêmes 3 chiffres que les tuiles). */}
           <div style={card}>
             <div style={sectionTitle}>🔁 Couverture des postes par la Réserve régionale</div>
-            <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 10 }}>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
               Part des journées CPS couvertes par la réserve régionale, sur le total des journées importées cette année.
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
@@ -273,12 +292,12 @@ export default function StatsEquipeView() {
             <div style={card}>
               <div style={sectionTitle}>🗓️ Congés refusés</div>
               <Tuile label="Jours refusés (équipe)" valeur={data.congesRefuses.nbJours} sousLabel={`${data.congesRefuses.nbAgentsConcernes} agent(s) concerné(s)`} large />
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
             </div>
             <div style={card}>
               <div style={sectionTitle}>🕒 VT refusés</div>
               <Tuile label="Jours refusés (équipe)" valeur={data.vtRefuses.nbJours} sousLabel={`${data.vtRefuses.nbAgentsConcernes} agent(s) concerné(s)`} large />
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
             </div>
           </div>
 
@@ -293,7 +312,7 @@ export default function StatsEquipeView() {
             <div style={card}>
               <div style={sectionTitle}>🎂 Âge moyen (hors Réserve régionale)</div>
               <Tuile label="Âge moyen" valeur={data.ageMoyenHorsReserve.moyenne != null ? `${data.ageMoyenHorsReserve.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsReserve.nbAgentsInclus} agent(s)`} large />
-              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
                 Estimé à partir des 2 premiers chiffres du CP (année de naissance). {data.ageMoyenHorsReserve.nbAgentsExclusParseEchec > 0 && `${data.ageMoyenHorsReserve.nbAgentsExclusParseEchec} agent(s) exclu(s), CP non reconnu.`}
               </div>
             </div>
@@ -312,31 +331,31 @@ export default function StatsEquipeView() {
               <div style={{ ...sectionTitle, marginBottom: 0 }}>🛠️ Agents habilités par poste</div>
               <div style={{ display: "flex", gap: 4 }}>
                 <button onClick={() => setTriHab("planning")}
-                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "planning" ? NAVY.from : "#f1f5f9", color: triHab === "planning" ? "#fff" : "#64748b" }}>
+                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "planning" ? NAVY.from : "var(--bg-page)", color: triHab === "planning" ? "#fff" : "var(--text-secondary)" }}>
                   Ordre planning
                 </button>
                 <button onClick={() => setTriHab("nombre")}
-                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "nombre" ? NAVY.from : "#f1f5f9", color: triHab === "nombre" ? "#fff" : "#64748b" }}>
+                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "nombre" ? NAVY.from : "var(--bg-page)", color: triHab === "nombre" ? "#fff" : "var(--text-secondary)" }}>
                   Nombre d'agents
                 </button>
               </div>
             </div>
-            <div style={{ fontSize: 11.5, color: "#94a3b8", marginBottom: 10 }}>
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
               Habilitations actives (table Habilitations) — indépendant du module Formation.
             </div>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                 <thead>
-                  <tr style={{ textAlign: "left", color: "#94a3b8", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
+                  <tr style={{ textAlign: "left", color: "var(--text-muted)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
                     <th style={{ padding: "4px 8px", fontWeight: 700 }}>Poste</th>
                     <th style={{ padding: "4px 8px", fontWeight: 700 }}>Agents habilités</th>
                   </tr>
                 </thead>
                 <tbody>
                   {completerAvecPostesConnus(data.habilitationsParPoste).sort((a, b) => triHab === "planning" ? ordrePoste(a.code_poste) - ordrePoste(b.code_poste) : b.nbAgents - a.nbAgents).map(h => (
-                    <tr key={h.code_poste} style={{ borderTop: "1px solid #f1f5f9" }}>
-                      <td style={{ padding: "6px 8px", fontWeight: 600, color: "#334155" }}>{labelPoste(h.code_poste)}</td>
-                      <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{h.nbAgents}</td>
+                    <tr key={h.code_poste} style={{ borderTop: "1px solid var(--border)" }}>
+                      <td style={{ padding: "6px 8px", fontWeight: 600, color: "var(--text-primary)" }}>{labelPoste(h.code_poste)}</td>
+                      <td style={{ padding: "6px 8px", fontWeight: 700, color: "var(--text-primary)" }}>{h.nbAgents}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -353,9 +372,9 @@ export default function StatsEquipeView() {
 function Tuile({ label, valeur, sousLabel, large }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: .04 }}>{label}</div>
-      <div style={{ fontFamily: "ui-monospace,Consolas,monospace", fontSize: large ? 24 : 20, fontWeight: 800, color: "#1e293b" }}>{valeur}</div>
-      {sousLabel && <div style={{ fontSize: 11, color: "#64748b" }}>{sousLabel}</div>}
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: .04 }}>{label}</div>
+      <div style={{ fontFamily: "ui-monospace,Consolas,monospace", fontSize: large ? 24 : 20, fontWeight: 800, color: "var(--text-primary)" }}>{valeur}</div>
+      {sousLabel && <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{sousLabel}</div>}
     </div>
   );
 }
@@ -363,11 +382,16 @@ function Tuile({ label, valeur, sousLabel, large }) {
 // Cellule pourcentage+fraction empilée verticalement (plutôt qu'en ligne)
 // pour garder chaque colonne étroite sur mobile — le tableau à 4 colonnes
 // (Année/Global/PRCI/PAR) débordait sinon facilement à 375px de large.
-function CellPct({ pct, num, den }) {
+// `light` (27/08, retrofit mode sombre) : utilisée aussi bien dans une ligne
+// normale (texte theme-aware) que dans la ligne "année en cours" surlignée
+// en pastel bleu clair fixe (voir CoverageParAnneeTable) -- ce 2e cas a
+// besoin d'un texte TOUJOURS foncé, jamais du token qui blanchirait en mode
+// sombre sur un fond resté volontairement clair.
+function CellPct({ pct, num, den, light }) {
   return (
     <div style={{ lineHeight: 1.25 }}>
-      <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 12.5 }}>{fmtPct(pct)}</div>
-      <div style={{ fontSize: 10, color: "#94a3b8" }}>{num}/{den}</div>
+      <div style={{ fontWeight: 700, color: light ? "#1e293b" : "var(--text-primary)", fontSize: 12.5 }}>{fmtPct(pct)}</div>
+      <div style={{ fontSize: 10, color: light ? "#64748b" : "var(--text-muted)" }}>{num}/{den}</div>
     </div>
   );
 }
@@ -380,14 +404,14 @@ function ReserveRoulementSection({ data }) {
   return (
     <div style={card}>
       <SectionHeader icon="🔁" titre="Réserve / Roulement (agents équipe) — historique mensuel" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail par mois" />
-      <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 6 }}>
+      <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginTop: 6 }}>
         Porte uniquement sur les agents équipe — la Réserve régionale est comptée à part. Un changement de statut ne modifie jamais le comptage des mois déjà passés.
       </div>
       {ouvert && (
         <div style={{ overflowX: "auto", marginTop: 12 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
-              <tr style={{ textAlign: "left", color: "#94a3b8", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
+              <tr style={{ textAlign: "left", color: "var(--text-muted)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
                 <th style={{ padding: "4px 8px", fontWeight: 700 }}>Mois</th>
                 <th style={{ padding: "4px 8px", fontWeight: 700 }}>Réserve</th>
                 <th style={{ padding: "4px 8px", fontWeight: 700 }}>Roulement</th>
@@ -395,10 +419,10 @@ function ReserveRoulementSection({ data }) {
             </thead>
             <tbody>
               {data.parMois.map(m => (
-                <tr key={m.mois} style={{ borderTop: "1px solid #f1f5f9" }}>
-                  <td style={{ padding: "6px 8px", fontWeight: 600, color: "#334155" }}>{MOIS_L[m.mois - 1]}</td>
-                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{m.nbReserve}</td>
-                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "#1e293b" }}>{m.nbRoulement}</td>
+                <tr key={m.mois} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "6px 8px", fontWeight: 600, color: "var(--text-primary)" }}>{MOIS_L[m.mois - 1]}</td>
+                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "var(--text-primary)" }}>{m.nbReserve}</td>
+                  <td style={{ padding: "6px 8px", fontWeight: 700, color: "var(--text-primary)" }}>{m.nbRoulement}</td>
                 </tr>
               ))}
             </tbody>
@@ -421,13 +445,13 @@ function ReserveRoulementSection({ data }) {
 function CoverageParAnneeTable({ data, anneeActuelle }) {
   const [ouvert, setOuvert] = useState(true);
   return (
-    <div style={{ borderTop: "1px solid #f1f5f9", marginTop: 12, paddingTop: 10 }}>
+    <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
       <SectionHeader icon="📈" titre="Évolution par année" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail" />
       {ouvert && (
         <div style={{ overflowX: "auto", marginTop: 10 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
-              <tr style={{ textAlign: "left", color: "#94a3b8", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
+              <tr style={{ textAlign: "left", color: "var(--text-muted)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
                 <th style={{ padding: "4px 8px", fontWeight: 700 }}>Année</th>
                 <th style={{ padding: "4px 8px", fontWeight: 700 }}>Global</th>
                 <th style={{ padding: "4px 8px", fontWeight: 700 }}>PRCI</th>
@@ -435,14 +459,17 @@ function CoverageParAnneeTable({ data, anneeActuelle }) {
               </tr>
             </thead>
             <tbody>
-              {data.map(row => (
-                <tr key={row.annee} style={{ borderTop: "1px solid #f1f5f9", background: row.annee === anneeActuelle ? "#eff6ff" : "transparent" }}>
-                  <td style={{ padding: "6px 6px", fontWeight: row.annee === anneeActuelle ? 800 : 600, color: "#334155" }}>{row.annee}</td>
-                  <td style={{ padding: "6px 6px" }}><CellPct pct={row.global.pct} num={row.global.numerateur} den={row.global.denominateur} /></td>
-                  <td style={{ padding: "6px 6px" }}><CellPct pct={row.PRCI.pct} num={row.PRCI.numerateur} den={row.PRCI.denominateur} /></td>
-                  <td style={{ padding: "6px 6px" }}><CellPct pct={row.PAR.pct} num={row.PAR.numerateur} den={row.PAR.denominateur} /></td>
-                </tr>
-              ))}
+              {data.map(row => {
+                const surlignee = row.annee === anneeActuelle;
+                return (
+                  <tr key={row.annee} style={{ borderTop: "1px solid var(--border)", background: surlignee ? "#eff6ff" : "transparent" }}>
+                    <td style={{ padding: "6px 6px", fontWeight: surlignee ? 800 : 600, color: surlignee ? "#1e293b" : "var(--text-primary)" }}>{row.annee}</td>
+                    <td style={{ padding: "6px 6px" }}><CellPct light={surlignee} pct={row.global.pct} num={row.global.numerateur} den={row.global.denominateur} /></td>
+                    <td style={{ padding: "6px 6px" }}><CellPct light={surlignee} pct={row.PRCI.pct} num={row.PRCI.numerateur} den={row.PRCI.denominateur} /></td>
+                    <td style={{ padding: "6px 6px" }}><CellPct light={surlignee} pct={row.PAR.pct} num={row.PAR.numerateur} den={row.PAR.denominateur} /></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -470,17 +497,17 @@ function DispoSection({ data }) {
         <Tuile label="Planning (CPS/perso)" valeur={identifie.total} />
         <Tuile label="Message libre" valeur={anonyme.total} />
       </div>
-      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 8 }}>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
         Journées où un agent est disponible sans poste à tenir — soit détecté directement (DISPO réel importé en CPS Officiel, ou sélectionné dans le planning perso), soit signalé par message libre dans CPS Officiel. Chiffre toujours anonymisé, aucun nom.
       </div>
       {ouvert && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           {identifie.parDate.length > 0 && (
             <div>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Planning (CPS/perso)</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 4 }}>Planning (CPS/perso)</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {identifie.parDate.map((e, i) => (
-                  <div key={i} style={{ fontSize: 11.5, color: "#64748b", borderTop: "1px solid #f1f5f9", paddingTop: 4 }}>
+                  <div key={i} style={{ fontSize: 11.5, color: "var(--text-secondary)", borderTop: "1px solid var(--border)", paddingTop: 4 }}>
                     {fmtDate(e.date_jour)} — {e.nb} agent{e.nb > 1 ? "s" : ""}
                   </div>
                 ))}
@@ -489,10 +516,10 @@ function DispoSection({ data }) {
           )}
           {anonyme.entries.length > 0 && (
             <div>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>Message libre</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 4 }}>Message libre</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {anonyme.entries.map((e, i) => (
-                  <div key={i} style={{ fontSize: 11.5, color: "#64748b", borderTop: "1px solid #f1f5f9", paddingTop: 4 }}>
+                  <div key={i} style={{ fontSize: 11.5, color: "var(--text-secondary)", borderTop: "1px solid var(--border)", paddingTop: 4 }}>
                     {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
                   </div>
                 ))}
@@ -515,19 +542,19 @@ function PostesNonTenusSection({ data }) {
       {ouvert && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
           {groupes.map(g => (
-            <div key={g.label} style={{ borderTop: "1px solid #f1f5f9", paddingTop: 8 }}>
-              <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 12.5, marginBottom: 6 }}>
+            <div key={g.label} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+              <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 12.5, marginBottom: 6 }}>
                 {g.label} ({codeAffichePoste(g.codes)}) — {g.nb} fois
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 4 }}>
                 {Object.values(g.parService).sort((a, b) => b.nb - a.nb).map(s => (
                   <div key={s.service}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "#475569" }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-secondary)" }}>
                       {s.service} — {s.nb} fois
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 10, marginTop: 2 }}>
                       {s.entries.map((e, i) => (
-                        <div key={i} style={{ fontSize: 11, color: "#64748b" }}>
+                        <div key={i} style={{ fontSize: 11, color: "var(--text-secondary)" }}>
                           {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
                         </div>
                       ))}
