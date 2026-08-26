@@ -272,8 +272,8 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
             <div key={it.key} style={{ background: "var(--bg-card)", border: `1.5px solid ${AMBRE.borderLight}`, borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px var(--shadow-card)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>
+                  <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>
                     📅 {fmtDate(it.date_session)} {it.lieu ? `· 📍 ${it.lieu}` : ""} · {it.categorie}
                   </div>
                 </div>
@@ -300,8 +300,8 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
             <div key={it.key} style={{ background: "var(--bg-card)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px var(--shadow-card)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>
+                  <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>
                     📅 {fmtDate(it.date)} {it.organisme ? `· ${it.organisme}` : ""}
                   </div>
                 </div>
@@ -359,7 +359,7 @@ function MesSessionsFormateurTab({ agentId, onGoToSession }) {
               style={{ cursor: "pointer", background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{s.intitule}</div>
-                <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
                 <RosterLignes session={s} agentId={agentId} />
               </div>
               <StatutBadge session={s} />
@@ -456,9 +456,19 @@ function GestionTab({ agents, refreshProfil, refreshSchedule, pendingSessionId, 
   );
 }
 
+// 26/08 (Olivier : "propose-moi" une presentation en colonne pour le
+// catalogue) : vraie grille de colonnes par categorie (Intitulé / Durée /
+// Format / Statut / Actions) au lieu d'une pile de cartes -- un `display:grid`
+// a colonnes fixes plutot qu'une vraie balise <table> (coherent avec le reste
+// du fichier, 100% style inline). Chaque ligne est cliquable et ouvre le
+// nouveau CouvertureModal (qui est deja forme / pas encore, point 4 de la
+// demande du 26/08) -- edition/archivage restent des boutons a part
+// (stopPropagation, sinon un clic sur "✏️" ouvrirait aussi la couverture).
+const CAT_COLS = "1fr 64px 96px 78px 70px";
 function CatalogueSection({ catalogue, loading, onChange }) {
   const [showForm, setShowForm] = useState(false);
   const [edit, setEdit] = useState(null);
+  const [couvertureId, setCouvertureId] = useState(null);
 
   return (
     <div>
@@ -474,34 +484,102 @@ function CatalogueSection({ catalogue, loading, onChange }) {
         if (!items.length) return null;
         return (
           <div key={cat} style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-active)", marginBottom: 8 }}>{cat}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {items.map(f => (
-                <div key={f.id} style={{ background: "var(--bg-card)", border: `1.5px solid ${f.statut === "archive" ? "var(--border)" : NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", opacity: f.statut === "archive" ? 0.6 : 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <div>
-                    <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{f.intitule}{f.obligatoire ? " ⭐" : ""}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>{[f.duree, f.format, f.statut === "archive" ? "archivée" : null].filter(Boolean).join(" · ")}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => { setEdit(f); setShowForm(true); }} style={{ ...btnSecondary, padding: "6px 12px" }}>✏️</button>
-                    <button onClick={() => api.formation.updateCatalogue(f.id, { statut: f.statut === "archive" ? "actif" : "archive" }).then(onChange)}
-                      style={{ ...btnSecondary, padding: "6px 12px" }}>
-                      {f.statut === "archive" ? "↺ Réactiver" : "📦 Archiver"}
-                    </button>
-                  </div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>{cat}</div>
+            <div style={{ border: "1.5px solid var(--border)", borderRadius: 10, overflow: "hidden", overflowX: "auto" }}>
+              <div style={{ minWidth: 420 }}>
+                <div style={{ display: "grid", gridTemplateColumns: CAT_COLS, gap: 8, padding: "8px 12px", background: "var(--bg-page)", fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: .3, borderBottom: "1.5px solid var(--border)" }}>
+                  <span>Intitulé</span><span>Durée</span><span>Format</span><span>Statut</span><span>Actions</span>
                 </div>
-              ))}
+                {items.map((f, i) => (
+                  <div key={f.id} onClick={() => setCouvertureId(f.id)}
+                    style={{ display: "grid", gridTemplateColumns: CAT_COLS, gap: 8, alignItems: "center", padding: "9px 12px", cursor: "pointer", opacity: f.statut === "archive" ? 0.55 : 1, background: "var(--bg-card)", borderTop: i === 0 ? "none" : "1px solid var(--border)" }}>
+                    <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{f.intitule}{f.obligatoire ? " ⭐" : ""}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{f.duree || "—"}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{f.format || "—"}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: f.statut === "archive" ? "var(--text-muted)" : "#15803d" }}>{f.statut === "archive" ? "Archivée" : "Active"}</span>
+                    <span style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
+                      <button onClick={() => { setEdit(f); setShowForm(true); }} title="Modifier" style={{ ...btnSecondary, padding: "4px 8px", fontSize: 12 }}>✏️</button>
+                      <button onClick={() => api.formation.updateCatalogue(f.id, { statut: f.statut === "archive" ? "actif" : "archive" }).then(onChange)}
+                        title={f.statut === "archive" ? "Réactiver" : "Archiver"} style={{ ...btnSecondary, padding: "4px 8px", fontSize: 12 }}>
+                        {f.statut === "archive" ? "↺" : "📦"}
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         );
       })}
       {!loading && catalogue.length === 0 && <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 30, fontSize: 13 }}>Aucune formation au catalogue.</div>}
+
+      {couvertureId && <CouvertureModal catalogueId={couvertureId} onClose={() => setCouvertureId(null)} />}
+    </div>
+  );
+}
+
+// 26/08 -- suivi de couverture d'une formation (point 4) : qui l'a deja
+// suivie (avec la date la plus recente), qui ne l'a pas encore suivie. Scope
+// = tous les agents actifs (choix confirme par Olivier), pas filtre par
+// famille -- il juge lui-meme qui est concerne. Reutilise exactement la meme
+// regle de presence reelle que les stats (un declin retire l'agent de
+// "formes" sans action manuelle).
+function CouvertureModal({ catalogueId, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    api.formation.getCouvertureFormation(catalogueId).then(setData).catch(() => setErr("Impossible de charger la couverture")).finally(() => setLoading(false));
+  }, [catalogueId]);
+
+  const total = data ? data.formes.length + data.nonFormes.length : 0;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", zIndex: 750, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(4px)" }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, width: "100%", maxWidth: 520, maxHeight: "88vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.3)" }}>
+        <div style={{ background: `linear-gradient(135deg,${NAVY.from},${NAVY.to})`, padding: "16px 20px", position: "sticky", top: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ color: "#fff" }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{data?.catalogue?.intitule || "..."}</div>
+            {data && <div style={{ fontSize: 12, opacity: .85 }}>{data.formes.length}/{total} agent(s) formé(s)</div>}
+          </div>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 10, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
+        </div>
+        <div style={{ padding: 20 }}>
+          {loading ? <div style={{ textAlign: "center", color: "var(--text-secondary)" }}>Chargement...</div> : err ? (
+            <div style={{ color: "#b91c1c", fontSize: 12.5 }}>⚠️ {err}</div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#15803d", marginBottom: 8 }}>✅ Déjà formés ({data.formes.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 18 }}>
+                {data.formes.map(a => (
+                  <div key={a.cp} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)" }}>
+                    <span style={{ color: "var(--text-primary)" }}>{a.prenom} {a.nom}</span>
+                    <span style={{ color: "var(--text-secondary)" }}>{fmtDate(a.derniere_date)}</span>
+                  </div>
+                ))}
+                {data.formes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Personne pour l'instant.</div>}
+              </div>
+
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309", marginBottom: 8 }}>🕳️ Pas encore formés ({data.nonFormes.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {data.nonFormes.map(a => (
+                  <div key={a.cp} style={{ fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)", color: "var(--text-primary)" }}>{a.prenom} {a.nom}</div>
+                ))}
+                {data.nonFormes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Tout le monde est formé.</div>}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 function CatalogueForm({ initial, onCancel, onSaved }) {
-  const [form, setForm] = useState(initial || { categorie: "PRCI", intitule: "", description: "", duree: "", format: "", public_cible: "", prerequis: "", obligatoire: false });
+  const [form, setForm] = useState(initial || { categorie: "PRCI", intitule: "", description: "", duree: "", duree_heures: "", format: "", public_cible: "", prerequis: "", obligatoire: false });
   const initialFormat = useMemo(() => splitChoixLibre(initial?.format, FORMAT_OPTIONS), [initial]);
   const [formatChoix, setFormatChoix] = useState(initialFormat.choix);
   const [formatAutre, setFormatAutre] = useState(initialFormat.autre);
@@ -536,7 +614,13 @@ function CatalogueForm({ initial, onCancel, onSaved }) {
         </div>
         <div><div style={labelStyle}>Intitulé</div><input value={form.intitule} onChange={e => setForm(p => ({ ...p, intitule: e.target.value }))} style={inputStyle} /></div>
         <div><div style={labelStyle}>Description</div><textarea value={form.description || ""} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></div>
-        <div><div style={labelStyle}>Durée</div><input value={form.duree || ""} onChange={e => setForm(p => ({ ...p, duree: e.target.value }))} placeholder="ex: 1 jour" style={inputStyle} /></div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ flex: 1 }}><div style={labelStyle}>Durée</div><input value={form.duree || ""} onChange={e => setForm(p => ({ ...p, duree: e.target.value }))} placeholder="ex: 1 jour" style={inputStyle} /></div>
+          <div style={{ flex: 1 }}>
+            <div style={labelStyle}>Durée en heures</div>
+            <input type="number" step="0.5" min="0" value={form.duree_heures ?? ""} onChange={e => setForm(p => ({ ...p, duree_heures: e.target.value }))} placeholder="ex: 7" style={inputStyle} />
+          </div>
+        </div>
         <div>
           <div style={labelStyle}>Format</div>
           <ChoixLibre options={FORMAT_OPTIONS} choix={formatChoix} onChoix={setFormatChoix} autre={formatAutre} onAutre={setFormatAutre} famille={NAVY} />
@@ -590,7 +674,7 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule, pe
               style={{ cursor: "pointer", background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{s.intitule}</div>
-                <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
                 <RosterLignes session={s} />
               </div>
               <StatutBadge session={s} />
@@ -604,6 +688,19 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule, pe
   );
 }
 
+// 26/08 (Olivier : "programmer des date de formation avec des participants
+// c'est pas intuitif") : formulaire regroupé en 3 sections visuellement
+// distinctes (sous-titres) -- Quoi & quand / Qui anime / Qui participe --
+// reste un seul écran (pas un wizard multi-étapes), juste mieux scanné. Le
+// vrai point de friction (composer la liste de participants un par un) est
+// adressé par "+ Ajouter tous les non-formés" : appelle la même couverture
+// que CouvertureModal pour la formation choisie et précoche d'un coup tous
+// les agents qui ne l'ont pas encore suivie -- l'AFO peut ensuite affiner à
+// la main comme avant.
+function FormSectionTitle({ children }) {
+  return <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent-active)", textTransform: "uppercase", letterSpacing: .3, marginTop: 4 }}>{children}</div>;
+}
+
 function SessionForm({ catalogue, agents, onCancel, onSaved }) {
   const [form, setForm] = useState({ catalogue_id: catalogue[0]?.id || "", date_session: "" });
   const [lieuChoix, setLieuChoix] = useState("PRCI");
@@ -613,6 +710,7 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
   const [search, setSearch] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [chargementNonFormes, setChargementNonFormes] = useState(false);
 
   const afos = agents.filter(a => a.is_afo);
   const filtered = agents.filter(a => {
@@ -625,6 +723,17 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
   }
   function toggleParticipant(cp) {
     setParticipants(p => p.includes(cp) ? p.filter(c => c !== cp) : [...p, cp]);
+  }
+
+  async function ajouterNonFormes() {
+    if (!form.catalogue_id) return setErr("Choisis d'abord une formation du catalogue");
+    setErr(""); setChargementNonFormes(true);
+    try {
+      const cov = await api.formation.getCouvertureFormation(form.catalogue_id);
+      const cps = cov.nonFormes.map(a => a.cp);
+      setParticipants(p => Array.from(new Set([...p, ...cps])));
+    } catch (e) { setErr(e.message || "Erreur"); }
+    setChargementNonFormes(false);
   }
 
   async function submit() {
@@ -642,6 +751,7 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
   return (
     <div style={{ background: NAVY.bgLight, border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 12, padding: 14, marginBottom: 14 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <FormSectionTitle>🗓️ Quoi & quand</FormSectionTitle>
         <div>
           <div style={labelStyle}>Formation du catalogue</div>
           <select value={form.catalogue_id} onChange={e => setForm(p => ({ ...p, catalogue_id: Number(e.target.value) }))} style={inputStyle}>
@@ -653,6 +763,8 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
           <div style={labelStyle}>Lieu</div>
           <ChoixLibre options={LIEU_OPTIONS} choix={lieuChoix} onChoix={setLieuChoix} autre={lieuAutre} onAutre={setLieuAutre} famille={NAVY} />
         </div>
+
+        <FormSectionTitle>👨‍🏫 Qui anime</FormSectionTitle>
         <div>
           <div style={labelStyle}>Formateurs (jusqu'à 3)</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -665,8 +777,13 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
             {afos.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucun agent AFO pour l'instant.</div>}
           </div>
         </div>
+
+        <FormSectionTitle>👥 Qui participe</FormSectionTitle>
         <div>
-          <div style={labelStyle}>Participants</div>
+          <button type="button" onClick={ajouterNonFormes} disabled={chargementNonFormes}
+            style={{ ...btnSecondary, fontSize: 12, marginBottom: 8, background: AMBRE.bgLight, color: AMBRE.accentDark, border: `1px solid ${AMBRE.borderLight}` }}>
+            {chargementNonFormes ? "..." : "+ Ajouter tous les non-formés"}
+          </button>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Rechercher un agent..." style={{ ...inputStyle, marginBottom: 8 }} />
           <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, border: "1px solid #e2e8f0", borderRadius: 8, padding: 6, background: "#fff" }}>
             {filtered.map(a => (
@@ -810,9 +927,22 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
 
 // ─── STATS (AFO) ────────────────────────────────────────────────────────────
 
+// 26/08 -- mini-tuile de stat (reprend le principe deja utilise dans
+// StatsEquipeView.jsx, pas le composant -- juste le meme esprit "valeur en
+// avant, libelle discret dessous").
+function StatTuile({ label, value }) {
+  return (
+    <div style={{ background: "var(--bg-page)", borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>{value}</div>
+      <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 1, textTransform: "uppercase", letterSpacing: .2 }}>{label}</div>
+    </div>
+  );
+}
+
 function StatsTab() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [couvertureId, setCouvertureId] = useState(null);
 
   useEffect(() => {
     api.formation.getStats().then(setData).catch(() => {}).finally(() => setLoading(false));
@@ -823,43 +953,52 @@ function StatsTab() {
 
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-active)", marginBottom: 8 }}>📖 Par formation</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>📖 Par formation</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
         {data.parFormation.map(f => (
-          <div key={f.catalogue_id} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{f.intitule} <span style={{ fontWeight: 500, color: "var(--text-secondary)" }}>({f.categorie})</span></div>
-            <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) suivi(s)</div>
-            {f.agents.length > 0 && <div style={{ fontSize: 12.5, color: "var(--text-primary)", fontWeight: 600, marginTop: 4 }}>{f.agents.map(a => `${a.prenom} ${a.nom}`).join(", ")}</div>}
+          <div key={f.catalogue_id} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{f.intitule} <span style={{ fontWeight: 400, color: "var(--text-secondary)" }}>({f.categorie})</span></div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) formé(s)</div>
+            </div>
+            <button onClick={() => setCouvertureId(f.catalogue_id)} style={{ ...btnSecondary, fontSize: 12, padding: "6px 12px" }}>Voir le détail</button>
           </div>
         ))}
         {data.parFormation.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune donnée.</div>}
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-active)", marginBottom: 8 }}>📅 Répartition annuelle (catégorie × source)</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>📅 Répartition annuelle (catégorie × source)</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
         {data.parAnneeCategorieSource.map((r, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, background: "var(--bg-card)", borderRadius: 8, padding: "6px 12px", color: "var(--text-primary)" }}>
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, background: "var(--bg-card)", borderRadius: 8, padding: "6px 12px", color: "var(--text-secondary)", fontWeight: 500 }}>
             <span>{r.annee} · {r.categorie}</span>
-            <span style={{ fontWeight: 700 }}>{r.nbAgents} agent(s)</span>
+            <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{r.nbAgents} agent(s)</span>
           </div>
         ))}
         {data.parAnneeCategorieSource.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune donnée.</div>}
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-active)", marginBottom: 8 }}>🎓 Par AFO (visible par tous les AFO)</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>🎓 Par AFO (visible par tous les AFO)</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {data.parAfo.map(a => (
-          <div key={a.cp} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{a.prenom} {a.nom}</div>
-            <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 4 }}>
-              {Object.keys(a.joursParAn).length === 0 ? "Aucune session animée" :
-                Object.entries(a.joursParAn).sort((x, y) => y[0] - x[0]).map(([an, n]) => `${an} : ${n} jour(s)`).join(" · ")}
+        {data.parAfo.map(a => {
+          const totalJours = Object.values(a.joursParAn).reduce((s, n) => s + n, 0);
+          const totalHeures = Object.values(a.heuresParAn).reduce((s, n) => s + n, 0);
+          return (
+            <div key={a.cp} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)", marginBottom: 8 }}>{a.prenom} {a.nom}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+                <StatTuile label="Sessions" value={a.nbSessions} />
+                <StatTuile label="Jours" value={totalJours} />
+                <StatTuile label="Heures" value={totalHeures % 1 === 0 ? totalHeures : totalHeures.toFixed(1)} />
+                <StatTuile label="Agents formés" value={a.agentsFormesGlobal} />
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>{a.agentsFormesGlobal} agent(s) formé(s) au total</div>
-          </div>
-        ))}
+          );
+        })}
         {data.parAfo.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun AFO pour l'instant.</div>}
       </div>
+
+      {couvertureId && <CouvertureModal catalogueId={couvertureId} onClose={() => setCouvertureId(null)} />}
     </div>
   );
 }

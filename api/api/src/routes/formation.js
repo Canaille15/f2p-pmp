@@ -4,6 +4,7 @@ const {
   getSessions, getSessionDetail, createSession, updateSession, deleteSession,
   addFormateur, removeFormateur, addParticipant, removeParticipant, lancerSession,
   getMesSessions, getFormationsProposees, declarerFormationPerso, getStats,
+  getCouvertureFormation,
 } = require('../controllers/formationController');
 const { authMiddleware, afoMiddleware } = require('../middleware/auth');
 
@@ -32,5 +33,10 @@ router.post('/perso',              authMiddleware, declarerFormationPerso);
 
 // Stats — réservé aux AFO, tous à égalité (voir tous les AFO, pas seulement soi)
 router.get('/stats', authMiddleware, afoMiddleware, getStats);
+
+// Couverture d'une formation (qui est formé / pas encore) — réservé aux AFO,
+// utilisé dans le catalogue (clic sur une ligne) et dans SessionForm ("+
+// Ajouter tous les non-formés")
+router.get('/catalogue/:id/couverture', authMiddleware, afoMiddleware, getCouvertureFormation);
 
 module.exports = router;

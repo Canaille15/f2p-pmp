@@ -723,6 +723,7 @@ export const formation = {
 
   // Stats AFO
   getStats: () => apiFetch('/formation/stats'),
+  getCouvertureFormation: (catalogueId) => apiFetch(`/formation/catalogue/${catalogueId}/couverture`),
 };
 
 // ─── MODULE STAT'EQUIP (statistiques d'équipe agrégées) ───────────────────────

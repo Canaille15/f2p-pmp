@@ -84,13 +84,13 @@ async function getCatalogue(req, res) {
 }
 
 async function createCatalogue(req, res) {
-  const { categorie, intitule, description, duree, format, public_cible, prerequis, obligatoire } = req.body;
+  const { categorie, intitule, description, duree, duree_heures, format, public_cible, prerequis, obligatoire } = req.body;
   if (!categorie || !intitule) return res.status(400).json({ error: 'Catégorie et intitulé requis' });
   try {
     const [result] = await pool.query(
-      `INSERT INTO formation_catalogue (categorie, intitule, description, duree, format, public_cible, prerequis, obligatoire, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
-      [categorie, intitule, description || null, duree || null, format || null, public_cible || null, prerequis || null, obligatoire ? 1 : 0, req.agent.cp]
+      `INSERT INTO formation_catalogue (categorie, intitule, description, duree, duree_heures, format, public_cible, prerequis, obligatoire, created_by)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [categorie, intitule, description || null, duree || null, duree_heures || null, format || null, public_cible || null, prerequis || null, obligatoire ? 1 : 0, req.agent.cp]
     );
     res.status(201).json({ message: 'Formation créée', id: result.insertId });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
@@ -98,12 +98,13 @@ async function createCatalogue(req, res) {
 
 async function updateCatalogue(req, res) {
   const { id } = req.params;
-  const { categorie, intitule, description, duree, format, public_cible, prerequis, obligatoire, statut } = req.body;
+  const { categorie, intitule, description, duree, duree_heures, format, public_cible, prerequis, obligatoire, statut } = req.body;
   const fields = [], values = [];
   if (categorie !== undefined)     { fields.push('categorie = ?');     values.push(categorie); }
   if (intitule !== undefined)      { fields.push('intitule = ?');      values.push(intitule); }
   if (description !== undefined)   { fields.push('description = ?');   values.push(description || null); }
   if (duree !== undefined)         { fields.push('duree = ?');         values.push(duree || null); }
+  if (duree_heures !== undefined)  { fields.push('duree_heures = ?');  values.push(duree_heures || null); }
   if (format !== undefined)        { fields.push('format = ?');        values.push(format || null); }
   if (public_cible !== undefined)  { fields.push('public_cible = ?');  values.push(public_cible || null); }
   if (prerequis !== undefined)     { fields.push('prerequis = ?');     values.push(prerequis || null); }
@@ -512,6 +513,25 @@ async function declarerFormationPerso(req, res) {
 // par tous les autres AFO).
 // ─────────────────────────────────────────────────────────────────────────
 
+// 10/08 : un agent qui a decline (retire la formation de son planning) une
+// session lancee n'a en realite jamais suivi la formation -- exclu du
+// comptage "agents formes" (Olivier : "si un agent ne participe plus a la
+// formation [...] ca met a jour les stats"). Plus besoin d'attendre que la
+// date soit passee (simplifie le 10/08 -- second retour d'Olivier : "c'est
+// peu utile d'attendre la date, vu que l'agent peut se remettre sur une des
+// formations prevue ce jour la") -- des qu'il decline, il n'est plus compte,
+// meme si le jour meme n'est pas encore arrive ; des qu'il se reinscrit (voir
+// picker DayEditPopup), il recompte aussitot. Une session pas encore lancee
+// reste toujours comptee normalement.
+// 26/08 : extraite en constante partagee (getStats ET getCouvertureFormation
+// ont besoin exactement de la meme regle, pour ne jamais diverger).
+const PRESENCE_REELLE = `(
+  fs.statut != 'lancee' OR EXISTS(
+    SELECT 1 FROM planning_jour pj JOIN planning_periode pp ON pp.planning_jour_id=pj.id
+    WHERE pj.cp_agent = fe.cp_agent AND pj.date_jour = fs.date_session AND pp.code_equipe='FOR'
+  )
+)`;
+
 async function getStats(req, res) {
   try {
     const [parFormationBase] = await pool.query(
@@ -522,22 +542,6 @@ async function getStats(req, res) {
        GROUP BY fc.id, fc.intitule, fc.categorie
        ORDER BY fc.categorie, fc.intitule`
     );
-    // 10/08 : un agent qui a decline (retire la formation de son planning)
-    // une session lancee n'a en realite jamais suivi la formation -- exclu
-    // du comptage "agents formes" (Olivier : "si un agent ne participe plus
-    // a la formation [...] ca met a jour les stats"). Plus besoin d'attendre
-    // que la date soit passee (simplifie le 10/08 -- second retour d'Olivier
-    // : "c'est peu utile d'attendre la date, vu que l'agent peut se remettre
-    // sur une des formations prevue ce jour la") -- des qu'il decline, il
-    // n'est plus compte, meme si le jour meme n'est pas encore arrive ; des
-    // qu'il se reinscrit (voir picker DayEditPopup), il recompte aussitot.
-    // Une session pas encore lancee reste toujours comptee normalement.
-    const PRESENCE_REELLE = `(
-      fs.statut != 'lancee' OR EXISTS(
-        SELECT 1 FROM planning_jour pj JOIN planning_periode pp ON pp.planning_jour_id=pj.id
-        WHERE pj.cp_agent = fe.cp_agent AND pj.date_jour = fs.date_session AND pp.code_equipe='FOR'
-      )
-    )`;
     const [agentsParFormation] = await pool.query(
       `SELECT fs.catalogue_id, a.cp, a.nom, a.prenom
        FROM formation_enrollment fe
@@ -584,9 +588,15 @@ async function getStats(req, res) {
 
     // Stats par AFO — visibles par tous les AFO, pas seulement le sien.
     const [afos] = await pool.query(`SELECT a.cp, a.nom, a.prenom FROM agent a JOIN profil_agent pa ON pa.cp_agent=a.cp WHERE pa.is_afo=1 ORDER BY a.nom, a.prenom`);
+    // 26/08 : duree_heures rapatriee ici pour le nouveau total "Heures" par
+    // AFO (Olivier : "je veux dans les stat que chaque afo voit [...] le
+    // nombre d'heure") -- champ optionnel du catalogue (0 si jamais renseigne
+    // sur cette formation), jamais bloquant.
     const [sessionsFormateur] = await pool.query(
-      `SELECT fsf.cp_agent AS cp_formateur, fs.id AS session_id, YEAR(fs.date_session) AS annee
-       FROM formation_session_formateur fsf JOIN formation_session fs ON fs.id = fsf.session_id`
+      `SELECT fsf.cp_agent AS cp_formateur, fs.id AS session_id, YEAR(fs.date_session) AS annee, fc.duree_heures
+       FROM formation_session_formateur fsf
+       JOIN formation_session fs ON fs.id = fsf.session_id
+       JOIN formation_catalogue fc ON fc.id = fs.catalogue_id`
     );
     const [agentsFormateur] = await pool.query(
       `SELECT fsf.cp_agent AS cp_formateur, fs.catalogue_id, fc.intitule, fe.cp_agent AS cp_stagiaire
@@ -599,7 +609,11 @@ async function getStats(req, res) {
     const parAfo = afos.map(afo => {
       const mesSessions = sessionsFormateur.filter(s => s.cp_formateur === afo.cp);
       const joursParAn = {};
-      mesSessions.forEach(s => { joursParAn[s.annee] = (joursParAn[s.annee] || 0) + 1; });
+      const heuresParAn = {};
+      mesSessions.forEach(s => {
+        joursParAn[s.annee] = (joursParAn[s.annee] || 0) + 1;
+        heuresParAn[s.annee] = (heuresParAn[s.annee] || 0) + Number(s.duree_heures || 0);
+      });
       const mesAgents = agentsFormateur.filter(a => a.cp_formateur === afo.cp);
       const parFormationMap = {};
       mesAgents.forEach(a => {
@@ -608,7 +622,9 @@ async function getStats(req, res) {
       });
       return {
         cp: afo.cp, nom: afo.nom, prenom: afo.prenom,
+        nbSessions: mesSessions.length,
         joursParAn,
+        heuresParAn,
         agentsFormesParFormation: Object.values(parFormationMap).map(f => ({ catalogue_id: f.catalogue_id, intitule: f.intitule, nbAgents: f.agents.size })),
         agentsFormesGlobal: new Set(mesAgents.map(a => a.cp_stagiaire)).size,
       };
@@ -618,9 +634,45 @@ async function getStats(req, res) {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
+// GET /formation/catalogue/:id/couverture — 26/08, demande par Olivier :
+// "il faut qu'un puisse suivre en detail les agent deja forme, par date, et
+// aussi ceux qui n'ont pas ete encore forme" (ex: 365 TRAVAUX, tous les
+// agents doivent etre formes). Meme regle PRESENCE_REELLE que getStats (un
+// agent qui decline une session lancee n'est jamais compte "forme"). Scope
+// = tous les agents actifs (choix confirme par Olivier plutot qu'un filtre
+// par famille PRCI/PAR -- il juge lui-meme qui est concerne).
+async function getCouvertureFormation(req, res) {
+  const { id } = req.params;
+  try {
+    const [[cat]] = await pool.query('SELECT id, intitule, categorie FROM formation_catalogue WHERE id=?', [id]);
+    if (!cat) return res.status(404).json({ error: 'Formation introuvable' });
+
+    const [formes] = await pool.query(
+      `SELECT a.cp, a.nom, a.prenom, MAX(fs.date_session) AS derniere_date
+       FROM formation_enrollment fe
+       JOIN formation_session fs ON fs.id = fe.session_id
+       JOIN agent a ON a.cp = fe.cp_agent
+       WHERE fs.catalogue_id = ? AND ${PRESENCE_REELLE}
+       GROUP BY a.cp, a.nom, a.prenom
+       ORDER BY derniere_date DESC`,
+      [id]
+    );
+    const cpFormes = formes.map(f => f.cp);
+    const [nonFormes] = await pool.query(
+      cpFormes.length
+        ? `SELECT cp, nom, prenom FROM agent WHERE statut='actif' AND cp NOT IN (?) ORDER BY nom, prenom`
+        : `SELECT cp, nom, prenom FROM agent WHERE statut='actif' ORDER BY nom, prenom`,
+      cpFormes.length ? [cpFormes] : []
+    );
+
+    res.json({ catalogue: cat, formes, nonFormes });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
 module.exports = {
   getCatalogue, createCatalogue, updateCatalogue, deleteCatalogue,
   getSessions, getSessionDetail, createSession, updateSession, deleteSession,
   addFormateur, removeFormateur, addParticipant, removeParticipant, lancerSession,
   getMesSessions, getFormationsProposees, declarerFormationPerso, getStats,
+  getCouvertureFormation,
 };
