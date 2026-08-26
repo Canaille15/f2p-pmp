@@ -49,10 +49,37 @@ const STATUT_SESSION = {
   annulee:   { label: "❌ Annulée",    bg: "#fee2e2", color: "#b91c1c" },
 };
 
+// 26/08 (Olivier, après avoir vu des "1"/"5" bruts sans unité mélangés à des
+// "1 jour" dans le catalogue existant -- "on ne sait pas a quoi il sert" --
+// puis "oui verouille le" une fois la donnée corrigée) : le champ Durée
+// n'accepte plus de texte libre -- toujours un nombre de jours (0.5 possible,
+// demi-journée), la chaîne affichée ("1 jour"/"5 jours") est entièrement
+// dérivée ici, ne peut plus dériver vers autre chose qu'un vrai compte de
+// jours à l'avenir.
+function formatDureeJours(raw) {
+  const n = parseFloat(String(raw ?? "").replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0) return "";
+  const affiche = Number.isInteger(n) ? String(n) : String(n).replace(".", ",");
+  return `${affiche} jour${n > 1 ? "s" : ""}`;
+}
+// Extrait le nombre de jours déjà stocké (ex: "1 jour"/"5 jours") pour
+// pré-remplir le champ numérique à l'édition -- une ancienne valeur non
+// numérique (résidu jamais nettoyé) donne simplement un champ vide plutôt
+// que de planter.
+function parseDureeJours(duree) {
+  const n = parseFloat(String(duree ?? "").replace(",", "."));
+  return Number.isFinite(n) ? String(n) : "";
+}
+
 function fmtDate(iso) {
   if (!iso) return "";
   const [a, m, j] = String(iso).slice(0, 10).split("-");
   return `${j}/${m}/${a}`;
+}
+// 26/08 (nouveau champ heure_debut) : mysql2 renvoie un TIME sous forme
+// "HH:MM:SS" -- tronqué à "HH:MM" pour l'affichage.
+function fmtHeure(hms) {
+  return hms ? String(hms).slice(0, 5) : "";
 }
 
 // 10/08 : une session "Lancée" dont la date est deja passee reste "Lancée"
@@ -274,7 +301,7 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
                 <div>
                   <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>
-                    📅 {fmtDate(it.date_session)} {it.lieu ? `· 📍 ${it.lieu}` : ""} · {it.categorie}
+                    📅 {fmtDate(it.date_session)} {it.heure_debut ? `· 🕐 ${fmtHeure(it.heure_debut)}` : ""} {it.lieu ? `· 📍 ${it.lieu}` : ""} · {it.categorie}
                   </div>
                 </div>
                 <StatutBadge session={it} />
@@ -359,7 +386,7 @@ function MesSessionsFormateurTab({ agentId, onGoToSession }) {
               style={{ cursor: "pointer", background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{s.intitule}</div>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.heure_debut ? `· 🕐 ${fmtHeure(s.heure_debut)}` : ""} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
                 <RosterLignes session={s} agentId={agentId} />
               </div>
               <StatutBadge session={s} />
@@ -608,6 +635,7 @@ function CouvertureModal({ catalogueId, onClose }) {
 
 function CatalogueForm({ initial, onCancel, onSaved }) {
   const [form, setForm] = useState(initial || { categorie: "PRCI", intitule: "", description: "", duree: "", duree_heures: "", format: "", public_cible: "", prerequis: "", obligatoire: false });
+  const [dureeJours, setDureeJours] = useState(() => parseDureeJours(initial?.duree));
   const initialFormat = useMemo(() => splitChoixLibre(initial?.format, FORMAT_OPTIONS), [initial]);
   const [formatChoix, setFormatChoix] = useState(initialFormat.choix);
   const [formatAutre, setFormatAutre] = useState(initialFormat.autre);
@@ -617,7 +645,7 @@ function CatalogueForm({ initial, onCancel, onSaved }) {
   async function submit() {
     if (!form.intitule.trim()) return setErr("L'intitulé est obligatoire");
     setErr(""); setSaving(true);
-    const payload = { ...form, format: formatChoix === "Autre" ? formatAutre.trim() : formatChoix };
+    const payload = { ...form, duree: formatDureeJours(dureeJours), format: formatChoix === "Autre" ? formatAutre.trim() : formatChoix };
     try {
       if (initial?.id) await api.formation.updateCatalogue(initial.id, payload);
       else await api.formation.createCatalogue(payload);
@@ -643,7 +671,11 @@ function CatalogueForm({ initial, onCancel, onSaved }) {
         <div><div style={labelStyle}>Intitulé</div><input value={form.intitule} onChange={e => setForm(p => ({ ...p, intitule: e.target.value }))} style={inputStyle} /></div>
         <div><div style={labelStyle}>Description</div><textarea value={form.description || ""} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={2} style={{ ...inputStyle, resize: "vertical" }} /></div>
         <div style={{ display: "flex", gap: 10 }}>
-          <div style={{ flex: 1 }}><div style={labelStyle}>Durée</div><input value={form.duree || ""} onChange={e => setForm(p => ({ ...p, duree: e.target.value }))} placeholder="ex: 1 jour" style={inputStyle} /></div>
+          <div style={{ flex: 1 }}>
+            <div style={labelStyle}>Durée (jours)</div>
+            <input type="number" step="0.5" min="0" value={dureeJours} onChange={e => setDureeJours(e.target.value)} placeholder="ex: 1" style={inputStyle} />
+            {dureeJours !== "" && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 3 }}>Affiché : {formatDureeJours(dureeJours) || "—"}</div>}
+          </div>
           <div style={{ flex: 1 }}>
             <div style={labelStyle}>Durée en heures</div>
             <input type="number" step="0.5" min="0" value={form.duree_heures ?? ""} onChange={e => setForm(p => ({ ...p, duree_heures: e.target.value }))} placeholder="ex: 7" style={inputStyle} />
@@ -702,7 +734,7 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule, pe
               style={{ cursor: "pointer", background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{s.intitule}</div>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.heure_debut ? `· 🕐 ${fmtHeure(s.heure_debut)}` : ""} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
                 <RosterLignes session={s} />
               </div>
               <StatutBadge session={s} />
@@ -730,7 +762,7 @@ function FormSectionTitle({ children }) {
 }
 
 function SessionForm({ catalogue, agents, onCancel, onSaved }) {
-  const [form, setForm] = useState({ catalogue_id: catalogue[0]?.id || "", date_session: "" });
+  const [form, setForm] = useState({ catalogue_id: catalogue[0]?.id || "", date_session: "", heure_debut: "" });
   const [lieuChoix, setLieuChoix] = useState("PRCI");
   const [lieuAutre, setLieuAutre] = useState("");
   const [formateurs, setFormateurs] = useState([]);
@@ -786,7 +818,10 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
             {catalogue.filter(c => c.statut !== "archive").map(c => <option key={c.id} value={c.id}>{c.categorie} — {c.intitule}</option>)}
           </select>
         </div>
-        <div><div style={labelStyle}>Date</div><input type="date" value={form.date_session} onChange={e => setForm(p => ({ ...p, date_session: e.target.value }))} style={inputStyle} /></div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ flex: 1 }}><div style={labelStyle}>Date</div><input type="date" value={form.date_session} onChange={e => setForm(p => ({ ...p, date_session: e.target.value }))} style={inputStyle} /></div>
+          <div style={{ flex: 1 }}><div style={labelStyle}>Heure de début (optionnel)</div><input type="time" value={form.heure_debut} onChange={e => setForm(p => ({ ...p, heure_debut: e.target.value }))} style={inputStyle} /></div>
+        </div>
         <div>
           <div style={labelStyle}>Lieu</div>
           <ChoixLibre options={LIEU_OPTIONS} choix={lieuChoix} onChoix={setLieuChoix} autre={lieuAutre} onAutre={setLieuAutre} famille={NAVY} />
@@ -840,10 +875,13 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
   const [msg, setMsg] = useState("");
   const [addParticipantCp, setAddParticipantCp] = useState("");
   const [addFormateurCp, setAddFormateurCp] = useState("");
+  const [heureDebut, setHeureDebut] = useState("");
+  const [savingHeure, setSavingHeure] = useState(false);
+  const [savingMsg, setSavingMsg] = useState(false);
 
   const charger = useCallback(() => {
     setLoading(true);
-    api.formation.getSessionDetail(sessionId).then(d => { setData(d); setMsg(d.session.message_lancement || ""); }).catch(() => setErr("Impossible de charger la session")).finally(() => setLoading(false));
+    api.formation.getSessionDetail(sessionId).then(d => { setData(d); setMsg(d.session.message_lancement || ""); setHeureDebut(fmtHeure(d.session.heure_debut)); }).catch(() => setErr("Impossible de charger la session")).finally(() => setLoading(false));
   }, [sessionId]);
   useEffect(() => { charger(); }, [charger]);
 
@@ -853,6 +891,29 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
       await api.formation.lancerSession(sessionId, msg);
       charger(); onChanged(); refreshProfil?.(); refreshSchedule?.();
     } catch (e) { setErr(e.message || "Erreur"); }
+  }
+  // 26/08 (Olivier : "il faudrait une case heure de debut que le formateur
+  // renseigne") -- editable a tout moment (pas seulement avant lancement,
+  // contrairement a la date qui elle reste figee une fois le planning des
+  // participants deja ecrit).
+  async function sauvegarderHeure() {
+    setErr(""); setSavingHeure(true);
+    try { await api.formation.updateSession(sessionId, { heure_debut: heureDebut || null }); charger(); onChanged(); }
+    catch (e) { setErr(e.message || "Erreur"); }
+    setSavingHeure(false);
+  }
+  // 26/08 (Olivier : "lorsqu'une formation est planifié, ou meme lancé, le
+  // formateur peut mettre un message libre pour les participant") -- avant
+  // ce jour, le message n'etait modifiable qu'au moment du lancement (bloc
+  // ci-dessous, statut==="planifiee"). Reste editable une fois lancee, via un
+  // bouton dedie (le message affiche cote participant vient directement de
+  // message_lancement, relu a chaque ouverture de "Mes formations" -- pas
+  // besoin d'un nouveau mecanisme de notification pour qu'ils le voient).
+  async function sauvegarderMessage() {
+    setErr(""); setSavingMsg(true);
+    try { await api.formation.updateSession(sessionId, { message_lancement: msg }); charger(); onChanged(); }
+    catch (e) { setErr(e.message || "Erreur"); }
+    setSavingMsg(false);
   }
   async function retirerParticipant(cp) {
     try { await api.formation.removeParticipant(sessionId, cp); charger(); onChanged(); refreshProfil?.(); refreshSchedule?.(); } catch (e) { setErr(e.message || "Erreur"); }
@@ -883,7 +944,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
         <div style={{ background: `linear-gradient(135deg,${NAVY.from},${NAVY.to})`, padding: "16px 20px", position: "sticky", top: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ color: "#fff" }}>
             <div style={{ fontSize: 15, fontWeight: 800 }}>{data?.session?.intitule || "..."}</div>
-            <div style={{ fontSize: 12, opacity: .85 }}>{data ? `${fmtDate(data.session.date_session)}${data.session.lieu ? " · " + data.session.lieu : ""}` : ""}</div>
+            <div style={{ fontSize: 12, opacity: .85 }}>{data ? `${fmtDate(data.session.date_session)}${data.session.heure_debut ? " · " + fmtHeure(data.session.heure_debut) : ""}${data.session.lieu ? " · " + data.session.lieu : ""}` : ""}</div>
           </div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 10, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
@@ -937,12 +998,24 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                 <button onClick={ajouterParticipant} style={{ ...btnSecondary, fontSize: 12 }}>OK</button>
               </div>
 
-              {data.session.statut === "planifiee" && (
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-active)", marginBottom: 6 }}>🕐 Heure de début</div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+                <input type="time" value={heureDebut} onChange={e => setHeureDebut(e.target.value)} style={{ ...inputStyle, width: "auto" }} />
+                <button onClick={sauvegarderHeure} disabled={savingHeure} style={{ ...btnSecondary, fontSize: 12 }}>{savingHeure ? "..." : "Enregistrer"}</button>
+              </div>
+
+              {(data.session.statut === "planifiee" || data.session.statut === "lancee") && (
                 <>
-                  <div style={labelStyle}>Message de lancement (optionnel)</div>
-                  <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", marginBottom: 10 }} placeholder="Visible par les participants lors du lancement" />
-                  <button onClick={lancer} style={{ ...btnPrimary(NAVY), width: "100%" }}>🚀 Lancer la session</button>
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6 }}>Ajoute "🎓 Formation" en plus du contenu déjà présent dans le planning de chaque participant (rien n'est jamais écrasé) et les prévient. Chaque agent valide sa venue en libérant sa journée depuis son planning perso.</div>
+                  <div style={labelStyle}>Message {data.session.statut === "planifiee" ? "de lancement (optionnel)" : "pour les participants"}</div>
+                  <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", marginBottom: 10 }} placeholder="Visible par les participants" />
+                  {data.session.statut === "planifiee" ? (
+                    <>
+                      <button onClick={lancer} style={{ ...btnPrimary(NAVY), width: "100%" }}>🚀 Lancer la session</button>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6 }}>Ajoute "🎓 Formation" en plus du contenu déjà présent dans le planning de chaque participant (rien n'est jamais écrasé) et les prévient. Chaque agent valide sa venue en libérant sa journée depuis son planning perso.</div>
+                    </>
+                  ) : (
+                    <button onClick={sauvegarderMessage} disabled={savingMsg} style={{ ...btnPrimary(NAVY), width: "100%" }}>{savingMsg ? "..." : "💾 Mettre à jour le message"}</button>
+                  )}
                 </>
               )}
             </>

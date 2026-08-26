@@ -203,16 +203,16 @@ async function getSessionDetail(req, res) {
 }
 
 async function createSession(req, res) {
-  const { catalogue_id, date_session, lieu, message_lancement, formateurs, participants } = req.body;
+  const { catalogue_id, date_session, heure_debut, lieu, message_lancement, formateurs, participants } = req.body;
   if (!catalogue_id || !date_session) return res.status(400).json({ error: 'catalogue_id et date_session requis' });
   if (formateurs && formateurs.length > 3) return res.status(400).json({ error: 'Jusqu\'à 3 formateurs maximum' });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const [result] = await conn.query(
-      `INSERT INTO formation_session (catalogue_id, date_session, lieu, message_lancement, cp_agent_creation)
-       VALUES (?,?,?,?,?)`,
-      [catalogue_id, date_session, lieu || null, message_lancement || null, req.agent.cp]
+      `INSERT INTO formation_session (catalogue_id, date_session, heure_debut, lieu, message_lancement, cp_agent_creation)
+       VALUES (?,?,?,?,?,?)`,
+      [catalogue_id, date_session, heure_debut || null, lieu || null, message_lancement || null, req.agent.cp]
     );
     const sessionId = result.insertId;
     for (const cp of (formateurs || [])) {
@@ -231,7 +231,7 @@ async function createSession(req, res) {
 
 async function updateSession(req, res) {
   const { id } = req.params;
-  const { lieu, message_lancement, date_session, statut } = req.body;
+  const { lieu, heure_debut, message_lancement, date_session, statut } = req.body;
   try {
     const [[session]] = await pool.query('SELECT statut, date_session FROM formation_session WHERE id=?', [id]);
     if (!session) return res.status(404).json({ error: 'Session introuvable' });
@@ -240,6 +240,7 @@ async function updateSession(req, res) {
     }
     const fields = [], values = [];
     if (lieu !== undefined)              { fields.push('lieu = ?');              values.push(lieu || null); }
+    if (heure_debut !== undefined)       { fields.push('heure_debut = ?');       values.push(heure_debut || null); }
     if (message_lancement !== undefined) { fields.push('message_lancement = ?'); values.push(message_lancement || null); }
     if (date_session !== undefined)      { fields.push('date_session = ?');      values.push(date_session); }
     if (statut !== undefined)            { fields.push('statut = ?');            values.push(statut); }
@@ -413,7 +414,7 @@ async function lancerSession(req, res) {
 async function getMesSessions(req, res) {
   try {
     const [rows] = await pool.query(
-      `SELECT fs.id, fs.date_session, fs.lieu, fs.statut, fs.message_lancement,
+      `SELECT fs.id, fs.date_session, fs.heure_debut, fs.lieu, fs.statut, fs.message_lancement,
               fc.intitule, fc.categorie,
               EXISTS(SELECT 1 FROM formation_enrollment fe2 WHERE fe2.session_id=fs.id AND fe2.cp_agent=?) AS est_participant,
               EXISTS(SELECT 1 FROM formation_session_formateur fsf2 WHERE fsf2.session_id=fs.id AND fsf2.cp_agent=?) AS est_formateur,
@@ -465,7 +466,7 @@ async function getFormationsProposees(req, res) {
   const { date } = req.params;
   try {
     const [rows] = await pool.query(
-      `SELECT fs.id, fc.intitule, fs.lieu
+      `SELECT fs.id, fc.intitule, fs.heure_debut, fs.lieu
        FROM formation_enrollment fe
        JOIN formation_session fs ON fs.id = fe.session_id
        JOIN formation_catalogue fc ON fc.id = fs.catalogue_id
