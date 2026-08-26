@@ -214,10 +214,18 @@ export default function StatsEquipeView() {
               <Tuile label="Agents global" valeur={data.headcounts.totalAgents} />
               <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} sousLabel={`dont ${data.reserveRoulement.actuel.nbReserve} réserve · ${data.reserveRoulement.actuel.nbRoulement} roulement`} />
               <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} sousLabel="compte à part" />
-              <Tuile label="Encadrement" valeur={data.headcounts.totalEncadrement} sousLabel="DPX / Adj DPX — compte à part" />
-              <Tuile label="AFO" valeur={data.headcounts.totalAfo} sousLabel="toutes catégories confondues" />
-              <Tuile label="ASFP" valeur={data.headcounts.totalAsfp} sousLabel="Assistant Formation Pro — compte à part" />
               <Tuile label="Temps partiel" valeur={fmtPct(data.headcounts.pctTempsPartiel)} sousLabel={`${data.headcounts.nbTempsPartiel} agent(s) · Temps plein ${fmtPct(pctTempsPlein)}`} />
+            </div>
+            {/* 25/08 (Olivier) : "tu mets en ligne 2 : le decompte des AFO,
+                encadrement et ASFP en dernier" -- grille séparée plutôt qu'un
+                seul auto-fit continu, pour que ces 3 tuiles restent TOUJOURS
+                groupées sur leur propre ligne quelle que soit la largeur
+                d'écran (un seul grid auto-fit n'aurait pas garanti que la
+                "ligne 2" corresponde toujours à ces 3-là). */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 10 }}>
+              <Tuile label="AFO" valeur={data.headcounts.totalAfo} sousLabel="toutes catégories confondues" />
+              <Tuile label="Encadrement" valeur={data.headcounts.totalEncadrement} sousLabel="DPX / Adj DPX — compte à part" />
+              <Tuile label="ASFP" valeur={data.headcounts.totalAsfp} sousLabel="Assistant Formation Pro — compte à part" />
             </div>
             {/* Par grade (18/08, demande d'Olivier : "decompté les Cadre Op
                 [...] Maitrises [...] Maytises 2", puis en suite immédiate :
