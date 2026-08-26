@@ -4507,7 +4507,24 @@ function ExportIcsButton({ agent, schedule, curMonth, curYear }){
     URL.revokeObjectURL(url);
   };
   return(<div style={{display:"flex",flexDirection:"column",gap:6}}>
-    <button onClick={()=>setOuvert(o=>!o)} style={{display:"flex",alignItems:"center",gap:6,border:"1.5px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,14px)",fontWeight:700,alignSelf:"flex-start"}}>
+    {/* 26/08 (Olivier : "verifie aussi la hauteur des bouton exporter
+        remplissage rapide et import de pdf. il doivent faire le meme
+        hauteur. tu ne les agrandis pas") -- padding/fontSize alignés au
+        pixel près sur BulletinImportButton et le bouton "Remplissage
+        rapide" (padding:"8px 12px", fontSize:11) au lieu de son propre
+        padding:"7px 14px" + fontSize responsive clamp(12px,1.4vw,14px), qui
+        produisait une hauteur légèrement différente selon la largeur
+        d'écran -- rétréci ici, jamais agrandi les 2 autres. */}
+    {/* 26/08 (Olivier : "verifie aussi la hauteur des bouton exporter
+        remplissage rapide et import de pdf. il doivent faire le meme
+        hauteur. tu ne les agrandis pas") -- ce bouton (comme "Remplissage
+        rapide") a une bordure de 1.5px que "Importer bulletin..." (une div
+        sans bordure) n'a pas -- à fontSize/padding par ailleurs identiques,
+        ce seul écart le rendait ~1.6px plus haut. Corrigé en RÉDUISANT
+        legèrement son padding vertical (8px→7.2px, jamais l'inverse) pour
+        retomber exactement sur la hauteur du bouton le plus bas plutôt que
+        d'agrandir les 2 autres. */}
+    <button onClick={()=>setOuvert(o=>!o)} style={{display:"flex",alignItems:"center",gap:6,border:"1.5px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:8,padding:"7.2px 12px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif",alignSelf:"flex-start"}}>
       📤 Exporter (.ics) {ouvert?"▴":"▾"}
     </button>
     {ouvert&&<div style={{border:"1.5px solid #e2e8f0",borderRadius:10,padding:12,display:"flex",flexDirection:"column",gap:8,background:"#fff"}}>
@@ -9279,7 +9296,13 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
             retirés : comme Importer (qui n'a jamais eu ces contraintes),
             le libellé peut désormais se replier sur 2 lignes dans l'espace
             disponible plutôt que forcer une seule ligne large. */}
-        <button onClick={()=>setShowRemplissage(true)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:10,padding:"8px 12px",cursor:"pointer",fontSize:11,fontWeight:700}}>
+        {/* Même correctif de hauteur que ExportIcsButton juste au-dessus
+            (26/08) : fontFamily explicite (un <button> n'hérite pas de la
+            police de la page par défaut) + padding vertical réduit de 8px à
+            7.2px pour compenser sa bordure de 1.5px, absente du bouton
+            "Importer..." -- retombe exactement sur sa hauteur, jamais
+            agrandi. */}
+        <button onClick={()=>setShowRemplissage(true)} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #0f4c81",background:"#eff6ff",color:"#0f4c81",borderRadius:10,padding:"7.2px 12px",cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
           🗂️ Remplissage rapide
         </button>
       </div>}
