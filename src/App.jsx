@@ -12722,7 +12722,6 @@ export default function App(){
   };
 
   const myAgentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
-  const nbFormationsNonVues = (agentProfiles[myAgentId]?.formationNotifications||[]).filter(n=>!n.acquitte).length;
   // Rappele apres une action qui ecrit dans le planning d'un tiers ou du soi
   // (Module Formation) — reutilise reconcileSchedule comme partout ailleurs.
   const refreshMonSchedule = ()=>{
@@ -12763,13 +12762,20 @@ export default function App(){
     {k:"cetPdfs",l:"🏦 CET"},
     {k:"d2i",l:"✊ D2I"},
     {k:"fim",l:"🗂️ Fiche Individuelle"},
-    {k:"formation",l:`🎓 Formation${nbFormationsNonVues>0?` 🔔${nbFormationsNonVues}`:""}`},
     {k:"statsEquipe", l:"📊 Stat'Equip"},
     {k:"profil",  l:"👤 Mon profil"},
     // AFO (25/08) : promu en vue séparée du lateral, comme Admin (Olivier :
     // "ce serait pas mieux que le lateral soit un module AFO - formation. et
     // que la tuile formation reste le module des formation perso") -- voir
     // en-tête de FormationView.jsx pour le détail de cette 2e refonte.
+    // "formation" retiré ENTIÈREMENT du latéral le 27/08 (Olivier : "le
+    // bouton formation amene aux meme infos que le module formation en
+    // dessous du perso. utile de le garder ?" -- confirmé redondant, la
+    // tuile "Formation" du panneau compteurs (DashboardCompteurs, clé "FOR")
+    // mène déjà exactement au même endroit via onOpenFormation et porte
+    // déjà sa propre cloche "🔔 N à voir" depuis la Phase Formation du
+    // 09/08 -- jamais dupliquée ici, la route view==="formation" reste bien
+    // en place plus bas, seule l'entrée de menu disparaît.
     ...(isAfo ? [{k:"afo", l:"🎓 AFO"}] : []),
     ...(isAdmin ? [{k:"admin", l:"\u{1F451} Admin"}] : [])
   ];
@@ -12960,10 +12966,12 @@ export default function App(){
               {aDesEchanges && <span style={{ marginLeft: "auto", background: "#f59e0b", color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{echangesOuvertesCount}</span>}
             </button>);
           };
-          // Trié alphabétiquement (Annuaire, Échanges, Formation), fixe : 3
-          // entrées seulement, pas besoin d'un tri générique sur des libellés
-          // JSX (Annuaire porte une icône, pas un simple texte).
-          const REST_KEYS = ["annuaire", "echanges", "formation", "statsEquipe"];
+          // Trié alphabétiquement (Annuaire, Échanges), fixe : entrées
+          // comptées à la main, pas besoin d'un tri générique sur des
+          // libellés JSX (Annuaire porte une icône, pas un simple texte).
+          // "formation" retiré le 27/08 (redondant avec la tuile "Formation"
+          // du panneau compteurs, voir commentaire dans VIEWS ci-dessus).
+          const REST_KEYS = ["annuaire", "echanges", "statsEquipe"];
           return (
             <>
               {renderPave("planning-group", "Planning",
