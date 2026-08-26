@@ -104,13 +104,21 @@ function ChoixLibre({ options, choix, onChoix, autre, onAutre, famille }) {
   );
 }
 
-const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" };
-const labelStyle = { fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 };
+// 25/08 (Olivier : "tes formation suivies en mode sombre illisible") --
+// inputStyle/labelStyle sont partages entre des formulaires DEJA
+// auto-suffisants (a l'interieur d'un encart NAVY.bgLight/AMBRE.bgLight,
+// pastel clair jamais impacte par le theme -- meme principe que le bandeau
+// "Echanges ouverts" documente dans CLAUDE.md) ET des endroits qui touchent
+// directement le fond de page/carte (ex: SessionDetailModal) -- rendus
+// theme-aware une fois pour toutes ici, sans effet visuel en mode clair
+// (valeurs identiques) ni risque dans les formulaires deja auto-suffisants.
+const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, outline: "none", background: "var(--bg-card)", color: "var(--text-primary)" };
+const labelStyle = { fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 };
 // 10/08 (Olivier, sur mobile, signalé une 2e fois : "les nom des agents [...]
 // sont peu lisible [...] augmenter la police noire peut etre") : le gris
 // clair habituel (#64748b/#94a3b8) est trop peu contrasté pour lire des noms
 // — quasi noir + plus grand + plus gras, réservé à ces lignes-là.
-const rosterStyle = { fontSize: 13, color: "#1e293b", fontWeight: 700, marginTop: 4, lineHeight: 1.4 };
+const rosterStyle = { fontSize: 13, color: "var(--text-primary)", fontWeight: 700, marginTop: 4, lineHeight: 1.4 };
 function RosterLignes({ session, agentId }) {
   const autres = agentId ? session.participants.filter(p => p.cp !== agentId) : session.participants;
   return (
@@ -134,8 +142,8 @@ export default function FormationView({ currentAgent, agentProfiles, setAgentPro
   return (
     <div style={{ padding: "12px", maxWidth: 1000, margin: "0 auto", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>🎓 Formation</div>
-        <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>Tes formations suivies</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>🎓 Formation</div>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>Tes formations suivies</div>
       </div>
       <MesFormationsTab agentId={agentId} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
     </div>
@@ -162,8 +170,8 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
   return (
     <div style={{ padding: "12px", maxWidth: 1000, margin: "0 auto", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>🎓 Espace AFO</div>
-        <div style={{ fontSize: 13, color: "#475569", marginTop: 2 }}>Ton rôle de formateur</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>🎓 Espace AFO</div>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>Ton rôle de formateur</div>
       </div>
 
       <div style={{ background: NAVY.bgLight, border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 14, padding: 14 }}>
@@ -255,17 +263,17 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
       )}
 
       {loading ? (
-        <div style={{ textAlign: "center", color: "#64748b", padding: 30 }}>Chargement...</div>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 30 }}>Chargement...</div>
       ) : items.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#94a3b8", padding: 30, fontSize: 13 }}>Aucune formation pour l'instant.</div>
+        <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 30, fontSize: 13 }}>Aucune formation pour l'instant.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {items.map(it => it.source === "afo" ? (
-            <div key={it.key} style={{ background: "#fff", border: `1.5px solid ${AMBRE.borderLight}`, borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <div key={it.key} style={{ background: "var(--bg-card)", border: `1.5px solid ${AMBRE.borderLight}`, borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px var(--shadow-card)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontWeight: 800, color: "#1e293b", fontSize: 14 }}>{it.intitule}</div>
-                  <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>
+                  <div style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>
                     📅 {fmtDate(it.date_session)} {it.lieu ? `· 📍 ${it.lieu}` : ""} · {it.categorie}
                   </div>
                 </div>
@@ -289,11 +297,11 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
               })()}
             </div>
           ) : (
-            <div key={it.key} style={{ background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+            <div key={it.key} style={{ background: "var(--bg-card)", border: "1.5px solid var(--border)", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px var(--shadow-card)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontWeight: 800, color: "#1e293b", fontSize: 14 }}>{it.intitule}</div>
-                  <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>
+                  <div style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
+                  <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>
                     📅 {fmtDate(it.date)} {it.organisme ? `· ${it.organisme}` : ""}
                   </div>
                 </div>
@@ -301,7 +309,7 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
                   {it.format === "e-learning" ? "💻 E-learning" : "📋 Externe"}
                 </span>
               </div>
-              <button onClick={() => retirerPerso(it.id)} style={{ marginTop: 8, background: "none", border: "none", color: "#64748b", fontSize: 11, cursor: "pointer", padding: 0 }}>
+              <button onClick={() => retirerPerso(it.id)} style={{ marginTop: 8, background: "none", border: "none", color: "var(--text-secondary)", fontSize: 11, cursor: "pointer", padding: 0 }}>
                 🗑 Retirer de l'archive
               </button>
             </div>
@@ -335,23 +343,23 @@ function MesSessionsFormateurTab({ agentId, onGoToSession }) {
     [sessions]
   );
 
-  if (loading) return <div style={{ textAlign: "center", color: "#64748b", padding: 30 }}>Chargement...</div>;
+  if (loading) return <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 30 }}>Chargement...</div>;
 
   return (
     <div>
       {err && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 10 }}>⚠️ {err}</div>}
       {sessionsFormateur.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: "#475569", fontStyle: "italic", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px" }}>
+        <div style={{ fontSize: 12.5, color: "var(--text-secondary)", fontStyle: "italic", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px 14px" }}>
           Aucune session en tant que formateur pour l'instant.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {sessionsFormateur.map(s => (
             <div key={s.id} onClick={() => onGoToSession(s.id)}
-              style={{ cursor: "pointer", background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              style={{ cursor: "pointer", background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
-                <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
+                <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{s.intitule}</div>
+                <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.participants.length} inscrit(s)</div>
                 <RosterLignes session={s} agentId={agentId} />
               </div>
               <StatutBadge session={s} />
@@ -460,19 +468,19 @@ function CatalogueSection({ catalogue, loading, onChange }) {
       {showForm && <CatalogueForm initial={edit} onCancel={() => setShowForm(false)} onSaved={() => { setShowForm(false); onChange(); }} />}
 
       {loading ? (
-        <div style={{ textAlign: "center", color: "#64748b", padding: 30 }}>Chargement...</div>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 30 }}>Chargement...</div>
       ) : CATEGORIES.map(cat => {
         const items = catalogue.filter(c => c.categorie === cat);
         if (!items.length) return null;
         return (
           <div key={cat} style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f", marginBottom: 8 }}>{cat}</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-active)", marginBottom: 8 }}>{cat}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {items.map(f => (
-                <div key={f.id} style={{ background: "#fff", border: `1.5px solid ${f.statut === "archive" ? "#e2e8f0" : NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", opacity: f.statut === "archive" ? 0.6 : 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div key={f.id} style={{ background: "var(--bg-card)", border: `1.5px solid ${f.statut === "archive" ? "var(--border)" : NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", opacity: f.statut === "archive" ? 0.6 : 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <div>
-                    <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{f.intitule}{f.obligatoire ? " ⭐" : ""}</div>
-                    <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>{[f.duree, f.format, f.statut === "archive" ? "archivée" : null].filter(Boolean).join(" · ")}</div>
+                    <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{f.intitule}{f.obligatoire ? " ⭐" : ""}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>{[f.duree, f.format, f.statut === "archive" ? "archivée" : null].filter(Boolean).join(" · ")}</div>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => { setEdit(f); setShowForm(true); }} style={{ ...btnSecondary, padding: "6px 12px" }}>✏️</button>
@@ -487,7 +495,7 @@ function CatalogueSection({ catalogue, loading, onChange }) {
           </div>
         );
       })}
-      {!loading && catalogue.length === 0 && <div style={{ textAlign: "center", color: "#94a3b8", padding: 30, fontSize: 13 }}>Aucune formation au catalogue.</div>}
+      {!loading && catalogue.length === 0 && <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 30, fontSize: 13 }}>Aucune formation au catalogue.</div>}
     </div>
   );
 }
@@ -572,17 +580,17 @@ function SessionsSection({ catalogue, agents, refreshProfil, refreshSchedule, pe
       {showForm && <SessionForm catalogue={catalogue} agents={agents} onCancel={() => setShowForm(false)} onSaved={() => { setShowForm(false); charger(); }} />}
 
       {loading ? (
-        <div style={{ textAlign: "center", color: "#64748b", padding: 30 }}>Chargement...</div>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 30 }}>Chargement...</div>
       ) : sessions.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#94a3b8", padding: 30, fontSize: 13 }}>Aucune session.</div>
+        <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 30, fontSize: 13 }}>Aucune session.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {sessions.map(s => (
             <div key={s.id} onClick={() => setOpenId(s.id)}
-              style={{ cursor: "pointer", background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              style={{ cursor: "pointer", background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontWeight: 700, color: "#1e293b", fontSize: 13 }}>{s.intitule}</div>
-                <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
+                <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 13 }}>{s.intitule}</div>
+                <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>📅 {fmtDate(s.date_session)} {s.lieu ? `· 📍 ${s.lieu}` : ""} · 👥 {s.nb_participants} inscrit(s)</div>
                 <RosterLignes session={s} />
               </div>
               <StatutBadge session={s} />
@@ -726,7 +734,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", zIndex: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(4px)" }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "88vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.3)" }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "88vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.3)" }}>
         <div style={{ background: `linear-gradient(135deg,${NAVY.from},${NAVY.to})`, padding: "16px 20px", position: "sticky", top: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ color: "#fff" }}>
             <div style={{ fontSize: 15, fontWeight: 800 }}>{data?.session?.intitule || "..."}</div>
@@ -735,16 +743,16 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
           <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 10, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
         <div style={{ padding: 20 }}>
-          {loading ? <div style={{ textAlign: "center", color: "#64748b" }}>Chargement...</div> : !data ? null : (
+          {loading ? <div style={{ textAlign: "center", color: "var(--text-secondary)" }}>Chargement...</div> : !data ? null : (
             <>
               {err && <div style={{ color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "8px 12px", fontSize: 12, marginBottom: 12 }}>{err}</div>}
 
               <div style={{ marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <StatutBadge session={data.session} />
-                <button onClick={supprimer} style={{ background: "none", border: "none", color: "#64748b", fontSize: 11, cursor: "pointer" }}>🗑 Supprimer la session</button>
+                <button onClick={supprimer} style={{ background: "none", border: "none", color: "var(--text-secondary)", fontSize: 11, cursor: "pointer" }}>🗑 Supprimer la session</button>
               </div>
 
-              <div style={{ marginTop: 14, fontSize: 12, fontWeight: 700, color: "#1e3a5f" }}>👨‍🏫 Formateurs</div>
+              <div style={{ marginTop: 14, fontSize: 12, fontWeight: 700, color: "var(--accent-active)" }}>👨‍🏫 Formateurs</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6, marginBottom: 10 }}>
                 {data.formateurs.map(f => (
                   <span key={f.cp} style={{ fontSize: 12, background: NAVY.bgLight, color: NAVY.accentDark, borderRadius: 20, padding: "4px 10px", display: "flex", alignItems: "center", gap: 6 }}>
@@ -763,18 +771,18 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                 )}
               </div>
 
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#1e3a5f" }}>👥 Participants ({data.participants.length})</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-active)" }}>👥 Participants ({data.participants.length})</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6, marginBottom: 10 }}>
                 {data.participants.map(p => (
-                  <div key={p.cp_agent} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "4px 8px", borderRadius: 6, background: data.session.statut === "lancee" && !p.toujours_present ? "#fef2f2" : "#f8fafc" }}>
-                    <span style={{ textDecoration: data.session.statut === "lancee" && !p.toujours_present ? "line-through" : "none", color: data.session.statut === "lancee" && !p.toujours_present ? "#b91c1c" : "#1e293b" }}>
+                  <div key={p.cp_agent} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, padding: "4px 8px", borderRadius: 6, background: data.session.statut === "lancee" && !p.toujours_present ? "#fef2f2" : "var(--bg-page)" }}>
+                    <span style={{ textDecoration: data.session.statut === "lancee" && !p.toujours_present ? "line-through" : "none", color: data.session.statut === "lancee" && !p.toujours_present ? "#b91c1c" : "var(--text-primary)" }}>
                       {p.prenom} {p.nom}
                       {data.session.statut === "lancee" && !p.toujours_present && <span style={{ marginLeft: 6, fontWeight: 700 }}>⚠️ a retiré la formation de son planning</span>}
                     </span>
-                    <button onClick={() => retirerParticipant(p.cp_agent)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}>✕</button>
+                    <button onClick={() => retirerParticipant(p.cp_agent)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
                   </div>
                 ))}
-                {data.participants.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucun participant.</div>}
+                {data.participants.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun participant.</div>}
               </div>
               <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
                 <select value={addParticipantCp} onChange={e => setAddParticipantCp(e.target.value)} style={{ ...inputStyle, fontSize: 12 }}>
@@ -789,7 +797,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                   <div style={labelStyle}>Message de lancement (optionnel)</div>
                   <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", marginBottom: 10 }} placeholder="Visible par les participants lors du lancement" />
                   <button onClick={lancer} style={{ ...btnPrimary(NAVY), width: "100%" }}>🚀 Lancer la session</button>
-                  <div style={{ fontSize: 11, color: "#475569", marginTop: 6 }}>Ajoute "🎓 Formation" en plus du contenu déjà présent dans le planning de chaque participant (rien n'est jamais écrasé) et les prévient. Chaque agent valide sa venue en libérant sa journée depuis son planning perso.</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6 }}>Ajoute "🎓 Formation" en plus du contenu déjà présent dans le planning de chaque participant (rien n'est jamais écrasé) et les prévient. Chaque agent valide sa venue en libérant sa journée depuis son planning perso.</div>
                 </>
               )}
             </>
@@ -810,47 +818,47 @@ function StatsTab() {
     api.formation.getStats().then(setData).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div style={{ textAlign: "center", color: "#64748b", padding: 30 }}>Chargement...</div>;
-  if (!data) return <div style={{ textAlign: "center", color: "#94a3b8", padding: 30, fontSize: 13 }}>Impossible de charger les statistiques.</div>;
+  if (loading) return <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 30 }}>Chargement...</div>;
+  if (!data) return <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 30, fontSize: 13 }}>Impossible de charger les statistiques.</div>;
 
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f", marginBottom: 8 }}>📖 Par formation</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-active)", marginBottom: 8 }}>📖 Par formation</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
         {data.parFormation.map(f => (
-          <div key={f.catalogue_id} style={{ background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{f.intitule} <span style={{ fontWeight: 500, color: "#64748b" }}>({f.categorie})</span></div>
-            <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) suivi(s)</div>
-            {f.agents.length > 0 && <div style={{ fontSize: 12.5, color: "#1e293b", fontWeight: 600, marginTop: 4 }}>{f.agents.map(a => `${a.prenom} ${a.nom}`).join(", ")}</div>}
+          <div key={f.catalogue_id} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{f.intitule} <span style={{ fontWeight: 500, color: "var(--text-secondary)" }}>({f.categorie})</span></div>
+            <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) suivi(s)</div>
+            {f.agents.length > 0 && <div style={{ fontSize: 12.5, color: "var(--text-primary)", fontWeight: 600, marginTop: 4 }}>{f.agents.map(a => `${a.prenom} ${a.nom}`).join(", ")}</div>}
           </div>
         ))}
-        {data.parFormation.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucune donnée.</div>}
+        {data.parFormation.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune donnée.</div>}
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f", marginBottom: 8 }}>📅 Répartition annuelle (catégorie × source)</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-active)", marginBottom: 8 }}>📅 Répartition annuelle (catégorie × source)</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
         {data.parAnneeCategorieSource.map((r, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, background: "#f8fafc", borderRadius: 8, padding: "6px 12px" }}>
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, background: "var(--bg-card)", borderRadius: 8, padding: "6px 12px", color: "var(--text-primary)" }}>
             <span>{r.annee} · {r.categorie}</span>
             <span style={{ fontWeight: 700 }}>{r.nbAgents} agent(s)</span>
           </div>
         ))}
-        {data.parAnneeCategorieSource.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucune donnée.</div>}
+        {data.parAnneeCategorieSource.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune donnée.</div>}
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#1e3a5f", marginBottom: 8 }}>🎓 Par AFO (visible par tous les AFO)</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-active)", marginBottom: 8 }}>🎓 Par AFO (visible par tous les AFO)</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {data.parAfo.map(a => (
-          <div key={a.cp} style={{ background: "#fff", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{a.prenom} {a.nom}</div>
-            <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 4 }}>
+          <div key={a.cp} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{a.prenom} {a.nom}</div>
+            <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 4 }}>
               {Object.keys(a.joursParAn).length === 0 ? "Aucune session animée" :
                 Object.entries(a.joursParAn).sort((x, y) => y[0] - x[0]).map(([an, n]) => `${an} : ${n} jour(s)`).join(" · ")}
             </div>
-            <div style={{ fontSize: 12, color: "#334155", fontWeight: 600, marginTop: 2 }}>{a.agentsFormesGlobal} agent(s) formé(s) au total</div>
+            <div style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, marginTop: 2 }}>{a.agentsFormesGlobal} agent(s) formé(s) au total</div>
           </div>
         ))}
-        {data.parAfo.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucun AFO pour l'instant.</div>}
+        {data.parAfo.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun AFO pour l'instant.</div>}
       </div>
     </div>
   );
