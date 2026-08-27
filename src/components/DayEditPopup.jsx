@@ -428,11 +428,19 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const postesJ = isTravailJ ? getPostes(type1) : [];
   const postesN = getPostes("N");
 
-  // posteChoisiEligible (27/08) : le poste actuellement affiché comme
-  // "principal" du jour (jour normal via poste1, ou nuit seule via posteN --
-  // jamais les deux à la fois par construction du popup) est-il un poste de
-  // métier (pas générique) ? Conditionne l'affichage de la case "Étude Poste".
-  const posteEtudeActuel = isNuitSeule ? posteN : (isTravailJ ? poste1 : "");
+  // posteChoisiEligible (27/08, corrigé le même jour) : le poste
+  // actuellement affiché comme "principal" du jour (jour normal via poste1,
+  // ou nuit seule via posteN -- jamais les deux à la fois par construction
+  // du popup) est-il un poste de métier (pas générique) ? Conditionne
+  // l'affichage de la case "Étude Poste". `isNuitSeule` (ligne ~275) n'est
+  // calculé QU'UNE FOIS à l'ouverture du popup, depuis l'entrée déjà
+  // enregistrée -- pour une nouvelle nuit seule créée depuis un jour vide, il
+  // reste figé à false pendant toute l'édition, empêchant la case d'apparaître
+  // malgré un poste de nuit bien choisi. `isNuitSeuleLive` reflète la vraie
+  // sélection en cours (typeN="N" sans type1), quel que soit l'état au moment
+  // de l'ouverture.
+  const isNuitSeuleLive = typeN === "N" && !type1;
+  const posteEtudeActuel = isNuitSeuleLive ? posteN : (isTravailJ ? poste1 : "");
   const posteChoisiEligible = !!posteEtudeActuel && !POSTES_ETUDE_EXCLUS.has(posteEtudeActuel);
 
   // Choix d'un poste (jour) -- applique en plus l'horaire spécifique du

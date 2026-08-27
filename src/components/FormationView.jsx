@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import api from "../api/client";
+import { computeEtudePosteDetail } from "../App";
 
 // ─── Module Formation ───────────────────────────────────────────────────────
 // Deux espaces bien séparés (refonte 25/08, demandé par Olivier : "j'aimerai
@@ -80,6 +81,15 @@ function fmtDate(iso) {
 // "HH:MM:SS" -- tronqué à "HH:MM" pour l'affichage.
 function fmtHeure(hms) {
   return hms ? String(hms).slice(0, 5) : "";
+}
+
+// Étude de poste (27/08) : ordre + pluriel des 4 vacations, pour le résumé
+// "AC LNE — 11 jours (4 matinées, 4 nuits, 3 soirées)" (Olivier). Les 4
+// libellés se pluralisent tous par un simple "s" final.
+const SHIFT_ORDER_ETUDE = ["M", "AM", "N", "J"];
+const SHIFT_LABEL_ETUDE = { M: "matinée", AM: "soirée", N: "nuit", J: "journée" };
+function resumeParVacation(parShift) {
+  return SHIFT_ORDER_ETUDE.filter(s => parShift[s]).map(s => `${parShift[s]} ${SHIFT_LABEL_ETUDE[s]}${parShift[s] > 1 ? "s" : ""}`).join(", ");
 }
 
 // 10/08 : une session "Lancée" dont la date est deja passee reste "Lancée"
@@ -163,7 +173,7 @@ const btnSecondary = { background: "#f1f5f9", color: "#64748b", border: "none", 
 
 // ─── COMPOSANT RACINE ───────────────────────────────────────────────────────
 
-export default function FormationView({ currentAgent, agentProfiles, setAgentProfiles, refreshSchedule }) {
+export default function FormationView({ currentAgent, agentProfiles, setAgentProfiles, refreshSchedule, schedule }) {
   const agentId = currentAgent?.immatriculation || currentAgent?.cp || currentAgent?.id;
 
   return (
@@ -172,7 +182,7 @@ export default function FormationView({ currentAgent, agentProfiles, setAgentPro
         <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>🎓 Formation</div>
         <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>Tes formations suivies</div>
       </div>
-      <MesFormationsTab agentId={agentId} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
+      <MesFormationsTab agentId={agentId} agent={currentAgent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
     </div>
   );
 }
@@ -225,11 +235,23 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
 
 // ─── MES FORMATIONS (tous les agents, uniquement le côté participant) ──────
 
-function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSchedule }) {
+function MesFormationsTab({ agentId, agent, schedule, agentProfiles, setAgentProfiles, refreshSchedule }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [showDeclare, setShowDeclare] = useState(false);
+
+  // Étude de poste (27/08, refondu le même jour -- Olivier : "dans le module
+  // formation, il faut sepaarer ses journees et mettre les matinnee nuit
+  // soiree ou journnee du poste tenue. et le nombre de journee faites par
+  // poste") : calculé à la volée depuis le planning perso réel (jamais
+  // stocké), année en cours seulement -- computeEtudePosteDetail exportée
+  // par App.jsx (même principe que les fonctions déjà réutilisées par
+  // FimPdfView.jsx, import circulaire sans risque tant qu'il n'est jamais
+  // lu au niveau module, seulement dans ce useMemo).
+  const etudeYear = new Date().getFullYear();
+  const agentForCalc = useMemo(() => ({ ...(agent || {}), id: agentId }), [agent, agentId]);
+  const etudeDetail = useMemo(() => computeEtudePosteDetail(agentForCalc, schedule || {}, etudeYear), [agentForCalc, schedule, etudeYear]);
 
   const charger = useCallback(() => {
     setLoading(true);
@@ -287,6 +309,28 @@ function MesFormationsTab({ agentId, agentProfiles, setAgentProfiles, refreshSch
             setShowDeclare(false);
           }}
         />
+      )}
+
+      {/* Étude de poste (27/08, refondu le même jour) : décompte séparé par
+          poste + par vacation, année en cours -- compte comme une journée de
+          formation (voir App.jsx/DashboardCompteurs), donc pas répété dans la
+          liste ci-dessous (ce ne sont ni des sessions AFO ni des
+          déclarations perso). */}
+      {etudeDetail.total > 0 && (
+        <div style={{ background: "var(--bg-card)", border: `1.5px solid ${AMBRE.borderLight}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 14 }}>🎓 Étude de poste — {etudeYear}</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2, marginBottom: 10 }}>
+            {etudeDetail.total} jour{etudeDetail.total > 1 ? "s" : ""} au total, comptés comme journées de formation
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {etudeDetail.postes.map(p => (
+              <div key={p.code} style={{ fontSize: 12.5 }}>
+                <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{p.label}</span>
+                <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}> — {p.total} jour{p.total > 1 ? "s" : ""} ({resumeParVacation(p.parShift)})</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {loading ? (

@@ -236,17 +236,34 @@ async function getStats(req, res) {
     );
     const formationInterne = { nbJours: joursFormation.n || 0, nbAgentsFormes: agentsFormes.n || 0 };
 
-    // ─── Étude de poste (27/08, demandé par Olivier) ────────────────────────
-    // Total anonyme par année, comme "Formation interne" -- aucune donnée
-    // nominative, un simple décompte de jours (planning_periode.etude_poste,
-    // porté par la période qui a le vrai poste, voir planningController.js).
-    const [[joursEtude]] = await pool.query(
-      `SELECT COUNT(*) AS n FROM planning_periode pp
-       JOIN planning_jour pj ON pj.id = pp.planning_jour_id
+    // ─── Étude de poste (27/08, refondu le même jour) ───────────────────────
+    // "1 agent forme sur 1 poste et 11 jours d'etudes de pote [...] un global
+    // sur tous les poste agent et journee" -- décompte anonyme PAR POSTE
+    // (jours + agents distincts, sans jamais exposer un CP/nom au frontend,
+    // seul le COUNT(DISTINCT) en sort) + un total tous postes confondus.
+    // planning_periode.code_poste stocke le code COURT local (ex: "LNE"),
+    // déjà indépendant de la vacation (code_equipe porte M/AM/N séparément,
+    // voir client.js/MAPPING_3X8) -- un simple GROUP BY code_poste regroupe
+    // donc déjà nativement les 3 vacations d'un même poste 3x8, aucune
+    // normalisation de suffixe nécessaire (vérifié en base : Matin/Nuit/
+    // Soirée du même poste partagent bien le même code_poste="LNE").
+    const [etudeParPosteRows] = await pool.query(
+      `SELECT pp.code_poste AS code_poste, COUNT(*) AS nbJours, COUNT(DISTINCT pj.cp_agent) AS nbAgents
+       FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
+       WHERE pp.etude_poste = 1 AND YEAR(pj.date_jour) = ? AND pp.code_poste IS NOT NULL
+       GROUP BY pp.code_poste ORDER BY nbJours DESC`,
+      [year]
+    );
+    const [[etudeGlobalRow]] = await pool.query(
+      `SELECT COUNT(*) AS nbJours, COUNT(DISTINCT pj.cp_agent) AS nbAgents
+       FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
        WHERE pp.etude_poste = 1 AND YEAR(pj.date_jour) = ?`,
       [year]
     );
-    const etudePoste = { nbJours: joursEtude.n || 0 };
+    const etudePoste = {
+      total: { nbJours: etudeGlobalRow.nbJours || 0, nbAgents: etudeGlobalRow.nbAgents || 0 },
+      parPoste: etudeParPosteRows.map(r => ({ code_poste: r.code_poste, nbJours: r.nbJours, nbAgents: r.nbAgents })),
+    };
 
     // ─── Habilitations par poste (#11) ──────────────────────────────────────
     // PPRCI retiré le 16/08 (Olivier : "tout le monde est apte à ça", pas

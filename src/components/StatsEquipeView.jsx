@@ -48,6 +48,23 @@ function labelPoste(code) {
   return label ? `${label} (${code})` : code;
 }
 
+// Étude de poste (27/08, refondu le même jour) : planning_periode.code_poste
+// stocke le code COURT local (ex: "LNE", "AC1", "PA1J" -- voir MAPPING_3X8/
+// MAPPING_JOURNEE dans client.js), pas le jsCode canonique keyant
+// POSTE_LABELS/JSCODE_TO_POSTE -- petite table de correspondance dédiée,
+// puis réutilise POSTE_LABELS pour le libellé final (jamais de table de
+// libellés dupliquée).
+const ETUDE_SHORT_TO_CANON = {
+  CCL: "PICCL", ADJ: "PIADJ", LNE: "PILNE", LNO: "PILNO", VGD: "PIVGD", LC: "PILCL",
+  AC1: "PAAC1-", AC2: "PAAC2-", ACXX: "PAACXX",
+  PA1J: "PIPA1J", PA2J: "PIPA2J", PA3J: "PIPA3J", DPXJ: "PIDPXJ", ASSJ: "PIASSJ", AFOPR: "AFOPRCI",
+  PARJ: "PAPAUJ", DPXP: "PADPXJ", ASMP: "PAASMJ",
+};
+function labelPosteEtude(code) {
+  const canon = ETUDE_SHORT_TO_CANON[code] || code;
+  return POSTE_LABELS[canon] || canon;
+}
+
 // Table dédiée pour "Postes non tenus" (18/08, demande d'Olivier : "il faut
 // indiquer en plus du code du poste l'intitulé du poste et le détail par
 // service") — POSTE_LABELS ci-dessus est keyée par code DE BASE sans
@@ -307,6 +324,11 @@ export default function StatsEquipeView() {
           {/* Postes non tenus */}
           <PostesNonTenusSection data={data.postesNonTenus} />
 
+          {/* Étude de poste (27/08, refondu le même jour -- détail par poste
+              désormais nécessaire, sa propre section repliable plutôt qu'une
+              simple tuile dans la grille Âge moyen/Formation interne). */}
+          <EtudePosteSection data={data.etudePoste} />
+
           {/* Âge moyen + Formation interne */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
             <div style={card}>
@@ -322,13 +344,6 @@ export default function StatsEquipeView() {
                 <Tuile label="Jours de formation" valeur={data.formationInterne.nbJours} large />
                 <Tuile label="Agents formés" valeur={data.formationInterne.nbAgentsFormes} large />
               </div>
-            </div>
-            {/* Étude de poste (27/08, demandé par Olivier) : total anonyme
-                par année, comme Formation interne -- aucun nom d'agent. */}
-            <div style={card}>
-              <div style={sectionTitle}>🎓 Études de poste</div>
-              <Tuile label="Jours en étude de poste" valeur={data.etudePoste.nbJours} large />
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Formation physique en double avec un titulaire — chiffre global anonymisé.</div>
             </div>
           </div>
 
@@ -581,4 +596,36 @@ function fmtDate(iso) {
   if (!iso) return "";
   const [a, m, j] = String(iso).slice(0, 10).split("-");
   return `${j}/${m}/${a}`;
+}
+
+// Étude de poste (27/08, refondu le même jour -- Olivier : "tu compte en
+// anonyme 1 agent forme sur 1 poste et 11 jours d'etudes de pote et tu fait
+// un global sur tous les poste agent et journee") : même principe que
+// PostesNonTenusSection -- tuiles globales toujours visibles, détail par
+// poste replié par défaut. Jamais de nom/CP, seuls des comptes agrégés déjà
+// calculés côté backend (nbAgents = COUNT DISTINCT, jamais une liste).
+function EtudePosteSection({ data }) {
+  const [ouvert, setOuvert] = useState(false);
+  return (
+    <div style={card}>
+      <SectionHeader icon="🎓" titre="Études de poste" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} />
+      <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
+        <Tuile label="Jours d'étude" valeur={data.total.nbJours} large />
+        <Tuile label="Agents formés" valeur={data.total.nbAgents} large />
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Formation physique en double avec un titulaire — chiffres anonymisés, aucun nom.</div>
+      {ouvert && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          {data.parPoste.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Aucune journée d'étude de poste cette année.</div>
+          ) : data.parPoste.map(p => (
+            <div key={p.code_poste} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 12.5 }}>{labelPosteEtude(p.code_poste)}</div>
+              <div style={{ fontSize: 11.5, color: "var(--text-secondary)", fontWeight: 600 }}>{p.nbAgents} agent(s) formé(s) · {p.nbJours} jour(s)</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

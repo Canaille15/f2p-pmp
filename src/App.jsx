@@ -3071,13 +3071,6 @@ const POSTE_REGISTRY = (() => {
 function computeDashboardTravail(agent, schedule, year){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const postes = {};
-  // etudePostes (27/08, demandé par Olivier) : décompte À PART pour les
-  // journées "en étude de poste" -- même structure que `postes` (poste
-  // précis + détail par vacation), mais jamais mélangé avec les vraies
-  // tenues du poste. Le total global (totalTravail/parShiftGlobal) reste
-  // incrémenté normalement : "dans le global ca s'joute au matinne nuit
-  // soiree journée tenue".
-  const etudePostes = {};
   // sansPosteVrai (21/08, Olivier : "ma journee de formation du 25 mars reste
   // en non aaffecté. pk ?") -- jusqu'au 21/08 une Formation était comptée
   // DEUX fois : dans sa propre carte "postes.FOR" ET dans "Non affecté" (pour
@@ -3097,19 +3090,29 @@ function computeDashboardTravail(agent, schedule, year){
     if(CODES_FETES[eq] || eq==="JF") return; // fête, pas travail
     if(!["M","AM","N","J","FOR"].includes(eq)) return; // pas une journée de travail
     totalTravail++;
-    parShiftGlobal[eq]++;
     // Formation (17/07, demandé par Olivier) : garde sa propre ligne dans
     // "postes" (total + dernière date, comme un vrai poste) -- depuis le
     // 21/08, sa propre catégorie dans la répartition (plus dans "Non
     // affecté", voir commentaire sur sansPosteVrai ci-dessus), avec sa propre
     // liste de dates (postes.FOR.dates) comme "Non affecté".
-    if(eq==="FOR"){
+    // Étude de poste (27/08, refondu le même jour -- Olivier : "ca doit se
+    // decompter comme un journee de formation quelque soit le poste [...] il
+    // ne doit pas etre decompter des journes tenue comme agent, mais en
+    // formation. donc pas de doublon possible") : un jour "en étude" compte
+    // désormais EXACTEMENT comme un jour Formation ici (même bucket
+    // parShiftGlobal.FOR/postes.FOR), jamais dans le détail M/AM/N/J ni dans
+    // le détail du vrai poste tenu -- le détail par poste/vacation de
+    // l'étude vit désormais dans le module Formation (voir
+    // computeEtudePosteDetail plus bas), pas dans "Jours travaillés".
+    if(eq==="FOR" || enEtude){
+      parShiftGlobal.FOR++;
       if(!postes.FOR) postes.FOR = { code:"FOR", label:"Formation", famille:"FOR", total:0, lastDate:null, parShift:{}, dates:[] };
       postes.FOR.total++;
       postes.FOR.dates.push(dk);
       if(!postes.FOR.lastDate || dk > postes.FOR.lastDate) postes.FOR.lastDate = dk;
       return;
     }
+    parShiftGlobal[eq]++;
     let info = jsCode ? POSTE_REGISTRY[jsCode] : null;
     // AY/CAF/VM/JEQ (21/08, demandé par Olivier) : POSTE_REGISTRY (et, pour
     // CAF/VM, POSTES_JOURNEE dont il dérive) est un registre STATIQUE
@@ -3142,14 +3145,10 @@ function computeDashboardTravail(agent, schedule, year){
       if(!sansPosteVrai.lastDate || dk > sansPosteVrai.lastDate) sansPosteVrai.lastDate = dk;
       return;
     }
-    // etudePoste (27/08) : router vers la structure séparée plutôt que le
-    // détail normal du poste -- "un decompte a part etude de poste", le vrai
-    // décompte du poste ne doit jamais inclure ces jours.
-    const cible = enEtude ? etudePostes : postes;
-    if(!cible[info.code]){
-      cible[info.code] = { code:info.code, label:info.label, famille:info.famille, total:0, lastDate:null, parShift:{} };
+    if(!postes[info.code]){
+      postes[info.code] = { code:info.code, label:info.label, famille:info.famille, total:0, lastDate:null, parShift:{} };
     }
-    const p = cible[info.code];
+    const p = postes[info.code];
     p.total++;
     if(!p.lastDate || dk > p.lastDate) p.lastDate = dk;
     if(!p.parShift[info.shift]) p.parShift[info.shift] = { count:0, lastDate:null };
@@ -3181,13 +3180,11 @@ function computeDashboardTravail(agent, schedule, year){
 
   const totalPRCI = Object.values(postes).filter(p=>p.famille==="PRCI").reduce((s,p)=>s+p.total,0);
   const totalPAR  = Object.values(postes).filter(p=>p.famille==="PAR").reduce((s,p)=>s+p.total,0);
+  // totalFormation inclut désormais les jours "en étude de poste" (27/08,
+  // refondu le même jour) -- ils sont routés dans postes.FOR par traiter()
+  // ci-dessus, exactement comme un vrai FOR, plus de bucket séparé ici.
   const totalFormation = postes.FOR?.total || 0;
-  const totalEtude = Object.values(etudePostes).reduce((s,p)=>s+p.total,0);
-  // totalEtude inclus ici pour que total reste === totalTravail (les jours
-  // d'étude sont routés hors de `postes`, voir traiter() ci-dessus) -- pas
-  // de 5e tuile dans la répartition PRCI/PAR/Formation/Non affecté, juste sa
-  // propre section détaillée plus bas (etudePostes).
-  const total = totalPRCI + totalPAR + totalFormation + totalEtude + sansPosteVrai.total; // === totalTravail
+  const total = totalPRCI + totalPAR + totalFormation + sansPosteVrai.total; // === totalTravail
   const pct = (n) => total>0 ? Math.round(n/total*1000)/10 : 0;
   sansPosteVrai.dates.sort((a,b)=> b.localeCompare(a)); // plus récent d'abord
   if(postes.FOR) postes.FOR.dates.sort((a,b)=> b.localeCompare(a));
@@ -3195,8 +3192,6 @@ function computeDashboardTravail(agent, schedule, year){
   return {
     totalTravail,
     postes: Object.values(postes).sort((a,b)=> b.total-a.total),
-    etudePostes: Object.values(etudePostes).sort((a,b)=> b.total-a.total),
-    totalEtude,
     sansPosteVrai,
     repartition: {
       PRCI: { jours: totalPRCI, pct: pct(totalPRCI) },
@@ -3206,6 +3201,46 @@ function computeDashboardTravail(agent, schedule, year){
     },
     parShiftGlobal,
   };
+}
+
+// Détail des journées "en étude de poste" par poste + par vacation (27/08,
+// refondu le même jour -- Olivier : "dans le module formation, il faut
+// separer ses journees et mettre les matinnee nuit soiree ou journnee du
+// poste tenue. et le nombre de journee faites par poste"). Extrait à part de
+// computeDashboardTravail (qui ne garde plus AUCUN détail étude -- ces jours
+// y comptent désormais comme de simples jours de Formation, sans
+// distinction) : le module Formation (FormationView.jsx) l'appelle
+// directement pour construire sa propre section "🎓 Étude de poste".
+export function computeEtudePosteDetail(agent, schedule, year){
+  const start = `${year}-01-01`, end = `${year}-12-31`;
+  const postes = {};
+  let total = 0;
+  Object.entries(schedule).forEach(([key,val])=>{
+    if(!agent || !key.startsWith(agent.id+"-")) return;
+    if(!val?.etudePoste) return;
+    const dk = key.slice(agent.id.length+1);
+    if(dk < start || dk > end) return;
+    // Même règle que computeDashboardTravail : le poste porté par l'étude
+    // vit toujours en p1 (jour normal OU nuit seule) -- jamais equipe2 (nuit
+    // accolée, non couverte par Étude Poste, voir client.js).
+    const isNuitSeule = val?.equipe==="N" && val?.equipe2==="N";
+    const shift = isNuitSeule ? "N" : val?.equipe;
+    if(!shift || !["M","AM","N","J"].includes(shift)) return;
+    let info = val?.jsCode ? POSTE_REGISTRY[val.jsCode] : null;
+    // Même recalcul de famille à la volée que computeDashboardTravail pour
+    // les postes génériques toutes familles (AY/CAF/VM/JEQ/DISPO/EIA) --
+    // POSTES_ETUDE_EXCLUS (DayEditPopup.jsx) les exclut déjà de la saisie
+    // étude, garde défensive ici au cas où une donnée plus ancienne existe.
+    if(info && (val.jsCode==="AY" || val.jsCode==="CAF" || val.jsCode==="VM" || val.jsCode==="JEQ" || val.jsCode==="DISPO" || val.jsCode==="EIA")){
+      info = {...info, famille: agent?.famille || "PRCI"};
+    }
+    if(!info) return;
+    if(!postes[info.code]) postes[info.code] = { code:info.code, label:info.label, famille:info.famille, total:0, parShift:{} };
+    const p = postes[info.code];
+    p.total++; total++;
+    p.parShift[shift] = (p.parShift[shift]||0) + 1;
+  });
+  return { total, postes: Object.values(postes).sort((a,b)=> b.total-a.total) };
 }
 
 // ─── MODALE TABLEAU DE BORD JOURNÉES TRAVAILLÉES ─────────────────────────────
@@ -3285,41 +3320,6 @@ function TravailDashboardContent({ data }) {
               </div>}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Étude de poste (27/08, demandé par Olivier) : décompte À PART, même
-          format que le détail par poste ci-dessus -- ces jours comptent déjà
-          dans "Total par vacation" et dans la répartition PRCI/PAR au-dessus
-          (le total global), mais jamais mélangés avec le vrai décompte du
-          poste concerné. */}
-      {data.etudePostes.length>0 && (
-        <div>
-          <div style={{fontSize:11,fontWeight:700,color:"#6d28d9",marginBottom:6}}>🎓 Étude de poste ({data.totalEtude}j, déjà inclus dans le total ci-dessus)</div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {data.etudePostes.map(p=>(
-              <div key={p.code} style={{border:"1.5px solid #ddd6fe",background:"#f5f3ff",borderRadius:10,padding:"10px 12px"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:6,background:p.famille==="PRCI"?"#dbeafe":"#d1fae5",color:p.famille==="PRCI"?"#1e40af":"#065f46"}}>{p.famille}</span>
-                    <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{p.label}</span>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:15,fontWeight:900,color:"#6d28d9"}}>{p.total}j</div>
-                    <div style={{fontSize:10,fontWeight:600,color:"#475569"}}>dernier : {fmtDate(p.lastDate)}</div>
-                  </div>
-                </div>
-                {Object.keys(p.parShift).length>0 && <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                  {Object.entries(p.parShift).map(([shift,s])=>(
-                    <div key={shift} style={{background:"#fff",borderRadius:7,padding:"4px 8px",fontSize:10}}>
-                      <span style={{fontWeight:700,color:"#334155"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
-                      <span style={{fontWeight:600,color:"#475569",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
-                    </div>
-                  ))}
-                </div>}
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
@@ -6815,10 +6815,18 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       // + nuit accolee, ex RP+N), equipe et equipe2 sont deux journees
       // distinctes a comptabiliser chacune.
       const isNuitSeule = val?.equipe==="N" && val?.equipe2==="N";
+      // Étude de poste (27/08, refondu le même jour -- Olivier : "ca doit se
+      // decompter comme un journee de formation [...] il ne doit pas etre
+      // decompter des journes tenue comme agent, mais en formation") : la
+      // vraie vacation tenue (M/AM/N/J) est remplacée par "FOR" pour ce jour
+      // -- alimente c.travail (toujours un jour travaillé) ET c.FOR
+      // ("Formation"), jamais un décompte de poste tenu. La nuit accolée
+      // (equipe2) n'est jamais concernée (Étude Poste ne couvre que p1, voir
+      // client.js), donc jamais de doublon.
       if(isNuitSeule){
-        tally("N");
+        tally(val?.etudePoste ? "FOR" : "N");
       } else {
-        tally(val?.equipe);
+        tally(val?.etudePoste ? "FOR" : val?.equipe);
         tally(val?.equipe2);
       }
       // Formation (09/08) : periode independante (val.formation), separee de
@@ -13110,7 +13118,7 @@ export default function App(){
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="d2i"&&<D2iView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="fim"&&<FimPdfView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} schedule={schedule}/>}
-  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule}/>}
+  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} schedule={schedule}/>}
   {view==="afo"&&<AfoView currentAgent={currentAgent||currentUser?.agent} agents={agents} refreshProfil={refreshMonProfil} refreshSchedule={refreshMonSchedule}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
