@@ -324,26 +324,23 @@ export default function StatsEquipeView() {
           {/* Postes non tenus */}
           <PostesNonTenusSection data={data.postesNonTenus} />
 
-          {/* Étude de poste (27/08, refondu le même jour -- détail par poste
-              désormais nécessaire, sa propre section repliable plutôt qu'une
-              simple tuile dans la grille Âge moyen/Formation interne). */}
-          <EtudePosteSection data={data.etudePoste} />
+          {/* Formation (27/08, regroupée le même jour -- Olivier : "ce serait
+              pas mieux de regruper dans sat equip les stat de formation ?" /
+              "tu legende bien les choses") : les 2 mécanismes de formation
+              (sessions AFO et étude de poste, structurellement indépendants
+              -- l'un vient de formation_session, l'autre du planning perso)
+              regroupés sous UN SEUL titre "Formation" pour que ce ne soit
+              plus 2 cartes presque homonymes éparpillées dans la page, mais
+              chacun garde son propre sous-titre explicite pour ne jamais
+              laisser croire que c'est la même donnée. */}
+          <FormationSection formationInterne={data.formationInterne} etudePoste={data.etudePoste} />
 
-          {/* Âge moyen + Formation interne */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-            <div style={card}>
-              <div style={sectionTitle}>🎂 Âge moyen (hors Réserve régionale)</div>
-              <Tuile label="Âge moyen" valeur={data.ageMoyenHorsReserve.moyenne != null ? `${data.ageMoyenHorsReserve.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsReserve.nbAgentsInclus} agent(s)`} large />
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-                Estimé à partir des 2 premiers chiffres du CP (année de naissance). {data.ageMoyenHorsReserve.nbAgentsExclusParseEchec > 0 && `${data.ageMoyenHorsReserve.nbAgentsExclusParseEchec} agent(s) exclu(s), CP non reconnu.`}
-              </div>
-            </div>
-            <div style={card}>
-              <div style={sectionTitle}>🎓 Formation interne</div>
-              <div style={{ display: "flex", gap: 20 }}>
-                <Tuile label="Jours de formation" valeur={data.formationInterne.nbJours} large />
-                <Tuile label="Agents formés" valeur={data.formationInterne.nbAgentsFormes} large />
-              </div>
+          {/* Âge moyen */}
+          <div style={card}>
+            <div style={sectionTitle}>🎂 Âge moyen (hors Réserve régionale)</div>
+            <Tuile label="Âge moyen" valeur={data.ageMoyenHorsReserve.moyenne != null ? `${data.ageMoyenHorsReserve.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsReserve.nbAgentsInclus} agent(s)`} large />
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+              Estimé à partir des 2 premiers chiffres du CP (année de naissance). {data.ageMoyenHorsReserve.nbAgentsExclusParseEchec > 0 && `${data.ageMoyenHorsReserve.nbAgentsExclusParseEchec} agent(s) exclu(s), CP non reconnu.`}
             </div>
           </div>
 
@@ -598,34 +595,57 @@ function fmtDate(iso) {
   return `${j}/${m}/${a}`;
 }
 
-// Étude de poste (27/08, refondu le même jour -- Olivier : "tu compte en
-// anonyme 1 agent forme sur 1 poste et 11 jours d'etudes de pote et tu fait
-// un global sur tous les poste agent et journee") : même principe que
-// PostesNonTenusSection -- tuiles globales toujours visibles, détail par
-// poste replié par défaut. Jamais de nom/CP, seuls des comptes agrégés déjà
-// calculés côté backend (nbAgents = COUNT DISTINCT, jamais une liste).
-function EtudePosteSection({ data }) {
+// Groupe titre pour un sous-bloc de FormationSection (label en majuscules,
+// même style que les libellés de Tuile, pour bien séparer visuellement les
+// 2 mécanismes sans dupliquer une carte entière par mécanisme).
+function GroupeLabel({ children }) {
+  return <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: .3, textTransform: "uppercase", marginBottom: 6 }}>{children}</div>;
+}
+
+// Formation (27/08, regroupée le même jour -- Olivier : "ce serait pas mieux
+// de regruper dans sat equip les stat de formation ?", puis "tu legende bien
+// les choses") : réunit 2 mécanismes structurellement indépendants sous un
+// même titre "Formation" -- sessions organisées par un AFO
+// (formation_session, jamais nominatif ici) et étude de poste (planning
+// perso, planning_periode.etude_poste) -- chacun garde son propre sous-titre
+// en majuscules pour qu'on ne confonde jamais les deux données. Seule
+// l'étude de poste a un détail par poste (repliable, même principe que
+// PostesNonTenusSection) -- la formation interne n'a pas cette granularité
+// côté backend, juste ses 2 tuiles globales.
+function FormationSection({ formationInterne, etudePoste }) {
   const [ouvert, setOuvert] = useState(false);
   return (
     <div style={card}>
-      <SectionHeader icon="🎓" titre="Études de poste" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} />
-      <div style={{ display: "flex", gap: 20, marginTop: 10 }}>
-        <Tuile label="Jours d'étude" valeur={data.total.nbJours} large />
-        <Tuile label="Agents formés" valeur={data.total.nbAgents} large />
-      </div>
-      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Formation physique en double avec un titulaire — chiffres anonymisés, aucun nom.</div>
-      {ouvert && (
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-          {data.parPoste.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Aucune journée d'étude de poste cette année.</div>
-          ) : data.parPoste.map(p => (
-            <div key={p.code_poste} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 12.5 }}>{labelPosteEtude(p.code_poste)}</div>
-              <div style={{ fontSize: 11.5, color: "var(--text-secondary)", fontWeight: 600 }}>{p.nbAgents} agent(s) formé(s) · {p.nbJours} jour(s)</div>
-            </div>
-          ))}
+      <SectionHeader icon="🎓" titre="Formation" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail par poste (étude)" />
+
+      <div style={{ marginTop: 10 }}>
+        <GroupeLabel>Sessions AFO (formation interne)</GroupeLabel>
+        <div style={{ display: "flex", gap: 20 }}>
+          <Tuile label="Jours de formation" valeur={formationInterne.nbJours} large />
+          <Tuile label="Agents formés" valeur={formationInterne.nbAgentsFormes} large />
         </div>
-      )}
+      </div>
+
+      <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+        <GroupeLabel>Étude de poste (planning perso)</GroupeLabel>
+        <div style={{ display: "flex", gap: 20 }}>
+          <Tuile label="Jours d'étude" valeur={etudePoste.total.nbJours} large />
+          <Tuile label="Agents formés" valeur={etudePoste.total.nbAgents} large />
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Formation physique en double avec un titulaire — chiffres anonymisés, aucun nom.</div>
+        {ouvert && (
+          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+            {etudePoste.parPoste.length === 0 ? (
+              <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Aucune journée d'étude de poste cette année.</div>
+            ) : etudePoste.parPoste.map(p => (
+              <div key={p.code_poste} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 12.5 }}>{labelPosteEtude(p.code_poste)}</div>
+                <div style={{ fontSize: 11.5, color: "var(--text-secondary)", fontWeight: 600 }}>{p.nbAgents} agent(s) formé(s) · {p.nbJours} jour(s)</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
