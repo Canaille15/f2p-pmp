@@ -158,6 +158,12 @@ const POSTE_ROWS_J = [
   ["DISPO","VM","CAF","JEQ","EIA","AY"], // DISPO (23/08) ajouté juste avant VM ; EIA (25/08) ajouté juste après JEQ, comme demandé
 ];
 
+// Postes exclus de "Étude Poste" (27/08, demandé par Olivier) : les postes
+// génériques (jamais liés à une habilitation précise, cf. exemption dans
+// getPostes ci-dessous) n'ont pas de vrai "titulaire" au sens propre --
+// "en double avec un autre agent" n'a de sens que sur un poste de métier.
+const POSTES_ETUDE_EXCLUS = new Set(["PPRCI","PPAR","VM","CAF","AY","JEQ","DISPO","EIA","RFTSAM"]);
+
 export const HORAIRES_DEFAUT = { M:"06h10–14h17", AM:"14h05–22h17", N:"22h15–06h17", J:"08h00–17h45" };
 
 // Horaires spécifiques à un poste précis, qui remplacent l'horaire générique
@@ -279,6 +285,11 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const [horaires1, setHoraires1] = useState(initHoraires);
   const [typeN,     setTypeN]     = useState(initTypeN);
   const [posteN,    setPosteN]    = useState(initPosteN);
+  // 🎓 etudePoste (27/08) : toggle lié au poste principal choisi (jour normal
+  // OU nuit seule -- toujours porté par la même période côté serveur, voir
+  // client.js). N'a de sens que sur un poste "de métier" (pas générique) --
+  // affiché conditionnellement, voir posteChoisiEligible plus bas.
+  const [etudePoste, setEtudePoste] = useState(!!entry?.etudePoste);
   // 🌙 finNuit : toggle indépendant, coexiste avec tout
   const [finNuit,   setFinNuit]   = useState(!!entry?.finNuit);
   const [notePerso, setNotePerso] = useState(entry?.notePerso || "");
@@ -417,6 +428,13 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const postesJ = isTravailJ ? getPostes(type1) : [];
   const postesN = getPostes("N");
 
+  // posteChoisiEligible (27/08) : le poste actuellement affiché comme
+  // "principal" du jour (jour normal via poste1, ou nuit seule via posteN --
+  // jamais les deux à la fois par construction du popup) est-il un poste de
+  // métier (pas générique) ? Conditionne l'affichage de la case "Étude Poste".
+  const posteEtudeActuel = isNuitSeule ? posteN : (isTravailJ ? poste1 : "");
+  const posteChoisiEligible = !!posteEtudeActuel && !POSTES_ETUDE_EXCLUS.has(posteEtudeActuel);
+
   // Choix d'un poste (jour) -- applique en plus l'horaire spécifique du
   // poste (HORAIRES_POSTE) si ce poste en a un, sinon laisse l'horaire déjà
   // saisi/généré par le type inchangé (comportement d'avant).
@@ -442,6 +460,10 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
       notePerso:  notePerso || null,   // indépendant, disponible sur tout type de jour, sauvegardé tel quel
       greve:      greve || null,       // indépendant, se combine avec n'importe quelle journée (comme finNuit)
       formation:  formation || null,   // indépendant, retiré ici uniquement (jamais ajouté depuis ce popup)
+      // etudePoste (27/08) : jamais transmis si le poste actuellement choisi
+      // n'est pas éligible -- même si la case a été cochée avant un
+      // changement de poste, ne pas laisser un flag orphelin.
+      etudePoste: (posteChoisiEligible && etudePoste) ? true : null,
     };
     onSave(newEntry);
     if (congeStatut !== congeStatutInitial && onCongeStatutChange) {
@@ -1061,6 +1083,27 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 ))}
               </div>
             </div>
+          )}
+
+          {/* ── Étude de poste (27/08, demandé par Olivier) ── */}
+          {/* Affichée seulement si le poste "principal" du jour (jour normal
+              via poste1, ou nuit seule via posteN) est un vrai poste de
+              métier -- jamais sur un poste générique (VM/CAF/DISPO/JEQ/EIA/
+              AY/RFTSAM/PPRCI/PPAR, POSTES_ETUDE_EXCLUS), ni sur une nuit
+              accolée à un jour (cas marginal non couvert dans cette V1). */}
+          {posteChoisiEligible && (
+            <label style={{
+              display:"flex", alignItems:"center", gap:8, cursor:"pointer",
+              background: etudePoste ? "#f5f3ff" : "#f8fafc",
+              border: `1.5px solid ${etudePoste ? "#c4b5fd" : "#e2e8f0"}`,
+              borderRadius:10, padding:"9px 12px",
+            }}>
+              <input type="checkbox" checked={etudePoste} onChange={e => setEtudePoste(e.target.checked)} />
+              <div>
+                <div style={{fontSize:12.5, fontWeight:700, color: etudePoste ? "#6d28d9" : "#334155"}}>🎓 En étude de poste</div>
+                <div style={{fontSize:10.5, color:"#94a3b8"}}>Formation physique en double avec le titulaire — jamais traité comme un conflit dans le Planning Prévisionnel.</div>
+              </div>
+            </label>
           )}
 
         </div>

@@ -357,6 +357,12 @@ export const planning = {
         notePerso: p1.note_perso || null,
         greve:    pGreve ? pGreve.code_equipe : null,
         formation: pFormation ? (pFormation.code_poste || 'Formation') : null,
+        // etudePoste (27/08, demandé par Olivier) : porté par p1 (poste jour
+        // normal OU nuit seule) -- une vraie nuit accolée à un autre repos
+        // n'est volontairement pas couverte dans cette première version (cas
+        // marginal, le poste de cette nuit n'apparaît déjà pas dans les
+        // vacations Nuit du Planning Prévisionnel/CPS Officiel).
+        etudePoste: !!p1.etude_poste,
         impressionAt: null,
       };
     });
@@ -408,6 +414,9 @@ result[`${row.agent_id || agentId}-${date}`] = {
         prive: entry.prive || false,
         note: entry.finNuit ? 'fin_nuit' : null,
         note_perso: entry.notePerso || null,
+        // etudePoste (27/08) : porté par cette période UNIQUEMENT si un vrai
+        // poste (equipe M/AM/J) est choisi -- jamais sur un simple RP/Congé.
+        etude_poste: !!entry.etudePoste,
       });
     }
     // Periode 2 du jour (25/08, Congé combinable) : soit une vraie Nuit
@@ -430,6 +439,10 @@ result[`${row.agent_id || agentId}-${date}`] = {
         // Si periode unique, elle fait office de periode N°1 : elle doit
         // porter la note (sinon la note n'a nulle part ou etre sauvegardee).
         ...(estPeriodeUnique ? {note_perso: entry.notePerso || null} : {}),
+        // etudePoste (27/08) : seulement pour une vraie NUIT SEULE (période
+        // unique) -- une nuit ACCOLÉE à un jour/repos n'est pas couverte dans
+        // cette V1 (cas marginal, voir commentaire dans getSchedule()).
+        etude_poste: (estNuit && estPeriodeUnique) ? !!entry.etudePoste : false,
       });
     }
     // Si rien du tout mais finNuit : juste noter la fin de nuit
@@ -567,6 +580,11 @@ result[`${row.agent_id || agentId}-${date}`] = {
         horaires: isPlaceholder ? null : horaires,
         prive:    false,
         finNuit:  isFinNuit,
+        // etudePoste (27/08) : porté par p1 (poste jour normal OU nuit seule,
+        // même convention que getSchedule() ci-dessus) — c'est ce flag que
+        // Planning Prévisionnel utilise pour ne pas traiter un agent "en
+        // étude" comme un conflit avec le titulaire du poste.
+        etudePoste: !!p1.etude_poste,
       };
     });
     return result;

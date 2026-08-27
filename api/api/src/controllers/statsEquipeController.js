@@ -236,6 +236,18 @@ async function getStats(req, res) {
     );
     const formationInterne = { nbJours: joursFormation.n || 0, nbAgentsFormes: agentsFormes.n || 0 };
 
+    // ─── Étude de poste (27/08, demandé par Olivier) ────────────────────────
+    // Total anonyme par année, comme "Formation interne" -- aucune donnée
+    // nominative, un simple décompte de jours (planning_periode.etude_poste,
+    // porté par la période qui a le vrai poste, voir planningController.js).
+    const [[joursEtude]] = await pool.query(
+      `SELECT COUNT(*) AS n FROM planning_periode pp
+       JOIN planning_jour pj ON pj.id = pp.planning_jour_id
+       WHERE pp.etude_poste = 1 AND YEAR(pj.date_jour) = ?`,
+      [year]
+    );
+    const etudePoste = { nbJours: joursEtude.n || 0 };
+
     // ─── Habilitations par poste (#11) ──────────────────────────────────────
     // PPRCI retiré le 16/08 (Olivier : "tout le monde est apte à ça", pas
     // significatif) — rien ne le remplace ici, DISPO est une stat à part non
@@ -397,6 +409,7 @@ async function getStats(req, res) {
       vtRefuses,
       postesNonTenus,
       formationInterne,
+      etudePoste,
       habilitationsParPoste,
       dispo,
       reserveRoulement,

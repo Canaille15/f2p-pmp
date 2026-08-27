@@ -323,6 +323,13 @@ export default function StatsEquipeView() {
                 <Tuile label="Agents formés" valeur={data.formationInterne.nbAgentsFormes} large />
               </div>
             </div>
+            {/* Étude de poste (27/08, demandé par Olivier) : total anonyme
+                par année, comme Formation interne -- aucun nom d'agent. */}
+            <div style={card}>
+              <div style={sectionTitle}>🎓 Études de poste</div>
+              <Tuile label="Jours en étude de poste" valeur={data.etudePoste.nbJours} large />
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Formation physique en double avec un titulaire — chiffre global anonymisé.</div>
+            </div>
           </div>
 
           {/* Habilitations par poste */}

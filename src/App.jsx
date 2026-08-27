@@ -2479,6 +2479,23 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           const fam=row.famille?FAMILLES[row.famille]:null;
           const pc=section.pc;
           const pJ=POSTES_JOURNEE.find(x=>x.jsCode===row.jsCode);
+          // nbTitulaires (27/08, Étude Poste) : un agent en étude ("en double
+          // avec un autre agent") ne doit jamais compter comme un vrai
+          // titulaire supplémentaire -- le badge "⚠ Conflit" ne doit se
+          // déclencher que s'il y a réellement 2+ VRAIS titulaires (ex: deux
+          // saisies contradictoires), jamais pour titulaire+étudiant.
+          const nbTitulaires=row.agents.filter(a=>!schedule[`${a.id}-${dateKey}`]?.etudePoste).length;
+          // rowAgentsTries (27/08, demandé par Olivier : "l'agent a l'etude
+          // doit etre a droite du titulaire sur ordi et en dessous du
+          // titulaire sur tel") -- tri stable, jamais les vrais titulaires
+          // après un étudiant : le flex-wrap du conteneur fait le reste tout
+          // seul (à droite si la largeur le permet, sinon repasse en dessous
+          // sur petit écran), sans changer la mise en page elle-même.
+          const rowAgentsTries=row.agents.slice().sort((a,b)=>{
+            const eA=!!schedule[`${a.id}-${dateKey}`]?.etudePoste;
+            const eB=!!schedule[`${b.id}-${dateKey}`]?.etudePoste;
+            return (eA===eB)?0:(eA?1:-1);
+          });
           return(<div key={`${row.jsCode}-${ri}`} style={{display:"flex",alignItems:"stretch",borderBottom:ri<section.rows.length-1?`1px solid ${pc.border}`:"none",background:ri%2===0?pc.bg:"#fff",borderLeft:`4px solid ${fam?.accent||"transparent"}`}}>
             <div style={{width:210,flexShrink:0,padding:"9px 14px",borderRight:`1px solid ${pc.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
@@ -2486,7 +2503,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                 {fam&&<span style={{fontSize:9,background:fam.accent,color:"#fff",borderRadius:10,padding:"1px 7px",fontWeight:800}}>{row.famille}</span>}
                 {row.allowFormation&&<span style={{fontSize:9,background:"#bbf7d0",color:"#14532d",borderRadius:10,padding:"1px 6px",fontWeight:700}}>/F</span>}
                 {(row.maxSlots||1)>1&&row.maxSlots<99&&<span style={{fontSize:9,background:"#dbeafe",color:"#1e40af",borderRadius:10,padding:"1px 5px",fontWeight:700}}>×{row.maxSlots}</span>}
-                {isPrevisionnel&&row.agents.length>1&&<span style={{fontSize:12,background:"#fee2e2",color:"#dc2626",borderRadius:10,padding:"2px 8px",fontWeight:800}}>⚠ Conflit</span>}
+                {isPrevisionnel&&nbTitulaires>1&&<span style={{fontSize:12,background:"#fee2e2",color:"#dc2626",borderRadius:10,padding:"2px 8px",fontWeight:800}}>⚠ Conflit</span>}
               </div>
               <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginTop:3}}>{pJ?`${pJ.jsCode} · ${pJ.label}`:row.poste.label}</div>
               {pJ?.subtitle&&<div style={{fontSize:10,color:"#1e293b",fontWeight:600,fontStyle:"italic"}}>{pJ.subtitle}</div>}
@@ -2520,7 +2537,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     </div>);
                   })
                 : Array.from({length:row.maxSlots<99?row.maxSlots:Math.max(row.agents.length,1)},(_,si)=>{
-                    const ag=row.agents[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
+                    const ag=rowAgentsTries[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
                     if(search&&ag&&!`${ag.prenom} ${ag.nom}`.toLowerCase().includes(search.toLowerCase()))return null;
                     const isForm=en?.equipe==="JF";const isMe=ag&&currentAgent?.id===ag.id;
                     // row.famille||ag?.famille (23/08) : les postes generiques toutes
@@ -2568,10 +2585,20 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                           <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#7c3aed"}}>📅 Signalement</div><button onClick={()=>annulerPrevisionnelSignalement(sig.id,setPrevisionnelSignalements)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#7c3aed",opacity:.6,marginLeft:"auto"}}>✕</button></div>
                         </div>);
                       }
-                      return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe?2.5:1.5}px solid ${isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px",boxShadow:isMe?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
+                      // enEtude/estConflit (27/08, Étude Poste) : un agent en
+                      // étude n'est jamais traité comme un conflit -- ni lui,
+                      // ni le vrai titulaire à côté de lui (le conflit ne
+                      // porte que sur les VRAIS titulaires, nbTitulaires
+                      // calculé plus haut au niveau de la row).
+                      const enEtude=!!en?.etudePoste;
+                      const estConflit=!enEtude&&nbTitulaires>1;
+                      return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:enEtude?"#f5f3ff":isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe&&!enEtude?2.5:1.5}px solid ${enEtude?"#c4b5fd":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px",boxShadow:isMe&&!enEtude?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
                         <Av initials={ag.initials} size={22} famille={ag.famille}/>
                         <div>
-                          <div style={{fontSize:11,fontWeight:700,color:row.agents.length>1?"#dc2626":"#1e293b"}}>{ag.prenom} {ag.nom}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:5}}>
+                            <div style={{fontSize:11,fontWeight:700,color:estConflit?"#dc2626":"#1e293b"}}>{ag.prenom} {ag.nom}</div>
+                            {enEtude&&<span style={{fontSize:9,background:"#ede9fe",color:"#6d28d9",borderRadius:8,padding:"1px 6px",fontWeight:700}}>🎓 Étude</span>}
+                          </div>
                           <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
                           {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
                         </div>
@@ -3044,6 +3071,13 @@ const POSTE_REGISTRY = (() => {
 function computeDashboardTravail(agent, schedule, year){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const postes = {};
+  // etudePostes (27/08, demandé par Olivier) : décompte À PART pour les
+  // journées "en étude de poste" -- même structure que `postes` (poste
+  // précis + détail par vacation), mais jamais mélangé avec les vraies
+  // tenues du poste. Le total global (totalTravail/parShiftGlobal) reste
+  // incrémenté normalement : "dans le global ca s'joute au matinne nuit
+  // soiree journée tenue".
+  const etudePostes = {};
   // sansPosteVrai (21/08, Olivier : "ma journee de formation du 25 mars reste
   // en non aaffecté. pk ?") -- jusqu'au 21/08 une Formation était comptée
   // DEUX fois : dans sa propre carte "postes.FOR" ET dans "Non affecté" (pour
@@ -3058,7 +3092,7 @@ function computeDashboardTravail(agent, schedule, year){
   // précisé) — distinct du détail par poste ci-dessous, jamais retiré.
   const parShiftGlobal = { M:0, AM:0, N:0, J:0, FOR:0 };
 
-  const traiter = (eq, jsCode, dk) => {
+  const traiter = (eq, jsCode, dk, enEtude) => {
     if(!eq) return;
     if(CODES_FETES[eq] || eq==="JF") return; // fête, pas travail
     if(!["M","AM","N","J","FOR"].includes(eq)) return; // pas une journée de travail
@@ -3108,10 +3142,14 @@ function computeDashboardTravail(agent, schedule, year){
       if(!sansPosteVrai.lastDate || dk > sansPosteVrai.lastDate) sansPosteVrai.lastDate = dk;
       return;
     }
-    if(!postes[info.code]){
-      postes[info.code] = { code:info.code, label:info.label, famille:info.famille, total:0, lastDate:null, parShift:{} };
+    // etudePoste (27/08) : router vers la structure séparée plutôt que le
+    // détail normal du poste -- "un decompte a part etude de poste", le vrai
+    // décompte du poste ne doit jamais inclure ces jours.
+    const cible = enEtude ? etudePostes : postes;
+    if(!cible[info.code]){
+      cible[info.code] = { code:info.code, label:info.label, famille:info.famille, total:0, lastDate:null, parShift:{} };
     }
-    const p = postes[info.code];
+    const p = cible[info.code];
     p.total++;
     if(!p.lastDate || dk > p.lastDate) p.lastDate = dk;
     if(!p.parShift[info.shift]) p.parShift[info.shift] = { count:0, lastDate:null };
@@ -3125,24 +3163,31 @@ function computeDashboardTravail(agent, schedule, year){
     if(dk < start || dk > end) return;
     const isNuitSeule = val?.equipe==="N" && val?.equipe2==="N";
     if(isNuitSeule){
-      traiter("N", val?.jsCode, dk);
+      traiter("N", val?.jsCode, dk, !!val?.etudePoste);
     } else {
-      traiter(val?.equipe, val?.jsCode, dk);
-      traiter(val?.equipe2, val?.jsCode2, dk);
+      traiter(val?.equipe, val?.jsCode, dk, !!val?.etudePoste);
+      // La nuit ACCOLÉE (equipe2) n'est volontairement pas couverte par
+      // Étude Poste dans cette V1 (voir client.js) -- jamais "en étude" ici.
+      traiter(val?.equipe2, val?.jsCode2, dk, false);
     }
     // Formation (09/08) : periode independante (val.formation) — meme regle
     // que dans DashboardCompteurs.computed : compte comme Formation
     // uniquement une fois la journee principale liberee (equipe vide),
     // jamais en plus d'une journee deja comptee via equipe/equipe2.
     if(val?.formation && !val?.equipe){
-      traiter("FOR", null, dk);
+      traiter("FOR", null, dk, false);
     }
   });
 
   const totalPRCI = Object.values(postes).filter(p=>p.famille==="PRCI").reduce((s,p)=>s+p.total,0);
   const totalPAR  = Object.values(postes).filter(p=>p.famille==="PAR").reduce((s,p)=>s+p.total,0);
   const totalFormation = postes.FOR?.total || 0;
-  const total = totalPRCI + totalPAR + totalFormation + sansPosteVrai.total; // === totalTravail
+  const totalEtude = Object.values(etudePostes).reduce((s,p)=>s+p.total,0);
+  // totalEtude inclus ici pour que total reste === totalTravail (les jours
+  // d'étude sont routés hors de `postes`, voir traiter() ci-dessus) -- pas
+  // de 5e tuile dans la répartition PRCI/PAR/Formation/Non affecté, juste sa
+  // propre section détaillée plus bas (etudePostes).
+  const total = totalPRCI + totalPAR + totalFormation + totalEtude + sansPosteVrai.total; // === totalTravail
   const pct = (n) => total>0 ? Math.round(n/total*1000)/10 : 0;
   sansPosteVrai.dates.sort((a,b)=> b.localeCompare(a)); // plus récent d'abord
   if(postes.FOR) postes.FOR.dates.sort((a,b)=> b.localeCompare(a));
@@ -3150,6 +3195,8 @@ function computeDashboardTravail(agent, schedule, year){
   return {
     totalTravail,
     postes: Object.values(postes).sort((a,b)=> b.total-a.total),
+    etudePostes: Object.values(etudePostes).sort((a,b)=> b.total-a.total),
+    totalEtude,
     sansPosteVrai,
     repartition: {
       PRCI: { jours: totalPRCI, pct: pct(totalPRCI) },
@@ -3238,6 +3285,41 @@ function TravailDashboardContent({ data }) {
               </div>}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Étude de poste (27/08, demandé par Olivier) : décompte À PART, même
+          format que le détail par poste ci-dessus -- ces jours comptent déjà
+          dans "Total par vacation" et dans la répartition PRCI/PAR au-dessus
+          (le total global), mais jamais mélangés avec le vrai décompte du
+          poste concerné. */}
+      {data.etudePostes.length>0 && (
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:"#6d28d9",marginBottom:6}}>🎓 Étude de poste ({data.totalEtude}j, déjà inclus dans le total ci-dessus)</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {data.etudePostes.map(p=>(
+              <div key={p.code} style={{border:"1.5px solid #ddd6fe",background:"#f5f3ff",borderRadius:10,padding:"10px 12px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:11,fontWeight:700,padding:"1px 7px",borderRadius:6,background:p.famille==="PRCI"?"#dbeafe":"#d1fae5",color:p.famille==="PRCI"?"#1e40af":"#065f46"}}>{p.famille}</span>
+                    <span style={{fontSize:13,fontWeight:800,color:"#1e293b"}}>{p.label}</span>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:15,fontWeight:900,color:"#6d28d9"}}>{p.total}j</div>
+                    <div style={{fontSize:10,fontWeight:600,color:"#475569"}}>dernier : {fmtDate(p.lastDate)}</div>
+                  </div>
+                </div>
+                {Object.keys(p.parShift).length>0 && <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {Object.entries(p.parShift).map(([shift,s])=>(
+                    <div key={shift} style={{background:"#fff",borderRadius:7,padding:"4px 8px",fontSize:10}}>
+                      <span style={{fontWeight:700,color:"#334155"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
+                      <span style={{fontWeight:600,color:"#475569",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
+                    </div>
+                  ))}
+                </div>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -9625,6 +9707,9 @@ justifyContent: "flex-start",
           notePerso: newEntry.notePerso !== undefined ? (newEntry.notePerso||null) : (prevEntry.notePerso||null),
           greve:    newEntry.greve !== undefined ? (newEntry.greve||null) : (prevEntry.greve||null),
           formation: newEntry.formation !== undefined ? (newEntry.formation||null) : (prevEntry.formation||null),
+          // etudePoste (27/08) : meme principe que finNuit/greve -- preserve
+          // si le popup ne le modifie pas.
+          etudePoste: newEntry.etudePoste !== undefined ? !!newEntry.etudePoste : !!prevEntry.etudePoste,
           impressionAt: null,
         };
         // Sauvegarder localement
