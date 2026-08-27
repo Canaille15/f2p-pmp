@@ -2080,7 +2080,6 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // Image directe
           text=await ocrPage(b64,file.type||"image/jpeg");
         }
-        console.log("TEXTE:",text);
         // Fix OCR : espace parasite a l'interieur d'un code JS (ex: "PIL CLX" -> "PILCLX")
         // — inoffensif sur du texte natif (ne matche que le defaut OCR exact).
         text=text.replace(/\b(PI|PA)([A-Z]{2,4}) ([A-Z0-9]{1,3}[-OXJ%]?)\b/g,"$1$2$3");
