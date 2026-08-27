@@ -581,7 +581,7 @@ export default function FimPdfView({ currentAgent, agentProfiles, schedule }) {
   const anneesDisponibles = [anneeCourante - 3, anneeCourante - 2, anneeCourante - 1, anneeCourante, anneeCourante + 1];
 
   const champStyle = { width: "100%", padding: "9px 11px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13.5, outline: "none", boxSizing: "border-box", background: "#fff" };
-  const labelStyle = { fontSize: 11.5, fontWeight: 700, color: "#64748b", marginBottom: 5, display: "block" };
+  const labelStyle = { fontSize: 11.5, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 5, display: "block" };
 
   const generer = async () => {
     if (!agent) return;
@@ -611,9 +611,9 @@ export default function FimPdfView({ currentAgent, agentProfiles, schedule }) {
     <div style={{ maxWidth: 520, margin: "0 auto", padding: "8px 4px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="#b45309"><path d="M4 3a1 1 0 0 1 1-1h5.586a1 1 0 0 1 .707.293l3.414 3.414a1 1 0 0 1 .293.707V17a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3Z" /><path fill="#fff" d="M11 2.5V6a1 1 0 0 0 1 1h3.5L11 2.5Z" /></svg>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: "#1e293b" }}>Fiche Individuelle Mensuelle</h2>
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: "var(--text-primary)" }}>Fiche Individuelle Mensuelle</h2>
       </div>
-      <p style={{ fontSize: 12.5, color: "#64748b", marginTop: 0, marginBottom: 18, lineHeight: 1.5 }}>
+      <p style={{ fontSize: 12.5, color: "var(--text-secondary)", marginTop: 0, marginBottom: 18, lineHeight: 1.5 }}>
         Résumé mensuel archivable/imprimable : congés, repos, temps acquis, fériés, CET, maladie et planning du mois — reconstitué depuis les données de l'appli. Choisis n'importe quel mois, même passé.
       </p>
 
@@ -642,7 +642,7 @@ export default function FimPdfView({ currentAgent, agentProfiles, schedule }) {
         {busy ? "⏳ Génération..." : `📄 Générer le PDF — ${MOIS_L[monthIdx]} ${year}`}
       </button>
 
-      <div style={{ marginTop: 18, fontSize: 11, color: "#94a3b8", lineHeight: 1.6 }}>
+      <div style={{ marginTop: 18, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.6 }}>
         Ce document n'est pas une fiche officielle SNCF — il ne contient ni élément de paie, ni classification RH/statutaire (ces informations ne sont pas suivies dans l'appli). Il reflète l'état des compteurs tels que saisis dans F2P.PMP.
       </div>
     </div>

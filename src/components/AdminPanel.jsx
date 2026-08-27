@@ -202,8 +202,8 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
 
       {/* Titre */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: "#1e293b" }}>👑 Panneau Admin</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>👑 Panneau Admin</div>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>
           Gérer les agents, les accès et les PIN
         </div>
       </div>
@@ -231,7 +231,8 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
           placeholder="🔍 Rechercher un agent..."
           style={{
             width: "100%", boxSizing: "border-box", padding: "8px 12px",
-            border: "1.5px solid #e2e8f0", borderRadius: 8,
+            border: "1.5px solid var(--border)", borderRadius: 8,
+            background: "var(--bg-card)", color: "var(--text-primary)",
             fontSize: 13, outline: "none", marginBottom: 10
           }}
         />
@@ -242,8 +243,8 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                 style={{
                   padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
                   fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-                  background: familleFilter === f ? (f === "PRCI" ? "#1d4ed8" : "#065f46") : "#f1f5f9",
-                  color: familleFilter === f ? "#fff" : "#64748b"
+                  background: familleFilter === f ? (f === "PRCI" ? "#1d4ed8" : "#065f46") : "var(--bg-page)",
+                  color: familleFilter === f ? "#fff" : "var(--text-secondary)"
                 }}>
                 {f} ({agents.filter(a => a.famille === f).length})
               </button>
@@ -252,8 +253,8 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               style={{
                 padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
                 fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-                background: reserveOnly ? "#7c3aed" : "#f1f5f9",
-                color: reserveOnly ? "#fff" : "#64748b"
+                background: reserveOnly ? "#7c3aed" : "var(--bg-page)",
+                color: reserveOnly ? "#fff" : "var(--text-secondary)"
               }}>
               🔁 Réserve régionale ({nbReserve})
             </button>
@@ -261,8 +262,8 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               style={{
                 padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
                 fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-                background: afoOnly ? "#b45309" : "#f1f5f9",
-                color: afoOnly ? "#fff" : "#64748b"
+                background: afoOnly ? "#b45309" : "var(--bg-page)",
+                color: afoOnly ? "#fff" : "var(--text-secondary)"
               }}>
               🎓 Formateur AFO ({nbAfo})
             </button>
@@ -270,8 +271,8 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               style={{
                 padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
                 fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-                background: adminOnly ? "#1e293b" : "#f1f5f9",
-                color: adminOnly ? "#fff" : "#64748b"
+                background: adminOnly ? "#1e293b" : "var(--bg-page)",
+                color: adminOnly ? "#fff" : "var(--text-secondary)"
               }}>
               👑 Admin ({nbAdmin})
             </button>
@@ -279,14 +280,14 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               style={{
                 padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
                 fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-                background: statutFilter === "quitte" ? "#78716c" : "#f1f5f9",
-                color: statutFilter === "quitte" ? "#fff" : "#64748b"
+                background: statutFilter === "quitte" ? "#78716c" : "var(--bg-page)",
+                color: statutFilter === "quitte" ? "#fff" : "var(--text-secondary)"
               }}>
               {statutFilter === "quitte" ? `🚪 Quittés (${nbQuittes})` : `🚪 Voir les quittés (${nbQuittes})`}
             </button>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
-            <span style={{ color: "#64748b", fontSize: 12, whiteSpace: "nowrap" }}>
+            <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
               {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
             </span>
             <button onClick={() => setModal("create")}
@@ -303,9 +304,9 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
 
       {/* Liste agents — cartes responsive */}
       {loading ? (
-        <div style={{ textAlign: "center", color: "#64748b", padding: 40, fontSize: 15 }}>Chargement...</div>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 40, fontSize: 15 }}>Chargement...</div>
       ) : agentsFiltres.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#64748b", padding: 30, fontSize: 14 }}>Aucun agent trouvé</div>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 30, fontSize: 14 }}>Aucun agent trouvé</div>
       ) : (
         <div style={{
           display: "grid",

@@ -10538,7 +10538,7 @@ function EchangesView({agents,currentAgent}){
 
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <div style={{fontSize:18,fontWeight:700,color:"#1e293b"}}>🔄 Échanges</div>
+      <div style={{fontSize:18,fontWeight:700,color:"var(--text-primary)"}}>🔄 Échanges</div>
       <button onClick={()=>{resetForm();setShowForm(true);}} style={{background:"#1e293b",color:"#fff",border:"none",borderRadius:12,padding:"12px 20px",cursor:"pointer",fontSize:15,fontWeight:700}}>+ Nouvelle demande</button>
     </div>
 
@@ -10574,8 +10574,8 @@ function EchangesView({agents,currentAgent}){
       </div>
     </div>)}
 
-    {loading&&<div style={{textAlign:"center",padding:"32px 22px",color:"#94a3b8",fontSize:15}}>Chargement…</div>}
-    {!loading&&listeAffichee.length===0&&<div style={{textAlign:"center",padding:"32px 22px",color:"#94a3b8",fontSize:15}}>Aucune demande en cours.</div>}
+    {loading&&<div style={{textAlign:"center",padding:"32px 22px",color:"var(--text-secondary)",fontSize:15}}>Chargement…</div>}
+    {!loading&&listeAffichee.length===0&&<div style={{textAlign:"center",padding:"32px 22px",color:"var(--text-secondary)",fontSize:15}}>Aucune demande en cours.</div>}
 
     {listeAffichee.map(e=>{
       const s=styleFor(e);
