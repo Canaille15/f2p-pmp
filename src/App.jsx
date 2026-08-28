@@ -4532,7 +4532,20 @@ function genererICS(agent, schedule, joursTries){
     const summary=libelleJourExport(schedule, agCp, date);
     if(!summary) return;
     const v=schedule[`${agCp}-${date}`];
-    const horaires=["M","AM","N","J"].includes(v.equipe) ? icsParseHoraires(EQ_COLORS[v.equipe]?.heures) : null;
+    // Priorité à l'horaire réel du jour (v.horaires, saisi/importé pour ce
+    // poste précis) — le générique EQ_COLORS[...].heures (ex: Soirée
+    // "14h05–22h17") n'est qu'un repli par défaut, jamais forcément l'horaire
+    // exact du vrai poste tenu (ex: Aide AC PAR/RFT SAM/DISPO ont leurs
+    // propres horaires, déjà stockés sur l'entrée quand connus).
+    // Cas "repos/absence + Nuit accolée" (ex: RP + Nuit, Congé + Nuit) : la
+    // vraie vacation est en 2e période (v.equipe2==='N'), jamais en v.equipe
+    // (qui vaut RP/CA/MA...) — sans ce 2e cas, ces jours tombaient tous en
+    // évènement "journée entière" côté export, alors que le libellé affichait
+    // bien "RP + Nuit" (bug signalé par Olivier : bons jours, bon libellé,
+    // mais horaires jamais réels une fois importé dans Google Calendar).
+    const horaires = ["M","AM","N","J"].includes(v.equipe)
+      ? icsParseHoraires(v.horaires || EQ_COLORS[v.equipe]?.heures)
+      : (v.equipe2==="N" ? icsParseHoraires(EQ_COLORS.N?.heures) : null);
     lignes.push("BEGIN:VEVENT");
     lignes.push(`UID:f2ppmp-${agCp}-${date}@f2p-pmp`);
     lignes.push(`DTSTAMP:${dtstamp}`);
