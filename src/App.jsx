@@ -4491,18 +4491,23 @@ export function getPlanningRappel(schedule, agCp, date){
 // (`notePerso`) reste volontairement exclue : c'est une donnée privée par
 // nature, elle n'a pas vocation à partir dans un agenda externe.
 const GREVE_LABELS_EXPORT = { DA:"01h00 grève", DB:"1/2 journée grève", DC:"Journée grève" };
+// Extrait de libelleJourExport (28/08) pour être réutilisable telle quelle
+// par genererICS quand un jour "repos + Nuit accolée" doit être scindé en 2
+// évènements distincts plutôt qu'un seul libellé combiné — jamais utilisée
+// ailleurs dans l'appli (grep confirmé), donc ce refactor ne change rien au
+// reste du site, uniquement l'export .ics.
+const OMIS_EXPORT = ["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF","CET"];
+function describeCodeExport(code, jsCode){
+  if(!code) return null;
+  if(CODES_FETES[code]) return CODES_FETES[code];
+  const label = EQ_COLORS[code]?.label || code;
+  const poste = jsCode && !OMIS_EXPORT.includes(jsCode) ? (getPosteLabelFromCode(jsCode)||jsCode) : null;
+  return poste ? `${label} · ${poste}` : label;
+}
 function libelleJourExport(schedule, agCp, date){
   const v = schedule?.[`${agCp}-${date}`];
   if(!v) return null;
-  const OMIS = ["M","AM","N","J","RP","RU","RQ","CA","CP","MA","VT","ABS","FOR","DISPO","NU","TC","TY","RN","JF","CET"];
-  const describe = (code, jsCode) => {
-    if(!code) return null;
-    if(CODES_FETES[code]) return CODES_FETES[code];
-    const label = EQ_COLORS[code]?.label || code;
-    const poste = jsCode && !OMIS.includes(jsCode) ? (getPosteLabelFromCode(jsCode)||jsCode) : null;
-    return poste ? `${label} · ${poste}` : label;
-  };
-  const parts = [describe(v.equipe, v.jsCode), describe(v.equipe2, v.jsCode2)].filter(Boolean);
+  const parts = [describeCodeExport(v.equipe, v.jsCode), describeCodeExport(v.equipe2, v.jsCode2)].filter(Boolean);
   let s = [...new Set(parts)].join(" + ");
   if(v.formation) s = (s?s+" + ":"")+`🎓 Formation : ${v.formation}`;
   if(v.greve) s = (s?s+" + ":"")+`✊ ${GREVE_LABELS_EXPORT[v.greve]||v.greve}`;
@@ -4522,32 +4527,22 @@ function icsParseHoraires(heures){
   const [,h1,m1,h2,m2]=m.map((x,i)=>i===0?x:+x);
   return { h1,m1,h2,m2, traverseMinuit: (h2*60+m2)<=(h1*60+m1) };
 }
+// Codes de repos/compteur qui, seuls (sans Nuit accolée), s'exportent en
+// évènement horodaté 00h00-23h59 plutôt qu'en "journée entière" (28/08,
+// demandé explicitement par Olivier) — scope volontairement limité à
+// l'export .ics, aucun changement du planning/calendrier/compteurs
+// eux-mêmes. Congés/Maladie/VT/Fêtes/etc. restent en "journée entière",
+// pas dans cette liste.
+const CODES_REPOS_HORODATES_EXPORT = new Set(["RP","RPP","RU","RQ","RN","TC"]);
 function genererICS(agent, schedule, joursTries){
   const lignes=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//F2P.PMP//Export planning//FR","CALSCALE:GREGORIAN"];
   const now=new Date();
   const p2=n=>String(n).padStart(2,"0");
   const dtstamp=`${now.getUTCFullYear()}${p2(now.getUTCMonth()+1)}${p2(now.getUTCDate())}T${p2(now.getUTCHours())}${p2(now.getUTCMinutes())}${p2(now.getUTCSeconds())}Z`;
   const agCp=agent.immatriculation||agent.cp||agent.id;
-  joursTries.forEach(date=>{
-    const summary=libelleJourExport(schedule, agCp, date);
-    if(!summary) return;
-    const v=schedule[`${agCp}-${date}`];
-    // Priorité à l'horaire réel du jour (v.horaires, saisi/importé pour ce
-    // poste précis) — le générique EQ_COLORS[...].heures (ex: Soirée
-    // "14h05–22h17") n'est qu'un repli par défaut, jamais forcément l'horaire
-    // exact du vrai poste tenu (ex: Aide AC PAR/RFT SAM/DISPO ont leurs
-    // propres horaires, déjà stockés sur l'entrée quand connus).
-    // Cas "repos/absence + Nuit accolée" (ex: RP + Nuit, Congé + Nuit) : la
-    // vraie vacation est en 2e période (v.equipe2==='N'), jamais en v.equipe
-    // (qui vaut RP/CA/MA...) — sans ce 2e cas, ces jours tombaient tous en
-    // évènement "journée entière" côté export, alors que le libellé affichait
-    // bien "RP + Nuit" (bug signalé par Olivier : bons jours, bon libellé,
-    // mais horaires jamais réels une fois importé dans Google Calendar).
-    const horaires = ["M","AM","N","J"].includes(v.equipe)
-      ? icsParseHoraires(v.horaires || EQ_COLORS[v.equipe]?.heures)
-      : (v.equipe2==="N" ? icsParseHoraires(EQ_COLORS.N?.heures) : null);
+  const pushEvent=(uidSuffix,summary,horaires,date)=>{
     lignes.push("BEGIN:VEVENT");
-    lignes.push(`UID:f2ppmp-${agCp}-${date}@f2p-pmp`);
+    lignes.push(`UID:f2ppmp-${agCp}-${date}${uidSuffix}@f2p-pmp`);
     lignes.push(`DTSTAMP:${dtstamp}`);
     lignes.push(`SUMMARY:${icsEscape(summary)}`);
     if(horaires){
@@ -4559,6 +4554,52 @@ function genererICS(agent, schedule, joursTries){
       lignes.push(`DTEND;VALUE=DATE:${icsDate(icsNextDay(date))}`);
     }
     lignes.push("END:VEVENT");
+  };
+  joursTries.forEach(date=>{
+    const v=schedule[`${agCp}-${date}`];
+    if(!v) return;
+    // Cas 1 — vraie vacation de travail (Matin/Soirée/Nuit/Journée) :
+    // priorité à l'horaire réel du jour (v.horaires, saisi/importé pour ce
+    // poste précis) — le générique EQ_COLORS[...].heures (ex: Soirée
+    // "14h05–22h17") n'est qu'un repli par défaut, jamais forcément
+    // l'horaire exact du vrai poste tenu (ex: Aide AC PAR/RFT SAM/DISPO ont
+    // leurs propres horaires, déjà stockés sur l'entrée quand connus).
+    if(["M","AM","N","J"].includes(v.equipe)){
+      const summary=libelleJourExport(schedule, agCp, date);
+      if(!summary) return;
+      pushEvent("", summary, icsParseHoraires(v.horaires || EQ_COLORS[v.equipe]?.heures), date);
+      return;
+    }
+    // Cas 2 — repos/absence + Nuit accolée (ex: RP + Nuit) : la vraie
+    // vacation est en 2e période (v.equipe2==='N') — scindé en 2 évènements
+    // distincts plutôt qu'un seul repli "journée entière" pour tout le
+    // jour : le repos de 00h00 à 22h15 (début réel de la Nuit, même
+    // horaire que EQ_COLORS.N), puis la Nuit elle-même de 22h15 au
+    // lendemain 06h17 (28/08, demandé explicitement par Olivier — "tu peux
+    // pas créer dans ics le RP 00h00 à 22h17 et la nuit à partir de
+    // 22h17 ?", 22h15 repris ici pour rester cohérent avec l'horaire réel
+    // de Nuit déjà utilisé partout ailleurs dans l'appli, pas 22h17).
+    if(v.equipe2==="N"){
+      const s1=describeCodeExport(v.equipe, v.jsCode)||"Repos";
+      const s2=describeCodeExport(v.equipe2, v.jsCode2)||"Nuit";
+      let summary1=s1;
+      if(v.formation) summary1+=` + 🎓 Formation : ${v.formation}`;
+      if(v.greve) summary1+=` + ✊ ${GREVE_LABELS_EXPORT[v.greve]||v.greve}`;
+      pushEvent("-jour", summary1, {h1:0,m1:0,h2:22,m2:15,traverseMinuit:false}, date);
+      pushEvent("-nuit", s2, icsParseHoraires(EQ_COLORS.N?.heures), date);
+      return;
+    }
+    const summary=libelleJourExport(schedule, agCp, date);
+    if(!summary) return;
+    // Cas 3 — repos/compteur seul (RP/RPP/RU/RQ/RN/TC, sans Nuit accolée) :
+    // bloc horodaté 00h00-23h59 plutôt que "journée entière".
+    if(CODES_REPOS_HORODATES_EXPORT.has(v.equipe)){
+      pushEvent("", summary, {h1:0,m1:0,h2:23,m2:59,traverseMinuit:false}, date);
+      return;
+    }
+    // Cas 4 — repli par défaut, inchangé (Congés/Maladie/VT/Fêtes/...) :
+    // "journée entière".
+    pushEvent("", summary, null, date);
   });
   lignes.push("END:VCALENDAR");
   return lignes.join("\r\n");
