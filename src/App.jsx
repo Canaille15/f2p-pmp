@@ -8359,6 +8359,12 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
   // (ex: token perdu) laissait l'agent sans aucun retour : l'action semblait
   // n'avoir rien fait, sans explication ni possibilité de réessayer (17/07).
   const [actionError, setActionError] = useState(null);
+  // Confirmation de suppression (28/08, demandé par Olivier) : supprimer une
+  // pause figée ne doit jamais être un simple clic accidentel — le clic
+  // (calendrier ou bouton × de la liste) ouvre d'abord une confirmation
+  // inline, jamais un window.confirm() natif (cohérent avec le reste de
+  // l'appli, ex. reset de la palette de couleurs le 17/07).
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   const allDates = useMemo(()=>{
     const obj = {};
@@ -8385,10 +8391,17 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
   const toggleDate = (dk) => {
     setActionError(null);
     if(allDates[dk]){
-      api.pauses.delete(agentId, dk).then(recharger).catch(()=>setActionError("Erreur lors de la suppression de cette journée. Réessaie."));
+      setConfirmDelete(dk);
     } else {
       api.pauses.add(agentId, dk).then(recharger).catch(()=>setActionError("Erreur lors de l'ajout de cette journée. Réessaie."));
     }
+  };
+  const confirmerSuppression = () => {
+    const dk = confirmDelete;
+    if(!dk) return;
+    setConfirmDelete(null);
+    setActionError(null);
+    api.pauses.delete(agentId, dk).then(recharger).catch(()=>setActionError("Erreur lors de la suppression de cette journée. Réessaie."));
   };
 
   const setFiaMois = (dk, moisKey) => {
@@ -8502,6 +8515,18 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
         <span style={{fontSize:12,fontWeight:600,color:"#991b1b"}}>⚠️ {actionError}</span>
         <button onClick={()=>setActionError(null)} style={{border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,
           fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff",flexShrink:0}}>✕</button>
+      </div>}
+      {confirmDelete&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",
+        padding:"10px 14px",background:"#fee2e2",borderBottom:"1.5px solid #fca5a5"}}>
+        <span style={{fontSize:12,fontWeight:600,color:"#991b1b"}}>
+          ⚠️ Supprimer la pause figée du {new Date(confirmDelete).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"})} ?
+        </span>
+        <div style={{display:"flex",gap:8,flexShrink:0}}>
+          <button onClick={()=>setConfirmDelete(null)} style={{border:"1px solid #fca5a5",borderRadius:8,padding:"6px 12px",fontSize:11,
+            fontWeight:700,cursor:"pointer",background:"#fff",color:"#991b1b"}}>Annuler</button>
+          <button onClick={confirmerSuppression} style={{border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,
+            fontWeight:700,cursor:"pointer",background:"#991b1b",color:"#fff"}}>Oui, supprimer</button>
+        </div>
       </div>}
 
       <div style={{padding:"14px 18px",display:"flex",gap:10,flexWrap:"wrap"}}>
