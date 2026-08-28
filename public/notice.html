@@ -346,7 +346,8 @@
     <a href="#pdf-cet">CET (6 imprimés)</a>
     <a href="#pdf-d2i">D2I — grève</a>
     <a href="#pdf-fim">Fiche Individuelle</a>
-    <div class="mt-group">Réglages</div>
+    <div class="mt-group">Mon profil & réglages</div>
+    <a href="#mon-profil">Mon profil</a>
     <a href="#mode-sombre">Mode sombre</a>
   </div>
 </details>
@@ -398,7 +399,8 @@
       <a href="#pdf-fim">Fiche Individuelle</a>
     </div>
     <div class="group">
-      <div class="group-label">Réglages</div>
+      <div class="group-label">Mon profil & réglages</div>
+      <a href="#mon-profil">Mon profil</a>
       <a href="#mode-sombre">Mode sombre</a>
     </div>
   </aside>
@@ -476,7 +478,8 @@
           <a href="#pdf-cet">CET (6 imprimés)</a>
           <a href="#pdf-d2i">D2I — grève</a>
           <a href="#pdf-fim">Fiche Individuelle</a>
-          <div class="g" style="margin-top:14px">Réglages</div>
+          <div class="g" style="margin-top:14px">Mon profil & réglages</div>
+          <a href="#mon-profil">Mon profil</a>
           <a href="#mode-sombre">Mode sombre</a>
         </div>
       </div>
@@ -519,6 +522,21 @@
         <div class="card-mini"><div class="t">☀️ Journée</div><div class="d">Postes de journée (Pauseur, DPX, VM, CAF...).</div></div>
       </div>
       <p>Une fois le type choisi, la liste des <strong>postes</strong> proposée ne montre que ceux où tu es réellement habilité (sauf quelques postes génériques — VM, CAF, DISPO, AY, Journée équipe, EIA, RFT SAM, PPRCI/PPAR — ouverts à tous, sans habilitation particulière). L'horaire se remplit automatiquement selon le poste.</p>
+
+      <h3>Ta carte agent — à côté de ton nom</h3>
+      <p>En haut de « Mon planning », ta propre carte affiche deux boutons juste à côté de ton nom : <span class="b">🎨</span> et <span class="b">▼</span>. C'est là que tout se règle.</p>
+      <div class="grid2">
+        <div class="card-mini"><div class="t">🎨 Palette de couleurs</div><div class="d">Choisis la couleur de chaque famille de code dans TON calendrier (Travail M/AM/N/J/JF, Repos RP/RPP/RU/RQ/TC/TY/RN, NU, DISPO, Congés, Absences/Santé, Grève, Formation, Fêtes, Note perso). Purement visuel et personnel — un bouton « Réinitialiser » remet les couleurs par défaut.</div></div>
+        <div class="card-mini"><div class="t">▼ Postes habilités</div><div class="d">Déplie un accordéon qui liste tes habilitations actuelles (badges), avec un bouton « ⚙️ Modifier » pour cocher/décocher chaque poste.</div></div>
+      </div>
+
+      <h3>⚡ Choisir ou modifier tes postes habilités</h3>
+      <div class="callout rule">
+        <div class="callout-title">📖 Comment ça fonctionne</div>
+        <p>C'est ce qui détermine directement quels postes t'apparaissent dans le formulaire de saisie ci-dessus, pour avoir un panneau de saisie qui colle vraiment à tes postes — pas de réglage caché ailleurs, tout se passe au même endroit, sur ta propre fiche en haut de « Mon planning ».</p>
+        <p>Le bouton <span class="b">▼</span> (à côté de la palette 🎨, sur ta carte agent) déplie l'accordéon <span class="b">⚡ Postes habilités</span> — la liste de tes habilitations actuelles, sous forme de badges. Un bouton <span class="b">⚙️ Modifier</span> ouvre une fenêtre où cocher/décocher chaque poste, regroupés en 4 blocs (PRCI 3×8, PRCI Journée, PAR 3×8, PAR Journée) — un poste coché apparaît immédiatement dans le formulaire de saisie de journée, un poste décoché en disparaît.</p>
+        <p>C'est <strong>toi seul</strong> qui gères tes habilitations (self-service, pas besoin de passer par un administrateur) — sauf pour les postes génériques listés plus haut, déjà ouverts à tout le monde sans avoir besoin d'être cochés.</p>
+      </div>
 
       <h3>Repos et absences</h3>
       <p>Deuxième rangée de boutons pour tout ce qui n'est pas une vacation de travail : <span class="b">RP</span> <span class="b">RPP</span> <span class="b">RU</span> <span class="b">RQ</span> <span class="b">RN</span> <span class="b">TC</span> <span class="b">TY</span> <span class="b">NU</span> <span class="b">Congés</span> <span class="b">🩷 Fêtes</span> <span class="b">Formation</span> <span class="b">✊ Grève</span> <span class="b">Maladie</span> <span class="b">VT</span>.</p>
@@ -720,7 +738,7 @@
       <p>Compteur pour les agents à temps partiel — le droit initial varie selon ton pourcentage, à saisir toi-même. Suit le même cycle à 3 états que les Congés : une demande n'apparaît jamais dans ton planning tant qu'elle n'est pas accordée ; une fois accordée avec sa date passée, elle bascule automatiquement en « Pris » sans action de ta part.</p>
       <div class="callout tip">
         <div class="callout-title">💡 Masquer le module si tu n'en as pas besoin</div>
-        <p>Si tu n'es pas à temps partiel, tu peux masquer la carte VT depuis « Mon profil » — c'est purement visuel, tout ce qui y est déjà enregistré reste compté normalement même masqué.</p>
+        <p>Si tu n'es pas à temps partiel, tu peux masquer la carte VT depuis <a href="#mon-profil">Mon profil</a> — c'est purement visuel, tout ce qui y est déjà enregistré reste compté normalement même masqué.</p>
       </div>
     </section>
 
@@ -884,6 +902,27 @@
     </section>
 
     <hr class="divider">
+
+    <section class="module" id="mon-profil">
+      <h2><span class="icon-chip">👤</span>Mon profil</h2>
+      <p class="kicker">Coordonnées, code PIN, signature, partage du prévisionnel, affichage de la case VT.</p>
+      <p>Accessible depuis le menu latéral (<span class="b">👤 Mon profil</span>). Regroupe tous les réglages propres à ton compte, indépendants de ton planning ou de tes compteurs :</p>
+
+      <h3>📇 Mes coordonnées (Annuaire)</h3>
+      <p>Fonction, téléphone, email — visibles par tes collègues dans l'<a href="#annuaire">Annuaire</a>, sauf si tu désactives ta visibilité juste en dessous du formulaire.</p>
+
+      <h3>🔑 Changer mon PIN</h3>
+      <p>PIN actuel + nouveau PIN (4 chiffres) + confirmation.</p>
+
+      <h3>✍️ Ma signature</h3>
+      <p>À dessiner directement à l'écran (doigt, souris ou stylet), ou à importer depuis une photo d'une signature papier (le fond est retiré automatiquement). Une fois enregistrée, elle s'insère automatiquement dans les générateurs PDF (Congés, CET) qui prévoient une case signature.</p>
+
+      <h3>Planning Prévisionnel — partager mon planning</h3>
+      <p>Interrupteur qui contrôle si ton planning personnel (codes M/AM/N/J/JF/FOR/DISPO uniquement) est visible par tes collègues dans la vue <a href="#previsionnel">Planning Prévisionnel</a>. Désactivé, ton planning reste strictement privé — il n'apparaît dans aucune vue partagée.</p>
+
+      <h3>🕒 Module VT (temps partiel)</h3>
+      <p>Interrupteur qui affiche ou masque la carte <span class="b">VT</span> dans ton panneau compteurs — utile si tu n'es pas à temps partiel et que la case ne te sert jamais. Actif par défaut. Purement visuel : si tu la masques, toute donnée VT déjà enregistrée reste comptée normalement, elle est juste retirée de l'affichage.</p>
+    </section>
 
     <section class="module" id="mode-sombre">
       <h2><span class="icon-chip">🌙</span>Mode sombre</h2>
