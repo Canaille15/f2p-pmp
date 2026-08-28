@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notice F2P.PMP</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root {
+    --bg-page: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-sunken: #f1f5f9;
+    --border: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    --shadow-card: rgba(15,23,42,.08);
+    --navy: #0f4c81;
+    --navy-deep: #1e3a5f;
+    --accent-active: #0a3a63;
+    --amber: #b45309;
+    --amber-bg: #fffbeb;
+    --amber-border: #fde68a;
+    --green: #15803d;
+    --green-bg: #f0fdf4;
+    --green-border: #bbf7d0;
+    --red: #b91c1c;
+    --red-bg: #fef2f2;
+    --red-border: #fecaca;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg-page: #0a0e1a;
+      --bg-card: #131b2e;
+      --bg-sunken: #0f1626;
+      --border: #26324a;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --shadow-card: rgba(0,0,0,.4);
+      --accent-active: #60a5fa;
+      --amber-bg: #2a1f0e;
+      --amber-border: #78350f;
+      --green-bg: #0f2a1a;
+      --green-border: #14532d;
+      --red-bg: #2a1414;
+      --red-border: #7f1d1d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg-page: #0a0e1a;
+    --bg-card: #131b2e;
+    --bg-sunken: #0f1626;
+    --border: #26324a;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --shadow-card: rgba(0,0,0,.4);
+    --accent-active: #60a5fa;
+    --amber-bg: #2a1f0e;
+    --amber-border: #78350f;
+    --green-bg: #0f2a1a;
+    --green-border: #14532d;
+    --red-bg: #2a1414;
+    --red-border: #7f1d1d;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { text-wrap: balance; font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif; }
+  code, .code, .badge {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  a { color: var(--navy); }
+  :root[data-theme="dark"] a { color: #7dd3fc; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) a { color: #7dd3fc; } }
+
+  /* ── En-tête ─────────────────────────────────────────────────────── */
+  .hero {
+    background: linear-gradient(135deg, var(--navy), var(--navy-deep));
+    color: #fff;
+    padding: 40px 24px 34px;
+    text-align: center;
+  }
+  .hero .logo {
+    width: 52px; height: 52px; border-radius: 14px;
+    background: rgba(255,255,255,.14);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px;
+    font-size: 26px;
+  }
+  .hero h1 { font-size: clamp(24px, 4vw, 32px); font-weight: 800; margin: 0 0 8px; letter-spacing: -.01em; }
+  .hero p { margin: 0; color: rgba(255,255,255,.78); font-size: 14.5px; max-width: 560px; margin: 0 auto; }
+  .hero .meta { margin-top: 16px; font-size: 12px; color: rgba(255,255,255,.55); letter-spacing: .02em; }
+  .print-btn {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 18px;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28);
+    color: #fff; border-radius: 9px; padding: 9px 16px; font: inherit; font-weight: 700; font-size: 13px;
+    cursor: pointer;
+  }
+  .print-btn:hover { background: rgba(255,255,255,.22); }
+  @media print { .print-btn { display: none !important; } }
+
+  /* ── Mise en page générale ───────────────────────────────────────── */
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 260px minmax(0,1fr);
+    gap: 0;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    aside.toc { display: none; }
+    .mobile-toc { display: block !important; }
+  }
+
+  aside.toc {
+    position: sticky;
+    top: 0;
+    max-height: 100vh;
+    overflow-y: auto;
+    padding: 28px 18px 40px 24px;
+    font-size: 13px;
+  }
+  aside.toc .group { margin-bottom: 20px; }
+  aside.toc .group-label {
+    font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 6px; padding-left: 10px;
+  }
+  aside.toc a {
+    display: block; text-decoration: none; color: var(--text-secondary);
+    padding: 6px 10px; border-radius: 8px; font-weight: 500;
+    border-left: 2px solid transparent;
+  }
+  aside.toc a:hover { background: var(--bg-sunken); color: var(--text-primary); }
+  aside.toc a.active { color: var(--navy); font-weight: 700; border-left-color: var(--navy); background: var(--bg-sunken); }
+  :root[data-theme="dark"] aside.toc a.active {
+    color: var(--accent-active); border-left-color: var(--accent-active);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) aside.toc a.active {
+      color: var(--accent-active); border-left-color: var(--accent-active);
+    }
+  }
+
+  .mobile-toc { display: none; margin: 18px 16px 0; }
+  .mobile-toc summary {
+    cursor: pointer; list-style: none; background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 16px; font-weight: 700; font-size: 14px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .mobile-toc summary::-webkit-details-marker { display: none; }
+  .mobile-toc summary::after { content: "▾"; color: var(--text-muted); }
+  .mobile-toc[open] summary::after { content: "▴"; }
+  .mobile-toc .mt-body { background: var(--bg-card); border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 6px; }
+  .mobile-toc a { display: block; padding: 7px 10px; color: var(--text-secondary); text-decoration: none; font-size: 13.5px; border-radius: 8px; }
+  .mobile-toc .mt-group { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); padding: 10px 10px 2px; }
+
+  main { padding: 28px 24px 100px; min-width: 0; }
+
+  section.module { margin-bottom: 46px; scroll-margin-top: 16px; }
+  section.module:first-of-type { margin-top: 4px; }
+  section.module h2 {
+    font-size: 22px; font-weight: 800; margin: 0 0 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  section.module .icon-chip {
+    width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 17px; flex-shrink: 0;
+    background: var(--bg-sunken); border: 1px solid var(--border);
+  }
+  section.module .kicker { color: var(--text-secondary); font-size: 13.5px; margin: 0 0 18px 44px; }
+  section.module h3 { font-size: 15.5px; font-weight: 700; margin: 26px 0 8px; color: var(--text-primary); }
+  section.module h3:first-of-type { margin-top: 18px; }
+  section.module p { margin: 0 0 12px; color: var(--text-primary); font-size: 14.5px; }
+  section.module ul, section.module ol { margin: 0 0 12px; padding-left: 20px; font-size: 14.5px; }
+  section.module li { margin-bottom: 6px; }
+  section.module .sub { color: var(--text-secondary); }
+
+  .divider { height: 1px; background: var(--border); margin: 40px 0; border: none; }
+
+  /* ── Badges façon appli (codes RP/CA/F2...) ──────────────────────── */
+  .b {
+    display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px;
+    font-size: 12px; font-weight: 700; background: var(--bg-sunken); color: var(--text-primary);
+    border: 1px solid var(--border); white-space: nowrap;
+  }
+  .btn-label {
+    display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 7px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 700;
+    background: var(--navy); color: #fff;
+  }
+  :root[data-theme="dark"] .btn-label { background: var(--accent-active); color: #06111f; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-label { background: var(--accent-active); color: #06111f; } }
+
+  /* ── Encarts ──────────────────────────────────────────────────────── */
+  .callout {
+    border-radius: 12px; padding: 14px 16px; margin: 14px 0 18px; font-size: 14px;
+    border: 1px solid var(--border); background: var(--bg-sunken);
+  }
+  .callout .callout-title { font-weight: 700; margin-bottom: 5px; display: flex; align-items: center; gap: 7px; font-size: 13.5px; }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.rule { background: var(--amber-bg); border-color: var(--amber-border); }
+  .callout.rule .callout-title { color: var(--amber); }
+  .callout.tip { background: var(--green-bg); border-color: var(--green-border); }
+  .callout.tip .callout-title { color: var(--green); }
+  .callout.warn { background: var(--red-bg); border-color: var(--red-border); }
+  .callout.warn .callout-title { color: var(--red); }
+
+  table.simple { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 10px 0 18px; }
+  table.simple th, table.simple td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  table.simple th { color: var(--text-secondary); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+  .table-wrap { overflow-x: auto; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0 18px; }
+  @media (max-width: 620px) { .grid2 { grid-template-columns: 1fr; } }
+  .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin: 10px 0 18px; }
+  @media (max-width: 780px) { .grid3 { grid-template-columns: 1fr; } }
+  .card-mini { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px var(--shadow-card); }
+  .card-mini .t { font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
+  .card-mini .d { color: var(--text-secondary); font-size: 13px; }
+
+  /* Carte "partie" (Bienvenue) — numéro + titre + mécanisme, plus étoffée
+     qu'une card-mini classique */
+  .part-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 18px 16px; box-shadow: 0 1px 3px var(--shadow-card); display: flex; flex-direction: column; }
+  .part-card .num { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: var(--navy); letter-spacing: .04em; margin-bottom: 8px; }
+  :root[data-theme="dark"] .part-card .num { color: var(--accent-active); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .part-card .num { color: var(--accent-active); } }
+  .part-card .t { font-weight: 800; font-size: 16px; margin-bottom: 8px; }
+  .part-card .d { color: var(--text-secondary); font-size: 13.5px; }
+
+  /* Bannière "Partie N" insérée dans le corps, avant chaque grand groupe de
+     sections, pour repérer où on en est en scrollant */
+  .part-header {
+    display: flex; align-items: center; gap: 14px; margin: 56px 0 22px; padding: 16px 20px;
+    background: linear-gradient(135deg, var(--navy), var(--navy-deep)); border-radius: 14px; color: #fff;
+  }
+  section.module:first-of-type + .part-header, main > .part-header:first-child { margin-top: 8px; }
+  .part-header .num { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; background: rgba(255,255,255,.16); border-radius: 7px; padding: 4px 9px; flex-shrink: 0; }
+  .part-header .t { font-weight: 800; font-size: 17px; }
+  .part-header .d { font-size: 12.5px; color: rgba(255,255,255,.7); margin-top: 2px; }
+  .modco-header { background: linear-gradient(135deg, var(--amber), #7c3a05); }
+
+  /* Sommaire visible dans le corps du document (en plus du menu latéral) */
+  .sommaire { background: var(--bg-sunken); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; margin: 24px 0 8px; }
+  .sommaire h2 { margin: 0 0 14px; font-size: 17px; }
+  .sommaire-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px 24px; }
+  @media (max-width: 780px) { .sommaire-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 520px) { .sommaire-grid { grid-template-columns: 1fr; } }
+  .sommaire-col .g { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--navy); margin-bottom: 6px; }
+  :root[data-theme="dark"] .sommaire-col .g { color: var(--accent-active); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sommaire-col .g { color: var(--accent-active); } }
+  .sommaire-col a { display: block; font-size: 13.5px; color: var(--text-primary); text-decoration: none; padding: 3px 0; }
+  .sommaire-col a:hover { color: var(--navy); text-decoration: underline; }
+  :root[data-theme="dark"] .sommaire-col a:hover { color: var(--accent-active); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sommaire-col a:hover { color: var(--accent-active); } }
+
+  footer {
+    text-align: center; padding: 30px 20px 60px; color: var(--text-muted); font-size: 12.5px;
+  }
+
+  /* ── Impression / export PDF ─────────────────────────────────────────
+     Forcer la palette claire (le papier n'a pas de mode sombre), masquer
+     le menu latéral et le sommaire mobile (des liens n'ont aucun sens sur
+     papier), repasser le contenu en pleine largeur, éviter qu'un encart ou
+     une carte ne soit coupé au milieu par un saut de page. */
+  @media print {
+    @page { margin: 14mm 12mm; }
+    :root, :root[data-theme="dark"] {
+      --bg-page: #ffffff; --bg-card: #ffffff; --bg-sunken: #f1f5f9; --border: #dbe3ec;
+      --text-primary: #1e293b; --text-secondary: #475569; --text-muted: #64748b;
+      --shadow-card: transparent; --accent-active: #0a3a63;
+      --amber-bg: #fffbeb; --amber-border: #fde68a;
+      --green-bg: #f0fdf4; --green-border: #bbf7d0;
+      --red-bg: #fef2f2; --red-border: #fecaca;
+    }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { background: #fff; }
+    details.mobile-toc, aside.toc, footer { display: none !important; }
+    .shell { display: block; }
+    main { padding: 0; }
+    .hero { border-radius: 0; padding: 22px 10px; }
+    a { color: var(--text-primary) !important; text-decoration: none !important; }
+    .sommaire a { text-decoration: underline !important; }
+    section.module { margin-bottom: 26px; }
+    .callout, .card-mini, .part-card, table.simple, .sommaire, .part-header { break-inside: avoid; }
+    h2, h3 { break-after: avoid; }
+    .part-header { break-before: page; }
+    main > section.module:first-of-type .part-header, #bienvenue + .part-header { break-before: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="logo">🚆</div>
+  <h1>Notice d'utilisation — F2P.PMP</h1>
+  <p>L'outil de planning partagé de tous les agents PRCI et PAR de Paris Montparnasse. Ce guide explique, module par module, comment s'en servir et les règles qui s'appliquent derrière chaque écran.</p>
+  <div class="meta">Dernière mise à jour : 27 août 2026</div>
+  <button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
+</div>
+
+<details class="mobile-toc">
+  <summary>Sommaire</summary>
+  <div class="mt-body">
+    <div class="mt-group">Prise en main</div>
+    <a href="#bienvenue">Bienvenue</a>
+    <a href="#connexion">Se connecter</a>
+    <div class="mt-group">Partie 1 — Mon agenda personnel</div>
+    <a href="#mon-planning">Saisir ma journée</a>
+    <a href="#import-export">Importer / exporter</a>
+    <a href="#conges">Congés</a>
+    <a href="#rp-ru-rq">RP · RU · RQ</a>
+    <a href="#fetes">Fêtes légales</a>
+    <a href="#pause-figee">Pause Figée</a>
+    <a href="#rn-tc-ty-tq">RN · TC · TY · TQ</a>
+    <a href="#jours-travailles">Jours travaillés</a>
+    <a href="#cet">CET</a>
+    <a href="#formation-compteur">Formation (suivi perso)</a>
+    <a href="#maladie">Maladie</a>
+    <a href="#vt">VT — temps partiel</a>
+    <a href="#bilan-global">Bilan Global</a>
+    <div class="mt-group">Partie 2 — Le planning CPS</div>
+    <a href="#cps-officiel">CPS Officiel</a>
+    <div class="mt-group">Partie 3 — Le prévisionnel</div>
+    <a href="#previsionnel">Planning Prévisionnel</a>
+    <div class="mt-group">Modules complémentaires</div>
+    <a href="#echanges">Échanges</a>
+    <a href="#annuaire">Annuaire</a>
+    <a href="#formation-afo">Formation & AFO</a>
+    <a href="#stat-equip">Stat'Equip</a>
+    <a href="#admin">Admin</a>
+    <div class="mt-group">Générateurs PDF</div>
+    <a href="#pdf-conges">Demande de congés</a>
+    <a href="#pdf-cet">CET (6 imprimés)</a>
+    <a href="#pdf-d2i">D2I — grève</a>
+    <a href="#pdf-fim">Fiche Individuelle</a>
+    <div class="mt-group">Réglages</div>
+    <a href="#mode-sombre">Mode sombre</a>
+  </div>
+</details>
+
+<div class="shell">
+  <aside class="toc" id="desktopToc">
+    <div class="group">
+      <div class="group-label">Prise en main</div>
+      <a href="#bienvenue">Bienvenue</a>
+      <a href="#connexion">Se connecter</a>
+    </div>
+    <div class="group">
+      <div class="group-label">Partie 1 — Mon agenda personnel</div>
+      <a href="#mon-planning">Saisir ma journée</a>
+      <a href="#import-export">Importer / exporter</a>
+      <a href="#conges">Congés</a>
+      <a href="#rp-ru-rq">RP · RU · RQ</a>
+      <a href="#fetes">Fêtes légales</a>
+      <a href="#pause-figee">Pause Figée</a>
+      <a href="#rn-tc-ty-tq">RN · TC · TY · TQ</a>
+      <a href="#jours-travailles">Jours travaillés</a>
+      <a href="#cet">CET</a>
+      <a href="#formation-compteur">Formation (suivi perso)</a>
+      <a href="#maladie">Maladie</a>
+      <a href="#vt">VT — temps partiel</a>
+      <a href="#bilan-global">Bilan Global</a>
+    </div>
+    <div class="group">
+      <div class="group-label">Partie 2 — Le planning CPS</div>
+      <a href="#cps-officiel">CPS Officiel</a>
+    </div>
+    <div class="group">
+      <div class="group-label">Partie 3 — Le prévisionnel</div>
+      <a href="#previsionnel">Planning Prévisionnel</a>
+    </div>
+    <div class="group">
+      <div class="group-label">Modules complémentaires</div>
+      <a href="#echanges">Échanges</a>
+      <a href="#annuaire">Annuaire</a>
+      <a href="#formation-afo">Formation & AFO</a>
+      <a href="#stat-equip">Stat'Equip</a>
+      <a href="#admin">Admin</a>
+    </div>
+    <div class="group">
+      <div class="group-label">Générateurs PDF</div>
+      <a href="#pdf-conges">Demande de congés</a>
+      <a href="#pdf-cet">CET (6 imprimés)</a>
+      <a href="#pdf-d2i">D2I — grève</a>
+      <a href="#pdf-fim">Fiche Individuelle</a>
+    </div>
+    <div class="group">
+      <div class="group-label">Réglages</div>
+      <a href="#mode-sombre">Mode sombre</a>
+    </div>
+  </aside>
+
+  <main>
+
+    <section class="module" id="bienvenue">
+      <h2><span class="icon-chip">👋</span>Bienvenue</h2>
+      <p class="kicker">Qui utilise F2P.PMP, et comment l'appli est organisée.</p>
+
+      <p>F2P.PMP est l'outil de gestion de planning utilisé par <strong>tous les agents PRCI et PAR de Paris Montparnasse</strong>. C'est un agenda <strong>partagé pour partie</strong> entre agents : une partie de ce que tu y vois n'appartient qu'à toi (ton planning perso, tes compteurs), une autre partie se construit et se lit avec toute l'équipe (le planning CPS, le prévisionnel).</p>
+
+      <p>L'appli se compose de <strong>3 grandes parties</strong> — 3 plannings, chacun avec son propre fonctionnement — plus des <strong>modules complémentaires</strong> qui viennent s'y greffer.</p>
+
+      <h3>Les 3 plannings</h3>
+      <div class="grid3">
+        <div class="part-card">
+          <div class="num">PARTIE 1</div>
+          <div class="t">📊 Mon agenda personnel</div>
+          <div class="d">Ton planning à toi, rempli par tes soins (saisie manuelle ou import de ton roulement/bulletin de commande), et tous tes compteurs personnels qui en découlent (congés, repos, heures...). Personne d'autre n'y touche.</div>
+        </div>
+        <div class="part-card">
+          <div class="num">PARTIE 2</div>
+          <div class="t">📋 Le planning CPS</div>
+          <div class="d">La vraie feuille de présence de l'équipe, celle qui fait foi. Son contenu est extrait des informations diffusées sur la digiborne ou sur Viva Engage — n'importe quel agent connecté peut importer le document (photo ou PDF) pour que tout le monde la retrouve au même endroit, à jour.</div>
+        </div>
+        <div class="part-card">
+          <div class="num">PARTIE 3</div>
+          <div class="t">📅 Le planning prévisionnel</div>
+          <div class="d">Une vue construite automatiquement à partir de ce que chaque agent a saisi dans son propre agenda personnel (Partie 1) — utile pour voir, à l'avance, qui est prévu où, avant même que la vraie feuille de présence CPS ne soit publiée.</div>
+        </div>
+      </div>
+
+      <h3>Les modules complémentaires</h3>
+      <p>En plus de ces 3 plannings, l'appli propose des outils annexes : les <strong>générateurs de PDF</strong> (demande de congés, CET, D2I, Fiche Individuelle), l'<strong>Annuaire</strong>, l'<strong>échange de journée</strong> entre agents, et le <strong>module AFO</strong> pour le suivi des formations — ainsi que Stat'Equip (statistiques d'équipe anonymes) et Admin (réservé aux administrateurs).</p>
+    </section>
+
+    <div class="sommaire" id="sommaire">
+      <h2>🧭 Sommaire</h2>
+      <div class="sommaire-grid">
+        <div class="sommaire-col">
+          <div class="g">Prise en main</div>
+          <a href="#bienvenue">Bienvenue</a>
+          <a href="#connexion">Se connecter</a>
+          <div class="g" style="margin-top:14px">Partie 1 — Mon agenda personnel</div>
+          <a href="#mon-planning">Saisir ma journée</a>
+          <a href="#import-export">Importer / exporter</a>
+          <a href="#conges">Congés</a>
+          <a href="#rp-ru-rq">RP · RU · RQ</a>
+          <a href="#fetes">Fêtes légales</a>
+          <a href="#pause-figee">Pause Figée</a>
+          <a href="#rn-tc-ty-tq">RN · TC · TY · TQ</a>
+          <a href="#jours-travailles">Jours travaillés</a>
+          <a href="#cet">CET</a>
+          <a href="#formation-compteur">Formation (suivi perso)</a>
+          <a href="#maladie">Maladie</a>
+          <a href="#vt">VT — temps partiel</a>
+          <a href="#bilan-global">Bilan Global</a>
+        </div>
+        <div class="sommaire-col">
+          <div class="g">Partie 2 — Le planning CPS</div>
+          <a href="#cps-officiel">CPS Officiel</a>
+          <div class="g" style="margin-top:14px">Partie 3 — Le prévisionnel</div>
+          <a href="#previsionnel">Planning Prévisionnel</a>
+          <div class="g" style="margin-top:14px">Modules complémentaires</div>
+          <a href="#echanges">Échanges</a>
+          <a href="#annuaire">Annuaire</a>
+          <a href="#formation-afo">Formation & AFO</a>
+          <a href="#stat-equip">Stat'Equip</a>
+          <a href="#admin">Admin</a>
+        </div>
+        <div class="sommaire-col">
+          <div class="g">Générateurs PDF</div>
+          <a href="#pdf-conges">Demande de congés</a>
+          <a href="#pdf-cet">CET (6 imprimés)</a>
+          <a href="#pdf-d2i">D2I — grève</a>
+          <a href="#pdf-fim">Fiche Individuelle</a>
+          <div class="g" style="margin-top:14px">Réglages</div>
+          <a href="#mode-sombre">Mode sombre</a>
+        </div>
+      </div>
+    </div>
+
+    <section class="module" id="connexion">
+      <h2><span class="icon-chip">🔑</span>Se connecter</h2>
+      <p class="kicker">CP + code PIN, ou création de compte à la première visite.</p>
+
+      <p>La connexion se fait avec ton <strong>CP</strong> (ton numéro d'agent SNCF) et un <strong>code PIN à 4 chiffres</strong>. Une case <span class="b">Se souvenir de mon CP sur cet appareil</span> permet de ne plus le ressaisir la fois suivante — laisse-la décochée si l'appareil est partagé.</p>
+
+      <h3>Première connexion</h3>
+      <p>Si c'est ta première fois, entre simplement ton CP : l'appli te propose de créer ton PIN toi-même (deux fois, pour confirmation). Rien d'autre à faire — ton compte doit juste déjà exister dans l'Annuaire (créé par un administrateur au préalable).</p>
+
+      <div class="callout rule">
+        <div class="callout-title">⚠️ Cas particulier — agent Réserve régionale</div>
+        <p>Pour un agent normal, le CP seul suffit à créer son propre code PIN à la première connexion. <strong>Pour un agent Réserve régionale, ce n'est jamais le cas</strong> — connaître son CP ne donne aucun accès : la création de PIN est explicitement refusée, quel que soit le PIN choisi. Seul un administrateur peut donner accès à ce type de compte, en lui attribuant directement un code PIN depuis sa fiche (panneau Admin → bouton <span class="btn-label">🔑 PIN</span> sur la fiche de l'agent) — l'agent utilise ensuite ce code pour se connecter normalement, sans jamais passer par l'écran « Première connexion ».</p>
+      </div>
+
+      <p>Mot de passe oublié, code bloqué, compte introuvable : seul un administrateur peut réinitialiser ton PIN (bouton <span class="btn-label">🔑 PIN</span> sur ta fiche, panneau Admin).</p>
+    </section>
+
+    <div class="part-header" id="partie-1">
+      <div class="num">PARTIE 1</div>
+      <div><div class="t">Mon agenda personnel</div><div class="d">Ton planning, saisi ou importé par toi, et tous les compteurs qui en découlent.</div></div>
+    </div>
+
+    <section class="module" id="mon-planning">
+      <h2><span class="icon-chip">📊</span>Mon planning — saisir ma journée</h2>
+      <p class="kicker">Ton planning personnel. Vue Mois uniquement — clique une case pour l'éditer.</p>
+
+      <p>C'est ton planning à toi, que tu remplis toi-même. Clique sur une case du calendrier pour ouvrir le formulaire de saisie du jour. Une case déjà remplie s'ouvre pré-remplie ; une case vide t'affiche directement les choix disponibles.</p>
+
+      <h3>Types de journée</h3>
+      <p>En haut du formulaire, quatre boutons pour une journée de travail :</p>
+      <div class="grid2">
+        <div class="card-mini"><div class="t">🌅 Matin</div><div class="d">Horaire du matin selon le poste choisi.</div></div>
+        <div class="card-mini"><div class="t">🌇 Soirée</div><div class="d">Horaire de soirée selon le poste choisi.</div></div>
+        <div class="card-mini"><div class="t">🌙 Nuit</div><div class="d">Peut être seule, ou accolée à un repos (ex. RP + Nuit).</div></div>
+        <div class="card-mini"><div class="t">☀️ Journée</div><div class="d">Postes de journée (Pauseur, DPX, VM, CAF...).</div></div>
+      </div>
+      <p>Une fois le type choisi, la liste des <strong>postes</strong> proposée ne montre que ceux où tu es réellement habilité (sauf quelques postes génériques — VM, CAF, DISPO, AY, Journée équipe, EIA, RFT SAM, PPRCI/PPAR — ouverts à tous, sans habilitation particulière). L'horaire se remplit automatiquement selon le poste.</p>
+
+      <h3>Repos et absences</h3>
+      <p>Deuxième rangée de boutons pour tout ce qui n'est pas une vacation de travail : <span class="b">RP</span> <span class="b">RPP</span> <span class="b">RU</span> <span class="b">RQ</span> <span class="b">RN</span> <span class="b">TC</span> <span class="b">TY</span> <span class="b">NU</span> <span class="b">Congés</span> <span class="b">🩷 Fêtes</span> <span class="b">Formation</span> <span class="b">✊ Grève</span> <span class="b">Maladie</span> <span class="b">VT</span>.</p>
+      <ul>
+        <li><strong>Congés et VT</strong> ont chacun un sous-menu à 3 états : <span class="b">✓ Accordé</span> (écrit réellement le congé/VT dans ta case, remplace ce qu'il y avait), <span class="b">⏳ Demandé</span> et <span class="b">✕ Refusé</span> (ces deux derniers n'écrivent <strong>jamais</strong> rien dans le planning — la journée déjà prévue reste affichée et comptée normalement tant que ce n'est pas accordé). Un badge <span class="b">⏳ CA (n°X)</span> apparaît en pointillé sur la case pendant que c'est en attente.</li>
+        <li><strong>✊ Grève</strong> propose 3 codes indépendants — <span class="b">DA</span> (1h), <span class="b">DB</span> (demi-journée), <span class="b">DC</span> (journée) — qui se combinent avec n'importe quelle journée de travail sans l'effacer.</li>
+        <li><strong>Formation</strong> ne se remplit jamais librement ici — le détail (intitulé, date...) vient toujours d'une session déjà créée par un formateur (AFO). Elle s'écrit automatiquement dans ta case dès que ce formateur te lance une session à laquelle tu participes. Si tu l'as retirée alors que tu restes inscrit à une session déjà lancée ce jour-là, un rappel « Formation(s) proposée(s) ce jour » te permet de la reprendre toi-même depuis cette liste. Pour une formation suivie en dehors de l'appli, c'est « + Déclarer une formation suivie » dans le module <a href="#formation-afo">Formation & AFO</a> qu'il faut utiliser, pas ce popup.</li>
+      </ul>
+
+      <h3>🌙 Descente de nuit</h3>
+      <p>Case à part, toujours disponible, indépendante du reste. Elle se coche <strong>automatiquement</strong> le lendemain d'une nuit que tu viens de saisir — tu peux la décocher ou la recocher librement, ça n'affecte jamais le reste de la case.</p>
+
+      <h3>📝 Note perso</h3>
+      <p>Un champ de texte libre, visible uniquement par toi (jamais par les autres agents ni les admins), pour te laisser un rappel personnel sur n'importe quel jour — même un jour par ailleurs vide.</p>
+
+      <h3>🎓 En étude de poste</h3>
+      <p>Case à cocher qui apparaît sous les horaires, une fois un vrai poste de métier choisi (jamais pour les postes génériques VM/CAF/DISPO/AY/Journée équipe/EIA/RFT SAM/PPRCI/PPAR, qui n'ont pas de vrai « titulaire »).</p>
+      <div class="callout rule">
+        <div class="callout-title">📖 Comment ça fonctionne</div>
+        <p>Pour noter une journée d'étude de poste, saisis ta journée normalement (Matinée/Soirée/Nuit/Journée, puis le poste parmi ceux où tu es habilité — exactement comme pour une vraie tenue de poste) — la seule différence est de cocher en plus <span class="b">🎓 En étude de poste</span>.</p>
+        <p>Une fois enregistrée, la journée s'ajoute automatiquement en second sur ce poste dans le <a href="#previsionnel">Planning Prévisionnel</a>, à côté du titulaire déjà prévu — jamais à la place. Elle est signalée par un badge <span class="b">🎓 Étude</span> plutôt que par le badge rouge « ⚠ Conflit » habituel, qui continue de s'afficher normalement si deux vrais titulaires se retrouvent sur le même poste. Sur ordinateur, l'agent en étude apparaît à droite du titulaire ; sur téléphone, en dessous.</p>
+        <p>Dans « Jours travaillés » (panneau compteurs), ces journées comptent comme des journées de <strong>Formation</strong> — jamais comme un poste tenu, pour ne jamais fausser ton décompte réel de postes. Le détail par poste et par vacation (« AC LNE — 11 jours : 4 matinées, 4 nuits, 3 soirées ») se retrouve dans le module <a href="#formation-compteur">Formation</a>. Dans <a href="#stat-equip">Stat'Equip</a>, seul un total anonyme (nombre de jours, nombre d'agents formés) est visible par poste, aucun nom.</p>
+      </div>
+    </section>
+
+    <section class="module" id="import-export">
+      <h2><span class="icon-chip">📥</span>Importer / exporter mon planning</h2>
+      <p class="kicker">Charger un bulletin de commande, exporter vers un autre agenda, remplir en masse.</p>
+
+      <h3>📥 Importer bulletin de commande / roulement</h3>
+      <p>Importe un PDF (ou une photo) de ton bulletin de commande ou de ton déroulé prévisionnel annuel. L'appli lit le document et propose les jours détectés avant d'écrire quoi que ce soit — rien n'est enregistré sans ta confirmation.</p>
+      <div class="callout tip">
+        <div class="callout-title">💡 Conseil</div>
+        <p>Préfère toujours le vrai fichier PDF du document (récupérable depuis ton espace agent SNCF) plutôt qu'une photo ou une capture d'écran — la lecture automatique est nettement plus fiable sur un PDF natif. Si seule une photo est disponible, envoie-la dans sa résolution d'origine plutôt qu'après un passage par une messagerie (WhatsApp, etc.) qui la recompresse et dégrade la lecture des chiffres.</p>
+      </div>
+
+      <h3>📤 Exporter (.ics)</h3>
+      <p>Génère un fichier <code>.ics</code> importable dans Google Calendar, Outlook ou l'app Calendrier d'iPhone — le mois affiché, l'année complète, ou une période personnalisée (Du/Au libre). Les notes perso restent privées et ne sont jamais exportées.</p>
+
+      <h3>🗂️ Remplissage rapide</h3>
+      <p>Pour remplir plusieurs jours d'un coup (par exemple toutes les matinées d'un poste sur un mois) : choisis le type de journée puis coche les jours voulus sur un mini-calendrier — ils s'écrivent tous en une seule action. Un bouton permet aussi d'effacer une période entière.</p>
+      <div class="callout rule">
+        <div class="callout-title">⚠️ Ce que « Effacer » ne touche jamais</div>
+        <p>Le bouton « Effacer cette période » efface tout le contenu du planning sur la période choisie, <strong>sauf</strong> les jours de congé déjà accordés (ils restent affichés et comptés normalement) et les jours de congé encore en attente (de toute façon jamais écrits dans le planning tant qu'ils ne sont pas accordés). Si la période en contient, le message avant confirmation te le précise explicitement. Pour effacer réellement un congé déjà accordé, il faut le faire un par un, directement depuis sa case (bouton Accordé → décocher → Enregistrer) — ce module ne le fera jamais à sa place.</p>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <div class="callout tip" style="margin-top:-6px">
+      <div class="callout-title">📊 Mes compteurs personnels</div>
+      <p>Sous ton planning, le panneau « Tableau de bords » réunit tous tes compteurs personnels — toujours dans la Partie 1, ils découlent directement de ce que tu as saisi dans ton agenda. Chaque carte s'ouvre en cliquant dessus.</p>
+    </div>
+
+    <section class="module" id="conges">
+      <h2><span class="icon-chip">🏖️</span>Congés</h2>
+      <p class="kicker">Droit annuel, cycle Demandé → Accordé → Refusé, report sur l'année suivante.</p>
+
+      <p>Clique la carte <span class="b">Congés</span> du panneau « Tableau de bords » pour ouvrir le détail : <strong>Droit</strong> (28 jours par défaut, modifiable — utile pour un temps partiel), <strong>Pris</strong>, <strong>Restant</strong>, et <strong>Refusés</strong>.</p>
+
+      <h3>Cycle Demandé → Accordé → Refusé</h3>
+      <p>Une nouvelle demande (bouton <span class="btn-label">+ Nouvelle demande</span>) reste « Demandée » tant que tu ne l'as pas toi-même fait passer en « Accordé » — un congé demandé n'apparaît jamais dans ton planning perso tant qu'il n'est pas accordé, la journée prévue ce jour-là reste affichée et comptée normalement. Le badge <span class="b">⏳ CA (n°X)</span> te rappelle qu'une demande est en attente sur cette case.</p>
+
+      <h3>↪️ Report sur l'année suivante</h3>
+      <div class="callout rule">
+        <div class="callout-title">📖 Comment ça fonctionne</div>
+        <p>La règle autorise de poser des jours de congé sur des dates de l'année suivante (A+1) tout en les décomptant du solde de l'année en cours (A) — une tolérance de report. Comme la date seule ne dit pas « à quel budget ce jour appartient », c'est toi qui le précises : dans le tableau de bord de l'année A, section <span class="b">↪️ Report sur A+1</span>, choisis une date déjà saisie comme congé accordé dans ton planning perso, et clique <span class="btn-label">+ Ajouter</span>.</p>
+        <p>Ce jour est alors compté dans le solde de l'année A (avec sa vraie date, ex. « Janvier A+1 — 3j »), et automatiquement retiré du décompte de l'année A+1 pour ne jamais être compté deux fois. Un jour retiré du report redevient un jour normal de l'année où il est réellement daté.</p>
+      </div>
+
+      <h3>❌ Refusées — suivi du talon</h3>
+      <p>Chaque refus peut être suivi individuellement (talon demandé / reçu / jamais reçu), regroupé par période si plusieurs jours consécutifs ont été refusés ensemble.</p>
+    </section>
+
+    <section class="module" id="rp-ru-rq">
+      <h2><span class="icon-chip">🌿</span>RP · RU · RQ</h2>
+      <p class="kicker">Repos périodiques, repos utilisation, repos qualifiés — chacun sa carte, son droit modifiable, son report.</p>
+
+      <p>Ces trois compteurs suivent le même principe que Congés : un <strong>droit annuel modifiable</strong> par toi (utile si ton quota diffère du standard), un décompte <strong>Pris</strong> basé sur ce qui est réellement saisi dans ton planning, et un <strong>Restant</strong>.</p>
+      <ul>
+        <li><span class="b">RP</span> et <span class="b">RPP</span> comptent ensemble dans le même total (ce sont deux variantes du même repos) et peuvent, comme les Congés, être reportés sur l'année suivante via la même mécanique <span class="b">↪️ Report</span>.</li>
+        <li><span class="b">RU</span> a la même mécanique de report.</li>
+        <li><span class="b">RQ</span> fonctionne différemment : pas de report par date choisie — le solde restant en fin d'année devient automatiquement l'acquis de départ de l'année suivante (sauf si tu corriges manuellement l'acquis d'une année précise).</li>
+      </ul>
+      <p>Chaque module propose aussi un mini-calendrier « Sélectionner des jours (dispersés) » pour cocher plusieurs jours non consécutifs d'un coup (ex. tous les RP d'un mois) plutôt que de les saisir un par un.</p>
+    </section>
+
+    <section class="module" id="fetes">
+      <h2><span class="icon-chip">🎉</span>Fêtes légales</h2>
+      <p class="kicker">Règles GRH00143, une cloche dès qu'une fête demande une action.</p>
+
+      <p>La carte <span class="b">Fêtes</span> affiche une cloche <span class="b">🔔 N à traiter</span> dès qu'au moins une fête de l'année nécessite une action de ta part. Le détail regroupe chaque fête par priorité : <strong>⚠️ À traiter</strong>, <strong>❌ Perdues</strong>, <strong>✅ Réglées</strong>, <strong>🔜 À venir</strong>.</p>
+
+      <h3>La règle du dimanche</h3>
+      <div class="callout rule">
+        <div class="callout-title">📖 Texte réglementaire (GRH00143)</div>
+        <p>Les fêtes légales tombant un dimanche ne sont pas considérées comme des jours fériés. Elles sont rémunérées comme des dimanches, et non récupérables.</p>
+        <p>✓ Lorsque le 1<sup>er</sup> Mai tombe un dimanche, il peut être récupéré, à condition de l'avoir travaillé.</p>
+        <p>✓ Lorsque le 25 décembre tombe un dimanche, c'est le samedi 24 décembre qui devient férié.</p>
+      </div>
+      <p>Concrètement : une fête tombant un dimanche est <strong>toujours perdue</strong>, sauf le 1<sup>er</sup> Mai (récupérable si tu l'as travaillé) et Noël (reporté au 24 automatiquement).</p>
+
+      <h3>📋 Report N-1</h3>
+      <p>Les 3 dernières fêtes de l'année (novembre-décembre) débordent sur le premier trimestre de l'année suivante — une section dédiée « Report N-1 » les affiche dans le tableau de bord de l'année qui suit, avec un délai limite fixé au 31 mars.</p>
+
+      <h3>Les 5 actions possibles sur chaque fête</h3>
+      <div class="grid2">
+        <div class="card-mini"><div class="t">📅 Date</div><div class="d">Fixer manuellement la date de récupération.</div></div>
+        <div class="card-mini"><div class="t">💶 Payé</div><div class="d">Marquer la fête comme réglée en paie.</div></div>
+        <div class="card-mini"><div class="t">🤒 Maladie</div><div class="d">Marquer perdue pour cause d'arrêt maladie.</div></div>
+        <div class="card-mini"><div class="t">📋 Motif</div><div class="d">Voir le motif réglementaire du calcul.</div></div>
+        <div class="card-mini"><div class="t">⏩ Anticipé</div><div class="d">Signaler un paiement anticipé, à confirmer une fois vérifié sur ta fiche de paie.</div></div>
+      </div>
+      <p>Le bouton <span class="b">↺ Annuler</span> revient à tout moment au calcul automatique d'origine, avec confirmation avant d'effacer une correction.</p>
+    </section>
+
+    <section class="module" id="pause-figee">
+      <h2><span class="icon-chip">⏸️</span>Pause Figée</h2>
+      <p class="kicker">Cycle en attente de vérification → validée. Chaque pause validée crédite +1h30 au compteur TC.</p>
+
+      <p>Ajoute une ou plusieurs journées de pause figée depuis la carte <span class="b">Pause Figée</span>. Chaque entrée reste « en attente » jusqu'à ce que tu la marques toi-même « validée » — le planning perso de ce jour-là est rappelé automatiquement pour t'aider à vérifier.</p>
+      <p>Une fois validée, la pause crédite automatiquement <strong>+1h30 au compteur TC</strong> (plafonné à 32h00, voir ci-dessous).</p>
+    </section>
+
+    <section class="module" id="rn-tc-ty-tq">
+      <h2><span class="icon-chip">⏱️</span>RN · TC · TY · TQ</h2>
+      <p class="kicker">Un solde continu en heures/minutes, jamais remis à zéro — tu l'ajustes toi-même.</p>
+
+      <p>Ces quatre compteurs fonctionnent différemment des autres : au lieu d'un solde en jours remis à zéro chaque année, c'est un <strong>solde continu en heures et minutes</strong>, ajusté manuellement par toi (un journal daté par mois, purement indicatif — l'important est le solde total, pas le mois affiché).</p>
+      <ul>
+        <li><span class="b">RN</span> et <span class="b">TY</span> : ajustement manuel libre, aucun plafond pour RN. <strong>TY est plafonné à 32h00</strong> — au-delà, tout ajout est signalé comme à payer en heures supplémentaires plutôt que crédité.</li>
+        <li><span class="b">TC</span> : reçoit en plus le crédit automatique +1h30 de chaque Pause Figée validée, également plafonné à 32h00.</li>
+        <li><span class="b">TQ</span> : suivi par semestre civil (S1 janvier-juin / S2 juillet-décembre). En fin de semestre, tu peux toi-même (jamais automatique) basculer ton solde TQ vers TY, de façon réversible à tout moment. Le surplus qui dépasserait le plafond 32h00 de TY est explicitement annoncé « à payer le mois suivant », jamais perdu silencieusement. <strong>Ces heures ne sont jamais épargnables au CET.</strong></li>
+      </ul>
+
+      <h3>🗄️ Archivage (module TC)</h3>
+      <div class="callout tip">
+        <div class="callout-title">📖 Comment ça fonctionne</div>
+        <p>Le bouton « Archivage » ne touche jamais au calcul du solde — il sert uniquement à alléger l'affichage une fois que l'historique devient long (au bout de 2-3 ans d'usage). Choisir un mois et cliquer « Archiver jusqu'à ce mois » replie tous les mouvements de ce mois et des mois précédents dans une section fermée, que tu peux rouvrir à tout moment d'un clic pour retrouver le détail. Le solde affiché en haut reste toujours exact, qu'un archivage soit en place ou non. « ✕ Tout désarchiver » annule l'archivage à tout moment, sans aucune perte.</p>
+      </div>
+    </section>
+
+    <section class="module" id="jours-travailles">
+      <h2><span class="icon-chip">💼</span>Jours travaillés</h2>
+      <p class="kicker">Un tableau de bord détaillé par poste et par vacation.</p>
+
+      <p>Clique la carte <span class="b">Jours travaillés</span> pour voir la répartition de ton année : total par famille (PRCI / PAR / Formation / Non affecté), total par vacation (Matin/Soirée/Nuit/Journée/Formation, tous postes confondus), puis le détail poste par poste (nombre de jours, dernière date, répartition par vacation).</p>
+      <p>Les journées de <a href="#mon-planning">Formation</a> (y compris les journées <a href="#mon-planning">« en étude de poste »</a>) comptent dans le total mais apparaissent dans leur propre catégorie, jamais mélangées avec le décompte réel d'un poste.</p>
+    </section>
+
+    <section class="module" id="cet">
+      <h2><span class="icon-chip">🏦</span>CET — Compte Épargne Temps</h2>
+      <p class="kicker">Deux sous-comptes, un cap d'épargne annuel, un abondement automatique.</p>
+
+      <div class="grid2">
+        <div class="card-mini"><div class="t">💼 Compte courant</div><div class="d">Plafonné à 20 jours.</div></div>
+        <div class="card-mini"><div class="t">🏁 Compte fin d'activité</div><div class="d">Plafonné à 250 jours.</div></div>
+      </div>
+
+      <h3>Épargner</h3>
+      <p>Sources acceptées : <span class="b">Congés</span>, <span class="b">RQ</span>, <span class="b">RN</span>, <span class="b">TC</span>, <span class="b">TY</span>, <span class="b">RCF</span> (repos compensateur de fête, épargnable directement depuis le module Fêtes) et <span class="b">Congé médaille</span>. Une demande d'épargne passe par le même cycle Demandé → Accordé que les autres compteurs ; une fois accordée, elle déduit immédiatement le compteur source.</p>
+      <div class="callout rule">
+        <div class="callout-title">⚠️ Plafond et cap annuel</div>
+        <p>Le <strong>cap d'épargne est de 10 jours par année civile</strong> (hors abondement), affiché en permanence dans le module. Si une épargne ferait dépasser le plafond du sous-compte choisi (20j courant / 250j fin d'activité), elle est bloquée avec un message clair — épargne vers l'autre sous-compte à la place.</p>
+      </div>
+
+      <h3>🎁 Abondement</h3>
+      <p>Dès ton premier jour épargné dans l'année (tous sous-comptes confondus), <strong>+1 jour d'abondement</strong> automatique — versé en priorité sur le Compte courant, sauf s'il est déjà plein, auquel cas il part sur le Compte fin d'activité. Un jour d'abondement mal placé peut être déplacé d'un sous-compte à l'autre à tout moment.</p>
+
+      <h3>Utiliser ou monétiser</h3>
+      <ul>
+        <li><strong>Utilisation en temps</strong> : choisis une période Du/Au, elle s'écrit directement dans ton planning perso (code <span class="b">CET</span>) et débite le sous-compte choisi.</li>
+        <li><strong>Monétisation</strong> : débit simple du solde, sans effet sur ton planning — seuls les jours épargnés l'année précédente sont normalement éligibles.</li>
+      </ul>
+    </section>
+
+    <section class="module" id="formation-compteur">
+      <h2><span class="icon-chip">🎓</span>Formation — mon suivi personnel</h2>
+      <p class="kicker">La carte « Formation » du panneau compteurs t'amène à ton propre suivi. Voir aussi <a href="#formation-afo">Formation & AFO</a> plus bas.</p>
+
+      <div class="callout tip">
+        <div class="callout-title">📖 La cloche de notification</div>
+        <p>La tuile « Formation » affiche <span class="b">🔔 N à voir</span> dès qu'un formateur (AFO) a lancé une session à laquelle tu participes, ou t'y a ajouté après coup. N est le total de <strong>toutes</strong> les notifications pas encore vues — pas juste une indication binaire. Chaque notification ne disparaît que si tu cliques explicitement sur « ✓ Vu », jamais automatiquement en consultant la page — et l'acquitter ne fait descendre le compteur que d'une seule unité.</p>
+      </div>
+    </section>
+
+    <section class="module" id="maladie">
+      <h2><span class="icon-chip">🤒</span>Maladie</h2>
+      <p class="kicker">Suivi des arrêts, avec les jours de congés/RP/RU/RQ éventuellement perdus.</p>
+
+      <p>Ajoute une période d'arrêt (Du/Au) depuis la carte <span class="b">Maladie</span> — elle écrit <span class="b">MA</span> dans ton planning perso pour ces jours.</p>
+      <p>Si l'arrêt te fait perdre des jours déjà prévus (Congés, RP, RU ou RQ), déclare-le dans le même module : indique combien de jours sont perdus pour chaque compteur concerné, avec une note explicative. Chaque compteur source affiche alors un rappel et son « Restant » est réduit d'autant — une correction peut être retirée à tout moment si tu t'es trompé.</p>
+    </section>
+
+    <section class="module" id="vt">
+      <h2><span class="icon-chip">🕒</span>VT — temps partiel</h2>
+      <p class="kicker">Cycle Demandé → Accordé → Pris, synchronisé avec ton planning perso.</p>
+
+      <p>Compteur pour les agents à temps partiel — le droit initial varie selon ton pourcentage, à saisir toi-même. Suit le même cycle à 3 états que les Congés : une demande n'apparaît jamais dans ton planning tant qu'elle n'est pas accordée ; une fois accordée avec sa date passée, elle bascule automatiquement en « Pris » sans action de ta part.</p>
+      <div class="callout tip">
+        <div class="callout-title">💡 Masquer le module si tu n'en as pas besoin</div>
+        <p>Si tu n'es pas à temps partiel, tu peux masquer la carte VT depuis « Mon profil » — c'est purement visuel, tout ce qui y est déjà enregistré reste compté normalement même masqué.</p>
+      </div>
+    </section>
+
+    <section class="module" id="bilan-global">
+      <h2><span class="icon-chip">🧮</span>Bilan Global</h2>
+      <p class="kicker">Tous tes jours et heures disponibles, en un seul endroit.</p>
+
+      <p>Accessible depuis le bandeau du panneau compteurs. Récapitule en lecture seule : Congés, RU, RQ, VT et Fêtes en jours (RP exclu, ce n'est pas un jour que tu choisis de poser) ; RN, TC et TY en heures. Une projection à une date choisie, et une calculatrice de conversion heures → jours (durée de journée de référence modifiable) donnent un total combiné « tout compris ». En bas, un rappel séparé de ton solde CET — volontairement à part, ce sont des jours épargnés, pas forcément à prendre dans l'année.</p>
+    </section>
+
+    <div class="part-header" id="partie-2">
+      <div class="num">PARTIE 2</div>
+      <div><div class="t">Le planning CPS</div><div class="d">La vraie feuille de présence de l'équipe, celle qui fait foi.</div></div>
+    </div>
+
+    <section class="module" id="cps-officiel">
+      <h2><span class="icon-chip">📋</span>CPS Officiel</h2>
+      <p class="kicker">Le planning partagé, en lecture pour tout le monde, alimenté par import PDF/photo.</p>
+
+      <p>Vue partagée du planning réel de l'équipe — la feuille de présence officielle. Son contenu est <strong>extrait des informations diffusées sur la digiborne ou sur Viva Engage</strong> : n'importe quel agent connecté à l'appli peut importer ce document (PDF ou simple photo), qui est alors lu automatiquement pour que toute l'équipe le retrouve au même endroit, à jour, sans devoir ressortir le document d'origine. Le contenu se met à jour automatiquement sur tous les appareils toutes les 45 secondes.</p>
+
+      <h3>Importer</h3>
+      <p>Sélectionne le fichier → l'appli extrait le texte → un écran de confirmation récapitule le nombre d'agents détectés et la date, avant toute sauvegarde réelle.</p>
+
+      <h3>🕓 Historique & annulation</h3>
+      <p>Chaque import crée un lot horodaté, consultable dans le panneau « Historique » (conservé 90 jours). Le bouton <span class="btn-label">↩️ Annuler</span> n'est disponible que sur le tout dernier lot, et restaure exactement l'état d'avant, ligne par ligne.</p>
+
+      <h3>🔄 Ajuster un poste</h3>
+      <p>Sur chaque case de poste, un bouton permet de signaler un échange, une erreur de saisie CPS, un poste non tenu, ou de laisser un message libre visible par tous. Chaque signalement reste annulable par n'importe qui.</p>
+      <div class="callout tip">
+        <div class="callout-title">📖 Clôturer un échange</div>
+        <p>Depuis le module <a href="#echanges">Échanges</a>, clôturer une demande regarde si l'agent avec qui tu as échangé avait lui-même un poste ce jour-là. S'il n'avait rien, un seul signalement est créé (ton poste passe à son nom). S'il avait un vrai poste (troc réciproque, ex. tu faisais la Matinée et lui la Soirée), <strong>deux</strong> signalements sont créés automatiquement — ton ancien poste passe à son nom, et le sien passe au tien — pour qu'aucun poste ne reste faussement « couvert » par quelqu'un qui n'y est plus.</p>
+      </div>
+    </section>
+
+    <div class="part-header" id="partie-3">
+      <div class="num">PARTIE 3</div>
+      <div><div class="t">Le planning prévisionnel</div><div class="d">Reconstruit automatiquement depuis l'agenda personnel de chaque agent.</div></div>
+    </div>
+
+    <section class="module" id="previsionnel">
+      <h2><span class="icon-chip">📅</span>Planning Prévisionnel</h2>
+      <p class="kicker">Le roulement annuel prévu, construit à partir du planning perso de chaque agent partageant le sien.</p>
+
+      <p>Vue similaire à CPS Officiel, mais alimentée directement par ce que chaque agent a saisi dans son planning perso (déroulé prévisionnel importé ou saisie manuelle), pas par un import de feuille de présence.</p>
+      <p>Un agent en <a href="#mon-planning">étude de poste</a> apparaît ici en second sur le poste concerné, avec le badge <span class="b">🎓 Étude</span>, sans jamais déclencher le badge rouge « ⚠ Conflit » réservé aux vrais doublons de titulaires.</p>
+    </section>
+
+    <div class="part-header modco-header" id="modules-complementaires">
+      <div class="num">MODULES</div>
+      <div><div class="t">Modules complémentaires</div><div class="d">Échanges, Annuaire, Formation & AFO, Stat'Equip, Admin.</div></div>
+    </div>
+
+    <section class="module" id="echanges">
+      <h2><span class="icon-chip">🔄</span>Échanges</h2>
+      <p class="kicker">Un tableau d'annonces pour proposer un échange de poste.</p>
+
+      <p>Publie une demande sur un jour précis (poste et horaires captés automatiquement depuis ton planning), les autres agents peuvent se déclarer intéressés. Une fois trouvé un accord, clôture la demande en choisissant avec qui tu as échangé — voir l'encart « Clôturer un échange » dans la section <a href="#cps-officiel">CPS Officiel</a> ci-dessus pour le détail exact de ce que ça écrit.</p>
+    </section>
+
+    <section class="module" id="annuaire">
+      <h2><span class="icon-chip">📇</span>Annuaire</h2>
+      <p class="kicker">Agents, postes fixes (UO) et numéros utiles.</p>
+
+      <ul>
+        <li><strong>Agents</strong> : fiches auto-gérées (coordonnées, habilitations affichées).</li>
+        <li><strong>UO</strong> : postes fixes de l'établissement, dont le titulaire peut être calculé dynamiquement selon l'heure à partir de CPS Officiel.</li>
+        <li><strong>Accès rapide</strong> : numéros utiles ajoutés librement.</li>
+      </ul>
+    </section>
+
+    <section class="module" id="formation-afo">
+      <h2><span class="icon-chip">🎓</span>Formation & AFO</h2>
+      <p class="kicker">Deux vues bien séparées — ton suivi personnel d'un côté, ton rôle de formateur de l'autre.</p>
+
+      <div class="callout rule">
+        <div class="callout-title">📖 La différence en une phrase</div>
+        <p>« 🎓 Formation » montre toujours <strong>TON</strong> propre suivi en tant qu'agent qui suit des formations — quels que soient tes autres rôles. « 🎓 AFO » montre <strong>TON</strong> rôle de formateur — il n'apparaît dans le menu que si tu es toi-même AFO. Un agent qui est à la fois simple agent et AFO a donc les deux entrées dans son menu, et elles ne montrent jamais la même chose : jamais tes propres sessions suivies dans « AFO », jamais tes sessions animées dans « Formation ».</p>
+      </div>
+
+      <h3>🎓 Formation (tous les agents)</h3>
+      <p>Ton archive personnelle, uniquement ce que TU as suivi ou vas suivre en tant que participant :</p>
+      <ul>
+        <li>Les sessions organisées par un AFO auxquelles tu es inscrit (intitulé, date, lieu, catégorie, statut, qui anime, qui d'autre y participe, le message de l'AFO au lancement s'il y en a un).</li>
+        <li>Tes formations suivies en dehors de l'appli (externe ou e-learning), déclarées toi-même via « + Déclarer une formation suivie ».</li>
+        <li>Le détail de tes journées <a href="#mon-planning">« en étude de poste »</a>, par poste et par vacation.</li>
+      </ul>
+      <p>Dès qu'une session à laquelle tu participes est lancée, elle écrit automatiquement « 🎓 Formation » dans ton planning perso ce jour-là — en plus de ce qu'il y avait déjà, jamais d'écrasement. Tu valides ta présence en libérant toi-même ta journée. Si tu retires cette formation de ton planning, la session disparaît aussitôt de cette liste — tu peux la reprendre à tout moment en rouvrant ce jour, un rappel « Formation(s) proposée(s) ce jour » te la repropose.</p>
+
+      <h3>🎓 AFO (formateurs uniquement)</h3>
+      <p>Tout ce qui concerne ton rôle de formateur, jamais ton propre suivi personnel :</p>
+      <ul>
+        <li><strong>👨‍🏫 Tes sessions</strong> — les sessions où tu animes (jusqu'à 3 formateurs par session).</li>
+        <li><strong>📋 Gestion</strong> — le catalogue de toutes les formations proposées, et la liste de toutes les sessions créées par n'importe quel AFO (aucune hiérarchie entre AFO). Créer une session, ajouter/retirer un formateur ou un participant, écrire un message de lancement, puis « 🚀 Lancer la session » — qui écrit « Formation » dans le planning de chaque participant. Si un participant retire ensuite la formation de son planning, son nom apparaît barré avec un avertissement.</li>
+        <li><strong>📊 Stats</strong> — combien de sessions et quels agents ont suivi chaque formation, la répartition par année/catégorie, et pour chaque AFO le nombre de jours animés et d'agents formés — visible par tous les AFO à égalité.</li>
+      </ul>
+      <p><strong>Si un AFO quitte son poste</strong>, les formations qu'il a menées restent dans le système sans limite de durée, pour que les participants ne les perdent jamais.</p>
+    </section>
+
+    <section class="module" id="stat-equip">
+      <h2><span class="icon-chip">📊</span>Stat'Equip</h2>
+      <p class="kicker">Statistiques d'équipe agrégées, ouvert à tous, aucune donnée nominative.</p>
+
+      <p>Vue d'ensemble des effectifs (global / équipe / Réserve régionale / temps partiel / encadrement / AFO), couverture des postes par la Réserve régionale, congés et VT refusés (totaux anonymes), postes non tenus signalés, âge moyen, formation (sessions AFO + études de poste, regroupées sous un même bloc « Formation » clairement légendé pour chaque source), et agents habilités par poste.</p>
+      <p>Aucun nom ni CP n'y transite jamais — tout est calculé côté serveur en totaux ou en comptes agrégés.</p>
+    </section>
+
+    <section class="module" id="admin">
+      <h2><span class="icon-chip">👑</span>Admin</h2>
+      <p class="kicker">Réservé aux administrateurs — gestion des fiches agent, rôles, habilitations.</p>
+
+      <p>Créer un agent, réinitialiser un PIN, promouvoir/retirer un admin, éditer coordonnées et habilitations directement sur chaque fiche, basculer les rôles « Réserve régionale » et « AFO », suivre le statut Réserve/Roulement (historique daté, distinct de la Réserve régionale).</p>
+
+      <h3>🚪 Départ d'un agent</h3>
+      <div class="callout rule">
+        <div class="callout-title">📖 Comment ça fonctionne</div>
+        <p>Le bouton « 🚪 Départ » (visible sur chaque fiche active) ouvre une fenêtre avec un seul champ « Date de départ ». « Confirmer le départ » fait deux choses en une action : vide le planning strictement <em>après</em> cette date (garde tout jusqu'à cette date inclus — rien n'est jamais supprimé en cascade) et marque la fiche comme quittée avec la date enregistrée.</p>
+        <p>La connexion de l'agent est bloquée immédiatement, sa fiche disparaît de la liste par défaut et devient accessible via le filtre « 🚪 Voir les quittés » — un bouton « ↺ Réactiver » y reste disponible (ne restaure pas le planning vidé). La vraie suppression définitive reste possible via un lien discret « Suppression définitive (irréversible, déconseillé) », réservée à un cas rare (fiche créée par erreur).</p>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <section class="module" id="pdf-conges">
+      <h2><span class="icon-chip">🗓️</span>Générateur — Demande de congés</h2>
+      <p class="kicker">Remplit le formulaire officiel SNCF, prêt à envoyer.</p>
+      <p>Génère le formulaire officiel <code>GA_demande_autorisation_absence.pdf</code> déjà rempli avec tes coordonnées et les périodes demandées, plus un message email prêt à copier-coller.</p>
+    </section>
+
+    <section class="module" id="pdf-cet">
+      <h2><span class="icon-chip">🏦</span>Générateur — CET (6 imprimés)</h2>
+      <p class="kicker">Tous les formulaires officiels du Compte Épargne Temps.</p>
+      <table class="simple">
+        <thead><tr><th>Imprimé</th><th>Usage</th></tr></thead>
+        <tbody>
+          <tr><td>Intention d'épargne de congés annuels</td><td>Sur les deux sous-comptes à la fois si besoin</td></tr>
+          <tr><td>Demande d'utilisation en temps — sous-compte courant</td><td>Entre 5 et 20 jours, délai de prévenance selon le volume</td></tr>
+          <tr><td>Demande d'épargne (hors congés)</td><td>RQ / RN / TC / TY / Congé médaille, un ou plusieurs types sur le même document</td></tr>
+          <tr><td>Demande d'utilisation en temps — fin d'activité</td><td>Congé de fin d'activité</td></tr>
+          <tr><td>Demande de monétisation — fin d'activité</td><td>Motif réglementaire RH0926 ou RH0930</td></tr>
+          <tr><td>Demande de transfert de jours</td><td>Du compte courant vers le compte fin d'activité</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="module" id="pdf-d2i">
+      <h2><span class="icon-chip">✊</span>Générateur — D2I (grève)</h2>
+      <p class="kicker">Déclaration Individuelle d'Intention.</p>
+      <p>Génère le formulaire officiel de préavis de grève — intention de participer, ou renoncer/reprendre le travail suite à une déclaration déjà faite, avec accusé de réception.</p>
+    </section>
+
+    <section class="module" id="pdf-fim">
+      <h2><span class="icon-chip">🗂️</span>Générateur — Fiche Individuelle</h2>
+      <p class="kicker">Résumé mensuel archivable, inspiré de la vraie Fiche Individuelle SNCF.</p>
+      <p>Pour un mois et une année choisis : Congés sur 3 années, Repos RP/RU/VT (+ « RP isolé »), Temps acquis RQ/RN/TY/TQ/TC arrêtés en fin de mois, Fériés à récupérer, le planning coloré du mois, et un résumé CET/Maladie. Aucun élément de paie ni classification RH — ces données ne sont pas stockées dans l'appli.</p>
+
+      <div class="callout tip">
+        <div class="callout-title">💡 En complément — archiver tes compteurs mois par mois</div>
+        <p>Si tu tiens tes compteurs à jour régulièrement dans l'appli, au fil du mois, et que tu les compares à ceux affichés sur ton interface salarié, ce générateur te permet d'archiver chaque mois en PDF — un instantané de l'état de tes compteurs à cette période, à conserver de ton côté.</p>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <section class="module" id="mode-sombre">
+      <h2><span class="icon-chip">🌙</span>Mode sombre</h2>
+      <p class="kicker">Bouton ☀️ / 🌙 en haut à droite de chaque écran.</p>
+      <p>Bascule tout le planning, les compteurs et la plupart des modules vers un fond sombre — réglage propre à chaque appareil, pas lié à ton profil agent.</p>
+    </section>
+
+  </main>
+</div>
+
+<footer>F2P.PMP — notice tenue à jour à chaque évolution notable de l'application.</footer>
+
+<script>
+  (function(){
+    var links = Array.prototype.slice.call(document.querySelectorAll('#desktopToc a'));
+    var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); }).filter(Boolean);
+    if (!sections.length) return;
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        var id = entry.target.id;
+        var link = links.find(function(a){ return a.getAttribute('href') === '#' + id; });
+        if (!link) return;
+        if (entry.isIntersecting) {
+          links.forEach(function(l){ l.classList.remove('active'); });
+          link.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+    sections.forEach(function(s){ io.observe(s); });
+  })();
+</script>
+</body>
+</html>

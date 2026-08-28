@@ -13078,6 +13078,9 @@ export default function App(){
               {REST_KEYS.map(renderFlat)}
               {renderFlat("profil")}
               {isAfo && renderFlat("afo")}
+              <a href="/notice.html" target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)} style={{ display: "flex", alignItems: "center", gap: 10, border: "none", background: "transparent", padding: "12px 16px", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "var(--text-primary)", textAlign: "left", width: "100%", textDecoration: "none" }}>
+                📘 Notice
+              </a>
               {isAdmin && renderFlat("admin")}
             </>
           );
