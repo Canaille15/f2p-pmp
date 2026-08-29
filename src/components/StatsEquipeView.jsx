@@ -250,7 +250,6 @@ export default function StatsEquipeView() {
               <Tuile label="Agents global" valeur={data.headcounts.totalAgents} />
               <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} sousLabel={`dont ${data.reserveRoulement.actuel.nbReserve} réserve · ${data.reserveRoulement.actuel.nbRoulement} roulement`} />
               <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} sousLabel="compte à part" />
-              <Tuile label="Temps partiel" valeur={fmtPct(data.headcounts.pctTempsPartiel)} sousLabel={`${data.headcounts.nbTempsPartiel} agent(s) · Temps plein ${fmtPct(pctTempsPlein)}`} />
             </div>
             {/* 25/08 (Olivier) : "tu mets en ligne 2 : le decompte des AFO,
                 encadrement et ASFP en dernier" -- grille séparée plutôt qu'un
@@ -312,9 +311,16 @@ export default function StatsEquipeView() {
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
             </div>
             <div style={card}>
-              <div style={sectionTitle}>🕒 VT refusés</div>
-              <Tuile label="Jours refusés (équipe)" valeur={data.vtRefuses.nbJours} sousLabel={`${data.vtRefuses.nbAgentsConcernes} agent(s) concerné(s)`} large />
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
+              {/* 29/08 (Olivier) : "deplace le % de temps partiel et met le
+                  avec vt refusé. c'est plus loqique" -- les deux parlent de
+                  VT (temps partiel), regroupés dans la même carte plutôt que
+                  Temps partiel isolé dans "Vue d'ensemble équipe". */}
+              <div style={sectionTitle}>🕒 VT (temps partiel)</div>
+              <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                <Tuile label="Temps partiel" valeur={fmtPct(data.headcounts.pctTempsPartiel)} sousLabel={`${data.headcounts.nbTempsPartiel} agent(s) · Temps plein ${fmtPct(pctTempsPlein)}`} large />
+                <Tuile label="Jours refusés (équipe)" valeur={data.vtRefuses.nbJours} sousLabel={`${data.vtRefuses.nbAgentsConcernes} agent(s) concerné(s)`} large />
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Jours refusés : chiffre global anonymisé — aucun détail par agent.</div>
             </div>
           </div>
 
