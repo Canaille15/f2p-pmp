@@ -11,6 +11,8 @@ async function getAll(req, res) {
               pa.familles_hab AS famille,
               pa.is_reserve,
               pa.is_afo,
+              pa.is_dpx,
+              pa.is_adjoint_dpx,
               au.is_admin,
               au.pin_hash IS NOT NULL AS has_pin,
               (SELECT rh.type_roulement FROM roulement_historique rh
@@ -55,7 +57,7 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, fonction, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, famille, nouveau_cp, is_admin, is_reserve, is_afo } = req.body;
+  const { email, telephone, fonction, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, famille, nouveau_cp, is_admin, is_reserve, is_afo, is_dpx, is_adjoint_dpx } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
@@ -68,7 +70,7 @@ async function update(req, res) {
     if (prenom !== undefined) { fields.push('prenom = ?'); values.push(prenom); }
     if (poste  !== undefined) { fields.push('poste = ?');  values.push(poste); }
   }
-  if (!fields.length && famille === undefined && is_admin === undefined && is_reserve === undefined && is_afo === undefined) return res.status(400).json({ error: 'Rien à modifier' });
+  if (!fields.length && famille === undefined && is_admin === undefined && is_reserve === undefined && is_afo === undefined && is_dpx === undefined && is_adjoint_dpx === undefined) return res.status(400).json({ error: 'Rien à modifier' });
   values.push(cp);
   try {
     if (fields.length) {
@@ -82,6 +84,12 @@ async function update(req, res) {
     }
     if (req.agent.is_admin && is_afo !== undefined) {
       await pool.query('UPDATE profil_agent SET is_afo = ? WHERE cp_agent = ?', [is_afo ? 1 : 0, cp]);
+    }
+    if (req.agent.is_admin && is_dpx !== undefined) {
+      await pool.query('UPDATE profil_agent SET is_dpx = ? WHERE cp_agent = ?', [is_dpx ? 1 : 0, cp]);
+    }
+    if (req.agent.is_admin && is_adjoint_dpx !== undefined) {
+      await pool.query('UPDATE profil_agent SET is_adjoint_dpx = ? WHERE cp_agent = ?', [is_adjoint_dpx ? 1 : 0, cp]);
     }
     if (req.agent.is_admin && is_admin !== undefined) {
       await pool.query('UPDATE auth SET is_admin = ? WHERE cp_agent = ?', [is_admin ? 1 : 0, cp]);

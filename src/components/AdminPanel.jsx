@@ -47,6 +47,10 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   // Filtre "Admin" : même principe, complète le trio Réserve/AFO (16/08) —
   // sert aussi de "liste des admins" (cliquer réduit la grille aux admins).
   const [adminOnly, setAdminOnly] = useState(false);
+  // Filtres "DPX"/"Assistant DPX" (28/08) : même principe, orthogonaux au
+  // reste — un DPX garde sa famille/son statut Réserve régionale de base.
+  const [dpxOnly, setDpxOnly] = useState(false);
+  const [adjointDpxOnly, setAdjointDpxOnly] = useState(false);
   // Statut actif/quitté (16/08) — par défaut on ne montre que les actifs,
   // un agent quitté reste consultable via ce filtre (historique jamais supprimé).
   const [statutFilter, setStatutFilter] = useState("actif");
@@ -81,12 +85,16 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
     const matchReserve = !reserveOnly || a.is_reserve;
     const matchAfo = !afoOnly || a.is_afo;
     const matchAdmin = !adminOnly || a.is_admin;
+    const matchDpx = !dpxOnly || a.is_dpx;
+    const matchAdjointDpx = !adjointDpxOnly || a.is_adjoint_dpx;
     const matchStatut = (a.statut || "actif") === statutFilter;
-    return matchSearch && matchFamille && matchReserve && matchAfo && matchAdmin && matchStatut;
+    return matchSearch && matchFamille && matchReserve && matchAfo && matchAdmin && matchDpx && matchAdjointDpx && matchStatut;
   });
   const nbReserve = agents.filter(a => a.is_reserve && (a.statut || "actif") === "actif").length;
   const nbAfo = agents.filter(a => a.is_afo && (a.statut || "actif") === "actif").length;
   const nbAdmin = agents.filter(a => a.is_admin && (a.statut || "actif") === "actif").length;
+  const nbDpx = agents.filter(a => a.is_dpx && (a.statut || "actif") === "actif").length;
+  const nbAdjointDpx = agents.filter(a => a.is_adjoint_dpx && (a.statut || "actif") === "actif").length;
   const nbQuittes = agents.filter(a => a.statut === "quitte").length;
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -153,6 +161,31 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       onAgentsChanged?.();
     } catch (e) {
       afficherMsg("err", e.message || "Erreur modification statut AFO");
+    }
+  }
+  // 28/08, demandé par Olivier ("mettre une case pour dpx et assistant dpx
+  // dans les fiches, pour identifier les gens et leurs poste") — remplace,
+  // pour le décompte "Encadrement" de Stat'Equip, l'ancien calcul basé sur
+  // les habilitations (self-service) : un rôle réel validé par un admin,
+  // même principe que Réserve régionale/AFO ci-dessus.
+  async function handleToggleDpx(agent) {
+    try {
+      await api.agents.update(agent.cp, { is_dpx: !agent.is_dpx });
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} ${agent.is_dpx ? "n'est plus" : "est maintenant"} DPX`);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur modification statut DPX");
+    }
+  }
+  async function handleToggleAdjointDpx(agent) {
+    try {
+      await api.agents.update(agent.cp, { is_adjoint_dpx: !agent.is_adjoint_dpx });
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} ${agent.is_adjoint_dpx ? "n'est plus" : "est maintenant"} Assistant DPX`);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur modification statut Assistant DPX");
     }
   }
   async function handleToggleRoulement(agent) {
@@ -276,6 +309,24 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               }}>
               👑 Admin ({nbAdmin})
             </button>
+            <button onClick={() => setDpxOnly(v => !v)}
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: dpxOnly ? "#0f766e" : "var(--bg-page)",
+                color: dpxOnly ? "#fff" : "var(--text-secondary)"
+              }}>
+              🧭 DPX ({nbDpx})
+            </button>
+            <button onClick={() => setAdjointDpxOnly(v => !v)}
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: adjointDpxOnly ? "#0d9488" : "var(--bg-page)",
+                color: adjointDpxOnly ? "#fff" : "var(--text-secondary)"
+              }}>
+              🧭 Assistant DPX ({nbAdjointDpx})
+            </button>
             <button onClick={() => setStatutFilter(s => s === "actif" ? "quitte" : "actif")}
               style={{
                 padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
@@ -384,6 +435,24 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                     borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
                   }}>
                   🎓 Formateur AFO{a.is_afo ? " ✓" : ""}
+                </button>
+                <button onClick={() => handleToggleDpx(a)}
+                  style={{
+                    background: a.is_dpx ? "#ccfbf1" : "#f8fafc",
+                    color: a.is_dpx ? "#0f766e" : "#94a3b8",
+                    border: `1px solid ${a.is_dpx ? "#99f6e4" : "#e2e8f0"}`,
+                    borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                  }}>
+                  🧭 DPX{a.is_dpx ? " ✓" : ""}
+                </button>
+                <button onClick={() => handleToggleAdjointDpx(a)}
+                  style={{
+                    background: a.is_adjoint_dpx ? "#ccfbf1" : "#f8fafc",
+                    color: a.is_adjoint_dpx ? "#0d9488" : "#94a3b8",
+                    border: `1px solid ${a.is_adjoint_dpx ? "#99f6e4" : "#e2e8f0"}`,
+                    borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                  }}>
+                  🧭 Assistant DPX{a.is_adjoint_dpx ? " ✓" : ""}
                 </button>
                 <button onClick={() => handleToggleRoulement(a)}
                   style={{
@@ -513,7 +582,7 @@ function ModalCreer({ onConfirm, onClose }) {
 // ─── MODAL SUPPRIMER ─────────────────────────────────────────────────────────
 
 function ModalModifier({ agent, onConfirm, onClose }) {
-  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, is_afo: agent.is_afo || false, telephone: "", email: "" });
+  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, is_afo: agent.is_afo || false, is_dpx: agent.is_dpx || false, is_adjoint_dpx: agent.is_adjoint_dpx || false, telephone: "", email: "" });
   const [nouveauCp, setNouveauCp] = useState(agent.cp || "");
   const [err, setErr] = useState("");
   const [coordLoading, setCoordLoading] = useState(true);
@@ -556,7 +625,7 @@ function ModalModifier({ agent, onConfirm, onClose }) {
       return setErr(e.message || "Erreur sauvegarde habilitations");
     }
     setHabSaving(false);
-    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, is_afo: form.is_afo, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
+    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, is_afo: form.is_afo, is_dpx: form.is_dpx, is_adjoint_dpx: form.is_adjoint_dpx, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
   }
 
   return (
@@ -638,6 +707,30 @@ function ModalModifier({ agent, onConfirm, onClose }) {
               color: form.is_afo ? "#fff" : "#64748b"
             }}>
             🎓 {form.is_afo ? "Formateur AFO" : "Pas formateur"}
+          </button>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>DPX</div>
+          <button onClick={() => setForm(p => ({ ...p, is_dpx: !p.is_dpx }))}
+            style={{
+              width: "100%", padding: "8px", border: "none", borderRadius: 8, cursor: "pointer",
+              fontWeight: 700, fontSize: 13,
+              background: form.is_dpx ? "#0f766e" : "#f1f5f9",
+              color: form.is_dpx ? "#fff" : "#64748b"
+            }}>
+            🧭 {form.is_dpx ? "DPX" : "Pas DPX"}
+          </button>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Assistant DPX</div>
+          <button onClick={() => setForm(p => ({ ...p, is_adjoint_dpx: !p.is_adjoint_dpx }))}
+            style={{
+              width: "100%", padding: "8px", border: "none", borderRadius: 8, cursor: "pointer",
+              fontWeight: 700, fontSize: 13,
+              background: form.is_adjoint_dpx ? "#0d9488" : "#f1f5f9",
+              color: form.is_adjoint_dpx ? "#fff" : "#64748b"
+            }}>
+            🧭 {form.is_adjoint_dpx ? "Assistant DPX" : "Pas assistant DPX"}
           </button>
         </div>
         <div>

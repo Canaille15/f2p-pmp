@@ -105,7 +105,8 @@ async function getStats(req, res) {
     // 18/08 avec l'ancienne requête `hc` séparée) — évite deux comptages qui
     // pourraient diverger.
     const [ageRows] = await pool.query(
-      `SELECT a.cp, a.grade, COALESCE(pa.is_reserve,0) AS is_reserve, COALESCE(pa.is_afo,0) AS is_afo
+      `SELECT a.cp, a.grade, COALESCE(pa.is_reserve,0) AS is_reserve, COALESCE(pa.is_afo,0) AS is_afo,
+              COALESCE(pa.is_dpx,0) AS is_dpx, COALESCE(pa.is_adjoint_dpx,0) AS is_adjoint_dpx
        FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
     );
     const totalAgents = ageRows.length;
@@ -114,19 +115,17 @@ async function getStats(req, res) {
 
     // ─── Encadrement (DPX/Adj DPX) mis à part (18/08, demande d'Olivier :
     // "il faut mettre a par les dpx et assisant [...] et tu recalcule bien
-    // les effectifs des autres") — basé sur la table `habilitation` (même
-    // source que "Agents habilités par poste"), pas un flag dédié sur
-    // l'agent. Un agent habilité DPX/Adj DPX est retiré du décompte "Agents
-    // équipe" (recalculé net, via une différence d'ensembles pour rester
-    // correct même dans le cas rare d'un chevauchement avec Réserve
-    // régionale) — jamais retiré du total "Agents global", qui reste un vrai
-    // total de tous les agents.
-    const CODES_ENCADREMENT = ['PIDPXJ', 'PIASSJ', 'PADPXJ'];
-    const [encadrementRows] = await pool.query(
-      `SELECT DISTINCT cp_agent FROM habilitation WHERE code_poste IN (?,?,?) AND date_fin IS NULL`,
-      CODES_ENCADREMENT
-    );
-    const encadrementSet = new Set(encadrementRows.map(r => r.cp_agent));
+    // les effectifs des autres") — était basé sur la table `habilitation`
+    // (self-service, l'agent coche lui-même) jusqu'au 28/08. Remplacé, sur
+    // décision explicite d'Olivier, par 2 cases dédiées `is_dpx`/
+    // `is_adjoint_dpx` sur `profil_agent` (admin-only, comme is_reserve/
+    // is_afo) — un rôle réel validé par un admin plutôt qu'une simple
+    // qualification auto-déclarée, jugé plus fiable pour ce décompte. Un
+    // agent DPX/Adj DPX est retiré du décompte "Agents équipe" (recalculé
+    // net, via une différence d'ensembles pour rester correct même dans le
+    // cas rare d'un chevauchement avec Réserve régionale) — jamais retiré du
+    // total "Agents global", qui reste un vrai total de tous les agents.
+    const encadrementSet = new Set(ageRows.filter(r => r.is_dpx || r.is_adjoint_dpx).map(r => r.cp));
     const totalEncadrement = encadrementSet.size;
     // ASFP (25/08, agent générique "Assistant Formation Professionnel",
     // demande d'Olivier : "il ne faut pas l'ajouter au nombre des AFO. Mais
