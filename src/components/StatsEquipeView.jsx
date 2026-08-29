@@ -622,7 +622,7 @@ function FormationSection({ formationInterne, etudePoste }) {
         <GroupeLabel>Sessions AFO (formation interne)</GroupeLabel>
         <div style={{ display: "flex", gap: 20 }}>
           <Tuile label="Jours de formation" valeur={formationInterne.nbJours} large />
-          <Tuile label="Agents formés" valeur={formationInterne.nbAgentsFormes} large />
+          <Tuile label="Agents formés" valeur={formationInterne.nbAgentsFormes} sousLabel={`${formationInterne.pctAgentsFormes ?? 0}% des agents cette année`} large />
         </div>
       </div>
 

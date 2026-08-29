@@ -242,7 +242,15 @@ async function getStats(req, res) {
        WHERE YEAR(fs.date_session) = ? AND fs.statut IN ('lancee','terminee') AND ${PRESENCE_REELLE}`,
       [year]
     );
-    const formationInterne = { nbJours: joursFormation.n || 0, nbAgentsFormes: agentsFormes.n || 0 };
+    // pctAgentsFormes (29/08, Olivier : "je veux savoir en pourcentage combien
+    // d'agent on recu une formation cette annee") -- sur totalAgents (déjà
+    // net d'ASFP depuis le correctif du jour), pas totalEquipe : une
+    // formation peut concerner n'importe quel agent réel, Réserve régionale
+    // et Encadrement inclus, jamais restreinte à "l'équipe" au sens de l'axe
+    // Réserve/Roulement.
+    const nbAgentsFormesInt = agentsFormes.n || 0;
+    const pctAgentsFormes = totalAgents > 0 ? Math.round((nbAgentsFormesInt / totalAgents) * 1000) / 10 : 0;
+    const formationInterne = { nbJours: joursFormation.n || 0, nbAgentsFormes: nbAgentsFormesInt, pctAgentsFormes };
 
     // ─── Étude de poste (27/08, refondu le même jour) ───────────────────────
     // "1 agent forme sur 1 poste et 11 jours d'etudes de pote [...] un global
