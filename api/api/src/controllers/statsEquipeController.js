@@ -109,7 +109,16 @@ async function getStats(req, res) {
               COALESCE(pa.is_dpx,0) AS is_dpx, COALESCE(pa.is_adjoint_dpx,0) AS is_adjoint_dpx
        FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
     );
-    const totalAgents = ageRows.length;
+    // ASFP (29/08) : agent générique (jamais un vrai membre d'équipe), déjà
+    // exclu de totalAfo depuis le 25/08 mais pas des autres agrégats -- il
+    // se retrouvait donc compté à tort dans "Agents global" et "Agents
+    // équipe" (et par ricochet dans l'axe Réserve/Roulement, comme "Roulement"
+    // puisqu'aucun de ses flags is_reserve/is_dpx/is_adjoint_dpx n'est posé).
+    // Corrigé au point le plus en amont possible : ageRows lui-même reste
+    // INCHANGÉ (totalAfo/totalAsfp plus bas ont encore besoin d'y retrouver
+    // ASFP), seuls les 2 agrégats qui représentent un vrai décompte de
+    // personnes (totalAgents, equipeSet) l'excluent désormais explicitement.
+    const totalAgents = ageRows.filter(r => r.cp !== 'ASFP').length;
     const reserveSet = new Set(ageRows.filter(r => r.is_reserve).map(r => r.cp));
     const totalReserve = reserveSet.size;
 
@@ -165,7 +174,7 @@ async function getStats(req, res) {
     // "Agents équipe" = tout le monde sauf Réserve régionale ET Encadrement,
     // par différence d'ensembles (jamais une simple soustraction de totaux,
     // qui compterait deux fois un éventuel agent à la fois réserve et DPX).
-    const equipeSet = new Set(ageRows.map(r => r.cp));
+    const equipeSet = new Set(ageRows.filter(r => r.cp !== 'ASFP').map(r => r.cp));
     reserveSet.forEach(cp => equipeSet.delete(cp));
     encadrementSet.forEach(cp => equipeSet.delete(cp));
     const totalEquipe = equipeSet.size;
