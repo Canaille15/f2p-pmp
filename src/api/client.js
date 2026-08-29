@@ -435,7 +435,18 @@ result[`${row.agent_id || agentId}-${date}`] = {
         heure_debut: estNuit ? '22:15' : null,
         heure_fin: estNuit ? '06:17' : null,
         prive: false,
-        note: 'debut_nuit',
+        // 29/08 -- bug corrigé (Option A, Olivier) : pour une vraie Nuit,
+        // 'debut_nuit' reste TOUJOURS posé (que ce soit "RP+Nuit" -- distingue
+        // p2 de p1 -- ou "Nuit seule" -- getSchedule relit alors p1=p2="N" par
+        // construction, mécanisme dont isNuitSeule dépend, jamais touché ici).
+        // Pour un Congé (equipe2='CA'/'CP') qui redevient période unique
+        // (ex: le RP/RPP/RU/... qui le portait a été retiré ensuite), garder
+        // 'debut_nuit' ferait relire p1=p2="CA" -- un Congé fantôme compté en
+        // double ET jamais réellement supprimable ("Le CA doit ... redevenir
+        // tout seul [...] attention au doublon"). Sans la note, getSchedule
+        // relit ce Congé comme une période 1 normale, standalone, exactement
+        // comme si l'agent l'avait saisi seul depuis le départ.
+        note: estNuit ? 'debut_nuit' : (estPeriodeUnique ? null : 'debut_nuit'),
         // Si periode unique, elle fait office de periode N°1 : elle doit
         // porter la note (sinon la note n'a nulle part ou etre sauvegardee).
         ...(estPeriodeUnique ? {note_perso: entry.notePerso || null} : {}),

@@ -37,6 +37,16 @@ const CODES_REPOS = [
 // suivait simplement celui du tableau ci-dessus.
 const CODES_REPOS_LIGNE1 = ["RP","RPP","RU","RQ","RN","TC","TY","NU"];
 
+// Congé combiné à un repos (25/08, Olivier) : "le conge remplace la nuit
+// qu'il aurait faire et qu'il a posé" -- ces codes peuvent porter un Congé
+// dans le 2e créneau (equipe2, même emplacement que Nuit) au lieu que le
+// Congé remplace le créneau principal. Promue au niveau module (29/08,
+// était déclarée dans le composant, après congeStatutInitial qui en avait
+// besoin -- déplacée pour être utilisable par le détachement auto ET par
+// toggleType1, sans dépendre de l'ordre des déclarations dans le composant).
+// Mirror exact de REPOS_AVEC_CONGE_SOIR (App.jsx) -- garder synchronisées.
+const REPOS_POUR_CONGE_EQUIPE2 = ["RP","RPP","RU","RQ","TC","TY","RN","VT"];
+
 const CODES_TRAVAIL = [
   { code:"M",  label:"Matin",    heures:"06h10–14h17", color:"#8B0000" },
   { code:"AM", label:"Soirée",   heures:"14h05–22h17", color:"#8B0000" },
@@ -334,8 +344,15 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const jourEtaitVideAtOpen = !(entry?.equipe || entry?.equipe2);
   const trackingExistant = agentProfiles?.[agKey]?.congesDemandes?.[date];
   const codeActuelAuOuverture = entry?.equipe || entry?.equipe2;
+  // 29/08 -- bug corrigé : le détachement ne doit PAS s'appliquer si le code
+  // déjà présent est un repos combinable (RP/RPP/RU/RQ/TC/TY/RN/VT), puisque
+  // c'est précisément la combinaison volontaire Congé+repos qu'on autorise
+  // depuis le 25/08 -- même exception déjà en place côté App.jsx
+  // (getCongesDemandeesAnnee, ligne ~319 "!REPOS_AVEC_CONGE_SOIR.includes")
+  // mais jamais reportée ici, ce qui faisait perdre le suivi Demandé/Refusé
+  // dès l'ouverture du popup sur un jour RP/RPP/etc. déjà présent.
   const congeStatutInitial = (trackingExistant && trackingExistant.statut &&
-      !(trackingExistant.jourEtaitVide && codeActuelAuOuverture))
+      !(trackingExistant.jourEtaitVide && codeActuelAuOuverture && !REPOS_POUR_CONGE_EQUIPE2.includes(codeActuelAuOuverture)))
     ? trackingExistant.statut : null;
   const [congeStatut, setCongeStatut] = useState(congeStatutInitial);
   const [showConges, setShowConges] = useState(false);
@@ -391,6 +408,18 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
       setPoste1("");
       setHoraires1("");
     } else {
+      // 29/08 -- bug corrigé : un Congé déjà Accordé en créneau principal
+      // (type1==="CA") était silencieusement écrasé en cliquant un repos
+      // combinable (RP/RPP/RU/RQ/TC/TY/RN/VT), perdant le Congé -- alors que
+      // le sens inverse (repos posé en premier, puis Congé) route déjà
+      // correctement vers le 2e créneau (accorderConge, plus bas). Routage
+      // symétrique : le Congé bascule dans typeN au lieu d'être perdu --
+      // jamais si typeN porte déjà une vraie Nuit (ne jamais l'écraser, cas
+      // hors scope de cette demande, laissé tel quel comme avant).
+      if (type1 === "CA" && REPOS_POUR_CONGE_EQUIPE2.includes(code) && (!typeN || typeN === "CA")) {
+        setTypeN("CA");
+        setPosteN("");
+      }
       setType1(code);
       setHoraires1(["M","AM","J"].includes(code) ? (HORAIRES_DEFAUT[code] || "") : "");
       setPoste1("");
@@ -405,7 +434,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   // principal porte déjà un de ces codes, "Congés · Accordé" route le Congé
   // dans le 2e créneau (equipe2, même emplacement que Nuit ↓) au lieu de
   // remplacer le créneau principal -- la journée RP/RU/... reste inchangée.
-  const REPOS_POUR_CONGE_EQUIPE2 = ["RP","RPP","RU","RQ","TC","TY","RN","VT"];
+  // (REPOS_POUR_CONGE_EQUIPE2 promue au niveau module le 29/08, voir en tête de fichier.)
   const congeAccorde = type1 === "CA" || typeN === "CA";
   const accorderConge = () => {
     setCongeStatut(null);
