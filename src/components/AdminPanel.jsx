@@ -154,11 +154,16 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
           page.drawLine({ start: { x: xSepTel, y: tableTop - headerH }, end: { x: xSepTel, y: tableBottom }, thickness: 0.75, color: gridColor });
         }
 
+        // 29/08, suite immédiate (Olivier : "dans le tri par prenom, il faut
+        // lire le prenom en 1er") -- l'ordre affiché (Nom Prénom / Prénom
+        // Nom) suit désormais le critère de tri de la page, pour rester
+        // cohérent avec l'ordre alphabétique réellement appliqué.
+        const parPrenom = critereTri === "prénom";
         const headerFontSize = Math.min(9, fontSize);
         for (let c = 0; c < nbCols; c++) {
           const x = MARGIN + c * (colW + GAP) + 6;
           const yH = tableTop - 14;
-          page.drawText("NOM Prénom", { x, y: yH, size: headerFontSize, font: fontBold, color: rgb(0.4, 0.44, 0.5) });
+          page.drawText(parPrenom ? "Prénom NOM" : "NOM Prénom", { x, y: yH, size: headerFontSize, font: fontBold, color: rgb(0.4, 0.44, 0.5) });
           const xTel = MARGIN + c * (colW + GAP) + colW - phoneReserve + 6;
           page.drawText("Téléphone", { x: xTel, y: yH, size: headerFontSize, font: fontBold, color: rgb(0.4, 0.44, 0.5) });
         }
@@ -171,7 +176,7 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
           const x = colX + 6;
           const rowTop = tableTop - headerH - row * rowH;
           const y = rowTop - rowH * 0.68;
-          const nomComplet = `${a.nom || ""} ${a.prenom || ""}`.trim();
+          const nomComplet = parPrenom ? `${a.prenom || ""} ${a.nom || ""}`.trim() : `${a.nom || ""} ${a.prenom || ""}`.trim();
           page.drawText(nomComplet.length > maxChars ? nomComplet.slice(0, maxChars - 1) + "…" : nomComplet, { x, y, size: fontSize, font, color: rgb(0.12, 0.15, 0.2) });
           if (a.telephone) {
             const telW = font.widthOfTextAtSize(a.telephone, fontSize);
