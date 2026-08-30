@@ -10819,6 +10819,13 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
   const [telephone,setTelephone]=useState("");
   const [fonction,setFonction]=useState("");
   const [visibleAnnuaire,setVisibleAnnuaire]=useState(true);
+  // pdf_annuaire_visible (29/08, demandé par Olivier) : indépendant de
+  // visibleAnnuaire -- un agent peut refuser d'apparaître dans l'Annuaire de
+  // l'appli tout en acceptant son numéro sur l'annuaire téléphonique
+  // imprimé par les admins (ou l'inverse). Désactivé par défaut (opt-in),
+  // comme les autres flags admin -- ici pris tel quel depuis la base, jamais
+  // un true par défaut contrairement à visibleAnnuaire.
+  const [visiblePdf,setVisiblePdf]=useState(false);
   const [coordBusy,setCoordBusy]=useState(false);
   const [coordMsg,setCoordMsg]=useState(null);
   const [coordLoadError,setCoordLoadError]=useState(false);
@@ -10830,6 +10837,7 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
       setTelephone(full?.telephone||"");
       setFonction(full?.fonction||"");
       setVisibleAnnuaire(full?.annuaire_visible===undefined||full?.annuaire_visible===null?true:!!full.annuaire_visible);
+      setVisiblePdf(!!full?.pdf_annuaire_visible);
     }).catch(()=>{setCoordLoadError(true);});
   };
   useEffect(()=>{ chargerCoordonnees(); },[currentAgent?.id]);
@@ -10865,6 +10873,16 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
       await api.annuaire.setVisible(currentAgent.id,nouvel);
     }catch(err){
       setVisibleAnnuaire(!nouvel);
+      setCoordMsg({type:"error",text:"Erreur lors du changement de visibilité"});
+    }
+  };
+  const toggleVisiblePdf=async()=>{
+    const nouvel=!visiblePdf;
+    setVisiblePdf(nouvel);
+    try{
+      await api.annuaire.setPdfVisible(currentAgent.id,nouvel);
+    }catch(err){
+      setVisiblePdf(!nouvel);
       setCoordMsg({type:"error",text:"Erreur lors du changement de visibilité"});
     }
   };
@@ -10924,6 +10942,22 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
             <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",position:"absolute",top:3,
               left:visibleAnnuaire?23:3,transition:"left .15s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
           </button>
+        </div>
+        {/* 29/08 (Olivier) : bouton indépendant du précédent -- un agent peut
+            refuser d'apparaître dans l'Annuaire de l'appli tout en acceptant
+            son numéro sur l'annuaire téléphonique imprimé par les admins,
+            ou l'inverse. */}
+        <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{fontSize:13,fontWeight:600,color:"#334155"}}>Visible sur l'annuaire téléphonique imprimé (PDF)</div>
+            <button onClick={toggleVisiblePdf}
+              style={{width:48,height:28,borderRadius:14,border:"none",cursor:"pointer",flexShrink:0,
+              background:visiblePdf?"#0C447C":"#e2e8f0",position:"relative",transition:"background .15s"}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",position:"absolute",top:3,
+                left:visiblePdf?23:3,transition:"left .15s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+            </button>
+          </div>
+          <div style={{fontSize:11,color:"#94a3b8",marginTop:6}}>Indépendant du réglage ci-dessus. Si activé, ton nom et ton numéro peuvent figurer sur la feuille imprimée par les admins pour affichage au poste — même désactivé, ton nom y reste (case téléphone laissée vide).</div>
         </div>
       </div>
     </div>

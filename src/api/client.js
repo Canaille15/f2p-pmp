@@ -986,9 +986,16 @@ export const annuaire = {
   setVisible: (cp, visible) =>
     apiFetch(`/agents/${cp}`, { method: 'PATCH', body: JSON.stringify({ annuaire_visible: visible ? 1 : 0 }) }),
 
+  /** Activer/désactiver sa propre visibilité sur l'annuaire téléphonique imprimé (PDF, 29/08) -- indépendant de setVisible */
+  setPdfVisible: (cp, visible) =>
+    apiFetch(`/agents/${cp}`, { method: 'PATCH', body: JSON.stringify({ pdf_annuaire_visible: visible ? 1 : 0 }) }),
+
   /** Mettre à jour ses propres email/téléphone (réutilise la route agents existante) */
   updateMesCoordonnees: (cp, data) =>
     apiFetch(`/agents/${cp}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  /** Données pour le générateur PDF de l'annuaire téléphonique (admin, 29/08) */
+  getPdfData: () => apiFetch('/annuaire/agents-pdf'),
 };
 
 // ─── EXPORT PRINCIPAL ─────────────────────────────────────────────────────────

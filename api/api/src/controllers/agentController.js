@@ -57,13 +57,17 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, fonction, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, famille, nouveau_cp, is_admin, is_reserve, is_afo, is_dpx, is_adjoint_dpx } = req.body;
+  const { email, telephone, fonction, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, pdf_annuaire_visible, famille, nouveau_cp, is_admin, is_reserve, is_afo, is_dpx, is_adjoint_dpx } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
   if (fonction !== undefined)  { fields.push('fonction = ?');  values.push(fonction || null); }
   if (partage_previsionnel !== undefined) { fields.push('partage_previsionnel = ?'); values.push(partage_previsionnel ? 1 : 0); }
   if (annuaire_visible !== undefined) { fields.push('annuaire_visible = ?'); values.push(annuaire_visible ? 1 : 0); }
+  // pdf_annuaire_visible (29/08) : "Visible sur l'annuaire téléphonique
+  // imprimé (PDF)" -- indépendant d'annuaire_visible (self-service, même
+  // permission -- soi-même ou admin, cf. le garde-fou en tête de fonction).
+  if (pdf_annuaire_visible !== undefined) { fields.push('pdf_annuaire_visible = ?'); values.push(pdf_annuaire_visible ? 1 : 0); }
   if (req.agent.is_admin) {
     if (grade  !== undefined) { fields.push('grade = ?');  values.push(grade); }
     if (nom    !== undefined) { fields.push('nom = ?');    values.push(nom); }

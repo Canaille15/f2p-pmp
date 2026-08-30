@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from "react";
 import api from "../api/client";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   const [statutFilter, setStatutFilter] = useState("actif");
   const [modal, setModal]             = useState(null); // "create" | { type:"delete"|"reset", agent }
   const [msg, setMsg]                 = useState(null); // { type:"ok"|"err", text }
+  const [pdfBusy, setPdfBusy]         = useState(false);
 
   // ─── Chargement ─────────────────────────────────────────────────────────────
   useEffect(() => { charger(); }, []);
@@ -72,6 +74,72 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   function afficherMsg(type, text) {
     setMsg({ type, text });
     setTimeout(() => setMsg(null), 3500);
+  }
+
+  // ─── Annuaire téléphonique imprimable (29/08, demandé par Olivier) ─────────
+  // 2 pages A4 (tri par nom, puis tri par prénom -- pour retrouver quelqu'un
+  // quel que soit le côté de la feuille recto/verso qu'on regarde). Tous les
+  // agents actifs sont listés (nom+prénom) ; le téléphone n'est imprimé que
+  // si l'agent a explicitement activé "Visible sur l'annuaire téléphonique
+  // imprimé" dans son profil (case laissée vide sinon -- jamais l'agent
+  // retiré de la liste). Génération 100% côté navigateur (pdf-lib, comme les
+  // 4 autres générateurs du projet) -- pas de charge serveur.
+  async function genererAnnuairePdf() {
+    setPdfBusy(true);
+    try {
+      const liste = await api.annuaire.getPdfData();
+      if (!liste || !liste.length) { afficherMsg("err", "Aucun agent à imprimer"); return; }
+
+      const pdfDoc = await PDFDocument.create();
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const PAGE_W = 595.28, PAGE_H = 841.89, MARGIN = 40, GAP = 18;
+      const dateGen = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+
+      function dessinerPage(listeTriee, critereTri) {
+        const page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+        page.drawText("Annuaire téléphonique", { x: MARGIN, y: PAGE_H - 44, size: 17, font: fontBold, color: rgb(0.05, 0.27, 0.5) });
+        page.drawText(`Tri par ${critereTri} — généré le ${dateGen}`, { x: MARGIN, y: PAGE_H - 62, size: 9.5, font, color: rgb(0.4, 0.44, 0.5) });
+        page.drawLine({ start: { x: MARGIN, y: PAGE_H - 72 }, end: { x: PAGE_W - MARGIN, y: PAGE_H - 72 }, thickness: 1, color: rgb(0.85, 0.87, 0.9) });
+
+        const startY = PAGE_H - 96;
+        const rowH = 16;
+        const usableH = startY - MARGIN;
+        const rowsPerCol = Math.max(1, Math.floor(usableH / rowH));
+        const nbCols = Math.max(1, Math.ceil(listeTriee.length / rowsPerCol));
+        const fontSize = nbCols <= 2 ? 9 : nbCols === 3 ? 8 : 7;
+        const colW = (PAGE_W - 2 * MARGIN - (nbCols - 1) * GAP) / nbCols;
+
+        listeTriee.forEach((a, i) => {
+          const col = Math.floor(i / rowsPerCol);
+          const row = i % rowsPerCol;
+          const x = MARGIN + col * (colW + GAP);
+          const y = startY - row * rowH;
+          const nomComplet = `${a.nom || ""} ${a.prenom || ""}`.trim();
+          page.drawText(nomComplet.length > 34 ? nomComplet.slice(0, 33) + "…" : nomComplet, { x, y, size: fontSize, font, color: rgb(0.12, 0.15, 0.2) });
+          if (a.telephone) {
+            const telW = font.widthOfTextAtSize(a.telephone, fontSize);
+            page.drawText(a.telephone, { x: x + colW - telW, y, size: fontSize, font, color: rgb(0.12, 0.15, 0.2) });
+          }
+        });
+      }
+
+      dessinerPage([...liste].sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr")), "nom");
+      dessinerPage([...liste].sort((a, b) => (a.prenom || "").localeCompare(b.prenom || "", "fr")), "prénom");
+
+      const bytes = await pdfDoc.save();
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Annuaire_telephonique_${new Date().toISOString().slice(0, 10)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur lors de la génération du PDF");
+    } finally {
+      setPdfBusy(false);
+    }
   }
 
   // ─── Filtrage ────────────────────────────────────────────────────────────────
@@ -341,6 +409,14 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
             <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
               {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
             </span>
+            <button onClick={genererAnnuairePdf} disabled={pdfBusy}
+              style={{
+                background: "var(--bg-page)", color: "var(--text-secondary)", border: "1.5px solid var(--border)",
+                borderRadius: 8, padding: "8px 16px", cursor: pdfBusy ? "wait" : "pointer",
+                fontSize: 13, fontWeight: 700, whiteSpace: "nowrap"
+              }}>
+              {pdfBusy ? "⏳ Génération…" : "📇 Annuaire tél. (PDF)"}
+            </button>
             <button onClick={() => setModal("create")}
               style={{
                 background: "#1e293b", color: "#fff", border: "none",

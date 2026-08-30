@@ -40,6 +40,39 @@ async function getAgentsVisibles(req, res) {
   }
 }
 
+// ─── Annuaire téléphonique imprimable (PDF, admin) ───────────────────────────
+// 29/08, demandé par Olivier : liste TOUS les agents actifs (nom+prénom
+// toujours affichés, même sans consentement -- "le pdf met tous les nom et
+// la case reste vide s'il non pas activé l'affichage sur pdf") -- le
+// téléphone n'est déchiffré/renvoyé que si pdf_annuaire_visible=1, sinon
+// null (case vide côté PDF). Indépendant d'annuaire_visible (visibilité
+// dans l'Annuaire de l'appli) -- un agent peut choisir l'un sans l'autre.
+// Admin-only (route gardée par adminMiddleware) : contrairement à
+// getAgentsVisibles, un admin a besoin de voir TOUT LE MONDE pour imprimer
+// un annuaire à jour, pas seulement les agents déjà visibles dans l'appli.
+// ASFP (agent générique, jamais un vrai collègue à contacter) exclu comme
+// ailleurs dans l'appli.
+async function getAnnuairePdfData(req, res) {
+  try {
+    const [rows] = await pool.query(
+      `SELECT cp, nom, prenom, telephone, pdf_annuaire_visible
+       FROM agent
+       WHERE statut = 'actif' AND cp != 'ASFP'
+       ORDER BY nom, prenom`
+    );
+    const agentsList = rows.map(a => ({
+      cp: a.cp,
+      nom: a.nom,
+      prenom: a.prenom,
+      telephone: a.pdf_annuaire_visible ? decryptSafe(a.telephone) : null,
+    }));
+    res.json(agentsList);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
 // ─── UO (unités opérationnelles) ──────────────────────────────────────────────
 // Fiches par POSTE/FONCTION (ex: "Assistant RH"), pas par personne — le
 // titulaire actuel n'est qu'une info affichée dessus, à mettre à jour lors
@@ -178,6 +211,7 @@ async function deleteAccesRapide(req, res) {
 
 module.exports = {
   getAgentsVisibles,
+  getAnnuairePdfData,
   getUo, createUo, updateUo, deleteUo,
   getAccesRapide, createAccesRapide, updateAccesRapide, deleteAccesRapide,
 };
