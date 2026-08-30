@@ -864,6 +864,14 @@
         <p>Le bouton « 🚪 Départ » (visible sur chaque fiche active) ouvre une fenêtre avec un seul champ « Date de départ ». « Confirmer le départ » fait deux choses en une action : vide le planning strictement <em>après</em> cette date (garde tout jusqu'à cette date inclus — rien n'est jamais supprimé en cascade) et marque la fiche comme quittée avec la date enregistrée.</p>
         <p>La connexion de l'agent est bloquée immédiatement, sa fiche disparaît de la liste par défaut et devient accessible via le filtre « 🚪 Voir les quittés » — un bouton « ↺ Réactiver » y reste disponible (ne restaure pas le planning vidé). La vraie suppression définitive reste possible via un lien discret « Suppression définitive (irréversible, déconseillé) », réservée à un cas rare (fiche créée par erreur).</p>
       </div>
+
+      <h3>📇 Annuaire téléphonique imprimable (PDF)</h3>
+      <p>Le bouton « 📇 Annuaire tél. (PDF) » de la barre d'outils génère un document A4 prêt à imprimer, en recto/verso : la <span class="b">page 1</span> liste tous les agents actifs triés par nom, la <span class="b">page 2</span> les mêmes triés par prénom — pour retrouver quelqu'un quel que soit le côté de la feuille consulté.</p>
+      <div class="callout rule">
+        <div class="callout-title">📖 Qui apparaît, et avec quel numéro</div>
+        <p>Tous les agents actifs sont toujours listés, nom et prénom. Le numéro de téléphone n'est imprimé que si l'agent a lui-même activé « Visible sur l'annuaire téléphonique imprimé (PDF) » dans son <a href="#mon-profil">profil personnel</a> — ce réglage est désactivé par défaut et totalement indépendant de la visibilité dans l'Annuaire de l'appli. Un agent qui n'a pas donné son accord reste listé, avec la case téléphone laissée vide.</p>
+        <p>Génération entièrement locale (dans le navigateur de l'admin qui clique) — aucune charge sur le serveur.</p>
+      </div>
     </section>
 
     <hr class="divider">
@@ -916,6 +924,13 @@
 
       <h3>📇 Mes coordonnées (Annuaire)</h3>
       <p>Fonction, téléphone, email — visibles par tes collègues dans l'<a href="#annuaire">Annuaire</a>, sauf si tu désactives ta visibilité juste en dessous du formulaire.</p>
+
+      <div class="callout rule">
+        <div class="callout-title">📖 Deux visibilités bien distinctes pour ton numéro</div>
+        <p>Deux interrupteurs séparés, indépendants l'un de l'autre — active l'un, l'autre, les deux ou aucun, selon ce que tu souhaites :</p>
+        <p><span class="b">Visible dans l'Annuaire</span> — ton numéro apparaît dans l'Annuaire de l'appli, consultable par tes collègues connectés.</p>
+        <p><span class="b">Visible sur l'annuaire téléphonique imprimé (PDF)</span> — ton numéro peut figurer sur la feuille papier qu'un admin imprime pour affichage au poste (voir <a href="#admin">Admin</a>). <span class="b">Désactivé par défaut</span> — c'est à toi de l'activer explicitement si tu es d'accord. Même désactivé, ton nom reste toujours listé sur cette feuille (juste la case téléphone reste vide) : ça permet aux admins de savoir qui manque encore un accord, sans jamais publier un numéro sans ton consentement.</p>
+      </div>
 
       <h3>🔑 Changer mon PIN</h3>
       <p>PIN actuel + nouveau PIN (4 chiffres) + confirmation.</p>
