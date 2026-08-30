@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS agent (
 CREATE TABLE IF NOT EXISTS auth (
   id            INT UNSIGNED  NOT NULL AUTO_INCREMENT,
   cp_agent      VARCHAR(10)   NOT NULL,
-  pin_hash      VARCHAR(255)  NOT NULL COMMENT 'bcrypt coût 12, PIN 5 chiffres',
+  pin_hash      VARCHAR(255)  NOT NULL COMMENT 'bcrypt coût 12, PIN 4 chiffres',
   is_admin      TINYINT(1)    NOT NULL DEFAULT 0,
   last_login    DATETIME      DEFAULT NULL,
   created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,

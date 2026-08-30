@@ -22,7 +22,7 @@ async function issueSession(req, res, agent) {
 async function login(req, res) {
   const { cp, pin } = req.body;
   if (!cp || !pin) return res.status(400).json({ error: 'CP et PIN requis' });
-  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (5 chiffres)' });
+  if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (4 chiffres)' });
   try {
     const [rows] = await pool.query(
       `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, a.statut, au.pin_hash, au.is_admin, pa.is_afo, pa.familles_hab AS famille

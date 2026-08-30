@@ -10844,7 +10844,7 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
   if(!currentAgent)return(<div style={{textAlign:"center",padding:"60px 20px",color:"#94a3b8"}}><div style={{fontSize:40,marginBottom:12}}>🔄</div><div style={{fontSize:15,fontWeight:600,color:"#475569"}}>Sélectionne ton profil</div></div>);
   const soumettre=async()=>{
     setMsg(null);
-    if(!/^\d{4}$/.test(pinNouveau)){setMsg({type:"error",text:"Le nouveau PIN doit faire 5 chiffres"});return;}
+    if(!/^\d{4}$/.test(pinNouveau)){setMsg({type:"error",text:"Le nouveau PIN doit faire 4 chiffres"});return;}
     if(pinNouveau!==pinConfirme){setMsg({type:"error",text:"Les deux PIN ne correspondent pas"});return;}
     setBusy(true);
     try{
