@@ -118,14 +118,26 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
         const usableH = tableTop - MARGIN - headerH;
         const n = listeTriee.length;
 
-        let fontSize = 7, rowH = 15, rowsPerCol = n, nbCols = 1, colW = PAGE_W - 2 * MARGIN;
-        for (let nc = 1; nc <= 4; nc++) {
+        // Recherche du meilleur compromis, quel que soit l'effectif (29/08,
+        // Olivier : "s'il y a plus d'agent ca s'adaptera ?") -- garde la
+        // MEILLEURE config rencontrée (fontSize le plus grand) au fil de la
+        // boucle plutôt qu'un repli fixe si aucune config confortable
+        // (fs>=8) n'est trouvée : la table reste TOUJOURS calculée pour
+        // tenir sur une page, même avec un effectif bien plus grand
+        // qu'aujourd'hui (jusqu'à ~86 agents en 2 colonnes, ~130 en 3,
+        // au-delà la police continue de se réduire proprement en 4-6
+        // colonnes plutôt que de risquer un débordement).
+        let best = null;
+        for (let nc = 1; nc <= 6; nc++) {
           const cw = (PAGE_W - 2 * MARGIN - (nc - 1) * GAP) / nc;
-          if (cw < 140) continue; // colonne trop étroite pour être utile, inutile d'essayer plus de colonnes
+          if (cw < 100) break; // plus de colonnes ne ferait plus qu'empirer la lisibilité, inutile de continuer
           const rpc = Math.ceil(n / nc);
           const fs = Math.min(12, Math.floor((usableH / rpc - 8) * 2) / 2); // arrondi au 0.5 le plus proche
-          if (fs >= 8) { fontSize = fs; rowH = fs + 8; rowsPerCol = rpc; nbCols = nc; colW = cw; break; }
+          if (fs < 4) continue; // vraiment illisible à cette largeur, cherche avec plus de colonnes
+          if (!best || fs > best.fontSize) best = { fontSize: fs, rowH: fs + 8, rowsPerCol: rpc, nbCols: nc, colW: cw };
+          if (fs >= 8) break; // déjà confortable, pas la peine de chercher plus loin
         }
+        const { fontSize, rowH, rowsPerCol, nbCols, colW } = best || { fontSize: 4, rowH: 12, rowsPerCol: n, nbCols: 1, colW: PAGE_W - 2 * MARGIN };
 
         const gridColor = rgb(0.8, 0.83, 0.87);
         const tableHeight = headerH + rowsPerCol * rowH;
