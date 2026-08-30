@@ -96,30 +96,77 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       const PAGE_W = 595.28, PAGE_H = 841.89, MARGIN = 40, GAP = 18;
       const dateGen = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
 
+      // 29/08, suite immédiate (Olivier : "trace les ligne des colonne et
+      // agrandi un peu la police mais en gardant tout sur un page" puis
+      // "fait un liseré vertical aussi pour separer no et tel") -- grille
+      // complète (cadre + séparateurs de colonnes + liseré Nom/Téléphone +
+      // ligne sous chaque rangée). Recherche du MEILLEUR compromis colonnes/
+      // police : priorité au moins de colonnes possible (donc la colonne la
+      // plus large, donc le moins de troncature de nom), la police étant
+      // alors déduite pour remplir exactement cette largeur -- un premier
+      // essai qui maximisait la police en premier retombait sur 3 colonnes
+      // étroites (159pt) au lieu de 2 larges (248pt) dès que l'effectif ne
+      // tenait pas tout juste en 2 colonnes à la plus grande taille testée,
+      // tronquant les noms à 8 caractères ("AKSSIRI…") -- corrigé.
       function dessinerPage(listeTriee, critereTri) {
         const page = pdfDoc.addPage([PAGE_W, PAGE_H]);
         page.drawText("Annuaire téléphonique", { x: MARGIN, y: PAGE_H - 44, size: 17, font: fontBold, color: rgb(0.05, 0.27, 0.5) });
         page.drawText(`Tri par ${critereTri} — généré le ${dateGen}`, { x: MARGIN, y: PAGE_H - 62, size: 9.5, font, color: rgb(0.4, 0.44, 0.5) });
-        page.drawLine({ start: { x: MARGIN, y: PAGE_H - 72 }, end: { x: PAGE_W - MARGIN, y: PAGE_H - 72 }, thickness: 1, color: rgb(0.85, 0.87, 0.9) });
 
-        const startY = PAGE_H - 96;
-        const rowH = 16;
-        const usableH = startY - MARGIN;
-        const rowsPerCol = Math.max(1, Math.floor(usableH / rowH));
-        const nbCols = Math.max(1, Math.ceil(listeTriee.length / rowsPerCol));
-        const fontSize = nbCols <= 2 ? 9 : nbCols === 3 ? 8 : 7;
-        const colW = (PAGE_W - 2 * MARGIN - (nbCols - 1) * GAP) / nbCols;
+        const tableTop = PAGE_H - 78;
+        const headerH = 20;
+        const usableH = tableTop - MARGIN - headerH;
+        const n = listeTriee.length;
 
+        let fontSize = 7, rowH = 15, rowsPerCol = n, nbCols = 1, colW = PAGE_W - 2 * MARGIN;
+        for (let nc = 1; nc <= 4; nc++) {
+          const cw = (PAGE_W - 2 * MARGIN - (nc - 1) * GAP) / nc;
+          if (cw < 140) continue; // colonne trop étroite pour être utile, inutile d'essayer plus de colonnes
+          const rpc = Math.ceil(n / nc);
+          const fs = Math.min(12, Math.floor((usableH / rpc - 8) * 2) / 2); // arrondi au 0.5 le plus proche
+          if (fs >= 8) { fontSize = fs; rowH = fs + 8; rowsPerCol = rpc; nbCols = nc; colW = cw; break; }
+        }
+
+        const gridColor = rgb(0.8, 0.83, 0.87);
+        const tableHeight = headerH + rowsPerCol * rowH;
+        const tableBottom = tableTop - tableHeight;
+        const phoneReserve = 88; // place réservée à droite pour un numéro, colonne alignée même si vide
+        page.drawRectangle({ x: MARGIN, y: tableBottom, width: PAGE_W - 2 * MARGIN, height: tableHeight, borderColor: gridColor, borderWidth: 1 });
+        page.drawLine({ start: { x: MARGIN, y: tableTop - headerH }, end: { x: PAGE_W - MARGIN, y: tableTop - headerH }, thickness: 1, color: gridColor });
+        for (let c = 0; c < nbCols; c++) {
+          const colX = MARGIN + c * (colW + GAP);
+          if (c > 0) page.drawLine({ start: { x: colX - GAP / 2, y: tableTop }, end: { x: colX - GAP / 2, y: tableBottom }, thickness: 1, color: gridColor });
+          // Liseré Nom/Téléphone (demandé le 29/08) -- même position que la
+          // réserve utilisée plus bas pour aligner le texte du téléphone.
+          const xSepTel = colX + colW - phoneReserve;
+          page.drawLine({ start: { x: xSepTel, y: tableTop - headerH }, end: { x: xSepTel, y: tableBottom }, thickness: 0.75, color: gridColor });
+        }
+
+        const headerFontSize = Math.min(9, fontSize);
+        for (let c = 0; c < nbCols; c++) {
+          const x = MARGIN + c * (colW + GAP) + 6;
+          const yH = tableTop - 14;
+          page.drawText("NOM Prénom", { x, y: yH, size: headerFontSize, font: fontBold, color: rgb(0.4, 0.44, 0.5) });
+          const xTel = MARGIN + c * (colW + GAP) + colW - phoneReserve + 6;
+          page.drawText("Téléphone", { x: xTel, y: yH, size: headerFontSize, font: fontBold, color: rgb(0.4, 0.44, 0.5) });
+        }
+
+        const maxChars = Math.max(6, Math.floor((colW - 18 - phoneReserve) / (fontSize * 0.52)));
         listeTriee.forEach((a, i) => {
           const col = Math.floor(i / rowsPerCol);
           const row = i % rowsPerCol;
-          const x = MARGIN + col * (colW + GAP);
-          const y = startY - row * rowH;
+          const colX = MARGIN + col * (colW + GAP);
+          const x = colX + 6;
+          const rowTop = tableTop - headerH - row * rowH;
+          const y = rowTop - rowH * 0.68;
           const nomComplet = `${a.nom || ""} ${a.prenom || ""}`.trim();
-          page.drawText(nomComplet.length > 34 ? nomComplet.slice(0, 33) + "…" : nomComplet, { x, y, size: fontSize, font, color: rgb(0.12, 0.15, 0.2) });
+          page.drawText(nomComplet.length > maxChars ? nomComplet.slice(0, maxChars - 1) + "…" : nomComplet, { x, y, size: fontSize, font, color: rgb(0.12, 0.15, 0.2) });
           if (a.telephone) {
             const telW = font.widthOfTextAtSize(a.telephone, fontSize);
-            page.drawText(a.telephone, { x: x + colW - telW, y, size: fontSize, font, color: rgb(0.12, 0.15, 0.2) });
+            page.drawText(a.telephone, { x: colX + colW - 12 - telW, y, size: fontSize, font, color: rgb(0.12, 0.15, 0.2) });
+          }
+          if (row < rowsPerCol - 1) {
+            page.drawLine({ start: { x: colX, y: rowTop - rowH }, end: { x: colX + colW, y: rowTop - rowH }, thickness: 0.5, color: gridColor });
           }
         });
       }
