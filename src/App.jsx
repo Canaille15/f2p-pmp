@@ -12243,7 +12243,20 @@ const handleLogin = async (pinOverride) => {
             </div>
 
             <div>
-              <input ref={cpRef} value={CP} onChange={e=>{setCP(e.target.value.toUpperCase());setError("");}}
+              {/* 31/08 (Olivier) : "le curseur ne descend pas tout seul...
+                  on peut continuer a sairsir des choses apres le cp" -- un CP
+                  fait toujours 8 caractères (ex: "0010186T"), jamais bridé ni
+                  côté longueur ni côté avancement automatique jusqu'ici.
+                  maxLength=8 bloque la saisie au-delà ; le passage automatique
+                  au champ PIN une fois les 8 caractères atteints se fait dans
+                  le onChange, sans toucher à Entrée (déjà géré séparément
+                  ci-dessous, comportement inchangé). */}
+              <input ref={cpRef} value={CP} maxLength={8} onChange={e=>{
+                  const v=e.target.value.toUpperCase();
+                  setCP(v);
+                  setError("");
+                  if(v.length===8) pinFieldRef.current?.focus();
+                }}
                 placeholder="CP SNCF"
                 onKeyDown={e=>{
                   if(e.key==="Enter"){
