@@ -9005,7 +9005,7 @@ function getRCFetesDuJour(agentId, dk, schedule, agentProfiles, yearAgent){
   return result;
 }
 
-function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,echangesOuvertesIds,onOpenEchanges,onOpenFormation}){
+function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAgentProfiles,onFetePaye,isAdmin,currentUser,echangesCount,echangesOuvertesIds,onOpenEchanges,onOpenFormation,jumpTarget}){
   // echangesDismissedIds (24/08) : par identifiant de demande, pas par simple
   // compte -- l'ancienne version (echangesDismissedCount) cachait le bandeau
   // "pour toujours" tant que le nombre total de demandes ouvertes ne
@@ -9051,6 +9051,9 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
     const diffMonths=(target.getFullYear()*12+target.getMonth())-(today.getFullYear()*12+today.getMonth());
     setMonthOff(diffMonths);
   };
+  // Recherche globale (01/09) : saut de date déclenché depuis le header,
+  // purement additif -- ne touche à rien d'autre du calendrier existant.
+  useEffect(()=>{ if(jumpTarget?.date) jumpToMonthDate(jumpTarget.date); },[jumpTarget]);
   const swipeMonth=useSwipeHandlers(()=>setMonthOff(m=>m+1),()=>setMonthOff(m=>m-1));
   const [showColorPicker,setShowColorPicker]=useState(false);
   const [showRemplissage,setShowRemplissage]=useState(false);
@@ -12418,6 +12421,126 @@ const handleLogin = async (pinOverride) => {
 // (comme LoginPage), pas via un mécanisme de hash local.
 // Panneau de gestion des comptes (admin)
 // DEAD_CODE_REMOVED_MARKER (ancien AdminAuthPanel, remplace par toggle admin reel dans AdminPanel.jsx)
+
+// Recherche globale (01/09, demandé par Olivier -- "sans rien casser, si ça
+// ne va pas on retirera") : composant volontairement autonome et additif,
+// aucune modification du menu/VIEWS existant. Liste de modules dupliquée
+// à dessein (labels texte simples) plutôt que dérivée de VIEWS, qui mélange
+// des libellés JSX (Annuaire) -- pour ne courir aucun risque sur le rendu
+// du menu latéral déjà en place.
+const SEARCH_MODULES=[
+  {k:"personal",label:"Mon planning",emoji:"📊"},
+  {k:"global",label:"CPS Officiel",emoji:"📋"},
+  {k:"previsionnel",label:"Planning Prévisionnel",emoji:"📅"},
+  {k:"echanges",label:"Échanges",emoji:"🔄"},
+  {k:"annuaire",label:"Annuaire",emoji:"📇"},
+  {k:"conges",label:"Demande de congés",emoji:"🗓️"},
+  {k:"cetPdfs",label:"CET",emoji:"🏦"},
+  {k:"d2i",label:"D2I",emoji:"✊"},
+  {k:"fim",label:"Fiche Individuelle",emoji:"🗂️"},
+  {k:"statsEquipe",label:"Stat'Equip",emoji:"📊"},
+  {k:"profil",label:"Mon profil",emoji:"👤"},
+];
+const normSearch=s=>(s||"").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+
+// Reconnaît "15/09", "15/09/2026" ou "15 septembre" -> "YYYY-MM-DD" (année
+// courante par défaut). Renvoie null si rien de reconnaissable -- jamais
+// d'erreur, la recherche ignore juste ce cas.
+function parseSearchDate(q){
+  const s=q.trim();
+  let m=s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  if(m){
+    const jj=+m[1],mm=+m[2];
+    if(jj<1||jj>31||mm<1||mm>12) return null;
+    let yy=m[3]?+m[3]:new Date().getFullYear();
+    if(yy<100) yy+=2000;
+    return `${yy}-${String(mm).padStart(2,"0")}-${String(jj).padStart(2,"0")}`;
+  }
+  m=s.match(/^(\d{1,2})\s+([a-zA-Zéûî]+)\s*(\d{2,4})?$/);
+  if(m){
+    const jj=+m[1];
+    if(jj<1||jj>31) return null;
+    const idx=MOIS_L.findIndex(mo=>normSearch(mo).startsWith(normSearch(m[2])));
+    if(idx<0) return null;
+    let yy=m[3]?+m[3]:new Date().getFullYear();
+    if(yy<100) yy+=2000;
+    return `${yy}-${String(idx+1).padStart(2,"0")}-${String(jj).padStart(2,"0")}`;
+  }
+  return null;
+}
+
+function GlobalSearch({agents,isAfo,isAdmin,onNavigate,onJumpToDate}){
+  const [open,setOpen]=useState(false);
+  const [q,setQ]=useState("");
+  const boxRef=useRef();
+  const inputRef=useRef();
+
+  useEffect(()=>{
+    if(!open) return;
+    const onDown=e=>{ if(boxRef.current&&!boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown",onDown);
+    return ()=>document.removeEventListener("mousedown",onDown);
+  },[open]);
+  useEffect(()=>{ if(open) setTimeout(()=>inputRef.current?.focus(),30); },[open]);
+
+  const nq=normSearch(q);
+  const agentResults = nq.length>=2 ? (agents||[]).filter(a=>normSearch(`${a.prenom||""} ${a.nom||""}`).includes(nq)).slice(0,5) : [];
+  const modules = [...SEARCH_MODULES,...(isAfo?[{k:"afo",label:"AFO",emoji:"🎓"}]:[]),...(isAdmin?[{k:"admin",label:"Admin",emoji:"👑"}]:[])];
+  const moduleResults = nq.length>=2 ? modules.filter(m=>normSearch(m.label).includes(nq)).slice(0,5) : [];
+  const dateIso = q.trim().length>=3 ? parseSearchDate(q) : null;
+  const hasResults = agentResults.length>0||moduleResults.length>0||!!dateIso;
+
+  const close=()=>{ setOpen(false); setQ(""); };
+  const fmtDateFr=iso=>{ const [y,m,d]=iso.split("-").map(Number); return `${d} ${MOIS_L[m-1]} ${y}`; };
+
+  return(<div ref={boxRef} style={{position:"relative",flexShrink:0}}>
+    <button onClick={()=>setOpen(o=>!o)} title="Recherche globale"
+      style={{border:"1px solid var(--border)",background:"var(--bg-card)",
+        borderRadius:7,padding:"5px 7px",cursor:"pointer",fontSize:13,
+        display:"flex",alignItems:"center"}}>🔍</button>
+    {open&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,width:280,
+      background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:12,
+      boxShadow:"0 8px 28px rgba(0,0,0,.18)",zIndex:200,overflow:"hidden"}}>
+      <input ref={inputRef} value={q} onChange={e=>setQ(e.target.value)}
+        placeholder="Un agent, un module, une date..."
+        style={{width:"100%",border:"none",borderBottom:"1px solid var(--border)",
+          padding:"10px 12px",fontSize:13,outline:"none",background:"transparent",
+          color:"var(--text-primary)",boxSizing:"border-box"}}/>
+      {q.trim().length>0&&<div style={{maxHeight:280,overflowY:"auto"}}>
+        {!hasResults&&<div style={{padding:"14px 12px",fontSize:12,color:"var(--text-muted)",textAlign:"center"}}>Aucun résultat</div>}
+        {agentResults.length>0&&<>
+          <div style={{padding:"8px 12px 4px",fontSize:10,fontWeight:700,color:"var(--text-muted)",letterSpacing:.5}}>AGENTS</div>
+          {agentResults.map(a=>(
+            <button key={a.id||a.cp||a.immatriculation} onClick={()=>{onNavigate("annuaire");close();}}
+              style={{display:"flex",alignItems:"center",gap:8,width:"100%",border:"none",background:"none",
+                cursor:"pointer",padding:"7px 12px",fontSize:13,color:"var(--text-primary)",textAlign:"left"}}>
+              <span>👤</span><span>{a.prenom} {a.nom}</span>
+            </button>
+          ))}
+        </>}
+        {moduleResults.length>0&&<>
+          <div style={{padding:"8px 12px 4px",fontSize:10,fontWeight:700,color:"var(--text-muted)",letterSpacing:.5,borderTop:agentResults.length?"1px solid var(--border)":"none",marginTop:agentResults.length?4:0}}>MODULES</div>
+          {moduleResults.map(m=>(
+            <button key={m.k} onClick={()=>{onNavigate(m.k);close();}}
+              style={{display:"flex",alignItems:"center",gap:8,width:"100%",border:"none",background:"none",
+                cursor:"pointer",padding:"7px 12px",fontSize:13,color:"var(--text-primary)",textAlign:"left"}}>
+              <span>{m.emoji}</span><span>{m.label}</span>
+            </button>
+          ))}
+        </>}
+        {dateIso&&<>
+          <div style={{padding:"8px 12px 4px",fontSize:10,fontWeight:700,color:"var(--text-muted)",letterSpacing:.5,borderTop:(agentResults.length||moduleResults.length)?"1px solid var(--border)":"none",marginTop:(agentResults.length||moduleResults.length)?4:0}}>DATE</div>
+          <button onClick={()=>{onJumpToDate(dateIso);close();}}
+            style={{display:"flex",alignItems:"center",gap:8,width:"100%",border:"none",background:"none",
+              cursor:"pointer",padding:"7px 12px",fontSize:13,color:"var(--text-primary)",textAlign:"left"}}>
+            <span>📅</span><span>{fmtDateFr(dateIso)} — Mon planning</span>
+          </button>
+        </>}
+      </div>}
+    </div>}
+  </div>);
+}
+
 export default function App(){
   // ── PERSISTANCE & ÉTATS ───────────────────────────────────────────────────
   const [view,setView]=usePersist("view","personal");
@@ -12464,6 +12587,10 @@ export default function App(){
     });
   };
   const [agents,setAgents]=usePersist("agents",AGENTS_INIT);
+  // Recherche globale (01/09) : cible de saut de date pour Mon planning,
+  // consommée par PersonalView (useEffect additif) puis réinitialisée --
+  // {date,nonce} pour redéclencher même sur la même date deux fois de suite.
+  const [personalJumpTarget,setPersonalJumpTarget]=useState(null);
   const [currentAgent,setCurrentAgent]=useState(null);
   const [weekOffset,setWeekOffset]=useState(0);
   const [menuOpen,setMenuOpen]=useState(false);
@@ -13092,6 +13219,12 @@ export default function App(){
 
         <div style={{flex:1}}/>
 
+        {/* Recherche globale (01/09) — voir GlobalSearch, composant autonome
+            et additif, aucune modification du menu/VIEWS existant. */}
+        <GlobalSearch agents={agents} isAfo={isAfo} isAdmin={isAdmin}
+          onNavigate={navigateToView}
+          onJumpToDate={dateIso=>{ setPersonalJumpTarget({date:dateIso,nonce:Date.now()}); navigateToView("personal"); }}/>
+
         {/* Mode sombre (19/08) — toggle par appareil, indépendant du compte.
             Essai limité à "Mon planning" + panneau compteurs pour l'instant
             (voir CLAUDE.md) : les autres vues gardent leur fond clair tant
@@ -13278,7 +13411,8 @@ export default function App(){
         echangesCount={echangesOuvertesCount}
         echangesOuvertesIds={echangesOuvertesIds}
         onOpenEchanges={()=>navigateToView("echanges")}
-        onOpenFormation={()=>navigateToView("formation")}/>}
+        onOpenFormation={()=>navigateToView("formation")}
+        jumpTarget={personalJumpTarget}/>}
       {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
   {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
   {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
