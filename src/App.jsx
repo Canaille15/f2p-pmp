@@ -12448,11 +12448,11 @@ const normSearch=s=>(s||"").toString().toLowerCase().normalize("NFD").replace(/[
 // d'erreur, la recherche ignore juste ce cas.
 function parseSearchDate(q){
   const s=q.trim();
-  let m=s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  let m=s.match(/^(\d{1,2})([./-])(\d{1,2})(?:\2(\d{2,4}))?$/);
   if(m){
-    const jj=+m[1],mm=+m[2];
+    const jj=+m[1],mm=+m[3];
     if(jj<1||jj>31||mm<1||mm>12) return null;
-    let yy=m[3]?+m[3]:new Date().getFullYear();
+    let yy=m[4]?+m[4]:new Date().getFullYear();
     if(yy<100) yy+=2000;
     return `${yy}-${String(mm).padStart(2,"0")}-${String(jj).padStart(2,"0")}`;
   }
