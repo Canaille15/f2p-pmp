@@ -667,6 +667,7 @@ export const profil = {
       formationsPersoDeclarees: extra.formationsPersoDeclarees|| [],
       formationNotifications:   extra.formationNotifications  || [],
       maladiePertes:            extra.maladiePertes            || [],
+      paletteHintVu:            extra.paletteHintVu            || false,
     };
   },
 
@@ -702,7 +703,7 @@ export const profil = {
       'vtEntitlement','vtTracking','vtReports','congesDemandes','tcAjustementManuel',
       'tcLedger','tcArchiveCutoff','tyLedger','rnLedger','tqLedger','tqTransferts','bilanGlobalDureeJourMin','cetLedger','compteursOrdre',
       'vtModuleActif','signatureDataUrl','formationsPersoDeclarees','formationNotifications',
-      'maladiePertes',
+      'maladiePertes','paletteHintVu',
     ];
     const donnees_json = {};
     EXTRA_KEYS.forEach(k => { if (data[k] !== undefined) donnees_json[k] = data[k]; });

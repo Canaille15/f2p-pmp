@@ -9420,6 +9420,13 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
     {/* ── BANDEAU PROFIL ÉTENDU ── */}
    
 <AgentHeader agent={agent} profile={profile} compteurYear={compteurYear} setCompteurYear={setCompteurYear} onImportDP={onImportDP} onCouleurs={()=>setShowColorPicker(true)} onHabilitations={()=>setShowHab(true)} onRoulementChange={r=>setProfile({roulement:r})} onReservisteChange={v=>setProfile({isReserve:v})} isOwnProfile={isOwnProfile}/>
+    {isOwnProfile&&!profile.paletteHintVu&&Object.keys(agentColors).length===0&&<div style={{display:"flex",alignItems:"stretch",gap:6,border:"1.5px solid #e9d5ff",background:"linear-gradient(90deg,#faf5ff,#fdf2f8)",borderRadius:12,padding:"4px 4px 4px 16px"}}>
+      <button onClick={()=>{setShowColorPicker(true);setProfile({paletteHintVu:true});}} style={{display:"flex",alignItems:"center",gap:8,border:"none",background:"none",cursor:"pointer",fontSize:13,fontWeight:700,color:"#7c3aed",flex:1,padding:"8px 0",textAlign:"left"}}>
+        <span style={{fontSize:16}}>🎨</span>
+        <span>Personnalise les couleurs de ton planning — fais-le à ton image</span>
+      </button>
+      <button onClick={()=>setProfile({paletteHintVu:true})} title="Masquer ce message" style={{border:"none",background:"none",cursor:"pointer",fontSize:17,color:"#c4b5fd",padding:"0 10px"}}>✕</button>
+    </div>}
     {typeof onOpenEchanges==="function"&&echangesVisibles.length>0&&<div style={{display:"flex",alignItems:"stretch",gap:6,border:"1.5px solid #fdba74",background:"#fef3c7",borderRadius:12,padding:"4px 4px 4px 16px"}}>
       <button onClick={onOpenEchanges} style={{display:"flex",alignItems:"center",justifyContent:"space-between",border:"none",background:"none",cursor:"pointer",fontSize:14,fontWeight:700,color:"#1e293b",flex:1,padding:"8px 0",textAlign:"left"}}>
         <span>🔄 Échanges</span>
