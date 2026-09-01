@@ -7016,6 +7016,11 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // Purement visuel ("meme masqué tout ce qui est dedans est comptabilisé")
   // : ne touche à aucun calcul, seulement à la présence de la carte ici.
   const vtActif = agentProfiles?.[agentIdPauses]?.vtModuleActif !== false;
+  // Module Maladie masquable (01/09, même principe que VT ci-dessus, mais
+  // demandé pour Maladie seule -- "visible par defaut, comme vt") : réglé
+  // dans "Mon profil", persisté par agent (agentProfiles[id].maladieModuleActif).
+  // Absent/undefined = actif (défaut). Purement visuel.
+  const maladieActif = agentProfiles?.[agentIdPauses]?.maladieModuleActif !== false;
   // Palette harmonisée (19/08, demandé par Olivier — "unité de couleurs tout
   // en gardant les touches de couleur") : les 14 teintes ci-dessous viennent
   // toutes de la même échelle Tailwind "600" (même saturation/luminosité),
@@ -7037,7 +7042,7 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     ...(vtActif ? [{key:"VT", label:"VT",    color:"#65a30d", subtitle:`Solde : ${vtData.solde} / ${vtData.entitlement}`, alert:vtData.solde<2}] : []),
     {key:"CET",     label:"CET",             color:"#7c3aed", subtitle:"Compte épargne temps"},
     {key:"FOR",     label:"Formation",       color:"#0891b2", subtitle: nbFormationsNonVues>0 ? `🔔 ${nbFormationsNonVues} à voir` : "Jours formation dans l'année", alert: nbFormationsNonVues>0},
-    {key:"MA",      label:"Maladie",         color:"#e11d48", subtitle:"Jours maladie dans l'année"},
+    ...(maladieActif ? [{key:"MA", label:"Maladie",  color:"#e11d48", subtitle:"Jours maladie dans l'année"}] : []),
   ];
 
   const [ouvert, setOuvert] = usePersist("compteursOuvert", false);
@@ -10825,6 +10830,13 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
     const nouvel=!vtActif;
     setAgentProfiles(prev=>({...prev,[currentAgent.id]:{...(prev[currentAgent.id]||{}),vtModuleActif:nouvel}}));
   };
+  // Module Maladie (01/09, même principe que VT ci-dessus) : masquable,
+  // actif par défaut -- purement visuel, voir DashboardCompteurs.
+  const maladieActif=agentProfiles?.[currentAgent?.id]?.maladieModuleActif!==false;
+  const toggleMaladieModule=()=>{
+    const nouvel=!maladieActif;
+    setAgentProfiles(prev=>({...prev,[currentAgent.id]:{...(prev[currentAgent.id]||{}),maladieModuleActif:nouvel}}));
+  };
   const [email,setEmail]=useState("");
   const [telephone,setTelephone]=useState("");
   const [fonction,setFonction]=useState("");
@@ -11021,6 +11033,19 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
           background:vtActif?"#0C447C":"#e2e8f0",position:"relative",transition:"background .15s"}}>
           <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",position:"absolute",top:3,
             left:vtActif?23:3,transition:"left .15s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+        </button>
+      </div>
+    </div>
+    <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>🤒 Module Maladie</div>
+      <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>Affiche ou masque la case Maladie dans tes compteurs. Actif par défaut. Purement visuel : si tu la masques, tes données Maladie déjà enregistrées restent comptabilisées normalement.</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#334155"}}>Afficher la case Maladie</div>
+        <button onClick={toggleMaladieModule}
+          style={{width:48,height:28,borderRadius:14,border:"none",cursor:"pointer",
+          background:maladieActif?"#0C447C":"#e2e8f0",position:"relative",transition:"background .15s"}}>
+          <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",position:"absolute",top:3,
+            left:maladieActif?23:3,transition:"left .15s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
         </button>
       </div>
     </div>
