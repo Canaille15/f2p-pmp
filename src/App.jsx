@@ -12137,6 +12137,71 @@ function PinInput({arr, setArr, label, inputRef, onComplete, error, setError, au
 
 const REMEMBER_CP_KEY = "f2ppmp_remembered_cp";
 
+// Onboarding première connexion (01/09, demandé par Olivier) — 4 écrans
+// guidés affichés UNIQUEMENT juste après la création d'un nouveau compte
+// (jamais à une connexion normale, donc jamais vu par un agent déjà actif).
+// Ne stocke rien côté serveur ni localStorage : purement un affichage
+// dans la session de connexion en cours, avant de transmettre le login au
+// reste de l'appli (le token est déjà valide côté serveur à ce stade,
+// voir client.js auth.register — aucun risque à retarder onLogin ici).
+const ONBOARDING_STEPS = [
+  {
+    emoji: "👋",
+    titre: "Bienvenue",
+    texte: "F2P.PMP est l'appli qui gère ton planning, tes congés et tes compteurs — plus besoin de tout retenir de ton côté. Quelques écrans pour bien démarrer.",
+  },
+  {
+    emoji: "⚡",
+    titre: "Tes postes habilités",
+    texte: "En haut de « Mon planning », ta carte agent a un bouton ▼ juste à côté de ton nom — déplie-le puis clique « ⚙️ Modifier » pour cocher les postes où tu es habilité. C'est ce qui détermine directement quels postes te sont proposés quand tu saisis une journée.",
+  },
+  {
+    emoji: "📊",
+    titre: "Saisir ta journée",
+    texte: "Dans « Mon planning », clique simplement une case du calendrier pour l'ouvrir et choisir ton type de journée (Matin, Soirée, Nuit, Journée) ou un repos/une absence (RP, Congés, Maladie...).",
+  },
+  {
+    emoji: "📘",
+    titre: "Besoin d'aide plus tard ?",
+    texte: "Une notice complète explique chaque module en détail — accessible à tout moment depuis le menu latéral (☰), lien « 📘 Notice » juste au-dessus de Admin.",
+  },
+];
+
+function OnboardingFlow({ prenom, onFinish }) {
+  const [i, setI] = useState(0);
+  const step = ONBOARDING_STEPS[i];
+  const isLast = i === ONBOARDING_STEPS.length - 1;
+  return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f4c81 0%,#1e3a8a 50%,#064e3b 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
+      <div style={{background:"#fff",borderRadius:24,width:"100%",maxWidth:400,boxShadow:"0 32px 80px rgba(0,0,0,.35)",overflow:"hidden"}}>
+        <div style={{background:"linear-gradient(135deg,#0f4c81,#1e3a8a)",padding:"28px 24px",textAlign:"center"}}>
+          <div style={{fontSize:44,marginBottom:8}}>{step.emoji}</div>
+          <div style={{color:"#fff",fontSize:18,fontWeight:800,letterSpacing:-.3}}>{i===0?`Bienvenue${prenom?", "+prenom:""} !`:step.titre}</div>
+          <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:14}}>
+            {ONBOARDING_STEPS.map((_,idx)=>(
+              <div key={idx} style={{width:idx===i?18:7,height:7,borderRadius:4,background:idx===i?"#fff":"rgba(255,255,255,.35)",transition:"all .15s"}}/>
+            ))}
+          </div>
+        </div>
+        <div style={{padding:"24px 24px 20px",display:"flex",flexDirection:"column",gap:20}}>
+          <div style={{fontSize:14,color:"#334155",lineHeight:1.6,textAlign:"center",minHeight:90}}>{step.texte}</div>
+          <div style={{display:"flex",gap:10}}>
+            {!isLast && (
+              <button onClick={onFinish} style={{flex:"0 0 auto",border:"none",background:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,fontWeight:600,padding:"14px 4px"}}>
+                Passer
+              </button>
+            )}
+            <button onClick={()=>isLast?onFinish():setI(i+1)}
+              style={{flex:1,background:"#0f4c81",color:"#fff",border:"none",borderRadius:12,padding:"14px 0",cursor:"pointer",fontSize:14,fontWeight:800}}>
+              {isLast?"C'est parti →":"Suivant →"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoginPage({ onLogin }) {
   const [step, setStep] = useState("login"); // "login" | "first_time" | "forgot"
   const [CP, setCP] = useState("");
@@ -12145,6 +12210,7 @@ function LoginPage({ onLogin }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [pendingOnboarding, setPendingOnboarding] = useState(null);
   const cpRef=useRef();
   const pinFieldRef=useRef();
   const newPinFieldRef=useRef();
@@ -12205,7 +12271,10 @@ const handleLogin = async (pinOverride) => {
         if(rememberMe) localStorage.setItem(REMEMBER_CP_KEY, mat);
         else localStorage.removeItem(REMEMBER_CP_KEY);
       } catch {}
-      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo });
+      // Compte fraîchement créé -> onboarding avant de transmettre le login
+      // (le token est déjà valide côté serveur, voir client.js auth.register,
+      // donc aucun risque à retarder onLogin le temps des quelques écrans).
+      setPendingOnboarding({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo });
     } catch(e) {
       // Réserve régionale : l'auto-enregistrement est bloqué côté serveur
       // (18/08, demande d'Olivier — "seul un admin donne accès"). On ramène
@@ -12222,6 +12291,10 @@ const handleLogin = async (pinOverride) => {
       setError(e.message || "Erreur connexion");
     }
   };
+
+  if(pendingOnboarding){
+    return <OnboardingFlow prenom={pendingOnboarding.agent.prenom} onFinish={()=>onLogin(pendingOnboarding)}/>;
+  }
 
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f4c81 0%,#1e3a8a 50%,#064e3b 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif"}}>
