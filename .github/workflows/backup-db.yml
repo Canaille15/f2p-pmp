@@ -1,0 +1,50 @@
+name: Sauvegarde nocturne de la base
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Installer les outils nécessaires
+        run: sudo apt-get update -y && sudo apt-get install -y mariadb-client gnupg
+
+      - name: Exporter et chiffrer la base
+        env:
+          DB_HOST: trolley.proxy.rlwy.net
+          DB_PORT: 47472
+          DB_USER: root
+          DB_NAME: railway
+          MYSQL_PWD: ${{ secrets.DB_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.BACKUP_GPG_PASSPHRASE }}
+        run: |
+          set -e
+          DATE=$(date +%F)
+          mysqldump --host="$DB_HOST" --port="$DB_PORT" --user="$DB_USER" \
+            --single-transaction --routines --triggers "$DB_NAME" > "backup-$DATE.sql"
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" --symmetric --cipher-algo AES256 \
+            -o "backup-$DATE.sql.gpg" "backup-$DATE.sql"
+          rm "backup-$DATE.sql"
+          echo "BACKUP_FILE=backup-$DATE.sql.gpg" >> "$GITHUB_ENV"
+
+      - name: Déposer la sauvegarde dans le dépôt privé
+        env:
+          BACKUP_REPO_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+        run: |
+          set -e
+          git clone --depth 1 "https://x-access-token:${BACKUP_REPO_TOKEN}@github.com/Canaille15/f2p-pmp-backups.git" backups-repo
+          mv "$BACKUP_FILE" backups-repo/
+          cd backups-repo
+          git config user.email "backup-bot@f2p-pmp.local"
+          git config user.name "F2P.PMP Backup Bot"
+          git add "$BACKUP_FILE"
+          git commit -m "Sauvegarde du $(date +%F)"
+          # Purge des sauvegardes de plus de 90 jours -- conservées le temps
+          # utile, sans laisser le dépôt grossir indéfiniment.
+          find . -maxdepth 1 -name "backup-*.sql.gpg" -mtime +90 -print -delete
+          git add -A
+          git diff --cached --quiet || git commit -m "Purge des sauvegardes de plus de 90 jours"
+          git push
