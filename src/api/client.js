@@ -763,6 +763,15 @@ export const statsEquipe = {
   get: (year) => apiFetch(`/stats-equipe?year=${year}`),
 };
 
+// ─── MODULE USAGE (suivi anonyme, admin uniquement) ────────────────────────────
+
+export const usage = {
+  // Fire-and-forget côté appelant (navigateToView) — ne doit jamais bloquer
+  // ni faire échouer une navigation réelle, voir App.jsx.
+  track: (vue) => apiFetch('/usage/track', { method: 'POST', body: JSON.stringify({ vue }) }),
+  getStats: () => apiFetch('/usage/stats'),
+};
+
 // ─── MODULE CPS (planning officiel SNCF importé) ──────────────────────────────
 
 export const cps = {
@@ -1114,6 +1123,7 @@ const api = {
   annuaire,
   formation,
   statsEquipe,
+  usage,
 };
 
 export default api;

@@ -56,6 +56,7 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   // un agent quitté reste consultable via ce filtre (historique jamais supprimé).
   const [statutFilter, setStatutFilter] = useState("actif");
   const [modal, setModal]             = useState(null); // "create" | { type:"delete"|"reset", agent }
+  const [usageOpen, setUsageOpen]     = useState(false); // 02/09 : suivi d'usage anonyme
   const [msg, setMsg]                 = useState(null); // { type:"ok"|"err", text }
   const [pdfBusy, setPdfBusy]         = useState(false);
 
@@ -473,6 +474,14 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
             <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
               {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
             </span>
+            <button onClick={() => setUsageOpen(true)}
+              style={{
+                background: "var(--bg-page)", color: "var(--text-secondary)", border: "1.5px solid var(--border)",
+                borderRadius: 8, padding: "8px 16px", cursor: "pointer",
+                fontSize: 13, fontWeight: 700, whiteSpace: "nowrap"
+              }}>
+              📊 Utilisation
+            </button>
             <button onClick={genererAnnuairePdf} disabled={pdfBusy}
               style={{
                 background: "var(--bg-page)", color: "var(--text-secondary)", border: "1.5px solid var(--border)",
@@ -652,6 +661,7 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       {modal?.type === "reset" && (
         <ModalResetPin agent={modal.agent} onConfirm={(pin) => handleResetPin(modal.agent, pin)} onClose={() => setModal(null)} />
       )}
+      {usageOpen && <UsageStatsModal onClose={() => setUsageOpen(false)} />}
     </div>
   );
 }
@@ -1012,6 +1022,113 @@ function ModalResetPin({ agent, onConfirm, onClose }) {
   );
 }
 
+// ─── MODAL UTILISATION (suivi anonyme, 02/09) ─────────────────────────────────
+
+// Libellés humains des clés de vue (VIEWS/navigateToView, App.jsx) — recopiés
+// depuis SEARCH_MODULES (App.jsx, non exporté) pour rester cohérents avec le
+// reste de l'appli, complétés par "afo"/"admin" (absents de SEARCH_MODULES
+// car ils ne sont jamais proposés par la recherche globale). Une clé inconnue
+// (ex: une future vue jamais ajoutée ici) reste affichée telle quelle plutôt
+// que de disparaître silencieusement.
+const VUE_LABELS = {
+  personal: "📊 Mon planning",
+  global: "📋 CPS Officiel",
+  previsionnel: "📅 Planning Prévisionnel",
+  echanges: "🔄 Échanges",
+  annuaire: "📇 Annuaire",
+  conges: "🗓️ Demande de congés",
+  cetPdfs: "🏦 CET",
+  d2i: "✊ D2I",
+  fim: "🗂️ Fiche Individuelle",
+  statsEquipe: "📊 Stat'Equip",
+  profil: "👤 Mon profil",
+  formation: "🎓 Formation",
+  afo: "🎓 AFO",
+  admin: "👑 Admin",
+};
+
+function UsageStatsModal({ onClose }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    api.usage.getStats()
+      .then(setData)
+      .catch(() => setErr("Impossible de charger les statistiques d'utilisation."));
+  }, []);
+
+  const maxJour = data ? Math.max(1, ...data.visitesParJour.map(j => j.total)) : 1;
+  const maxPage = data ? Math.max(1, ...data.topPages.map(p => p.total)) : 1;
+
+  return (
+    <Modal title="📊 Utilisation de l'appli" onClose={onClose} maxWidth={520}>
+      <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 14, lineHeight: 1.5 }}>
+        Suivi anonyme — aucun nom, aucun CP n'est jamais affiché ici, uniquement
+        des totaux. Basé sur les 30 derniers jours (sauf le compteur du jour).
+      </div>
+
+      {err && <div style={{ color: "#dc2626", fontSize: 13, fontWeight: 600 }}>⚠️ {err}</div>}
+      {!data && !err && <div style={{ textAlign: "center", color: "#94a3b8", padding: 20 }}>Chargement...</div>}
+
+      {data && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Agents uniques */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+            {[
+              { label: "Aujourd'hui", val: data.agentsUniques.today },
+              { label: "7 derniers jours", val: data.agentsUniques.last7 },
+              { label: "30 derniers jours", val: data.agentsUniques.last30 },
+            ].map(t => (
+              <div key={t.label} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#1e293b" }}>{t.val}</div>
+                <div style={{ fontSize: 10.5, color: "#64748b", fontWeight: 600, marginTop: 2 }}>{t.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pages les plus consultées */}
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 8 }}>📖 Pages les plus consultées</div>
+            {data.topPages.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucune donnée pour l'instant.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {data.topPages.map(p => (
+                  <div key={p.vue} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 130, flexShrink: 0, fontSize: 12, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {VUE_LABELS[p.vue] || p.vue}
+                    </div>
+                    <div style={{ flex: 1, background: "#f1f5f9", borderRadius: 5, overflow: "hidden", height: 14 }}>
+                      <div style={{ width: `${(p.total / maxPage) * 100}%`, background: "#1d4ed8", height: "100%", borderRadius: 5 }} />
+                    </div>
+                    <div style={{ width: 34, textAlign: "right", fontSize: 12, fontWeight: 700, color: "#334155" }}>{p.total}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Fréquence : visites par jour */}
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 8 }}>📈 Fréquence (30 derniers jours)</div>
+            {data.visitesParJour.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucune donnée pour l'instant.</div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 70, overflowX: "auto" }}>
+                {data.visitesParJour.map(j => (
+                  <div key={j.jour} title={`${j.jour} — ${j.total} navigation(s), ${j.agents} agent(s)`}
+                    style={{ flex: "1 0 6px", minWidth: 6, background: "#1d4ed8", opacity: 0.85, borderRadius: "3px 3px 0 0", height: `${Math.max(4, (j.total / maxJour) * 100)}%` }} />
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 4 }}>Survoler une barre pour voir le détail du jour.</div>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 // ─── MODAL BASE ───────────────────────────────────────────────────────────────
 
 // Le contenu de ModalModifier a grossi (habilitations, 16/08) au point de
@@ -1020,7 +1137,7 @@ function ModalResetPin({ agent, onConfirm, onClose }) {
 // grand en coupant le haut ET le bas, sans aucun moyen d'atteindre le bouton
 // "Enregistrer". Corrigé : la carte a désormais une hauteur plafonnée, avec
 // un scroll interne sur le corps uniquement (l'en-tête reste toujours visible).
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, maxWidth = 420 }) {
   return (
     <div style={{
       position: "fixed", inset: 0, background: "rgba(15,23,42,.6)",
@@ -1028,7 +1145,7 @@ function Modal({ title, onClose, children }) {
       padding: 16, backdropFilter: "blur(4px)"
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: "#fff", borderRadius: 16, width: "100%", maxWidth: 420,
+        background: "#fff", borderRadius: 16, width: "100%", maxWidth,
         maxHeight: "90vh", display: "flex", flexDirection: "column",
         boxShadow: "0 24px 60px rgba(0,0,0,.25)", overflow: "hidden"
       }}>

@@ -12657,6 +12657,17 @@ export default function App(){
   // périmée ne doit jamais écraser une modification locale plus récente).
   const agentProfilesRef = useRef(agentProfiles);
   useEffect(()=>{ agentProfilesRef.current = agentProfiles; },[agentProfiles]);
+  // Suivi d'usage anonyme (02/09, demandé par Olivier — "combien d'agents
+  // utilisent l'appli, la fréquence, les pages les plus utilisées") : une
+  // ligne par navigation réelle (view change, quelle qu'en soit la cause —
+  // navigateToView, goBack/goForwardView, ou un setView direct ailleurs dans
+  // le fichier), jamais un heartbeat périodique ni un simple appel réseau.
+  // Fire-and-forget : le suivi ne doit jamais gêner ni ralentir la vraie
+  // navigation de l'agent — .catch(()=>{}) volontaire, aucune alerte possible.
+  useEffect(()=>{
+    if(!currentUser?.agent?.id) return;
+    api.usage.track(view).catch(()=>{});
+  },[view, currentUser?.agent?.id]);
   // Charger les agents depuis l'API (source de verite = Railway) - seulement si connecte
     const rechargerAgents = () => {
     api.agents.getAll().then(rows=>{
