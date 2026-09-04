@@ -2536,7 +2536,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
               {pJ?.subtitle&&<div style={{fontSize:10,color:"#1e293b",fontWeight:600,fontStyle:"italic"}}>{pJ.subtitle}</div>}
               {row.isJournee&&pJ&&<div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>{pJ.horaires}</div>}
             </div>
-            <div style={{flex:1,padding:"7px 12px",display:"flex",flexWrap:"wrap",gap:6,alignItems:"center",minHeight:46}}>
+            <div style={{flex:1,minWidth:0,padding:"7px 12px",display:"flex",flexWrap:"wrap",gap:6,alignItems:"center",minHeight:46}}>
               {row.isDispo
                 ? row.agents.map(ag=>{
                     // fix (23/08, demande d'Olivier : "le bouton [...] doit aussi avoir
@@ -2624,37 +2624,40 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       // calculé plus haut au niveau de la row).
                       const enEtude=!!en?.etudePoste;
                       const estConflit=!enEtude&&nbTitulaires>1;
-                      return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,background:enEtude?"#f5f3ff":isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe&&!enEtude?2.5:1.5}px solid ${enEtude?"#c4b5fd":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px",boxShadow:isMe&&!enEtude?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
+                      return(<div key={si} style={{display:"flex",alignItems:"center",gap:6,minWidth:0,background:enEtude?"#f5f3ff":isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe&&!enEtude?2.5:1.5}px solid ${enEtude?"#c4b5fd":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:9,padding:"4px 9px",boxShadow:isMe&&!enEtude?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
                         <Av initials={ag.initials} size={22} famille={ag.famille}/>
-                        <div>
-                          <div style={{display:"flex",alignItems:"center",gap:5}}>
-                            <div style={{fontSize:11,fontWeight:700,color:estConflit?"#dc2626":"#1e293b"}}>{ag.prenom} {ag.nom}</div>
-                            {enEtude&&<span style={{fontSize:9,background:"#ede9fe",color:"#6d28d9",borderRadius:8,padding:"1px 6px",fontWeight:700}}>🎓 Étude</span>}
-                          </div>
+                        {/* minWidth:0 + badge sur sa propre ligne (03/09, signale par
+                            Olivier sur mobile) : le badge "🎓" inline a cote du nom
+                            forcait cette carte plus large que l'espace disponible sur
+                            petit ecran (le flex interne ne "wrap" jamais tout seul),
+                            elargissant toute la ligne vers la droite et poussant le
+                            bouton d'action hors champ. Le passer sous le nom regle le
+                            probleme a la racine plutot que de juste le cacher. */}
+                        <div style={{minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:700,color:estConflit?"#dc2626":"#1e293b"}}>{ag.prenom} {ag.nom}</div>
+                          {enEtude&&<span style={{fontSize:9,background:"#ede9fe",color:"#6d28d9",borderRadius:8,padding:"1px 6px",fontWeight:700,display:"inline-block",marginTop:1}}>🎓 Étude</span>}
                           <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
                           {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
                         </div>
                         {row.isJourneeSpeciale?
-                        <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>📝</button>
+                        <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto",flexShrink:0}}>📝</button>
                         :
-                        <button onClick={()=>setPrevisionnelTarget({agentId:ag.id,nomTitulaire:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
+                        <button onClick={()=>setPrevisionnelTarget({agentId:ag.id,nomTitulaire:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto",flexShrink:0}}>🔄</button>}
                       </div>);
                     }
-                    if(ag)return(<div key={si} style={{display:"flex",flexDirection:"column",gap:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,background:isEnFormationDoublon?"#f5f3ff":isForm?"#f0fdf4":isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe&&!isForm&&!isEnFormationDoublon?2.5:1.5}px solid ${isEnFormationDoublon?"#c4b5fd":isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:alea?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px",boxShadow:isMe&&!isForm&&!isEnFormationDoublon?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
+                    if(ag)return(<div key={si} style={{display:"flex",flexDirection:"column",gap:0,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,background:isEnFormationDoublon?"#f5f3ff":isForm?"#f0fdf4":isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe&&!isForm&&!isEnFormationDoublon?2.5:1.5}px solid ${isEnFormationDoublon?"#c4b5fd":isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:alea?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px",boxShadow:isMe&&!isForm&&!isEnFormationDoublon?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
                         <Av initials={ag.initials} size={22} famille={ag.famille}/>
-                        <div>
-                          <div style={{display:"flex",alignItems:"center",gap:5}}>
-                            <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}</div>
-                            {isEnFormationDoublon&&<span style={{fontSize:9,background:"#ede9fe",color:"#6d28d9",borderRadius:8,padding:"1px 6px",fontWeight:700}}>🎓 En formation</span>}
-                          </div>
+                        <div style={{minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}</div>
+                          {isEnFormationDoublon&&<span style={{fontSize:9,background:"#ede9fe",color:"#6d28d9",borderRadius:8,padding:"1px 6px",fontWeight:700,display:"inline-block",marginTop:1}}>🎓 En formation</span>}
                           <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
                             {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
                         </div>
                         {row.isJourneeSpeciale?
-                        <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>📝</button>
+                        <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto",flexShrink:0}}>📝</button>
                         :
-                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>}
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto",flexShrink:0}}>🔄</button>}
                       </div>
                       {alea?.type==="message"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"4px 9px"}}>
                         <span style={{fontSize:12}}>📢</span>
