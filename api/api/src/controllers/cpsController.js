@@ -5,7 +5,7 @@ async function getCps(req, res) {
   const { from, to } = req.query;
   try {
     const [rows] = await pool.query(
-      `SELECT cp_agent, date_jour, equipe, js_code, horaires, famille
+      `SELECT cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation
        FROM planning_cps
        WHERE (? IS NULL OR date_jour >= ?)
          AND (? IS NULL OR date_jour <= ?)
@@ -29,7 +29,7 @@ async function getLastImport(req, res) {
 }
 
 // POST /api/cps/import  -> import en masse depuis OCR (n'importe quel agent connecte)
-// body: { entries: [{cp_agent, date_jour, equipe, js_code, horaires, famille}, ...] }
+// body: { entries: [{cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation}, ...] }
 // Enregistre aussi un lot d'historique (avant/apres par ligne) pour permettre
 // d'annuler l'import, et purge les lots de plus de 90 jours au passage.
 async function importCps(req, res) {
@@ -41,30 +41,31 @@ async function importCps(req, res) {
     const details = [];
     for (const e of entries) {
       const [avantRows] = await conn.query(
-        'SELECT equipe, js_code, horaires FROM planning_cps WHERE cp_agent=? AND date_jour=?',
+        'SELECT equipe, js_code, horaires, en_formation FROM planning_cps WHERE cp_agent=? AND date_jour=?',
         [e.cp_agent, e.date_jour]);
       const avant = avantRows[0] || null;
+      const enFormation = e.en_formation ? 1 : 0;
       await conn.query(
-        `INSERT INTO planning_cps (cp_agent, date_jour, equipe, js_code, horaires, famille, importe_par)
-         VALUES (?,?,?,?,?,?,?)
+        `INSERT INTO planning_cps (cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation, importe_par)
+         VALUES (?,?,?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE equipe=VALUES(equipe), js_code=VALUES(js_code),
-           horaires=VALUES(horaires), famille=VALUES(famille),
+           horaires=VALUES(horaires), famille=VALUES(famille), en_formation=VALUES(en_formation),
            importe_le=NOW(), importe_par=VALUES(importe_par)`,
-        [e.cp_agent, e.date_jour, e.equipe, e.js_code||null, e.horaires||null, e.famille, req.agent.cp]);
-      details.push({ e, avant });
+        [e.cp_agent, e.date_jour, e.equipe, e.js_code||null, e.horaires||null, e.famille, enFormation, req.agent.cp]);
+      details.push({ e, avant, enFormation });
     }
     const [batchResult] = await conn.query(
       'INSERT INTO cps_import_batch (importe_par, nb_entrees) VALUES (?, ?)',
       [req.agent.cp, entries.length]);
     const batchId = batchResult.insertId;
-    for (const { e, avant } of details) {
+    for (const { e, avant, enFormation } of details) {
       await conn.query(
         `INSERT INTO cps_import_detail
-           (batch_id, cp_agent, date_jour, famille, avant_equipe, avant_js_code, avant_horaires, apres_equipe, apres_js_code, apres_horaires)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+           (batch_id, cp_agent, date_jour, famille, avant_equipe, avant_js_code, avant_horaires, avant_en_formation, apres_equipe, apres_js_code, apres_horaires, apres_en_formation)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [batchId, e.cp_agent, e.date_jour, e.famille,
-         avant?.equipe||null, avant?.js_code||null, avant?.horaires||null,
-         e.equipe, e.js_code||null, e.horaires||null]);
+         avant?.equipe||null, avant?.js_code||null, avant?.horaires||null, avant?avant.en_formation:null,
+         e.equipe, e.js_code||null, e.horaires||null, enFormation]);
     }
     await conn.query('DELETE FROM cps_import_batch WHERE importe_le < NOW() - INTERVAL 90 DAY');
     await conn.commit();
@@ -108,8 +109,8 @@ async function undoLastImport(req, res) {
         await conn.query('DELETE FROM planning_cps WHERE cp_agent=? AND date_jour=?', [d.cp_agent, d.date_jour]);
       } else {
         await conn.query(
-          'UPDATE planning_cps SET equipe=?, js_code=?, horaires=? WHERE cp_agent=? AND date_jour=?',
-          [d.avant_equipe, d.avant_js_code, d.avant_horaires, d.cp_agent, d.date_jour]);
+          'UPDATE planning_cps SET equipe=?, js_code=?, horaires=?, en_formation=? WHERE cp_agent=? AND date_jour=?',
+          [d.avant_equipe, d.avant_js_code, d.avant_horaires, d.avant_en_formation||0, d.cp_agent, d.date_jour]);
       }
     }
     await conn.query('UPDATE cps_import_batch SET annule_le=NOW(), annule_par=? WHERE id=?', [req.agent.cp, latest.id]);

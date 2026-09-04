@@ -1530,7 +1530,13 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
         const dowDk=new Date(dateKey).getDay(); // 0=dim, 6=sam
         const isLneFusion=(p.id==="N")||(p.id==="AM"&&dowDk===6)||(p.id==="M"&&dowDk===0);
         const lneLabel=(isLneFusion&&poste.code==="LNE")?"AC LNE/VGD":poste.label;
-        rows.push({poste:{...poste,label:`${jsCode} · ${lneLabel}`},jsCode,agents:ags,famille:"PRCI",isJournee:false,maxSlots:isPrevisionnel?Math.max(ags.length,1):1});
+        // 03/09 : sur CPS Officiel, un poste 3x8 reste normalement limite a 1
+        // case (maxSlots=1) -- un vrai doublon accidentel continue de n'en
+        // afficher qu'une, comme avant. Elargi uniquement si l'import a
+        // confirme un agent en formation/doublon (marqueur "/" SNCF, voir
+        // handleCpsImport) parmi les agents de cette case precise.
+        const hasFormationDoublon=!isPrevisionnel&&ags.some(a=>schedule[`${a.id}-${dateKey}`]?.enFormation);
+        rows.push({poste:{...poste,label:`${jsCode} · ${lneLabel}`},jsCode,agents:ags,famille:"PRCI",isJournee:false,maxSlots:(isPrevisionnel||hasFormationDoublon)?Math.max(ags.length,1):1});
       });
     }
 
@@ -1547,7 +1553,9 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
       POSTES_PAR_3x8.forEach(poste=>{
         const jsCode=poste[p.jsKey];if(!jsCode)return;
         const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===jsCode||en.poste===poste.label)&&!EQ[en.equipe]?.prive;});
-        rows.push({poste:{...poste,label:`${jsCode} · ${poste.label}`},jsCode,agents:ags,famille:"PAR",isJournee:false,maxSlots:isPrevisionnel?Math.max(ags.length,1):1});
+        // 03/09 : meme elargissement conditionnel que le bloc PRCI 3x8 ci-dessus.
+        const hasFormationDoublon=!isPrevisionnel&&ags.some(a=>schedule[`${a.id}-${dateKey}`]?.enFormation);
+        rows.push({poste:{...poste,label:`${jsCode} · ${poste.label}`},jsCode,agents:ags,famille:"PAR",isJournee:false,maxSlots:(isPrevisionnel||hasFormationDoublon)?Math.max(ags.length,1):1});
       });
     }
 
@@ -2235,6 +2243,18 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // verification, retire car il ne se declenchait jamais).
           if(jsCode==="PILND-") jsCode="PILNO-"; // fix OCR : D lu au lieu de O
           if(jsCode==="PIAOJX") jsCode="PIADJX"; // fix OCR : O lu au lieu de D
+          // Marqueur SNCF "agent en doublon/formation sur ce poste" (03/09) :
+          // un "/" colle juste apres le code JS du titulaire (ex: "PILCL-/",
+          // "PILCLX/") pour signaler un 2e agent sur le meme poste, pas une
+          // erreur de saisie. Meme convention deja connue et geree cote import
+          // du derole previsionnel (voir deriveCodeEquipeBulletin plus haut,
+          // commentaire "Formation en doublon sur un poste"), jamais reliee a
+          // cet import CPS Officiel jusqu'ici -- confirme sur 2 vrais PDF
+          // (Olivier, 03-04/09) : "PILCL-/ [...] MENDY [...]" (matinee) et
+          // "PILCLX/ [...] MENDY [...]" (nuit) -- generique, independant du
+          // poste/de la vacation. jsCodeMatch[0] est le prefixe exact matche
+          // (avant fixups) donc encore intact a cet endroit de la ligne.
+          const enFormation=jsCodeMatch&&/^\s*\//.test(lineForJs.slice(jsCodeMatch[0].length));
           // fix extraction (17/08) : un nom de famille en 2 mots (ex: "VICENTE CARREIRA",
           // "EL ADRAOUI", "LE MOISY") peut etre extrait par pdfjs comme un seul mot colle
           // sans espace ("VICENTECARREIRA") - la comparaison stricte ne matchait alors
@@ -2305,14 +2325,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
           if(existing&&(existing.equipe!==equipe||existing.jsCode!==jsCode)) ec++;
           const finalJsCode=jsCode||existing?.jsCode||null;
-          updates.push({key,equipe,jsCode:finalJsCode,horaires,cp_agent:ag.id,date_jour:lineDateStr,famille:ag.fam||"PAR"});
+          updates.push({key,equipe,jsCode:finalJsCode,horaires,cp_agent:ag.id,date_jour:lineDateStr,famille:ag.fam||"PAR",enFormation:!!enFormation});
           nb++;
         });
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
 
         // On ne sauvegarde pas tout de suite : on affiche un récap et on attend
         // une confirmation explicite avant d'écraser le planning officiel partagé.
-        setPendingImport({date:dateStr,nb,ecarts:ec,updates});
+        const nbFormation=updates.filter(u=>u.enFormation).length;
+        setPendingImport({date:dateStr,nb,ecarts:ec,nbFormation,updates});
       }catch(err){
         alert("Erreur import CPS : "+err.message);
       }
@@ -2338,11 +2359,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         js_code: u.jsCode,
         horaires: u.horaires,
         famille: u.famille,
+        en_formation: u.enFormation?1:0,
       })));
 
       setSchedule(prev=>{
         const next={...prev};
-        updates.forEach(u=>{next[u.key]={equipe:u.equipe,jsCode:u.jsCode,horaires:u.horaires,prive:false,impressionAt:new Date().toISOString()};});
+        updates.forEach(u=>{next[u.key]={equipe:u.equipe,jsCode:u.jsCode,horaires:u.horaires,enFormation:!!u.enFormation,prive:false,impressionAt:new Date().toISOString()};});
         return next;
       });
       setCpsResult({date:dateStr,nb,ecarts:ec});
@@ -2378,6 +2400,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <div style={{fontSize:13,fontWeight:700,color:"#92400e"}}>
         ⚠️ Confirmer l'import : <strong>{pendingImport.nb} agent{pendingImport.nb>1?"s":""}</strong> détecté{pendingImport.nb>1?"s":""} pour le <strong>{new Date(pendingImport.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"})}</strong>
         {pendingImport.ecarts>0&&<> · {pendingImport.ecarts} écart{pendingImport.ecarts>1?"s":""} avec le planning perso déclaré</>}
+        {pendingImport.nbFormation>0&&<> · 🎓 {pendingImport.nbFormation} en doublon/formation</>}
       </div>
       <div style={{fontSize:11,color:"#92400e",opacity:.85}}>Ça va remplacer le planning officiel partagé pour cette date. Vérifie que c'est le bon document avant de valider.</div>
       <div style={{display:"flex",gap:8}}>
@@ -2483,7 +2506,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // titulaire supplémentaire -- le badge "⚠ Conflit" ne doit se
           // déclencher que s'il y a réellement 2+ VRAIS titulaires (ex: deux
           // saisies contradictoires), jamais pour titulaire+étudiant.
-          const nbTitulaires=row.agents.filter(a=>!schedule[`${a.id}-${dateKey}`]?.etudePoste).length;
+          // estDoublure (03/09) : etudePoste (Planning Previsionnel, self-
+          // declare) OU enFormation (CPS Officiel, marqueur "/" a l'import) --
+          // les deux vivent sur des schedule/tables totalement separes,
+          // jamais peuples simultanement pour la meme entree, donc combiner
+          // les deux ici ne risque aucune confusion entre les deux mecanismes.
+          const estDoublure=a=>{const en=schedule[`${a.id}-${dateKey}`];return !!(en?.etudePoste||en?.enFormation);};
+          const nbTitulaires=row.agents.filter(a=>!estDoublure(a)).length;
           // rowAgentsTries (27/08, demandé par Olivier : "l'agent a l'etude
           // doit etre a droite du titulaire sur ordi et en dessous du
           // titulaire sur tel") -- tri stable, jamais les vrais titulaires
@@ -2491,8 +2520,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           // seul (à droite si la largeur le permet, sinon repasse en dessous
           // sur petit écran), sans changer la mise en page elle-même.
           const rowAgentsTries=row.agents.slice().sort((a,b)=>{
-            const eA=!!schedule[`${a.id}-${dateKey}`]?.etudePoste;
-            const eB=!!schedule[`${b.id}-${dateKey}`]?.etudePoste;
+            const eA=estDoublure(a),eB=estDoublure(b);
             return (eA===eB)?0:(eA?1:-1);
           });
           return(<div key={`${row.jsCode}-${ri}`} style={{display:"flex",alignItems:"stretch",borderBottom:ri<section.rows.length-1?`1px solid ${pc.border}`:"none",background:ri%2===0?pc.bg:"#fff",borderLeft:`4px solid ${fam?.accent||"transparent"}`}}>
@@ -2539,6 +2567,11 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     const ag=rowAgentsTries[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
                     if(search&&ag&&!`${ag.prenom} ${ag.nom}`.toLowerCase().includes(search.toLowerCase()))return null;
                     const isForm=en?.equipe==="JF";const isMe=ag&&currentAgent?.id===ag.id;
+                    // isEnFormationDoublon (03/09) : meme traitement visuel que
+                    // "enEtude" en Planning Previsionnel (badge, jamais en
+                    // conflit) -- ici pour un agent confirme en doublon/
+                    // formation par l'import CPS Officiel (marqueur "/").
+                    const isEnFormationDoublon=!!en?.enFormation;
                     // row.famille||ag?.famille (23/08) : les postes generiques toutes
                     // familles (DISPO/RFT SAM/JEQ...) ont row.famille=null -- sans ce
                     // repli sur la vraie famille de l'agent, findAlea/setAleaTarget
@@ -2608,10 +2641,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       </div>);
                     }
                     if(ag)return(<div key={si} style={{display:"flex",flexDirection:"column",gap:0}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6,background:isForm?"#f0fdf4":isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe&&!isForm?2.5:1.5}px solid ${isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:alea?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px",boxShadow:isMe&&!isForm?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,background:isEnFormationDoublon?"#f5f3ff":isForm?"#f0fdf4":isMe?(fam?.highlightBg||"#c7d2fe"):(fam?.light||"rgba(255,255,255,.8)"),border:`${isMe&&!isForm&&!isEnFormationDoublon?2.5:1.5}px solid ${isEnFormationDoublon?"#c4b5fd":isForm?"#22c55e":isMe?(fam?.accent||"#6366f1"):"rgba(0,0,0,.07)"}`,borderRadius:alea?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px",boxShadow:isMe&&!isForm&&!isEnFormationDoublon?`0 0 0 2px ${fam?.accent||"#6366f1"}22`:"none"}}>
                         <Av initials={ag.initials} size={22} famille={ag.famille}/>
                         <div>
-                          <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:5}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{ag.prenom} {ag.nom}</div>
+                            {isEnFormationDoublon&&<span style={{fontSize:9,background:"#ede9fe",color:"#6d28d9",borderRadius:8,padding:"1px 6px",fontWeight:700}}>🎓 En formation</span>}
+                          </div>
                           <div style={{fontSize:9,color:"#94a3b8",fontFamily:"monospace"}}>{ag.grade}</div>
                             {row.isJourneeSpeciale&&findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)&&<div style={{fontSize:9,color:"#7c3aed",fontStyle:"italic"}}>{findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey).message}</div>}
                         </div>

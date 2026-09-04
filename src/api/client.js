@@ -777,7 +777,7 @@ export const usage = {
 export const cps = {
   /**
    * Charger tout le planning CPS sur une période
-   * Retourne un objet { "AGENTID-YYYY-MM-DD": { equipe, jsCode, horaires, famille } }
+   * Retourne un objet { "AGENTID-YYYY-MM-DD": { equipe, jsCode, horaires, famille, enFormation } }
    */
   async getSchedule(from, to) {
     const params = new URLSearchParams();
@@ -793,6 +793,10 @@ export const cps = {
         jsCode: row.js_code || null,
         horaires: row.horaires || null,
         famille: row.famille || null,
+        // 03/09 : agent en doublon/formation sur ce poste (marqueur SNCF "/"
+        // en fin de code JS, ex: "PILCL-/") -- purement informatif, jamais lié
+        // au planning perso ni aux compteurs Formation/Étude de poste de l'agent.
+        enFormation: !!row.en_formation,
         prive: false,
       };
     });
@@ -801,7 +805,7 @@ export const cps = {
 
   /**
    * Importer en masse des entrées CPS (n'importe quel agent connecté)
-   * @param {Array<{cp_agent, date_jour, equipe, js_code, horaires, famille}>} entries
+   * @param {Array<{cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation}>} entries
    */
   import: (entries) =>
     apiFetch('/cps/import', {
