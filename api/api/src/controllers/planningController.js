@@ -118,7 +118,7 @@ async function getAllPublic(req, res) {
 // liste des combinables : Congés a déjà son propre type de vague dans ce
 // module, avec sa règle d'écrasement dédiée.
 const EQUIPE2_COMBINABLES_BULK = new Set(['N','VT','RU','RQ','RN','TC','TY','MA']);
-const ANCRES_POUR_NUIT = new Set(['RP','RPP','RU']);
+const ANCRES_POUR_NUIT = new Set(['RP','RPP','RU','NU']);
 const ANCRES_POUR_ABSENCE = new Set(['RP','RPP']);
 
 async function bulkFill(req, res) {

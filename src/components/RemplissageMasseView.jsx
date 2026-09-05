@@ -52,6 +52,7 @@ const TYPES_JOURNEE = [
   { code:"rp",     label:"RP" },
   { code:"rpp",    label:"RPP" },
   { code:"ru",     label:"RU" },
+  { code:"nu",     label:"NU" },
   { code:"conges", label:"Congés" },
 ];
 
@@ -169,17 +170,18 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       const label = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}`;
       return { id, type:"poste", label, dates, write:{ kind:"planning", codeEquipe:vacation, codePoste:posteCode, jsCode, horaires, overwrite:false } };
     }
-    if (typeJournee==="rp" || typeJournee==="rpp" || typeJournee==="ru") {
-      // 05/09/2026 (Olivier : "et RU est peut etre combiné avec une nuit ?") --
-      // RU n'est jamais une ancre pour CODES_COMBINABLES_EQUIPE2 (RU+VT/RQ/...
-      // se remplacent simplement, comme dans DayEditPopup) mais PEUT combiner
-      // avec une vraie Nuit accolée, exactement comme n'importe quel autre
-      // type1 -- ce toggle ("N") n'a jamais été restreint à RP/RPP côté popup
-      // (voir toggleType1, 1er if de la fonction, aucune condition sur type1).
-      // combinablesActuels (calculé plus bas dans le composant) restreint déjà
-      // les boutons proposés pour "ru" à Nuit seule -- ici on fait juste
-      // confiance à `combinable2`, jamais rempli avec autre chose pour "ru".
-      const codeEquipe = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : "RU";
+    if (typeJournee==="rp" || typeJournee==="rpp" || typeJournee==="ru" || typeJournee==="nu") {
+      // 05/09/2026 (Olivier : "et RU est peut etre combiné avec une nuit ?"
+      // puis correction "att c'etait NU avec une nuit") -- ni RU ni NU ne
+      // sont une ancre pour CODES_COMBINABLES_EQUIPE2 (RU/NU+VT/RQ/... se
+      // remplacent simplement, comme dans DayEditPopup) mais PEUVENT
+      // combiner avec une vraie Nuit accolée, exactement comme n'importe
+      // quel autre type1 -- ce toggle ("N") n'a jamais été restreint à
+      // RP/RPP côté popup (voir toggleType1, 1er if de la fonction, aucune
+      // condition sur type1). combinablesDisponibles (calculé plus bas dans
+      // le composant) restreint déjà les boutons proposés pour "ru"/"nu" à
+      // Nuit seule -- ici on fait juste confiance à `combinable2`.
+      const codeEquipe = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="nu" ? "NU" : "RU";
       const combo = COMBINABLES2.find(c=>c.code===combinable2);
       const label = combo ? `${codeEquipe} + ${combo.label}` : codeEquipe;
       return { id, type:typeJournee, label, dates, write:{ kind:"planning", codeEquipe, codePoste:null, jsCode:null, horaires:null, overwrite:false, equipe2: combinable2||null } };
@@ -231,18 +233,19 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   };
 
   // 05/09/2026 (Olivier : "et RU est peut etre combiné avec une nuit ? dans
-  // le planning et ici ?") -- vérifié dans toggleType1 (DayEditPopup.jsx) :
-  // le toggle "Nuit ↓" (code "N") n'a JAMAIS été restreint à RP/RPP, c'est
-  // le tout premier `if` de la fonction, sans condition sur type1 -- RU (et
-  // en théorie n'importe quel autre type1) peut donc déjà se combiner avec
-  // une vraie Nuit accolée dans le planning perso, ce qui est distinct de
+  // le planning et ici ?" puis correction "att c'etait NU avec une nuit") --
+  // vérifié dans toggleType1 (DayEditPopup.jsx) : le toggle "Nuit ↓" (code
+  // "N") n'a JAMAIS été restreint à RP/RPP, c'est le tout premier `if` de la
+  // fonction, sans condition sur type1 -- RU et NU (et en théorie n'importe
+  // quel autre type1) peuvent donc déjà se combiner avec une vraie Nuit
+  // accolée dans le planning perso, ce qui est distinct de
   // CODES_COMBINABLES_EQUIPE2 (l'ancre RP/RPP-only, réservée aux 05/09 :
-  // RU+VT/RQ/... se remplacent simplement, jamais ne se combinent). D'où :
-  // RP/RPP proposent les 8 combinables (Nuit + les 7 absences), RU ne
-  // propose QUE Nuit (seule combinaison valide avec RU comme ancre).
-  const ancreActuelle = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="ru" ? "RU" : null;
+  // RU/NU+VT/RQ/... se remplacent simplement, jamais ne se combinent). D'où :
+  // RP/RPP proposent les 8 combinables (Nuit + les 7 absences), RU et NU ne
+  // proposent QUE Nuit (seule combinaison valide avec RU/NU comme ancre).
+  const ancreActuelle = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="ru" ? "RU" : typeJournee==="nu" ? "NU" : null;
   const combinablesDisponibles = (typeJournee==="rp"||typeJournee==="rpp") ? COMBINABLES2
-    : typeJournee==="ru" ? COMBINABLES2.filter(c=>c.code==="N")
+    : (typeJournee==="ru"||typeJournee==="nu") ? COMBINABLES2.filter(c=>c.code==="N")
     : [];
 
   const [miniYear, miniMonthNum] = miniMonth.split("-").map(Number);
@@ -647,13 +650,15 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                       }}
                       disabled={bloque||fillBusy}
                       title={dejaAncreSansCombo ? `Déjà ${ancreActuelle} — clique pour ouvrir ce jour et ajouter "${COMBINABLES2.find(c=>c.code===combinable2)?.label||combinable2}" directement` : occupeDb ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : enAttenteLot ? "Jour déjà dans une autre vague du lot — retire-le de cette vague si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
-                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":dejaAncreSansCombo?"#0369a1":occupeDb?couleurDeja:enAttenteLot?"#f59e0b":occupeReel?"#fde68a":"#cbd5e1"}`,
+                      style={{aspectRatio:"1",border:`${dejaAncreSansCombo?2.5:1.5}px solid ${isSel?"#0f4c81":dejaAncreSansCombo?"#1d4ed8":occupeDb?couleurDeja:enAttenteLot?"#f59e0b":occupeReel?"#fde68a":"#cbd5e1"}`,
                         borderStyle:dejaAncreSansCombo?"dashed":"solid",
+                        boxShadow:dejaAncreSansCombo?"0 0 0 3px #dbeafe":"none",
                         borderRadius:6,background:isSel?"#0f4c81":dejaAncreSansCombo?"#eff6ff":occupeDb?"#f1f5f9":enAttenteLot?"#fffbeb":"#fff",
-                        color:isSel?"#fff":dejaAncreSansCombo?"#0369a1":occupeDb?"#cbd5e1":enAttenteLot?"#b45309":"#334155",opacity:fillBusy&&!bloque?.5:1,
+                        color:isSel?"#fff":dejaAncreSansCombo?"#1d4ed8":occupeDb?"#cbd5e1":enAttenteLot?"#b45309":"#334155",opacity:fillBusy&&!bloque?.5:1,
                         fontSize:11,fontWeight:700,cursor:(bloque||fillBusy)?"default":"pointer",
-                        display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:0,gap:0}}>
                       {day}
+                      {dejaAncreSansCombo && <span style={{fontSize:11,lineHeight:1}}>✎</span>}
                     </button>
                   );
                 })}
