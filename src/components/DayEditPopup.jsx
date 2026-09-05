@@ -787,12 +787,24 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
               {CODES_REPOS_LIGNE1.map(code => {
                 const r = CODES_REPOS.find(x => x.code === code);
+                // 05/09 -- bug corrigé (Olivier : "si j'ai rp et ru dans la
+                // case et que je veux garder le rp et effacer le ru, la case
+                // [le bouton] est pas coloré [...] la logique serait de la
+                // laisser colorer, puis pour la supprimer de cocher dessus
+                // pour l'eteindre") : le bouton ne reflétait que type1, jamais
+                // typeN -- un code posé en 2e créneau (ex RU sous RP)
+                // paraissait "non sélectionné" alors qu'il est bien présent
+                // dans la case, et rien n'indiquait qu'un reclic dessus le
+                // retire (ce que toggleType1 fait déjà correctement). Pour
+                // RP/RPP/NU (jamais combinables), typeN===code est toujours
+                // faux -- ce OR ne change rien pour eux.
+                const actif = type1 === r.code || typeN === r.code;
                 return (
                   <button key={r.code} onClick={() => toggleType1(r.code)} style={{
                     padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                     fontSize:12, fontWeight:700,
-                    background: type1 === r.code ? r.color : "#f1f5f9",
-                    color: type1 === r.code ? "#fff" : "#475569",
+                    background: actif ? r.color : "#f1f5f9",
+                    color: actif ? "#fff" : "#475569",
                     transition:"all .1s",
                   }}>{r.label}</button>
                 );
@@ -848,12 +860,12 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 background: showGreve || greve ? "#dc2626" : "#fef2f2",
                 color: showGreve || greve ? "#fff" : "#991b1b",
               }}>✊ Grève{greve ? " · "+greve : ""}</button>
-              {(() => { const r = CODES_REPOS.find(x => x.code === "MA"); return (
+              {(() => { const r = CODES_REPOS.find(x => x.code === "MA"); const actif = type1 === r.code || typeN === r.code; return (
                 <button onClick={() => toggleType1(r.code)} style={{
                   padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                   fontSize:12, fontWeight:700,
-                  background: type1 === r.code ? r.color : "#f1f5f9",
-                  color: type1 === r.code ? "#fff" : "#475569",
+                  background: actif ? r.color : "#f1f5f9",
+                  color: actif ? "#fff" : "#475569",
                   transition:"all .1s",
                 }}>{r.label}</button>
               ); })()}
@@ -1051,8 +1063,12 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 // RU/... occupant le 2e créneau (avant ce correctif, `!!typeN`
                 // le remplissait dès que N'IMPORTE QUOI occupait ce créneau,
                 // trompeur maintenant que 8 codes différents peuvent s'y
-                // trouver). Un simple anneau bleu (outline) reste affiché pour
-                // signaler "quelque chose d'autre occupe ce créneau".
+                // trouver). L'anneau bleu ajouté dans un 1er temps pour ce cas
+                // a été retiré le même jour (Olivier : "on voit nuit encadré
+                // [...] est ce vraiment utile ?") -- le bouton RU/RQ/.../
+                // Maladie lui-même s'affiche désormais coloré (voir plus
+                // haut), ça suffit à indiquer où il se trouve, sans faire
+                // croire à tort qu'il est question de "Nuit".
                 const isActive = t.code === "N" ? typeN === "N" : type1 === t.code;
                 return (
                   <button key={t.code} onClick={() => toggleType1(t.code)} style={{
@@ -1062,7 +1078,6 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     color: isActive ? "#fff" : "#475569",
                     display:"flex", flexDirection:"column", alignItems:"center", gap:2,
                     transition:"all .1s",
-                    outline: t.code === "N" && typeN && typeN !== "N" ? "2px solid #3b82f6" : "none",
                   }}>
                     <span>{t.label}</span>
                     <span style={{fontSize:8,opacity:.7}}>{t.heures.split("–")[0]}</span>
