@@ -125,7 +125,7 @@ async function bulkFill(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { dates, code_equipe, code_poste, heure_debut, heure_fin, overwrite, equipe2 } = req.body;
+  const { dates, code_equipe, code_poste, heure_debut, heure_fin, overwrite, equipe2, code_poste2 } = req.body;
   if (!Array.isArray(dates) || dates.length === 0) return res.status(400).json({ error: 'Dates requises' });
   if (!code_equipe) return res.status(400).json({ error: 'code_equipe requis' });
   if (equipe2) {
@@ -174,16 +174,84 @@ async function bulkFill(req, res) {
       // note_perso ici -- ce module n'a pas de note perso).
       if (equipe2) {
         const estNuit = equipe2 === 'N';
+        // Poste de la Nuit (05/09/2026, "mais une nuit sur quel poste ?") --
+        // même convention que saveEntry (client.js) : le code de poste brut
+        // est stocké DIRECTEMENT dans code_poste pour la période ordre=2,
+        // sans conversion (jsCodeNuit côté DayEditPopup.jsx fait pareil) --
+        // jamais pertinent pour un combinable qui n'est pas une vraie Nuit
+        // (VT/RU/RQ/RN/TC/TY/MA n'ont pas de poste).
         await conn.query(
           `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
-           VALUES (?,2,?,NULL,?,?,0,'debut_nuit',NULL)`,
-          [jour.id, equipe2, estNuit ? '22:15' : null, estNuit ? '06:17' : null]
+           VALUES (?,2,?,?,?,?,0,'debut_nuit',NULL)`,
+          [jour.id, equipe2, estNuit ? (code_poste2 || null) : null, estNuit ? '22:15' : null, estNuit ? '06:17' : null]
         );
       }
       appliques.push(date);
     }
     await conn.commit();
     res.json({ message: 'Remplissage appliqué', nb_appliques: appliques.length, appliques, ignores });
+  } catch (e) {
+    await conn.rollback();
+    console.error(e); res.status(500).json({ error: 'Erreur serveur' });
+  } finally { conn.release(); }
+}
+
+// POST /api/planning/:cp/bulk-add-combo (05/09/2026, "je veux pouvoir
+// combiner des case rempli par rp [...] et avec nu aussi [...] que ca soit
+// simple a faire") : contrairement a bulkFill (qui refuse tout jour deja
+// occupe, sauf overwrite reserve a Conges), celle-ci vise EXPRESSEMENT un
+// jour DEJA REMPLI par l'ancre choisie (RP/RPP/RU/NU) et lui AJOUTE un 2e
+// creneau -- jamais l'inverse. Ne touche JAMAIS a la periode ordre=1 (le
+// poste/l'ancre reste strictement inchange) ni a aucune autre periode deja
+// presente sur ce jour (note perso, greve, formation -- chacune sa propre
+// ligne, jamais recreee ni supprimee ici) : un simple INSERT additif, pas de
+// DELETE prealable comme bulkFill. 3 garde-fous, chacun fait echouer
+// silencieusement CETTE seule date (ajoutee a `ignores`, jamais une erreur
+// bloquante pour le reste du lot) :
+//  - le jour doit deja exister ET sa periode ordre=1 doit porter EXACTEMENT
+//    le code_equipe demande (jamais un autre code, meme proche -- ex RPP
+//    quand RP est demande) ;
+//  - aucune periode "2e creneau" (note='debut_nuit') ne doit deja exister
+//    sur ce jour (jamais un 2e 2e-creneau) ;
+//  - meme regle de combinaison que bulkFill (EQUIPE2_COMBINABLES_BULK /
+//    ANCRES_POUR_NUIT / ANCRES_POUR_ABSENCE), verifiee une seule fois avant
+//    la boucle puisqu'elle ne depend pas de la date.
+async function bulkAddCombo(req, res) {
+  const { cp } = req.params;
+  if (req.agent.cp !== cp && !req.agent.is_admin)
+    return res.status(403).json({ error: 'Accès refusé' });
+  const { dates, ancre, equipe2, code_poste2 } = req.body;
+  if (!Array.isArray(dates) || dates.length === 0) return res.status(400).json({ error: 'Dates requises' });
+  if (!ancre) return res.status(400).json({ error: 'ancre requise' });
+  if (!equipe2 || !EQUIPE2_COMBINABLES_BULK.has(equipe2)) return res.status(400).json({ error: 'Code de 2e créneau invalide' });
+  const ancresValides = equipe2 === 'N' ? ANCRES_POUR_NUIT : ANCRES_POUR_ABSENCE;
+  if (!ancresValides.has(ancre)) return res.status(400).json({ error: 'Cette combinaison n\'est pas valide' });
+  const estNuit = equipe2 === 'N';
+  const appliques = [], ignores = [];
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    for (const date of dates) {
+      const [[jour]] = await conn.query(
+        'SELECT id FROM planning_jour WHERE cp_agent=? AND date_jour=?', [cp, date]
+      );
+      if (!jour) { ignores.push(date); continue; }
+      const [periodes] = await conn.query(
+        'SELECT ordre, code_equipe, note FROM planning_periode WHERE planning_jour_id=?', [jour.id]
+      );
+      const p1 = periodes.find(p => p.ordre === 1);
+      if (!p1 || p1.code_equipe !== ancre) { ignores.push(date); continue; }
+      if (periodes.some(p => p.note === 'debut_nuit')) { ignores.push(date); continue; }
+      const nextOrdre = periodes.reduce((max, p) => Math.max(max, p.ordre), 0) + 1;
+      await conn.query(
+        `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
+         VALUES (?,?,?,?,?,?,0,'debut_nuit',NULL)`,
+        [jour.id, nextOrdre, equipe2, estNuit ? (code_poste2 || null) : null, estNuit ? '22:15' : null, estNuit ? '06:17' : null]
+      );
+      appliques.push(date);
+    }
+    await conn.commit();
+    res.json({ message: '2e créneau ajouté', nb_appliques: appliques.length, appliques, ignores });
   } catch (e) {
     await conn.rollback();
     console.error(e); res.status(500).json({ error: 'Erreur serveur' });
@@ -317,4 +385,4 @@ async function bulkClearUndo(req, res) {
   } finally { conn.release(); }
 }
 
-module.exports = { getPlanning, getAllPublic, setJour, deleteJour, bulkFill, bulkClear, bulkClearUndo };
+module.exports = { getPlanning, getAllPublic, setJour, deleteJour, bulkFill, bulkAddCombo, bulkClear, bulkClearUndo };

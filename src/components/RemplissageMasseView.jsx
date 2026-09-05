@@ -139,7 +139,16 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   // 2e créneau combiné avec RP/RPP (05/09/2026) -- "" = aucun, sinon un code
   // de COMBINABLES2. Uniquement pertinent quand typeJournee==="rp"|"rpp".
   const [combinable2, setCombinable2] = useState("");
+  // Poste de la Nuit (05/09/2026, Olivier : "mais une nuit sur quel poste ?
+  // tu perds la tete non ?") -- une vraie Nuit sans poste n'a pas de sens
+  // opérationnel, exactement comme la section "Poste de nuit" du popup de
+  // saisie normal (DayEditPopup.jsx, postesN) qui apparaît dès que "Nuit ↓"
+  // est coché. Uniquement pertinent quand combinable2==="N". Optionnel,
+  // comme dans le popup (posteN peut rester vide là-bas aussi) -- mais
+  // désormais au moins PROPOSÉ, ce qui manquait entièrement jusqu'ici.
+  const [posteNuit, setPosteNuit] = useState("");
   const postesDispo = getPostesPourAgent(agent, agentProfiles, vacation);
+  const postesNuitDispo = getPostesPourAgent(agent, agentProfiles, "N");
 
   const [miniMonth, setMiniMonth] = useState(()=>{
     const now = new Date();
@@ -183,8 +192,12 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       // Nuit seule -- ici on fait juste confiance à `combinable2`.
       const codeEquipe = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="nu" ? "NU" : "RU";
       const combo = COMBINABLES2.find(c=>c.code===combinable2);
-      const label = combo ? `${codeEquipe} + ${combo.label}` : codeEquipe;
-      return { id, type:typeJournee, label, dates, write:{ kind:"planning", codeEquipe, codePoste:null, jsCode:null, horaires:null, overwrite:false, equipe2: combinable2||null } };
+      // 05/09/2026 (Olivier : "mais une nuit sur quel poste ?") -- le poste
+      // de la Nuit n'est jamais devine, jamais imposé non plus (comme dans
+      // le popup normal) -- purement ce que l'agent a choisi juste en dessous.
+      const posteNuitLabel = combinable2==="N" && posteNuit ? (postesNuitDispo.find(p=>p.code===posteNuit)?.label||posteNuit) : null;
+      const label = combo ? `${codeEquipe} + ${combo.label}${posteNuitLabel?` · ${posteNuitLabel}`:""}` : codeEquipe;
+      return { id, type:typeJournee, label, dates, write:{ kind:"planning", codeEquipe, codePoste:null, jsCode:null, horaires:null, overwrite:false, equipe2: combinable2||null, codePoste2: combinable2==="N" ? (posteNuit||null) : null } };
     }
     // conges
     if (!congeStatut) return null;
@@ -206,7 +219,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   const changerType = (t) => {
     if (fillBusy) return;
     ajouterAuLot();
-    setTypeJournee(t); setPosteCode(""); setCongeStatut(""); setCombinable2(""); setJoursSelect([]); setFillMsg(null);
+    setTypeJournee(t); setPosteCode(""); setCongeStatut(""); setCombinable2(""); setPosteNuit(""); setJoursSelect([]); setFillMsg(null);
   };
   const choisirVacation = (code) => {
     if (fillBusy) return;
@@ -230,6 +243,13 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     const nouveau = combinable2===code ? "" : code;
     if (nouveau!==combinable2) ajouterAuLot();
     setCombinable2(nouveau);
+    setPosteNuit(""); // change de combinable -> le poste de nuit choisi avant ne s'applique plus
+  };
+  const choisirPosteNuit = (code) => {
+    if (fillBusy) return;
+    const nouveau = posteNuit===code ? "" : code;
+    if (nouveau!==posteNuit) ajouterAuLot();
+    setPosteNuit(nouveau);
   };
 
   // 05/09/2026 (Olivier : "et RU est peut etre combiné avec une nuit ? dans
@@ -309,13 +329,63 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       });
       return { ok:true, appliques:entree.dates.length, ignores:0 };
     }
-    const { codeEquipe, codePoste, jsCode, horaires, overwrite, equipe2 } = entree.write;
+    const { codeEquipe, codePoste, jsCode, horaires, overwrite, equipe2, codePoste2 } = entree.write;
+    // 05/09/2026 ("je veux pouvoir combiner des case rempli par rp [...] et
+    // avec nu aussi [...] que ca soit simple a faire") -- un jour du lot
+    // peut être soit vraiment vide (l'ancre ET le combo s'écrivent ensemble,
+    // chemin bulkFill déjà existant), soit DÉJÀ rempli par cette ancre
+    // exacte sans 2e créneau (le calendrier ne rend sélectionnables QUE ces
+    // 2 cas -- voir dejaAncreCombinable plus bas). Ce 2e cas passe par
+    // bulkAddCombo, qui n'écrit QUE le 2e créneau, sans jamais toucher à
+    // l'ancre déjà en place ni à aucune autre période du jour (note perso,
+    // grève, formation).
+    if (equipe2 && (entree.type==="rp"||entree.type==="rpp"||entree.type==="ru"||entree.type==="nu")) {
+      const datesVides = [], datesDejaAncrees = [];
+      entree.dates.forEach(d => {
+        const v = schedule[`${agCp}-${d}`];
+        if (v && v.equipe===codeEquipe && !v.equipe2) datesDejaAncrees.push(d);
+        else datesVides.push(d);
+      });
+      try {
+        let totalAppliques = 0, totalIgnores = 0;
+        if (datesVides.length>0) {
+          const res = await api.planning.bulkFill(agCp, { dates: datesVides, codeEquipe, codePoste, horaires, overwrite, equipe2, codePoste2 });
+          setSchedule(prev => {
+            const next = {...prev};
+            (res.appliques||[]).forEach(d => {
+              next[`${agCp}-${d}`] = { equipe: codeEquipe, jsCode: jsCode || codePoste, horaires, prive: !["M","AM","N","J","CA"].includes(codeEquipe),
+                equipe2, jsCode2: (equipe2==="N" && codePoste2) ? codePoste2 : null };
+            });
+            return next;
+          });
+          totalAppliques += res.nb_appliques; totalIgnores += res.ignores?.length||0;
+        }
+        if (datesDejaAncrees.length>0) {
+          const res2 = await api.planning.bulkAddCombo(agCp, { dates: datesDejaAncrees, ancre: codeEquipe, equipe2, codePoste2 });
+          setSchedule(prev => {
+            const next = {...prev};
+            (res2.appliques||[]).forEach(d => {
+              const key = `${agCp}-${d}`;
+              // Fusion sur l'entrée existante -- préserve tout ce que le
+              // jour portait déjà (note perso, grève, formation), jamais un
+              // remplacement complet comme pour un jour vraiment vide.
+              next[key] = { ...(prev[key]||{}), equipe2, jsCode2: (equipe2==="N" && codePoste2) ? codePoste2 : null };
+            });
+            return next;
+          });
+          totalAppliques += res2.nb_appliques; totalIgnores += res2.ignores?.length||0;
+        }
+        return { ok:true, appliques:totalAppliques, ignores:totalIgnores };
+      } catch(e) {
+        return { ok:false, error: e.message || "Erreur réseau" };
+      }
+    }
     try {
-      const res = await api.planning.bulkFill(agCp, { dates: entree.dates, codeEquipe, codePoste, horaires, overwrite, equipe2 });
+      const res = await api.planning.bulkFill(agCp, { dates: entree.dates, codeEquipe, codePoste, horaires, overwrite, equipe2, codePoste2 });
       setSchedule(prev => {
         const next = {...prev};
         (res.appliques||[]).forEach(d => {
-          next[`${agCp}-${d}`] = { equipe: codeEquipe, jsCode: jsCode || codePoste, horaires, prive: !["M","AM","N","J","CA"].includes(codeEquipe), ...(equipe2 ? { equipe2 } : {}) };
+          next[`${agCp}-${d}`] = { equipe: codeEquipe, jsCode: jsCode || codePoste, horaires, prive: !["M","AM","N","J","CA"].includes(codeEquipe) };
         });
         return next;
       });
@@ -590,9 +660,41 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                 ))}
               </div>
             )}
-            {combinablesDisponibles.length>0 && combinable2 && typeof onOuvrirJour==="function" && (
-              <div style={{fontSize:10,fontWeight:600,color:"#0369a1",background:"#eff6ff",border:"1px dashed #93c5fd",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
-                💡 Un jour en pointillés bleus a déjà {ancreActuelle} — clique dessus pour l'ouvrir directement et y ajouter "{combinablesDisponibles.find(c=>c.code===combinable2)?.label}".
+            {/* 05/09/2026 (Olivier : "mais une nuit sur quel poste ? tu perds
+                la tete non ?") -- une vraie Nuit sans poste n'a pas de sens
+                opérationnel, exactement comme la section "Poste de nuit" du
+                popup de saisie normal (postesN, DayEditPopup.jsx), qui
+                apparaît dès que Nuit est cochée. Reprend la même liste
+                filtrée par habilitation (getPostesPourAgent(agent,
+                agentProfiles,"N")) -- optionnel, comme dans le popup (un
+                agent peut aussi y laisser aucun poste choisi). */}
+            {combinable2==="N" && (
+              <div style={{marginBottom:10}}>
+                <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Poste de nuit</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {postesNuitDispo.length===0
+                    ? <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic"}}>Aucun poste habilité pour la Nuit.</div>
+                    : postesNuitDispo.map(p => (
+                      <button key={p.code} onClick={()=>choisirPosteNuit(p.code)} disabled={fillBusy}
+                        style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
+                          background:posteNuit===p.code?"#1e293b":"#f1f5f9",color:posteNuit===p.code?"#fff":"#334155"}}>
+                        {p.label}
+                      </button>
+                    ))
+                  }
+                </div>
+              </div>
+            )}
+            {/* 05/09/2026 (Olivier : "je veux pouvoir combiner des case
+                rempli par rp [...] et avec nu aussi [...] que ca soit
+                simple a faire") -- un jour déjà rempli par l'ancre choisie
+                (sans 2e créneau) devient directement cochable, en bleu, dans
+                le même calendrier que les jours vides -- une seule case à
+                cocher, comme les jours vides, plutôt qu'un détour par un
+                autre popup. */}
+            {combinablesDisponibles.length>0 && combinable2 && (
+              <div style={{fontSize:10,fontWeight:600,color:"#0369a1",background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
+                💡 Les jours en bleu ont déjà {ancreActuelle} — coche-les aussi pour y ajouter "{combinablesDisponibles.find(c=>c.code===combinable2)?.label}", sans toucher au reste du jour.
               </div>
             )}
 
@@ -612,25 +714,22 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   const dk = `${miniYear}-${String(miniMonthNum).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
                   const v = schedule[`${agCp}-${dk}`];
                   const occupeReel = !!(v && (v.equipe || v.equipe2));
-                  const occupeDb = occupeReel && griserSiOccupe;
+                  // 05/09/2026 (Olivier : "je veux pouvoir combiner des case
+                  // rempli par rp [...] et avec nu aussi [...] que ca soit
+                  // simple a faire et que le poste [...] puisse etre mis")
+                  // -- un jour déjà rempli par EXACTEMENT l'ancre choisie
+                  // (RP/RPP/RU/NU), sans 2e créneau déjà posé, devient
+                  // sélectionnable au même titre qu'un jour vide : coché, il
+                  // ne réécrit jamais l'ancre ni ne touche à rien d'autre du
+                  // jour (voir ecrireEntree/bulkAddCombo) -- seul le 2e
+                  // créneau est ajouté. Jamais vrai pour un jour occupé par
+                  // autre chose (poste, un autre repos, déjà 2 créneaux) --
+                  // ceux-là restent bloqués comme avant, à éditer un par un.
+                  const dejaAncreCombinable = !!combinable2 && !!ancreActuelle && v?.equipe===ancreActuelle && !v?.equipe2;
+                  const occupeDb = occupeReel && griserSiOccupe && !dejaAncreCombinable;
                   const enAttenteLot = panierDates.has(dk);
                   const occupe = occupeDb || enAttenteLot;
-                  // 05/09/2026 (Olivier, après avoir cherché en vain à ajouter
-                  // Nuit sur un RP déjà rempli : "si toi tu y arrive, et pas
-                  // moi, c'est que c'est pas intuitif") -- ce module ne
-                  // touche JAMAIS un jour déjà rempli (règle générale
-                  // inchangée, protège note perso/grève/formation qui
-                  // pourraient déjà être sur ce jour), donc "ajouter un 2e
-                  // créneau à un RP/RPP déjà posé" n'est structurellement pas
-                  // possible ici -- c'est un vrai jour à ÉDITER, pas à
-                  // remplir en masse. Plutôt que de laisser un jour grisé
-                  // sans issue, ce cas précis (même ancre déjà là, pas encore
-                  // de 2e créneau) devient un raccourci direct vers le
-                  // popup de saisie normal (onOuvrirJour, câblé depuis
-                  // PersonalView) -- jamais d'écrasement, juste une porte
-                  // d'entrée vers l'outil qui sait déjà le faire correctement.
-                  const dejaAncreSansCombo = !!combinable2 && !!ancreActuelle && typeof onOuvrirJour==="function" && v?.equipe===ancreActuelle && !v?.equipe2;
-                  const bloque = occupe && !dejaAncreSansCombo;
+                  const bloque = occupe;
                   const isSel = joursSelect.includes(dk);
                   // 25/08 (Olivier) : un jour grisé garde un liseré coloré
                   // rappelant ce qui l'occupe déjà -- couleur personnalisée
@@ -644,21 +743,15 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   const couleurDeja = codeDeja ? (agentColors[codeDeja] || DEFAULT_COLORS[codeDeja] || "#e2e8f0") : "#e2e8f0";
                   return (
                     <button key={dk}
-                      onClick={()=>{
-                        if (dejaAncreSansCombo) { onOuvrirJour(dk); return; }
-                        toggleJourSelect(dk,occupe);
-                      }}
+                      onClick={()=>toggleJourSelect(dk,occupe)}
                       disabled={bloque||fillBusy}
-                      title={dejaAncreSansCombo ? `Déjà ${ancreActuelle} — clique pour ouvrir ce jour et ajouter "${COMBINABLES2.find(c=>c.code===combinable2)?.label||combinable2}" directement` : occupeDb ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : enAttenteLot ? "Jour déjà dans une autre vague du lot — retire-le de cette vague si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
-                      style={{aspectRatio:"1",border:`${dejaAncreSansCombo?2.5:1.5}px solid ${isSel?"#0f4c81":dejaAncreSansCombo?"#1d4ed8":occupeDb?couleurDeja:enAttenteLot?"#f59e0b":occupeReel?"#fde68a":"#cbd5e1"}`,
-                        borderStyle:dejaAncreSansCombo?"dashed":"solid",
-                        boxShadow:dejaAncreSansCombo?"0 0 0 3px #dbeafe":"none",
-                        borderRadius:6,background:isSel?"#0f4c81":dejaAncreSansCombo?"#eff6ff":occupeDb?"#f1f5f9":enAttenteLot?"#fffbeb":"#fff",
-                        color:isSel?"#fff":dejaAncreSansCombo?"#1d4ed8":occupeDb?"#cbd5e1":enAttenteLot?"#b45309":"#334155",opacity:fillBusy&&!bloque?.5:1,
+                      title={dejaAncreCombinable ? `Déjà ${ancreActuelle} — coche pour ajouter "${COMBINABLES2.find(c=>c.code===combinable2)?.label||combinable2}" directement, sans toucher au reste` : occupeDb ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : enAttenteLot ? "Jour déjà dans une autre vague du lot — retire-le de cette vague si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
+                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":dejaAncreCombinable?"#60a5fa":occupeDb?couleurDeja:enAttenteLot?"#f59e0b":occupeReel?"#fde68a":"#cbd5e1"}`,
+                        borderRadius:6,background:isSel?"#0f4c81":dejaAncreCombinable?"#eff6ff":occupeDb?"#f1f5f9":enAttenteLot?"#fffbeb":"#fff",
+                        color:isSel?"#fff":dejaAncreCombinable?"#1d4ed8":occupeDb?"#cbd5e1":enAttenteLot?"#b45309":"#334155",opacity:fillBusy&&!bloque?.5:1,
                         fontSize:11,fontWeight:700,cursor:(bloque||fillBusy)?"default":"pointer",
-                        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:0,gap:0}}>
+                        display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
                       {day}
-                      {dejaAncreSansCombo && <span style={{fontSize:11,lineHeight:1}}>✎</span>}
                     </button>
                   );
                 })}

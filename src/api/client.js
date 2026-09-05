@@ -536,7 +536,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
    *  planningController.bulkFill), jamais d'écrasement, SAUF si overwrite
    *  est passé à true (uniquement Congés "Accordé" en masse — même règle
    *  que le popup de saisie normal, qui écrase volontairement). */
-  bulkFill: (agentId, { dates, codeEquipe, codePoste, horaires, overwrite, equipe2 }) =>
+  bulkFill: (agentId, { dates, codeEquipe, codePoste, horaires, overwrite, equipe2, codePoste2 }) =>
     apiFetch(`/planning/${agentId}/bulk-fill`, {
       method: 'POST',
       body: JSON.stringify({
@@ -548,7 +548,23 @@ result[`${row.agent_id || agentId}-${date}`] = {
         // 2e créneau optionnel, uniquement valide côté serveur si code_equipe
         // est RP/RPP -- voir bulkFill (planningController.js).
         equipe2: equipe2 || null,
+        // Poste de la Nuit (05/09/2026, "mais une nuit sur quel poste ?") --
+        // n'a de sens que si equipe2==="N", ignoré côté serveur sinon.
+        code_poste2: codePoste2 || null,
       }),
+    }),
+  /**
+   * Ajoute un 2e créneau (equipe2) à des jours DÉJÀ remplis par l'ancre
+   * indiquée (RP/RPP/RU/NU) -- 05/09/2026, "je veux pouvoir combiner des
+   * case rempli par rp [...] et avec nu aussi". Contrairement à bulkFill,
+   * ne touche jamais à la période ordre=1 (l'ancre) ni à aucune autre
+   * période déjà présente (note perso, grève, formation) -- pur ajout,
+   * refusé silencieusement (date dans `ignores`) si l'ancre ne correspond
+   * pas exactement ou si un 2e créneau existe déjà. */
+  bulkAddCombo: (agentId, { dates, ancre, equipe2, codePoste2 }) =>
+    apiFetch(`/planning/${agentId}/bulk-add-combo`, {
+      method: 'POST',
+      body: JSON.stringify({ dates, ancre, equipe2, code_poste2: codePoste2 || null }),
     }),
   /** Efface le planning perso sur une période, avec sauvegarde pour annulation. */
   bulkClear: (agentId, dateFrom, dateTo) =>
