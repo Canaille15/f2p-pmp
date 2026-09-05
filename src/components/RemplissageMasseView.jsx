@@ -169,13 +169,21 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       const label = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}`;
       return { id, type:"poste", label, dates, write:{ kind:"planning", codeEquipe:vacation, codePoste:posteCode, jsCode, horaires, overwrite:false } };
     }
-    if (typeJournee==="rp" || typeJournee==="rpp") {
-      const codeEquipe = typeJournee==="rpp" ? "RPP" : "RP";
+    if (typeJournee==="rp" || typeJournee==="rpp" || typeJournee==="ru") {
+      // 05/09/2026 (Olivier : "et RU est peut etre combiné avec une nuit ?") --
+      // RU n'est jamais une ancre pour CODES_COMBINABLES_EQUIPE2 (RU+VT/RQ/...
+      // se remplacent simplement, comme dans DayEditPopup) mais PEUT combiner
+      // avec une vraie Nuit accolée, exactement comme n'importe quel autre
+      // type1 -- ce toggle ("N") n'a jamais été restreint à RP/RPP côté popup
+      // (voir toggleType1, 1er if de la fonction, aucune condition sur type1).
+      // combinablesActuels (calculé plus bas dans le composant) restreint déjà
+      // les boutons proposés pour "ru" à Nuit seule -- ici on fait juste
+      // confiance à `combinable2`, jamais rempli avec autre chose pour "ru".
+      const codeEquipe = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : "RU";
       const combo = COMBINABLES2.find(c=>c.code===combinable2);
       const label = combo ? `${codeEquipe} + ${combo.label}` : codeEquipe;
       return { id, type:typeJournee, label, dates, write:{ kind:"planning", codeEquipe, codePoste:null, jsCode:null, horaires:null, overwrite:false, equipe2: combinable2||null } };
     }
-    if (typeJournee==="ru") return { id, type:"ru", label:"RU", dates, write:{ kind:"planning", codeEquipe:"RU", codePoste:null, jsCode:null, horaires:null, overwrite:false } };
     // conges
     if (!congeStatut) return null;
     if (congeStatut==="accorde") return { id, type:"conges", label:"Congés (Accordé)", dates, write:{ kind:"planning", codeEquipe:"CA", codePoste:null, jsCode:null, horaires:null, overwrite:true } };
@@ -221,6 +229,21 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     if (nouveau!==combinable2) ajouterAuLot();
     setCombinable2(nouveau);
   };
+
+  // 05/09/2026 (Olivier : "et RU est peut etre combiné avec une nuit ? dans
+  // le planning et ici ?") -- vérifié dans toggleType1 (DayEditPopup.jsx) :
+  // le toggle "Nuit ↓" (code "N") n'a JAMAIS été restreint à RP/RPP, c'est
+  // le tout premier `if` de la fonction, sans condition sur type1 -- RU (et
+  // en théorie n'importe quel autre type1) peut donc déjà se combiner avec
+  // une vraie Nuit accolée dans le planning perso, ce qui est distinct de
+  // CODES_COMBINABLES_EQUIPE2 (l'ancre RP/RPP-only, réservée aux 05/09 :
+  // RU+VT/RQ/... se remplacent simplement, jamais ne se combinent). D'où :
+  // RP/RPP proposent les 8 combinables (Nuit + les 7 absences), RU ne
+  // propose QUE Nuit (seule combinaison valide avec RU comme ancre).
+  const ancreActuelle = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="ru" ? "RU" : null;
+  const combinablesDisponibles = (typeJournee==="rp"||typeJournee==="rpp") ? COMBINABLES2
+    : typeJournee==="ru" ? COMBINABLES2.filter(c=>c.code==="N")
+    : [];
 
   const [miniYear, miniMonthNum] = miniMonth.split("-").map(Number);
   const miniDaysInMonth = joursDuMois(miniYear, miniMonthNum);
@@ -543,18 +566,20 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
             )}
 
             {/* 05/09/2026, revu le même jour ("c'etait pas possible de
-                combiner 2 touches directement ? [...] comme fait avant ?") --
-                plus de section/paragraphe/encart séparé : juste une 2e rangée
-                de boutons directement sous RP/RPP, même style, aucun clic de
-                plus que dans le popup de saisie (click l'ancre, click le
-                combinable). RP/RPP reste inchangé, le code cliqué vient se
-                poser en dessous -- un simple title= (infobulle) suffit,
-                comme n'importe quel autre bouton de ce module. */}
-            {(typeJournee==="rp" || typeJournee==="rpp") && (
+                combiner 2 touches directement ? [...] comme fait avant ?"),
+                puis étendu à RU le même jour ("et RU est peut etre combiné
+                avec une nuit ?") -- plus de section/paragraphe/encart
+                séparé : juste une 2e rangée de boutons directement sous
+                l'ancre choisie, même style, aucun clic de plus que dans le
+                popup de saisie (click l'ancre, click le combinable). RU ne
+                propose que Nuit (combinablesDisponibles filtré plus haut) --
+                les 7 autres absences ne combinent qu'avec RP/RPP, jamais RU
+                (elles le remplacent simplement, comme dans DayEditPopup). */}
+            {combinablesDisponibles.length>0 && (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-                {COMBINABLES2.map(c => (
+                {combinablesDisponibles.map(c => (
                   <button key={c.code} onClick={()=>choisirCombinable2(c.code)} disabled={fillBusy}
-                    title={`Se combine avec ${typeJournee==="rpp"?"RPP":"RP"} (2e créneau), comme dans le planning perso`}
+                    title={`Se combine avec ${ancreActuelle} (2e créneau), comme dans le planning perso`}
                     style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                       background:combinable2===c.code?"#16a34a":"#f0fdf4",color:combinable2===c.code?"#fff":"#166534"}}>
                     {c.label}
@@ -562,9 +587,9 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                 ))}
               </div>
             )}
-            {(typeJournee==="rp"||typeJournee==="rpp") && combinable2 && typeof onOuvrirJour==="function" && (
+            {combinablesDisponibles.length>0 && combinable2 && typeof onOuvrirJour==="function" && (
               <div style={{fontSize:10,fontWeight:600,color:"#0369a1",background:"#eff6ff",border:"1px dashed #93c5fd",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
-                💡 Un jour en pointillés bleus a déjà {typeJournee==="rpp"?"RPP":"RP"} — clique dessus pour l'ouvrir directement et y ajouter "{COMBINABLES2.find(c=>c.code===combinable2)?.label}".
+                💡 Un jour en pointillés bleus a déjà {ancreActuelle} — clique dessus pour l'ouvrir directement et y ajouter "{combinablesDisponibles.find(c=>c.code===combinable2)?.label}".
               </div>
             )}
 
@@ -601,7 +626,6 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   // popup de saisie normal (onOuvrirJour, câblé depuis
                   // PersonalView) -- jamais d'écrasement, juste une porte
                   // d'entrée vers l'outil qui sait déjà le faire correctement.
-                  const ancreActuelle = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : null;
                   const dejaAncreSansCombo = !!combinable2 && !!ancreActuelle && typeof onOuvrirJour==="function" && v?.equipe===ancreActuelle && !v?.equipe2;
                   const bloque = occupe && !dejaAncreSansCombo;
                   const isSel = joursSelect.includes(dk);

@@ -105,12 +105,21 @@ async function getAllPublic(req, res) {
 // cohérent avec ce que le frontend considère "libre").
 // 05/09/2026 (RemplissageMasseView, "RP + combinable en masse", demandé par
 // Olivier -- mêmes règles que toggleType1/DayEditPopup.jsx, jamais un
-// nouveau mécanisme) : 2e créneau optionnel, valide UNIQUEMENT quand
-// code_equipe est RP/RPP (seules ancres possibles, REPOS_POUR_CONGE_EQUIPE2/
-// REPOS_AVEC_CONGE_SOIR côté frontend) -- CA volontairement absent de cette
-// liste (Congés a déjà son propre type de vague dans ce module, avec sa
-// règle d'écrasement dédiée).
+// nouveau mécanisme) : 2e créneau optionnel. Deux règles distinctes,
+// vérifiées dans toggleType1 (DayEditPopup.jsx) : (1) une vraie Nuit
+// (equipe2='N') n'a JAMAIS été restreinte à une ancre précise -- le toggle
+// "Nuit ↓" est le tout premier `if` de la fonction, sans condition sur
+// type1 -- donc RP/RPP/RU peuvent tous se combiner avec une vraie Nuit
+// accolée ("et RU est peut etre combiné avec une nuit ?", demandé le même
+// jour). (2) une absence (VT/RU/RQ/RN/TC/TY/MA) ne peut se combiner QU'avec
+// RP/RPP (REPOS_POUR_CONGE_EQUIPE2/REPOS_AVEC_CONGE_SOIR côté frontend) --
+// avec RU comme ancre, ces codes se REMPLACENT simplement (comme dans
+// DayEditPopup), jamais ne se combinent. CA volontairement absent de la
+// liste des combinables : Congés a déjà son propre type de vague dans ce
+// module, avec sa règle d'écrasement dédiée.
 const EQUIPE2_COMBINABLES_BULK = new Set(['N','VT','RU','RQ','RN','TC','TY','MA']);
+const ANCRES_POUR_NUIT = new Set(['RP','RPP','RU']);
+const ANCRES_POUR_ABSENCE = new Set(['RP','RPP']);
 
 async function bulkFill(req, res) {
   const { cp } = req.params;
@@ -120,8 +129,9 @@ async function bulkFill(req, res) {
   if (!Array.isArray(dates) || dates.length === 0) return res.status(400).json({ error: 'Dates requises' });
   if (!code_equipe) return res.status(400).json({ error: 'code_equipe requis' });
   if (equipe2) {
-    if (!['RP','RPP'].includes(code_equipe)) return res.status(400).json({ error: 'Le 2e créneau ne peut être combiné qu\'avec RP/RPP' });
     if (!EQUIPE2_COMBINABLES_BULK.has(equipe2)) return res.status(400).json({ error: 'Code de 2e créneau invalide' });
+    const ancresValides = equipe2 === 'N' ? ANCRES_POUR_NUIT : ANCRES_POUR_ABSENCE;
+    if (!ancresValides.has(code_equipe)) return res.status(400).json({ error: 'Cette combinaison n\'est pas valide' });
   }
   const prive = CODES_PUBLICS.has(code_equipe) ? 0 : 1;
   const appliques = [], ignores = [];
