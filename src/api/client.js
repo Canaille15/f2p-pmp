@@ -296,6 +296,13 @@ export function resolveJsCode(codePoste, equipe) {
   return convertirCodePosteVersJsCode(codePoste, equipe) || (CANONICAL_JSCODES.has(codePoste) ? codePoste : null);
 }
 
+// Codes acceptés dans le "2e créneau" (equipe2, même emplacement que Nuit) --
+// 'N' pour une vraie Nuit, les autres remplacent la nuit qui aurait été
+// travaillée (Congé depuis le 25/08, généralisé le 05/09 à VT/RU/RQ/RN/TC/
+// TY/Maladie sur demande d'Olivier). Mirror de REPOS_POUR_CONGE_EQUIPE2
+// (DayEditPopup.jsx) / REPOS_AVEC_CONGE_SOIR (App.jsx) -- garder synchronisées.
+const EQUIPE2_CODES_COMBINABLES = ['N', 'CA', 'CP', 'VT', 'RU', 'RQ', 'RN', 'TC', 'TY', 'MA'];
+
 export const planning = {
   /**
    * Charger tout le planning d'un agent
@@ -419,13 +426,18 @@ result[`${row.agent_id || agentId}-${date}`] = {
         etude_poste: !!entry.etudePoste,
       });
     }
-    // Periode 2 du jour (25/08, Congé combinable) : soit une vraie Nuit
-    // (equipe2='N', comportement d'origine, horaires fixes 22:15-06:17), soit
-    // un Congé qui la remplace (equipe2='CA'/'CP', demande d'Olivier : "le
-    // conge remplace la nuit qu'il aurait faire" -- ex RP le jour + Congé ce
-    // soir-la au lieu de la nuit prevue). Un Congé n'a jamais de poste ni
-    // d'horaire propre, contrairement a une vraie Nuit.
-    if (entry.equipe2 === 'N' || entry.equipe2 === 'CA' || entry.equipe2 === 'CP') {
+    // Periode 2 du jour (25/08, Congé combinable -- généralisé le 05/09 à VT/
+    // RU/RQ/RN/TC/TY/Maladie, demande d'Olivier : "ajouter les vt, ru, rq,
+    // rn, tc, ty, maladie comme un conges lorsquil remplace une nuit") : soit
+    // une vraie Nuit (equipe2='N', comportement d'origine, horaires fixes
+    // 22:15-06:17), soit un des codes de EQUIPE2_CODES_COMBINABLES qui la
+    // remplace (ex RP le jour + Congé/VT/RU/... ce soir-la au lieu de la nuit
+    // prevue). Aucun de ces codes n'a de poste ni d'horaire propre,
+    // contrairement a une vraie Nuit. Mirror de REPOS_POUR_CONGE_EQUIPE2/
+    // REPOS_AVEC_CONGE_SOIR (DayEditPopup.jsx/App.jsx, la liste des codes
+    // acceptés en créneau PRINCIPAL pour déclencher ce mécanisme) -- garder
+    // synchronisées.
+    if (EQUIPE2_CODES_COMBINABLES.includes(entry.equipe2)) {
       const estNuit = entry.equipe2 === 'N';
       const estPeriodeUnique = periodes.length === 0; // cas "seule" : pas de journée avant
       periodes.push({

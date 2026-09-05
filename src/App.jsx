@@ -315,7 +315,12 @@ const HORAIRES_DIMANCHE_RAPPEL = {
 // (REPOS_POUR_CONGE_EQUIPE2) -- quand le créneau principal porte un de ces
 // codes, le Congé (accordé OU en attente) se rend en bas de case (position
 // du "2e créneau", celle de Nuit) plutôt qu'en zone 1 -- "meme regle pour
-// les demandés aussi" (Olivier, 25/08).
+// les demandés aussi" (Olivier, 25/08). Généralisée le 05/09 (Olivier :
+// "ajouter les vt, ru, rq, rn, tc, ty, maladie comme un conges lorsquil
+// remplace unenuit") : le 2e créneau (equipe2) peut désormais aussi porter
+// VT/RU/RQ/RN/TC/TY/MA -- voir ZONE 3bis (GlobalView) pour leur rendu dans
+// le planning perso, et EQUIPE2_CODES_COMBINABLES (client.js) pour les
+// valeurs acceptées à la sauvegarde.
 const REPOS_AVEC_CONGE_SOIR = ["RP","RPP","RU","RQ","TC","TY","RN","VT"];
 
 // Codes fêtes légales SNCF
@@ -3463,6 +3468,12 @@ function getCongesDemandeesAnnee(agent, agentProfiles, schedule, year){
 // Jours "VT demandé" de l'année (06/08, même principe que
 // getCongesDemandeesAnnee — VT suit désormais le même cycle
 // Accordé/Demandé/Refusé que Congés, voir computeDashboardVT).
+// 05/09 -- gap corrigé (symétrique à celui de DayEditPopup.jsx,
+// vtStatutInitial) : il manquait ici l'exception REPOS_AVEC_CONGE_SOIR que
+// getCongesDemandeesAnnee a déjà -- un suivi VT Demandé se détachait à tort
+// dès que le jour portait un repos combinable (RP/RU/RQ/TC/TY/RN/RPP), alors
+// que c'est justement la combinaison voulue (VT accordé remplacerait la nuit
+// à côté de ce repos, voir accorderEnEquipe2 côté DayEditPopup).
 function getJoursVTDemandeesAnnee(agent, agentProfiles, schedule, year){
   const profil = agentProfiles?.[agent?.id] || {};
   const tracking = profil.vtTracking || {};
@@ -3473,7 +3484,7 @@ function getJoursVTDemandeesAnnee(agent, agentProfiles, schedule, year){
     if(d<start||d>end) return;
     const entree = schedule[`${agent?.id}-${d}`];
     const codeActuel = entree?.equipe || entree?.equipe2;
-    if(t.jourEtaitVide && codeActuel) return;
+    if(t.jourEtaitVide && codeActuel && !REPOS_AVEC_CONGE_SOIR.includes(codeActuel)) return;
     jours.push(d);
   });
   return jours;
@@ -5301,19 +5312,38 @@ function TcDashboardModal({ agent, schedule, setSchedule, agentProfiles, setAgen
     api.planning.saveEntry(agCp, date, fullEntry).catch(e=>{ console.error("Erreur sauvegarde TC dans planning:", e); setActionError("Erreur lors de l'enregistrement dans le planning. Réessaie."); });
   };
 
+  // 05/09 -- bug corrigé (trouvé en testant la généralisation "TC remplace la
+  // nuit") : TC peut désormais aussi occuper le 2e créneau (equipe2, voir
+  // REPOS_POUR_CONGE_EQUIPE2/accorderEnEquipe2 dans DayEditPopup.jsx), pas
+  // seulement le créneau principal comme avant -- le garde `equipe !== "TC"`
+  // faisait échouer silencieusement "✕ Retirer" sur un jour où TC était en
+  // 2e créneau (ex: RP + TC "soir"). Traite désormais les deux emplacements.
   const retirerTCDuPlanning = (date) => {
     const key = `${agCp}-${date}`;
     const entryExistante = schedule[key];
-    if(!entryExistante || entryExistante.equipe !== "TC") return;
-    const {equipe, ...reste} = entryExistante;
-    const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
-    if(videTotal){
-      setSchedule(prev=>{const n={...prev}; delete n[key]; return n;});
-      api.planning.deleteEntry(agCp, date).catch(e=>{ console.error("Erreur suppression TC du planning:", e); setActionError("Erreur lors de la suppression dans le planning. Réessaie."); });
-    } else {
-      const fullEntry = {...reste, equipe:null};
-      setSchedule(prev=>({...prev, [key]: fullEntry}));
-      api.planning.saveEntry(agCp, date, fullEntry).catch(e=>{ console.error("Erreur suppression TC du planning:", e); setActionError("Erreur lors de la suppression dans le planning. Réessaie."); });
+    if(!entryExistante) return;
+    if(entryExistante.equipe === "TC"){
+      const {equipe, ...reste} = entryExistante;
+      const videTotal = !reste.equipe2 && !reste.finNuit && !reste.notePerso;
+      if(videTotal){
+        setSchedule(prev=>{const n={...prev}; delete n[key]; return n;});
+        api.planning.deleteEntry(agCp, date).catch(e=>{ console.error("Erreur suppression TC du planning:", e); setActionError("Erreur lors de la suppression dans le planning. Réessaie."); });
+      } else {
+        const fullEntry = {...reste, equipe:null};
+        setSchedule(prev=>({...prev, [key]: fullEntry}));
+        api.planning.saveEntry(agCp, date, fullEntry).catch(e=>{ console.error("Erreur suppression TC du planning:", e); setActionError("Erreur lors de la suppression dans le planning. Réessaie."); });
+      }
+    } else if(entryExistante.equipe2 === "TC"){
+      const {equipe2, jsCode2, ...reste} = entryExistante;
+      const videTotal = !reste.equipe && !reste.finNuit && !reste.notePerso;
+      if(videTotal){
+        setSchedule(prev=>{const n={...prev}; delete n[key]; return n;});
+        api.planning.deleteEntry(agCp, date).catch(e=>{ console.error("Erreur suppression TC du planning:", e); setActionError("Erreur lors de la suppression dans le planning. Réessaie."); });
+      } else {
+        const fullEntry = {...reste, equipe2:null, jsCode2:null};
+        setSchedule(prev=>({...prev, [key]: fullEntry}));
+        api.planning.saveEntry(agCp, date, fullEntry).catch(e=>{ console.error("Erreur suppression TC du planning:", e); setActionError("Erreur lors de la suppression dans le planning. Réessaie."); });
+      }
     }
   };
 
@@ -9735,25 +9765,44 @@ justifyContent: "flex-start",
                 {(code==="N"?posteLabel:posteNuitLabel)&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{code==="N"?posteLabel:posteNuitLabel}</span>}
               </div>}
 
-              {/* ZONE 3bis — Congé remplaçant la nuit (25/08, demandé par
-                  Olivier : "le conge remplace la nuit qu'il aurait faire"
-                  -- ex RP/RU le jour + Congé accordé au lieu de la nuit
-                  prévue). Même emplacement (bas de case) que Nuit, jamais les
-                  deux en même temps (equipe2 ne vaut qu'une chose à la fois)
-                  -- "cela symbolise que le CA est a suivre les autres jours
-                  et vient en remplacement d'une nuit". Numéroté comme le CA
-                  seul (congeToutNumeros compte déjà equipe2, voir
-                  computeCompteurAvecDetail), sur demande explicite. */}
-              {isOwnProfile&&(en?.equipe2==="CA"||en?.equipe2==="CP")&&showData&&<div style={{
-                background:getColor("CA"), color:getTc("CA"),
-                borderRadius:5, padding:"2px 5px",
-                fontSize:"clamp(7px,2.3vw,10px)", fontWeight:700, lineHeight:1.35,
-                display:"flex", flexDirection:"column",
-                minWidth:0,
-              }}>
-                <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>🏖️ {en.equipe2}</span>
-                {congeToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeToutNumeros[dk].numero}{congeToutNumeros[dk].anneeReport?` (${congeToutNumeros[dk].anneeReport})`:""}</span>}
-              </div>}
+              {/* ZONE 3bis — Congé/VT/RU/RQ/RN/TC/TY/Maladie remplaçant la
+                  nuit (25/08, demandé par Olivier : "le conge remplace la
+                  nuit qu'il aurait faire" -- ex RP/RU le jour + Congé accordé
+                  au lieu de la nuit prévue -- généralisée le 05/09 à VT/RU/
+                  RQ/RN/TC/TY/Maladie, "ajouter [...] comme un conges lorsquil
+                  remplace unenuit"). Même emplacement (bas de case) que Nuit,
+                  jamais les deux en même temps (equipe2 ne vaut qu'une chose
+                  à la fois) -- "cela symbolise que le CA est a suivre les
+                  autres jours et vient en remplacement d'une nuit", même
+                  principe étendu aux 6 autres codes. Numéro affiché
+                  uniquement pour les codes qui ont une vraie numérotation par
+                  jour (CA/RU/RQ/VT/MA, chacun déjà comptés en equipe2 par
+                  computeCompteurAvecDetail/getJoursCodesAnnee) -- RN/TC/TY
+                  sont des soldes en heures (ledger), jamais numérotés, même
+                  en 2e créneau. */}
+              {isOwnProfile&&en?.equipe2&&en.equipe2!=="N"&&showData&&(()=>{
+                const eq2=en.equipe2;
+                const isCA=eq2==="CA"||eq2==="CP";
+                let numeroInfo=null;
+                if(isCA) numeroInfo=congeToutNumeros[dk]||null;
+                else if(eq2==="RU") numeroInfo=ruNumeros[dk]||null;
+                else if(eq2==="VT") numeroInfo=vtToutNumeros[dk]||null;
+                else if(eq2==="RQ"&&rqNumeros[dk]!=null) numeroInfo={numero:rqNumeros[dk]};
+                else if(eq2==="MA"&&maNumeros[dk]!=null) numeroInfo={numero:maNumeros[dk]};
+                const label=isCA?("🏖️ "+eq2):(eq2==="MA"?"🤒 Maladie":avecCesure(EQ_COLORS[eq2]?.label||eq2));
+                return (
+                  <div style={{
+                    background:getColor(isCA?"CA":eq2), color:getTc(isCA?"CA":eq2),
+                    borderRadius:5, padding:"2px 5px",
+                    fontSize:"clamp(7px,2.3vw,10px)", fontWeight:700, lineHeight:1.35,
+                    display:"flex", flexDirection:"column",
+                    minWidth:0,
+                  }}>
+                    <span style={{display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</span>
+                    {numeroInfo&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{numeroInfo.numero}{numeroInfo.anneeReport?` (${numeroInfo.anneeReport})`:""}</span>}
+                  </div>
+                );
+              })()}
 
               {/* ZONE 3ter — Congé demandé, en bas comme son pendant accordé
                   (25/08, "tu prends les meme regle pour les demandés aussi") —

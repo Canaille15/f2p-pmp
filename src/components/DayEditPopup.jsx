@@ -47,6 +47,19 @@ const CODES_REPOS_LIGNE1 = ["RP","RPP","RU","RQ","RN","TC","TY","NU"];
 // Mirror exact de REPOS_AVEC_CONGE_SOIR (App.jsx) -- garder synchronisées.
 const REPOS_POUR_CONGE_EQUIPE2 = ["RP","RPP","RU","RQ","TC","TY","RN","VT"];
 
+// Généralisation du "remplace la Nuit" (05/09, demandé par Olivier : "est ce
+// qu'on a prevu de pouvoir ajouter les vt, ru, rq, rn, tc, ty, madadie comme
+// un conges lorsquil remplace unenuit ?" -- "commence et fais tout") : VT
+// garde son propre sous-menu Accordé/Demandé/Refusé (accorderEnEquipe2 plus
+// bas route automatiquement vers le 2e créneau, comme Congé). Ces 6 codes en
+// revanche n'ont pas de sous-menu -- un simple clic direct sur leur bouton
+// (CODES_REPOS_LIGNE1/ligne 2) sert déjà à choisir le créneau PRINCIPAL, donc
+// réutiliser ces mêmes boutons pour le 2e créneau serait ambigu (remplace le
+// jour, ou complète le soir ?). Affichés à la place dans une section dédiée,
+// séparée, visible uniquement quand le créneau principal porte déjà un repos
+// combinable -- zéro ambiguïté avec les boutons de sélection du jour.
+const CODES_2E_CRENEAU_SANS_SOUS_MENU = ["RU","RQ","RN","TC","TY","MA"];
+
 const CODES_TRAVAIL = [
   { code:"M",  label:"Matin",    heures:"06h10–14h17", color:"#8B0000" },
   { code:"AM", label:"Soirée",   heures:"14h05–22h17", color:"#8B0000" },
@@ -359,10 +372,13 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const toggleCongeStatut = (statut) => {
     if (congeStatut === statut) { setCongeStatut(null); return; }
     setCongeStatut(statut);
-    // Un jour ne peut pas être à la fois "Accordé" (écrit CA dans la case) ET
-    // "Demandé"/"Refusé" (suivi indépendant) — si le jour était déjà accordé,
-    // choisir Demandé/Refusé désélectionne l'accord.
+    // Un jour ne peut pas être à la fois "Accordé" (écrit CA dans la case,
+    // en créneau principal OU en 2e créneau depuis le 25/08) ET "Demandé"/
+    // "Refusé" (suivi indépendant) — si le jour était déjà accordé, choisir
+    // Demandé/Refusé désélectionne l'accord, quel que soit le créneau qui le
+    // portait (typeN ajouté le 05/09, gap symétrique au correctif VT ci-dessous).
     if (type1 === "CA") { setType1(null); setPoste1(""); setHoraires1(""); }
+    if (typeN === "CA") { setTypeN(null); setPosteN(""); }
   };
 
   // VT Demandé/Refusé (06/08, même principe que Congés ci-dessus, sur demande
@@ -370,8 +386,14 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   // l'affichage du numéro dans le calendrier reste sur la convention propre à
   // VT, cumul de fin de mois, voir App.jsx).
   const vtTrackingExistant = agentProfiles?.[agKey]?.vtTracking?.[date];
+  // 05/09 -- même exception REPOS_POUR_CONGE_EQUIPE2 que congeStatutInitial
+  // ci-dessus (jusque-là oubliée ici, gap symétrique côté App.jsx/
+  // getJoursVTDemandeesAnnee corrigé en même temps) : un suivi VT Demandé/
+  // Refusé ne doit pas se détacher juste parce que le jour porte déjà un
+  // repos combinable (RP/RU/RQ/TC/TY/RN/RPP) -- c'est justement la
+  // combinaison voulue (VT accordé remplacerait la nuit à côté de ce repos).
   const vtStatutInitial = (vtTrackingExistant && vtTrackingExistant.statut &&
-      !(vtTrackingExistant.jourEtaitVide && codeActuelAuOuverture))
+      !(vtTrackingExistant.jourEtaitVide && codeActuelAuOuverture && !REPOS_POUR_CONGE_EQUIPE2.includes(codeActuelAuOuverture)))
     ? vtTrackingExistant.statut : null;
   const [vtStatut, setVtStatut] = useState(vtStatutInitial);
   const [showVt, setShowVt] = useState(false);
@@ -379,6 +401,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     if (vtStatut === statut) { setVtStatut(null); return; }
     setVtStatut(statut);
     if (type1 === "VT") { setType1(null); setPoste1(""); setHoraires1(""); }
+    if (typeN === "VT") { setTypeN(null); setPosteN(""); }
   };
 
   const dateObj = new Date(date + "T12:00:00");
@@ -398,9 +421,15 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   // Toggle type journée
   const toggleType1 = (code) => {
     if (code === "N") {
-      // N = nuit du soir, géré par typeN
-      setTypeN(prev => prev ? null : "N");
-      if (typeN) setPosteN("");
+      // N = nuit du soir, géré par typeN. 05/09 -- bug corrigé : l'ancien
+      // `prev ? null : "N"` videait purement et simplement le 2e créneau
+      // s'il portait déjà autre chose qu'une Nuit (Congé/VT/RU/...) au lieu
+      // de le remplacer par une vraie Nuit -- il fallait alors cliquer 2 fois
+      // pour obtenir une vraie Nuit. Toggle exact sur "N" : un clic la met
+      // toujours en place (quel que soit ce qu'il y avait avant), un 2e clic
+      // la retire.
+      setTypeN(prev => prev === "N" ? null : "N");
+      setPosteN("");
       return;
     }
     if (type1 === code) {
@@ -434,23 +463,33 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   // principal porte déjà un de ces codes, "Congés · Accordé" route le Congé
   // dans le 2e créneau (equipe2, même emplacement que Nuit ↓) au lieu de
   // remplacer le créneau principal -- la journée RP/RU/... reste inchangée.
-  // (REPOS_POUR_CONGE_EQUIPE2 promue au niveau module le 29/08, voir en tête de fichier.)
+  // (REPOS_POUR_CONGE_EQUIPE2 promue au niveau module le 29/08, voir en tête
+  // de fichier.) Généralisée le 05/09 en accorderEnEquipe2, réutilisée par
+  // Congé ET VT (le seul autre code à avoir son propre sous-menu Accordé) --
+  // voir CODES_2E_CRENEAU_SANS_SOUS_MENU plus haut pour les 6 autres codes,
+  // qui n'ont pas ce sous-menu et passent par une section dédiée plus bas.
   const congeAccorde = type1 === "CA" || typeN === "CA";
-  const accorderConge = () => {
-    setCongeStatut(null);
-    setShowConges(false);
-    if (REPOS_POUR_CONGE_EQUIPE2.includes(type1)) {
-      // Toggle : reclique "Accordé" pour retirer le Congé, sans toucher au
-      // repos principal.
-      setTypeN(prev => prev === "CA" ? null : "CA");
+  const vtAccordeSoir = typeN === "VT";
+  const vtAccorde = type1 === "VT" || vtAccordeSoir;
+  const accorderEnEquipe2 = (code, revertTo = null) => {
+    if (REPOS_POUR_CONGE_EQUIPE2.includes(type1) && type1 !== code) {
+      // Toggle : reclique "Accordé" pour retirer le code du 2e créneau, sans
+      // toucher au repos principal.
+      setTypeN(prev => prev === code ? null : code);
       setPosteN("");
       return;
     }
-    toggleType1("CA");
-    // Un Congé qui prend le créneau principal ne doit jamais coexister avec
-    // un Congé déjà routé dans le 2e créneau (double-comptage) -- revient à
-    // une vraie Nuit dans ce cas, comme avant le 25/08.
-    if (typeN === "CA") setTypeN("N");
+    toggleType1(code);
+    // Ce code ne doit jamais coexister à la fois en créneau principal ET en
+    // 2e créneau (double-comptage) -- revient à revertTo dans ce cas (une
+    // vraie Nuit pour Congé, comme avant le 25/08 ; rien de spécial pour les
+    // autres, cas défensif très rare en pratique).
+    if (typeN === code) setTypeN(revertTo);
+  };
+  const accorderConge = () => {
+    setCongeStatut(null);
+    setShowConges(false);
+    accorderEnEquipe2("CA", "N");
   };
 
   const isTravailJ = type1 && ["M","AM","J"].includes(type1);
@@ -583,6 +622,28 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   padding:"2px 7px", borderRadius:5,
                 }}>
                   🏖️ Congé (nuit) ↓
+                </span>
+              )}
+              {typeN === "VT" && (
+                <span style={{
+                  background:"#eab308", color:"#fff",
+                  fontSize:10, fontWeight:700,
+                  padding:"2px 7px", borderRadius:5,
+                }}>
+                  VT (nuit) ↓
+                </span>
+              )}
+              {/* 05/09 -- généralisation : badge unique pour les 6 codes sans
+                  sous-menu (CODES_2E_CRENEAU_SANS_SOUS_MENU) quand ils
+                  occupent le 2e créneau -- CA et VT gardent leur badge dédié
+                  ci-dessus, jamais dupliqués ici. */}
+              {typeN && CODES_2E_CRENEAU_SANS_SOUS_MENU.includes(typeN) && (
+                <span style={{
+                  background:getColor(typeN), color:"#fff",
+                  fontSize:10, fontWeight:700,
+                  padding:"2px 7px", borderRadius:5,
+                }}>
+                  {CODES_REPOS.find(r=>r.code===typeN)?.label || typeN} (nuit) ↓
                 </span>
               )}
               {greve && (
@@ -798,18 +859,20 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
               {/* VT (06/08) : même sous-menu Accordé/Demandé/Refusé que Congés,
                   sur demande d'Olivier — "le même fonctionnement pour les
                   demande accord et refus". Seul "Accordé" écrit dans le
-                  planning perso (type1="VT"). */}
+                  planning perso (type1="VT" normalement, ou typeN="VT" en 2e
+                  créneau depuis le 05/09 -- voir accorderEnEquipe2, vtAccorde/
+                  vtAccordeSoir). */}
               <button onClick={() => setShowVt(v=>!v)} style={{
                 padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                 fontSize:12, fontWeight:700,
-                background: type1==="VT" ? "#eab308"
+                background: vtAccorde ? "#eab308"
                   : vtStatut==="demande" ? "#fef3c7"
                   : vtStatut==="refuse" ? "#fef2f2" : "#f1f5f9",
-                color: type1==="VT" ? "#fff"
+                color: vtAccorde ? "#fff"
                   : vtStatut==="demande" ? "#92400e"
                   : vtStatut==="refuse" ? "#991b1b" : "#475569",
               }}>
-                {type1==="VT" ? "VT · Accordé"
+                {vtAccorde ? `VT · Accordé${vtAccordeSoir ? " (soir)" : ""}`
                   : vtStatut==="demande" ? "⏳ VT · Demandé"
                   : vtStatut==="refuse" ? "✕ VT · Refusé" : "VT"}
               </button>
@@ -902,12 +965,12 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
             {showVt && (
               <div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
-                  <button onClick={() => { toggleType1("VT"); setVtStatut(null); setShowVt(false); }} style={{
+                  <button onClick={() => { accorderEnEquipe2("VT"); setVtStatut(null); setShowVt(false); }} style={{
                     padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                     fontSize:12, fontWeight:700,
-                    background: type1==="VT" ? "#16a34a" : "#f0fdf4",
-                    color: type1==="VT" ? "#fff" : "#166534",
-                  }}>✓ Accordé</button>
+                    background: vtAccorde ? "#16a34a" : "#f0fdf4",
+                    color: vtAccorde ? "#fff" : "#166534",
+                  }}>✓ Accordé{REPOS_POUR_CONGE_EQUIPE2.includes(type1) && type1!=="VT" ? " (soir)" : ""}</button>
                   <button onClick={() => { toggleVtStatut("demande"); setShowVt(false); }} style={{
                     padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                     fontSize:12, fontWeight:700,
@@ -970,6 +1033,41 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 }}>✕</button>
               </div>
             )}
+            {/* 🌙 Remplace la nuit par... (05/09, demandé par Olivier) --
+                RU/RQ/RN/TC/TY/Maladie n'ont pas de sous-menu comme Congé/VT
+                (CODES_2E_CRENEAU_SANS_SOUS_MENU) : section dédiée, séparée
+                des boutons de sélection du jour ci-dessus, pour ne jamais
+                être ambiguë (remplace le jour vs complète le soir ?). Ne
+                s'affiche que si le créneau principal porte déjà un repos
+                combinable -- exactement la même condition que le routage
+                Congé/VT. */}
+            {REPOS_POUR_CONGE_EQUIPE2.includes(type1) && (
+              <div style={{marginTop:9}}>
+                <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:5}}>
+                  🌙 Remplace la nuit par…
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {CODES_2E_CRENEAU_SANS_SOUS_MENU.filter(c => c !== type1).map(code => {
+                    const r = CODES_REPOS.find(x => x.code === code);
+                    const actif = typeN === code;
+                    return (
+                      <button key={code} onClick={() => {
+                        setTypeN(prev => prev === code ? null : code);
+                        setPosteN("");
+                      }} style={{
+                        padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
+                        fontSize:12, fontWeight:700,
+                        background: actif ? r.color : "#f1f5f9",
+                        color: actif ? "#fff" : "#475569",
+                      }}>{r.label}</button>
+                    );
+                  })}
+                </div>
+                <div style={{fontSize:9,color:"#94a3b8",marginTop:4,fontStyle:"italic"}}>
+                  Remplace la Nuit qui aurait suivi le {CODES_REPOS.find(r=>r.code===type1)?.label||type1} — ne touche jamais le reste de la journée.
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Travail ── */}
@@ -982,7 +1080,14 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:7}}>
               {CODES_TRAVAIL.map(t => {
-                const isActive = t.code === "N" ? !!typeN : type1 === t.code;
+                // 05/09 -- corrigé : "Nuit ↓" ne s'affiche "rempli" que pour
+                // une VRAIE Nuit (typeN==="N"), plus jamais pour un Congé/VT/
+                // RU/... occupant le 2e créneau (avant ce correctif, `!!typeN`
+                // le remplissait dès que N'IMPORTE QUOI occupait ce créneau,
+                // trompeur maintenant que 8 codes différents peuvent s'y
+                // trouver). Un simple anneau bleu (outline) reste affiché pour
+                // signaler "quelque chose d'autre occupe ce créneau".
+                const isActive = t.code === "N" ? typeN === "N" : type1 === t.code;
                 return (
                   <button key={t.code} onClick={() => toggleType1(t.code)} style={{
                     padding:"9px 5px", borderRadius:10, border:"none", cursor:"pointer",
@@ -991,7 +1096,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     color: isActive ? "#fff" : "#475569",
                     display:"flex", flexDirection:"column", alignItems:"center", gap:2,
                     transition:"all .1s",
-                    outline: t.code === "N" && typeN ? "2px solid #3b82f6" : "none",
+                    outline: t.code === "N" && typeN && typeN !== "N" ? "2px solid #3b82f6" : "none",
                   }}>
                     <span>{t.label}</span>
                     <span style={{fontSize:8,opacity:.7}}>{t.heures.split("–")[0]}</span>
