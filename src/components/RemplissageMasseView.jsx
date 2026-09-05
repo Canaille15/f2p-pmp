@@ -50,6 +50,7 @@ const VACATIONS = [
 const TYPES_JOURNEE = [
   { code:"poste",  label:"Poste de travail" },
   { code:"rp",     label:"RP" },
+  { code:"rpp",    label:"RPP" },
   { code:"ru",     label:"RU" },
   { code:"conges", label:"Congés" },
 ];
@@ -60,12 +61,16 @@ const CONGES_STATUTS = [
   { code:"refuse",  label:"✕ Refusé" },
 ];
 
-// Combiner RP avec un 2e créneau (05/09/2026, demandé par Olivier) -- mêmes
-// règles que toggleType1 (DayEditPopup.jsx) : seuls RP/RPP peuvent être
-// ancre, un des codes ci-dessous vient alors se poser en 2e créneau (même
-// emplacement que Nuit) plutôt que d'écraser l'ancre. Ce module n'a jamais
-// de bouton "RPP" (uniquement "RP", voir TYPES_JOURNEE) -- seule l'ancre
-// "RP" est concernée ici. CA volontairement EXCLU de cette liste : Congés a
+// Combiner RP/RPP avec un 2e créneau (05/09/2026, demandé par Olivier --
+// "c'etait pas possible de combiner 2 touches directement ? RP ou RPP +
+// nuit ou une des absences [...] comme fait avant ?", après un 1er essai en
+// section/module séparé jugé trop indirect) -- mêmes règles que toggleType1
+// (DayEditPopup.jsx) : seuls RP/RPP peuvent être ancre (voir TYPES_JOURNEE,
+// "rp" et "rpp" tous deux disponibles), un des codes ci-dessous vient alors
+// se poser en 2e créneau (même emplacement que Nuit) plutôt que d'écraser
+// l'ancre -- juste 2 clics directs (l'ancre, puis le combinable), sans
+// panneau/module intermédiaire, comme dans le popup de saisie. CA
+// volontairement EXCLU de cette liste : Congés a
 // déjà son propre type de vague ("conges", Accordé/Demandé/Refusé avec sa
 // règle d'écrasement dédiée) dans ce même module -- combiner CA en 2e
 // créneau ici referait tout ce mécanisme en double pour un cas marginal,
@@ -130,8 +135,8 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   const [vacation, setVacation] = useState("M");
   const [posteCode, setPosteCode] = useState("");
   const [congeStatut, setCongeStatut] = useState("");
-  // 2e créneau combiné avec RP (05/09/2026) -- "" = aucun, sinon un code de
-  // COMBINABLES2. Uniquement pertinent quand typeJournee==="rp".
+  // 2e créneau combiné avec RP/RPP (05/09/2026) -- "" = aucun, sinon un code
+  // de COMBINABLES2. Uniquement pertinent quand typeJournee==="rp"|"rpp".
   const [combinable2, setCombinable2] = useState("");
   const postesDispo = getPostesPourAgent(agent, agentProfiles, vacation);
 
@@ -164,10 +169,11 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       const label = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}`;
       return { id, type:"poste", label, dates, write:{ kind:"planning", codeEquipe:vacation, codePoste:posteCode, jsCode, horaires, overwrite:false } };
     }
-    if (typeJournee==="rp") {
+    if (typeJournee==="rp" || typeJournee==="rpp") {
+      const codeEquipe = typeJournee==="rpp" ? "RPP" : "RP";
       const combo = COMBINABLES2.find(c=>c.code===combinable2);
-      const label = combo ? `RP + ${combo.label}` : "RP";
-      return { id, type:"rp", label, dates, write:{ kind:"planning", codeEquipe:"RP", codePoste:null, jsCode:null, horaires:null, overwrite:false, equipe2: combinable2||null } };
+      const label = combo ? `${codeEquipe} + ${combo.label}` : codeEquipe;
+      return { id, type:typeJournee, label, dates, write:{ kind:"planning", codeEquipe, codePoste:null, jsCode:null, horaires:null, overwrite:false, equipe2: combinable2||null } };
     }
     if (typeJournee==="ru") return { id, type:"ru", label:"RU", dates, write:{ kind:"planning", codeEquipe:"RU", codePoste:null, jsCode:null, horaires:null, overwrite:false } };
     // conges
@@ -478,7 +484,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
           {/* ── Section A ── */}
           <div>
             <div style={{fontSize:13,fontWeight:800,color:"#1e293b",marginBottom:2}}>Remplir plusieurs jours</div>
-            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Choisis un type de journée, coche les jours concernés, puis change de type autant de fois que tu veux (Poste, RP, RU, Congés) — rien n'est écrit tant que tu n'as pas cliqué "✅ Tout remplir".</div>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Choisis un type de journée, coche les jours concernés, puis change de type autant de fois que tu veux (Poste, RP, RPP, RU, Congés) — RP/RPP peut se combiner directement avec un 2e créneau (Nuit, VT...) juste en dessous. Rien n'est écrit tant que tu n'as pas cliqué "✅ Tout remplir".</div>
 
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
               {TYPES_JOURNEE.map(t => (
@@ -536,28 +542,26 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
               </div>
             )}
 
-            {/* 05/09/2026 -- combiner RP avec un 2e créneau (Nuit ou une
-                absence), mêmes règles que dans le popup de saisie normal :
-                RP reste l'ancre inchangée, le code choisi vient se poser en
-                dessous plutôt que le remplacer. Optionnel -- "" = rien de
-                plus, juste RP seul comme avant. */}
-            {typeJournee==="rp" && (<>
-              <div style={{fontSize:11,color:"#475569",marginBottom:6}}>+ Combiner avec un 2e créneau (optionnel, même principe que dans le planning perso) :</div>
+            {/* 05/09/2026, revu le même jour ("c'etait pas possible de
+                combiner 2 touches directement ? [...] comme fait avant ?") --
+                plus de section/paragraphe/encart séparé : juste une 2e rangée
+                de boutons directement sous RP/RPP, même style, aucun clic de
+                plus que dans le popup de saisie (click l'ancre, click le
+                combinable). RP/RPP reste inchangé, le code cliqué vient se
+                poser en dessous -- un simple title= (infobulle) suffit,
+                comme n'importe quel autre bouton de ce module. */}
+            {(typeJournee==="rp" || typeJournee==="rpp") && (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
                 {COMBINABLES2.map(c => (
                   <button key={c.code} onClick={()=>choisirCombinable2(c.code)} disabled={fillBusy}
+                    title={`Se combine avec ${typeJournee==="rpp"?"RPP":"RP"} (2e créneau), comme dans le planning perso`}
                     style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                       background:combinable2===c.code?"#16a34a":"#f0fdf4",color:combinable2===c.code?"#fff":"#166534"}}>
                     {c.label}
                   </button>
                 ))}
               </div>
-              {combinable2 && (
-                <div style={{fontSize:10,fontWeight:600,color:"#166534",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
-                  ℹ️ RP reste inchangé, "{COMBINABLES2.find(c=>c.code===combinable2)?.label}" vient se poser en dessous sur les mêmes jours.
-                </div>
-              )}
-            </>)}
+            )}
 
             {pretPourCalendrier && (<>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
