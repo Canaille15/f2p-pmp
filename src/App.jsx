@@ -315,13 +315,16 @@ const HORAIRES_DIMANCHE_RAPPEL = {
 // (REPOS_POUR_CONGE_EQUIPE2) -- quand le créneau principal porte un de ces
 // codes, le Congé (accordé OU en attente) se rend en bas de case (position
 // du "2e créneau", celle de Nuit) plutôt qu'en zone 1 -- "meme regle pour
-// les demandés aussi" (Olivier, 25/08). Généralisée le 05/09 (Olivier :
-// "ajouter les vt, ru, rq, rn, tc, ty, maladie comme un conges lorsquil
-// remplace unenuit") : le 2e créneau (equipe2) peut désormais aussi porter
-// VT/RU/RQ/RN/TC/TY/MA -- voir ZONE 3bis (GlobalView) pour leur rendu dans
-// le planning perso, et EQUIPE2_CODES_COMBINABLES (client.js) pour les
-// valeurs acceptées à la sauvegarde.
-const REPOS_AVEC_CONGE_SOIR = ["RP","RPP","RU","RQ","TC","TY","RN","VT"];
+// les demandés aussi" (Olivier, 25/08). Généralisée le 05/09 (VT/RU/RQ/RN/
+// TC/TY/Maladie peuvent aussi occuper le 2e créneau -- equipe2 -- voir ZONE
+// 3bis dans PersonalView pour leur rendu, et EQUIPE2_CODES_COMBINABLES
+// client.js pour les valeurs acceptées à la sauvegarde), PUIS resserrée le
+// même jour (Olivier : "rp et rpp est le seul a etre en haut [...] c'est
+// juste quand c'est sur une nuit [...] aucun risque d'ordre") : seuls RP et
+// RPP restent des ancres valides -- RU/RQ/RN/TC/TY/VT ne peuvent plus
+// eux-mêmes accueillir un compagnon en 2e créneau, seulement y être placés
+// à côté de RP/RPP.
+const REPOS_AVEC_CONGE_SOIR = ["RP","RPP"];
 
 // Codes fêtes légales SNCF
 const CODES_FETES = {

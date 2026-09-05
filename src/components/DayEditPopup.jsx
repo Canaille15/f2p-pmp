@@ -38,27 +38,30 @@ const CODES_REPOS = [
 const CODES_REPOS_LIGNE1 = ["RP","RPP","RU","RQ","RN","TC","TY","NU"];
 
 // Congé combiné à un repos (25/08, Olivier) : "le conge remplace la nuit
-// qu'il aurait faire et qu'il a posé" -- ces codes peuvent porter un Congé
-// dans le 2e créneau (equipe2, même emplacement que Nuit) au lieu que le
-// Congé remplace le créneau principal. Promue au niveau module (29/08,
-// était déclarée dans le composant, après congeStatutInitial qui en avait
-// besoin -- déplacée pour être utilisable par le détachement auto ET par
-// toggleType1, sans dépendre de l'ordre des déclarations dans le composant).
-// Mirror exact de REPOS_AVEC_CONGE_SOIR (App.jsx) -- garder synchronisées.
-const REPOS_POUR_CONGE_EQUIPE2 = ["RP","RPP","RU","RQ","TC","TY","RN","VT"];
+// qu'il aurait faire et qu'il a posé". Généralisé le 05/09 à VT/RU/RQ/RN/TC/
+// TY/Maladie, puis RESSERRÉ le même jour (Olivier, après un 1er essai jugé
+// "ultra compliqué" puis un 2e encore trop large) : "rp et rpp est le seul a
+// etre en haut. car en cas de nuit le soir il doit etre en haut [...] c'est
+// juste quand c'est sur une nuit [...] aucun risque d'ordre : rp ou rpp avec
+// une absence en bas". Seuls RP et RPP peuvent donc porter un 2e créneau
+// (equipe2, même emplacement que Nuit) -- RU/RQ/RN/TC/TY/VT ne sont plus des
+// ancres (ils l'étaient dans un essai intermédiaire le même jour, revenu en
+// arrière) : combinés avec RP/RPP ils passent en 2e créneau, mais entre eux
+// (ex: RU puis RQ) un clic remplace toujours l'autre normalement, sans
+// routage particulier -- plus aucune ambiguïté d'ordre.
+// Promue au niveau module (29/08, était déclarée dans le composant, après
+// congeStatutInitial qui en avait besoin -- déplacée pour être utilisable
+// par le détachement auto ET par toggleType1, sans dépendre de l'ordre des
+// déclarations dans le composant). Mirror exact de REPOS_AVEC_CONGE_SOIR
+// (App.jsx) -- garder synchronisées.
+const REPOS_POUR_CONGE_EQUIPE2 = ["RP","RPP"];
 
-// Généralisation du "remplace la Nuit" (05/09, demandé par Olivier : "est ce
-// qu'on a prevu de pouvoir ajouter les vt, ru, rq, rn, tc, ty, madadie comme
-// un conges lorsquil remplace unenuit ?" -- "commence et fais tout") : VT
-// garde son propre sous-menu Accordé/Demandé/Refusé (accorderEnEquipe2 plus
-// bas route automatiquement vers le 2e créneau, comme Congé). Ces 6 codes en
-// revanche n'ont pas de sous-menu -- un simple clic direct sur leur bouton
-// (CODES_REPOS_LIGNE1/ligne 2) sert déjà à choisir le créneau PRINCIPAL, donc
-// réutiliser ces mêmes boutons pour le 2e créneau serait ambigu (remplace le
-// jour, ou complète le soir ?). Affichés à la place dans une section dédiée,
-// séparée, visible uniquement quand le créneau principal porte déjà un repos
-// combinable -- zéro ambiguïté avec les boutons de sélection du jour.
-const CODES_2E_CRENEAU_SANS_SOUS_MENU = ["RU","RQ","RN","TC","TY","MA"];
+// Codes qui peuvent occuper le 2e créneau à la place de la Nuit, uniquement
+// quand le créneau principal est RP ou RPP (REPOS_POUR_CONGE_EQUIPE2
+// ci-dessus) -- voir toggleType1 plus bas, seule source de vérité pour ce
+// routage (aucun bouton dédié séparé, Congé et VT gardent leur sous-menu
+// existant, les 6 autres sont de simples boutons directs).
+const CODES_COMBINABLES_EQUIPE2 = ["CA","VT","RU","RQ","RN","TC","TY","MA"];
 
 const CODES_TRAVAIL = [
   { code:"M",  label:"Matin",    heures:"06h10–14h17", color:"#8B0000" },
@@ -358,9 +361,9 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   const trackingExistant = agentProfiles?.[agKey]?.congesDemandes?.[date];
   const codeActuelAuOuverture = entry?.equipe || entry?.equipe2;
   // 29/08 -- bug corrigé : le détachement ne doit PAS s'appliquer si le code
-  // déjà présent est un repos combinable (RP/RPP/RU/RQ/TC/TY/RN/VT), puisque
-  // c'est précisément la combinaison volontaire Congé+repos qu'on autorise
-  // depuis le 25/08 -- même exception déjà en place côté App.jsx
+  // déjà présent est RP ou RPP (REPOS_POUR_CONGE_EQUIPE2, resserré le 05/09),
+  // puisque c'est précisément la combinaison volontaire Congé+repos qu'on
+  // autorise depuis le 25/08 -- même exception déjà en place côté App.jsx
   // (getCongesDemandeesAnnee, ligne ~319 "!REPOS_AVEC_CONGE_SOIR.includes")
   // mais jamais reportée ici, ce qui faisait perdre le suivi Demandé/Refusé
   // dès l'ouverture du popup sur un jour RP/RPP/etc. déjà présent.
@@ -418,7 +421,15 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
     return "#64748b";
   };
 
-  // Toggle type journée
+  // Toggle type journée -- unifie depuis le 05/09 le routage "1er code = jour
+  // principal, 2e code différent = complète en dessous (2e créneau)", sur
+  // demande explicite d'Olivier ("il faut juste pouvoir coche rp et si on
+  // met sur le meme jour un conges, ru, rq.... le mettre en bas de case") --
+  // même bouton pour les deux usages, plus de section séparée. C'est la
+  // SEULE fonction qui décide du routage, appelée aussi bien par un clic
+  // direct (RP/RPP/RU/RQ/RN/TC/TY/NU/Maladie) que par "Congés · Accordé" et
+  // "VT · Accordé" (leurs sous-menus Demandé/Refusé restent à part, gérés
+  // par toggleCongeStatut/toggleVtStatut).
   const toggleType1 = (code) => {
     if (code === "N") {
       // N = nuit du soir, géré par typeN. 05/09 -- bug corrigé : l'ancien
@@ -436,60 +447,50 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
       setType1(null);
       setPoste1("");
       setHoraires1("");
-    } else {
-      // 29/08 -- bug corrigé : un Congé déjà Accordé en créneau principal
-      // (type1==="CA") était silencieusement écrasé en cliquant un repos
-      // combinable (RP/RPP/RU/RQ/TC/TY/RN/VT), perdant le Congé -- alors que
-      // le sens inverse (repos posé en premier, puis Congé) route déjà
-      // correctement vers le 2e créneau (accorderConge, plus bas). Routage
-      // symétrique : le Congé bascule dans typeN au lieu d'être perdu --
-      // jamais si typeN porte déjà une vraie Nuit (ne jamais l'écraser, cas
-      // hors scope de cette demande, laissé tel quel comme avant).
-      if (type1 === "CA" && REPOS_POUR_CONGE_EQUIPE2.includes(code) && (!typeN || typeN === "CA")) {
-        setTypeN("CA");
-        setPosteN("");
-      }
-      setType1(code);
-      setHoraires1(["M","AM","J"].includes(code) ? (HORAIRES_DEFAUT[code] || "") : "");
-      setPoste1("");
-      setShowFetes(false);
+      return;
     }
-  };
-
-  // Congé combiné à un repos (25/08, Olivier) : "un rp suivi d'un congé
-  // [...] en fait le conge remplace la nuit qu'il aurait faire et qu'il a
-  // posé" -- automatique selon la combinaison, sans bouton supplémentaire
-  // ("selon la combine, ca se fait automatiquement") : si le créneau
-  // principal porte déjà un de ces codes, "Congés · Accordé" route le Congé
-  // dans le 2e créneau (equipe2, même emplacement que Nuit ↓) au lieu de
-  // remplacer le créneau principal -- la journée RP/RU/... reste inchangée.
-  // (REPOS_POUR_CONGE_EQUIPE2 promue au niveau module le 29/08, voir en tête
-  // de fichier.) Généralisée le 05/09 en accorderEnEquipe2, réutilisée par
-  // Congé ET VT (le seul autre code à avoir son propre sous-menu Accordé) --
-  // voir CODES_2E_CRENEAU_SANS_SOUS_MENU plus haut pour les 6 autres codes,
-  // qui n'ont pas ce sous-menu et passent par une section dédiée plus bas.
-  const congeAccorde = type1 === "CA" || typeN === "CA";
-  const vtAccordeSoir = typeN === "VT";
-  const vtAccorde = type1 === "VT" || vtAccordeSoir;
-  const accorderEnEquipe2 = (code, revertTo = null) => {
-    if (REPOS_POUR_CONGE_EQUIPE2.includes(type1) && type1 !== code) {
-      // Toggle : reclique "Accordé" pour retirer le code du 2e créneau, sans
-      // toucher au repos principal.
+    // Cas 1 : le créneau principal est déjà un repos combinable (RP/RPP/RU/
+    // RQ/TC/TY/RN/VT) et le code cliqué peut remplacer la nuit -> il va
+    // directement en 2e créneau, le repos principal ne bouge jamais. Reclique
+    // le même code pour le retirer du 2e créneau sans toucher au repos.
+    if (REPOS_POUR_CONGE_EQUIPE2.includes(type1) && CODES_COMBINABLES_EQUIPE2.includes(code)) {
       setTypeN(prev => prev === code ? null : code);
       setPosteN("");
       return;
     }
-    toggleType1(code);
-    // Ce code ne doit jamais coexister à la fois en créneau principal ET en
-    // 2e créneau (double-comptage) -- revient à revertTo dans ce cas (une
-    // vraie Nuit pour Congé, comme avant le 25/08 ; rien de spécial pour les
-    // autres, cas défensif très rare en pratique).
-    if (typeN === code) setTypeN(revertTo);
+    // Cas 2 (29/08, généralisé le 05/09) -- symétrique : le créneau principal
+    // porte déjà un code combinable "seul" (Congé/Maladie, jamais un repos
+    // combinable à part entière) et le code cliqué est un repos qui prend le
+    // relais comme jour principal -> l'ancien code descend en 2e créneau au
+    // lieu d'être perdu (ex: Congé posé seul, puis RP cliqué -> RP+Congé(soir)).
+    if (CODES_COMBINABLES_EQUIPE2.includes(type1) && REPOS_POUR_CONGE_EQUIPE2.includes(code)) {
+      setTypeN(prevN => (!prevN || prevN === type1) ? type1 : prevN);
+      setPosteN("");
+      setType1(code);
+      setHoraires1(["M","AM","J"].includes(code) ? (HORAIRES_DEFAUT[code] || "") : "");
+      setPoste1("");
+      return;
+    }
+    // Cas normal : remplace le créneau principal -- filet de sécurité, si le
+    // code cliqué était déjà (par un chemin détourné) présent en 2e créneau,
+    // on l'en retire pour ne jamais le compter dans les deux créneaux à la fois.
+    if (typeN === code) { setTypeN(null); setPosteN(""); }
+    setType1(code);
+    setHoraires1(["M","AM","J"].includes(code) ? (HORAIRES_DEFAUT[code] || "") : "");
+    setPoste1("");
+    setShowFetes(false);
   };
+
+  const congeAccorde = type1 === "CA" || typeN === "CA";
+  const vtAccordeSoir = typeN === "VT";
+  const vtAccorde = type1 === "VT" || vtAccordeSoir;
+  // Congé et VT gardent leur propre bouton dédié (sous-menu Accordé/Demandé/
+  // Refusé) -- "Accordé" appelle directement toggleType1, qui route déjà tout
+  // seul vers le bon créneau selon ce qui est déjà coché (voir Cas 1/2 ci-dessus).
   const accorderConge = () => {
     setCongeStatut(null);
     setShowConges(false);
-    accorderEnEquipe2("CA", "N");
+    toggleType1("CA");
   };
 
   const isTravailJ = type1 && ["M","AM","J"].includes(type1);
@@ -633,11 +634,11 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   VT (nuit) ↓
                 </span>
               )}
-              {/* 05/09 -- généralisation : badge unique pour les 6 codes sans
-                  sous-menu (CODES_2E_CRENEAU_SANS_SOUS_MENU) quand ils
-                  occupent le 2e créneau -- CA et VT gardent leur badge dédié
-                  ci-dessus, jamais dupliqués ici. */}
-              {typeN && CODES_2E_CRENEAU_SANS_SOUS_MENU.includes(typeN) && (
+              {/* 05/09 -- badge générique pour tout code en 2e créneau autre
+                  que Nuit/Congé/VT (RU/RQ/RN/TC/TY/Maladie, qui n'ont pas de
+                  badge dédié) -- CA et VT gardent le leur ci-dessus, jamais
+                  dupliqués ici. */}
+              {typeN && !["N","CA","VT"].includes(typeN) && (
                 <span style={{
                   background:getColor(typeN), color:"#fff",
                   fontSize:10, fontWeight:700,
@@ -860,8 +861,8 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   sur demande d'Olivier — "le même fonctionnement pour les
                   demande accord et refus". Seul "Accordé" écrit dans le
                   planning perso (type1="VT" normalement, ou typeN="VT" en 2e
-                  créneau depuis le 05/09 -- voir accorderEnEquipe2, vtAccorde/
-                  vtAccordeSoir). */}
+                  créneau depuis le 05/09 -- toggleType1 route tout seul, voir
+                  vtAccorde/vtAccordeSoir). */}
               <button onClick={() => setShowVt(v=>!v)} style={{
                 padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                 fontSize:12, fontWeight:700,
@@ -965,7 +966,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
             {showVt && (
               <div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
-                  <button onClick={() => { accorderEnEquipe2("VT"); setVtStatut(null); setShowVt(false); }} style={{
+                  <button onClick={() => { toggleType1("VT"); setVtStatut(null); setShowVt(false); }} style={{
                     padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
                     fontSize:12, fontWeight:700,
                     background: vtAccorde ? "#16a34a" : "#f0fdf4",
@@ -1031,41 +1032,6 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   background:"none", border:"none", color:"#78350f", cursor:"pointer",
                   fontWeight:800, fontSize:13, flexShrink:0, padding:0,
                 }}>✕</button>
-              </div>
-            )}
-            {/* 🌙 Remplace la nuit par... (05/09, demandé par Olivier) --
-                RU/RQ/RN/TC/TY/Maladie n'ont pas de sous-menu comme Congé/VT
-                (CODES_2E_CRENEAU_SANS_SOUS_MENU) : section dédiée, séparée
-                des boutons de sélection du jour ci-dessus, pour ne jamais
-                être ambiguë (remplace le jour vs complète le soir ?). Ne
-                s'affiche que si le créneau principal porte déjà un repos
-                combinable -- exactement la même condition que le routage
-                Congé/VT. */}
-            {REPOS_POUR_CONGE_EQUIPE2.includes(type1) && (
-              <div style={{marginTop:9}}>
-                <div style={{fontSize:10,color:"#94a3b8",fontWeight:700,marginBottom:5}}>
-                  🌙 Remplace la nuit par…
-                </div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                  {CODES_2E_CRENEAU_SANS_SOUS_MENU.filter(c => c !== type1).map(code => {
-                    const r = CODES_REPOS.find(x => x.code === code);
-                    const actif = typeN === code;
-                    return (
-                      <button key={code} onClick={() => {
-                        setTypeN(prev => prev === code ? null : code);
-                        setPosteN("");
-                      }} style={{
-                        padding:"5px 11px", borderRadius:8, border:"none", cursor:"pointer",
-                        fontSize:12, fontWeight:700,
-                        background: actif ? r.color : "#f1f5f9",
-                        color: actif ? "#fff" : "#475569",
-                      }}>{r.label}</button>
-                    );
-                  })}
-                </div>
-                <div style={{fontSize:9,color:"#94a3b8",marginTop:4,fontStyle:"italic"}}>
-                  Remplace la Nuit qui aurait suivi le {CODES_REPOS.find(r=>r.code===type1)?.label||type1} — ne touche jamais le reste de la journée.
-                </div>
               </div>
             )}
           </div>
