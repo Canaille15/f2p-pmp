@@ -562,7 +562,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
             {pretPourCalendrier && (<>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                 <button onClick={()=>changerMiniMois(-1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#0f4c81",padding:"2px 8px",fontWeight:700}}>‹</button>
-                <span style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{MOIS_L[miniMonthNum-1]} {miniYear}</span>
+                <span style={{fontSize:15,fontWeight:800,color:"#0f4c81",background:"#e0f2fe",padding:"3px 12px",borderRadius:8}}>{MOIS_L[miniMonthNum-1]} {miniYear}</span>
                 <button onClick={()=>changerMiniMois(1)} style={{border:"none",background:"none",cursor:"pointer",fontSize:16,color:"#0f4c81",padding:"2px 8px",fontWeight:700}}>›</button>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
