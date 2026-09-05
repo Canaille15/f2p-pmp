@@ -9128,6 +9128,20 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
     const diffMonths=(target.getFullYear()*12+target.getMonth())-(today.getFullYear()*12+today.getMonth());
     setMonthOff(diffMonths);
   };
+  // 05/09/2026 (Olivier : "j'ai voulu mettre une nuit le soir du 2eme rp
+  // [...] si toi tu y arrive, et pas moi, c'est que c'est pas intuitif") --
+  // Remplissage rapide ne touche JAMAIS un jour déjà rempli (protège une
+  // éventuelle note perso/grève/formation déjà présente ce jour-là), donc
+  // "ajouter un 2e créneau à un RP/RPP déjà posé" n'y est structurellement
+  // pas possible -- c'est un vrai jour à éditer, pas à remplir en masse.
+  // Raccourci direct vers le popup normal (même mécanisme que le clic sur
+  // une case du calendrier, ligne ~9615) plutôt que de laisser un jour
+  // grisé sans issue dans le module.
+  const ouvrirJourDepuisRemplissage=(dk)=>{
+    setShowRemplissage(false);
+    jumpToMonthDate(dk);
+    setDayPopup({dk, entry: schedule[`${agent.id}-${dk}`]||null});
+  };
   // Recherche globale (01/09) : saut de date déclenché depuis le header,
   // purement additif -- ne touche à rien d'autre du calendrier existant.
   useEffect(()=>{ if(jumpTarget?.date) jumpToMonthDate(jumpTarget.date); },[jumpTarget]);
@@ -9562,7 +9576,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
         </button>
       </div>}
     </div>
-    {showRemplissage && <RemplissageMasseModal agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} schedule={schedule} setSchedule={setSchedule} onClose={()=>setShowRemplissage(false)}/>}
+    {showRemplissage && <RemplissageMasseModal agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} schedule={schedule} setSchedule={setSchedule} onClose={()=>setShowRemplissage(false)} onOuvrirJour={ouvrirJourDepuisRemplissage}/>}
 
     <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToMonthDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
     {/* ── VUE MOIS (seule vue restante depuis le 04/08, voir CLAUDE.md) ── */}

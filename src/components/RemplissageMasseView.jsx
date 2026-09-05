@@ -117,7 +117,7 @@ function fmtDateCourt(dk) {
   return new Date(dk+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});
 }
 
-export default function RemplissageMasseModal({ agent, agentProfiles, setAgentProfiles, schedule, setSchedule, onClose }) {
+export default function RemplissageMasseModal({ agent, agentProfiles, setAgentProfiles, schedule, setSchedule, onClose, onOuvrirJour }) {
   const agCp = agent?.immatriculation || agent?.cp || agent?.id;
 
   // ── Section A : remplissage en masse ──────────────────────────────────
@@ -562,6 +562,11 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                 ))}
               </div>
             )}
+            {(typeJournee==="rp"||typeJournee==="rpp") && combinable2 && typeof onOuvrirJour==="function" && (
+              <div style={{fontSize:10,fontWeight:600,color:"#0369a1",background:"#eff6ff",border:"1px dashed #93c5fd",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
+                💡 Un jour en pointillés bleus a déjà {typeJournee==="rpp"?"RPP":"RP"} — clique dessus pour l'ouvrir directement et y ajouter "{COMBINABLES2.find(c=>c.code===combinable2)?.label}".
+              </div>
+            )}
 
             {pretPourCalendrier && (<>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
@@ -582,6 +587,23 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   const occupeDb = occupeReel && griserSiOccupe;
                   const enAttenteLot = panierDates.has(dk);
                   const occupe = occupeDb || enAttenteLot;
+                  // 05/09/2026 (Olivier, après avoir cherché en vain à ajouter
+                  // Nuit sur un RP déjà rempli : "si toi tu y arrive, et pas
+                  // moi, c'est que c'est pas intuitif") -- ce module ne
+                  // touche JAMAIS un jour déjà rempli (règle générale
+                  // inchangée, protège note perso/grève/formation qui
+                  // pourraient déjà être sur ce jour), donc "ajouter un 2e
+                  // créneau à un RP/RPP déjà posé" n'est structurellement pas
+                  // possible ici -- c'est un vrai jour à ÉDITER, pas à
+                  // remplir en masse. Plutôt que de laisser un jour grisé
+                  // sans issue, ce cas précis (même ancre déjà là, pas encore
+                  // de 2e créneau) devient un raccourci direct vers le
+                  // popup de saisie normal (onOuvrirJour, câblé depuis
+                  // PersonalView) -- jamais d'écrasement, juste une porte
+                  // d'entrée vers l'outil qui sait déjà le faire correctement.
+                  const ancreActuelle = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : null;
+                  const dejaAncreSansCombo = !!combinable2 && !!ancreActuelle && typeof onOuvrirJour==="function" && v?.equipe===ancreActuelle && !v?.equipe2;
+                  const bloque = occupe && !dejaAncreSansCombo;
                   const isSel = joursSelect.includes(dk);
                   // 25/08 (Olivier) : un jour grisé garde un liseré coloré
                   // rappelant ce qui l'occupe déjà -- couleur personnalisée
@@ -594,12 +616,18 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   const codeDeja = v?.equipe || v?.equipe2 || null;
                   const couleurDeja = codeDeja ? (agentColors[codeDeja] || DEFAULT_COLORS[codeDeja] || "#e2e8f0") : "#e2e8f0";
                   return (
-                    <button key={dk} onClick={()=>toggleJourSelect(dk,occupe)} disabled={occupe||fillBusy}
-                      title={occupeDb ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : enAttenteLot ? "Jour déjà dans une autre vague du lot — retire-le de cette vague si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
-                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":occupeDb?couleurDeja:enAttenteLot?"#f59e0b":occupeReel?"#fde68a":"#cbd5e1"}`,
-                        borderRadius:6,background:isSel?"#0f4c81":occupeDb?"#f1f5f9":enAttenteLot?"#fffbeb":"#fff",
-                        color:isSel?"#fff":occupeDb?"#cbd5e1":enAttenteLot?"#b45309":"#334155",opacity:fillBusy&&!occupe?.5:1,
-                        fontSize:11,fontWeight:700,cursor:(occupe||fillBusy)?"default":"pointer",
+                    <button key={dk}
+                      onClick={()=>{
+                        if (dejaAncreSansCombo) { onOuvrirJour(dk); return; }
+                        toggleJourSelect(dk,occupe);
+                      }}
+                      disabled={bloque||fillBusy}
+                      title={dejaAncreSansCombo ? `Déjà ${ancreActuelle} — clique pour ouvrir ce jour et ajouter "${COMBINABLES2.find(c=>c.code===combinable2)?.label||combinable2}" directement` : occupeDb ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : enAttenteLot ? "Jour déjà dans une autre vague du lot — retire-le de cette vague si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
+                      style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":dejaAncreSansCombo?"#0369a1":occupeDb?couleurDeja:enAttenteLot?"#f59e0b":occupeReel?"#fde68a":"#cbd5e1"}`,
+                        borderStyle:dejaAncreSansCombo?"dashed":"solid",
+                        borderRadius:6,background:isSel?"#0f4c81":dejaAncreSansCombo?"#eff6ff":occupeDb?"#f1f5f9":enAttenteLot?"#fffbeb":"#fff",
+                        color:isSel?"#fff":dejaAncreSansCombo?"#0369a1":occupeDb?"#cbd5e1":enAttenteLot?"#b45309":"#334155",opacity:fillBusy&&!bloque?.5:1,
+                        fontSize:11,fontWeight:700,cursor:(bloque||fillBusy)?"default":"pointer",
                         display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
                       {day}
                     </button>
