@@ -536,7 +536,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
    *  planningController.bulkFill), jamais d'écrasement, SAUF si overwrite
    *  est passé à true (uniquement Congés "Accordé" en masse — même règle
    *  que le popup de saisie normal, qui écrase volontairement). */
-  bulkFill: (agentId, { dates, codeEquipe, codePoste, horaires, overwrite }) =>
+  bulkFill: (agentId, { dates, codeEquipe, codePoste, horaires, overwrite, equipe2 }) =>
     apiFetch(`/planning/${agentId}/bulk-fill`, {
       method: 'POST',
       body: JSON.stringify({
@@ -544,6 +544,10 @@ result[`${row.agent_id || agentId}-${date}`] = {
         heure_debut: horaires ? horaires.split('–')[0]?.trim().replace('h',':') : null,
         heure_fin:   horaires ? horaires.split('–')[1]?.trim().replace('h',':') : null,
         overwrite: !!overwrite,
+        // 05/09/2026 (RemplissageMasseView, "RP + combinable en masse") :
+        // 2e créneau optionnel, uniquement valide côté serveur si code_equipe
+        // est RP/RPP -- voir bulkFill (planningController.js).
+        equipe2: equipe2 || null,
       }),
     }),
   /** Efface le planning perso sur une période, avec sauvegarde pour annulation. */

@@ -60,6 +60,27 @@ const CONGES_STATUTS = [
   { code:"refuse",  label:"✕ Refusé" },
 ];
 
+// Combiner RP avec un 2e créneau (05/09/2026, demandé par Olivier) -- mêmes
+// règles que toggleType1 (DayEditPopup.jsx) : seuls RP/RPP peuvent être
+// ancre, un des codes ci-dessous vient alors se poser en 2e créneau (même
+// emplacement que Nuit) plutôt que d'écraser l'ancre. Ce module n'a jamais
+// de bouton "RPP" (uniquement "RP", voir TYPES_JOURNEE) -- seule l'ancre
+// "RP" est concernée ici. CA volontairement EXCLU de cette liste : Congés a
+// déjà son propre type de vague ("conges", Accordé/Demandé/Refusé avec sa
+// règle d'écrasement dédiée) dans ce même module -- combiner CA en 2e
+// créneau ici referait tout ce mécanisme en double pour un cas marginal,
+// non demandé explicitement.
+const COMBINABLES2 = [
+  { code:"N",  label:"Nuit" },
+  { code:"VT", label:"VT" },
+  { code:"RU", label:"RU" },
+  { code:"RQ", label:"RQ" },
+  { code:"RN", label:"RN" },
+  { code:"TC", label:"TC" },
+  { code:"TY", label:"TY" },
+  { code:"MA", label:"Maladie" },
+];
+
 const MOIS_L = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
 // Liseré coloré sur les jours grisés (25/08, demandé par Olivier : "les
@@ -109,6 +130,9 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   const [vacation, setVacation] = useState("M");
   const [posteCode, setPosteCode] = useState("");
   const [congeStatut, setCongeStatut] = useState("");
+  // 2e créneau combiné avec RP (05/09/2026) -- "" = aucun, sinon un code de
+  // COMBINABLES2. Uniquement pertinent quand typeJournee==="rp".
+  const [combinable2, setCombinable2] = useState("");
   const postesDispo = getPostesPourAgent(agent, agentProfiles, vacation);
 
   const [miniMonth, setMiniMonth] = useState(()=>{
@@ -140,7 +164,11 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       const label = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}`;
       return { id, type:"poste", label, dates, write:{ kind:"planning", codeEquipe:vacation, codePoste:posteCode, jsCode, horaires, overwrite:false } };
     }
-    if (typeJournee==="rp") return { id, type:"rp", label:"RP", dates, write:{ kind:"planning", codeEquipe:"RP", codePoste:null, jsCode:null, horaires:null, overwrite:false } };
+    if (typeJournee==="rp") {
+      const combo = COMBINABLES2.find(c=>c.code===combinable2);
+      const label = combo ? `RP + ${combo.label}` : "RP";
+      return { id, type:"rp", label, dates, write:{ kind:"planning", codeEquipe:"RP", codePoste:null, jsCode:null, horaires:null, overwrite:false, equipe2: combinable2||null } };
+    }
     if (typeJournee==="ru") return { id, type:"ru", label:"RU", dates, write:{ kind:"planning", codeEquipe:"RU", codePoste:null, jsCode:null, horaires:null, overwrite:false } };
     // conges
     if (!congeStatut) return null;
@@ -162,7 +190,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   const changerType = (t) => {
     if (fillBusy) return;
     ajouterAuLot();
-    setTypeJournee(t); setPosteCode(""); setCongeStatut(""); setJoursSelect([]); setFillMsg(null);
+    setTypeJournee(t); setPosteCode(""); setCongeStatut(""); setCombinable2(""); setJoursSelect([]); setFillMsg(null);
   };
   const choisirVacation = (code) => {
     if (fillBusy) return;
@@ -180,6 +208,12 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     const nouveau = congeStatut===code ? "" : code;
     if (nouveau!==congeStatut) ajouterAuLot();
     setCongeStatut(nouveau);
+  };
+  const choisirCombinable2 = (code) => {
+    if (fillBusy) return;
+    const nouveau = combinable2===code ? "" : code;
+    if (nouveau!==combinable2) ajouterAuLot();
+    setCombinable2(nouveau);
   };
 
   const [miniYear, miniMonthNum] = miniMonth.split("-").map(Number);
@@ -243,13 +277,13 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       });
       return { ok:true, appliques:entree.dates.length, ignores:0 };
     }
-    const { codeEquipe, codePoste, jsCode, horaires, overwrite } = entree.write;
+    const { codeEquipe, codePoste, jsCode, horaires, overwrite, equipe2 } = entree.write;
     try {
-      const res = await api.planning.bulkFill(agCp, { dates: entree.dates, codeEquipe, codePoste, horaires, overwrite });
+      const res = await api.planning.bulkFill(agCp, { dates: entree.dates, codeEquipe, codePoste, horaires, overwrite, equipe2 });
       setSchedule(prev => {
         const next = {...prev};
         (res.appliques||[]).forEach(d => {
-          next[`${agCp}-${d}`] = { equipe: codeEquipe, jsCode: jsCode || codePoste, horaires, prive: !["M","AM","N","J","CA"].includes(codeEquipe) };
+          next[`${agCp}-${d}`] = { equipe: codeEquipe, jsCode: jsCode || codePoste, horaires, prive: !["M","AM","N","J","CA"].includes(codeEquipe), ...(equipe2 ? { equipe2 } : {}) };
         });
         return next;
       });
@@ -501,6 +535,29 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                 ℹ️ N'écrit rien dans le planning — retrouve le suivi dans le module Congés.
               </div>
             )}
+
+            {/* 05/09/2026 -- combiner RP avec un 2e créneau (Nuit ou une
+                absence), mêmes règles que dans le popup de saisie normal :
+                RP reste l'ancre inchangée, le code choisi vient se poser en
+                dessous plutôt que le remplacer. Optionnel -- "" = rien de
+                plus, juste RP seul comme avant. */}
+            {typeJournee==="rp" && (<>
+              <div style={{fontSize:11,color:"#475569",marginBottom:6}}>+ Combiner avec un 2e créneau (optionnel, même principe que dans le planning perso) :</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                {COMBINABLES2.map(c => (
+                  <button key={c.code} onClick={()=>choisirCombinable2(c.code)} disabled={fillBusy}
+                    style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
+                      background:combinable2===c.code?"#16a34a":"#f0fdf4",color:combinable2===c.code?"#fff":"#166534"}}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              {combinable2 && (
+                <div style={{fontSize:10,fontWeight:600,color:"#166534",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
+                  ℹ️ RP reste inchangé, "{COMBINABLES2.find(c=>c.code===combinable2)?.label}" vient se poser en dessous sur les mêmes jours.
+                </div>
+              )}
+            </>)}
 
             {pretPourCalendrier && (<>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>

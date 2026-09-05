@@ -103,13 +103,26 @@ async function getAllPublic(req, res) {
 // ordre=1 (jamais un simple repère placeholder 'fin_nuit'/'note_seule',
 // même règle que isPlaceholder côté client -- getSchedule() -- pour rester
 // cohérent avec ce que le frontend considère "libre").
+// 05/09/2026 (RemplissageMasseView, "RP + combinable en masse", demandé par
+// Olivier -- mêmes règles que toggleType1/DayEditPopup.jsx, jamais un
+// nouveau mécanisme) : 2e créneau optionnel, valide UNIQUEMENT quand
+// code_equipe est RP/RPP (seules ancres possibles, REPOS_POUR_CONGE_EQUIPE2/
+// REPOS_AVEC_CONGE_SOIR côté frontend) -- CA volontairement absent de cette
+// liste (Congés a déjà son propre type de vague dans ce module, avec sa
+// règle d'écrasement dédiée).
+const EQUIPE2_COMBINABLES_BULK = new Set(['N','VT','RU','RQ','RN','TC','TY','MA']);
+
 async function bulkFill(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { dates, code_equipe, code_poste, heure_debut, heure_fin, overwrite } = req.body;
+  const { dates, code_equipe, code_poste, heure_debut, heure_fin, overwrite, equipe2 } = req.body;
   if (!Array.isArray(dates) || dates.length === 0) return res.status(400).json({ error: 'Dates requises' });
   if (!code_equipe) return res.status(400).json({ error: 'code_equipe requis' });
+  if (equipe2) {
+    if (!['RP','RPP'].includes(code_equipe)) return res.status(400).json({ error: 'Le 2e créneau ne peut être combiné qu\'avec RP/RPP' });
+    if (!EQUIPE2_COMBINABLES_BULK.has(equipe2)) return res.status(400).json({ error: 'Code de 2e créneau invalide' });
+  }
   const prive = CODES_PUBLICS.has(code_equipe) ? 0 : 1;
   const appliques = [], ignores = [];
   const conn = await pool.getConnection();
@@ -143,6 +156,20 @@ async function bulkFill(req, res) {
          VALUES (?,1,?,?,?,?,?,NULL,NULL)`,
         [jour.id, code_equipe, code_poste || null, heure_debut || null, heure_fin || null, prive]
       );
+      // 2e créneau combiné (equipe2) : même structure que saveEntry (client.js)
+      // pour une vraie Nuit accolée (horaires fixes 22:15-06:17, note
+      // 'debut_nuit') ou un des codes combinables sans poste/horaire propre --
+      // ordre=1 (l'ancre RP/RPP) vient toujours d'être écrite juste au-dessus,
+      // jamais le cas "période unique" (note toujours 'debut_nuit', jamais
+      // note_perso ici -- ce module n'a pas de note perso).
+      if (equipe2) {
+        const estNuit = equipe2 === 'N';
+        await conn.query(
+          `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
+           VALUES (?,2,?,NULL,?,?,0,'debut_nuit',NULL)`,
+          [jour.id, equipe2, estNuit ? '22:15' : null, estNuit ? '06:17' : null]
+        );
+      }
       appliques.push(date);
     }
     await conn.commit();
