@@ -176,8 +176,15 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       if (!posteCode) return null;
       const jsCode = convertirCodePosteVersJsCode(posteCode, vacation);
       const horaires = (jsCode && HORAIRES_POSTE[jsCode]) || HORAIRES_DEFAUT[vacation] || null;
-      const label = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}`;
-      return { id, type:"poste", label, dates, write:{ kind:"planning", codeEquipe:vacation, codePoste:posteCode, jsCode, horaires, overwrite:false } };
+      // 06/09/2026 (Olivier -- "cocher une case dans les touches bleues et
+      // la combiner avec les touches vertes") : un poste de travail peut
+      // désormais recevoir une vraie Nuit en 2e créneau, exactement comme
+      // RP/RPP/RU/NU -- seule Nuit est proposée (voir combinablesDisponibles
+      // plus bas), jamais les 7 absences (qui remplaceraient le poste au
+      // lieu de s'y ajouter, comme dans DayEditPopup/toggleType1).
+      const posteNuitLabel = combinable2==="N" && posteNuit ? (postesNuitDispo.find(p=>p.code===posteNuit)?.label||posteNuit) : null;
+      const label = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}${combinable2==="N" ? ` + Nuit${posteNuitLabel?` · ${posteNuitLabel}`:""}` : ""}`;
+      return { id, type:"poste", label, dates, write:{ kind:"planning", codeEquipe:vacation, codePoste:posteCode, jsCode, horaires, overwrite:false, equipe2: combinable2||null, codePoste2: combinable2==="N" ? (posteNuit||null) : null } };
     }
     if (typeJournee==="rp" || typeJournee==="rpp" || typeJournee==="ru" || typeJournee==="nu") {
       // 05/09/2026 (Olivier : "et RU est peut etre combiné avec une nuit ?"
@@ -225,6 +232,11 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     if (fillBusy) return;
     if (code!==vacation) ajouterAuLot();
     setVacation(code); setPosteCode("");
+    // 06/09/2026 : Nuit ne peut jamais se combiner avec elle-même -- si le
+    // combinable Nuit était coché et qu'on bascule vers la vacation "Nuit",
+    // on le retire (sinon il resterait en mémoire, invisible, et ferait
+    // échouer l'écriture plus tard sans que ce soit clair pourquoi).
+    if (code==="N" && combinable2==="N") { setCombinable2(""); setPosteNuit(""); }
   };
   const choisirPoste = (code) => {
     if (fillBusy) return;
@@ -264,8 +276,15 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   // RP/RPP proposent les 8 combinables (Nuit + les 7 absences), RU et NU ne
   // proposent QUE Nuit (seule combinaison valide avec RU/NU comme ancre).
   const ancreActuelle = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="ru" ? "RU" : typeJournee==="nu" ? "NU" : null;
+  // 06/09/2026 (Olivier -- "cocher une case dans les touches bleues [poste
+  // de travail] et la combiner avec les touches vertes") : pour "poste",
+  // seule Nuit est proposée (jamais les 7 absences, qui n'ont de sens
+  // qu'en remplacement d'une nuit prévue après RP/RPP -- voir toggleType1,
+  // DayEditPopup.jsx) -- et jamais si la vacation choisie est déjà "Nuit"
+  // (une Nuit ne se combine jamais avec elle-même).
   const combinablesDisponibles = (typeJournee==="rp"||typeJournee==="rpp") ? COMBINABLES2
     : (typeJournee==="ru"||typeJournee==="nu") ? COMBINABLES2.filter(c=>c.code==="N")
+    : (typeJournee==="poste" && vacation!=="N") ? COMBINABLES2.filter(c=>c.code==="N")
     : [];
 
   const [miniYear, miniMonthNum] = miniMonth.split("-").map(Number);
@@ -339,12 +358,22 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     // bulkAddCombo, qui n'écrit QUE le 2e créneau, sans jamais toucher à
     // l'ancre déjà en place ni à aucune autre période du jour (note perso,
     // grève, formation).
-    if (equipe2 && (entree.type==="rp"||entree.type==="rpp"||entree.type==="ru"||entree.type==="nu")) {
+    if (equipe2 && (entree.type==="rp"||entree.type==="rpp"||entree.type==="ru"||entree.type==="nu"||entree.type==="poste")) {
+      const estPoste = entree.type==="poste";
       const datesVides = [], datesDejaAncrees = [];
       entree.dates.forEach(d => {
         const v = schedule[`${agCp}-${d}`];
-        if (v && v.equipe===codeEquipe && !v.equipe2) datesDejaAncrees.push(d);
-        else datesVides.push(d);
+        // 06/09/2026 (Olivier -- "poste de travail" + Nuit en masse) : pour
+        // "poste", n'importe quel poste de travail réel déjà en place (peu
+        // importe lequel -- M/AM/J) devient "déjà ancré", jamais besoin
+        // qu'il corresponde au posteCode/vacation actuellement choisis dans
+        // l'UI -- ceux-ci ne servent qu'à écrire du neuf sur du vide.
+        // bulkAddCombo (backend) ne touche jamais à l'ordre=1, donc aucun
+        // risque d'y écrire le mauvais poste.
+        const dejaAncre = estPoste
+          ? (v && v.equipe && ["M","AM","J"].includes(v.equipe) && !v.equipe2)
+          : (v && v.equipe===codeEquipe && !v.equipe2);
+        if (dejaAncre) datesDejaAncrees.push(d); else datesVides.push(d);
       });
       try {
         let totalAppliques = 0, totalIgnores = 0;
@@ -361,14 +390,17 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
           totalAppliques += res.nb_appliques; totalIgnores += res.ignores?.length||0;
         }
         if (datesDejaAncrees.length>0) {
-          const res2 = await api.planning.bulkAddCombo(agCp, { dates: datesDejaAncrees, ancre: codeEquipe, equipe2, codePoste2 });
+          const res2 = await api.planning.bulkAddCombo(agCp, estPoste
+            ? { dates: datesDejaAncrees, anclePosteLibre: true, equipe2, codePoste2 }
+            : { dates: datesDejaAncrees, ancre: codeEquipe, equipe2, codePoste2 });
           setSchedule(prev => {
             const next = {...prev};
             (res2.appliques||[]).forEach(d => {
               const key = `${agCp}-${d}`;
               // Fusion sur l'entrée existante -- préserve tout ce que le
-              // jour portait déjà (note perso, grève, formation), jamais un
-              // remplacement complet comme pour un jour vraiment vide.
+              // jour portait déjà (note perso, grève, formation, ET -- pour
+              // "poste" -- le vrai poste en place, jamais celui de l'UI),
+              // jamais un remplacement complet comme pour un jour vraiment vide.
               next[key] = { ...(prev[key]||{}), equipe2, jsCode2: (equipe2==="N" && codePoste2) ? codePoste2 : null };
             });
             return next;
@@ -580,7 +612,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
           {/* ── Section A ── */}
           <div>
             <div style={{fontSize:13,fontWeight:800,color:"#1e293b",marginBottom:2}}>Remplir plusieurs jours</div>
-            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Choisis un type de journée, coche les jours concernés, puis change de type autant de fois que tu veux (Poste, RP, RPP, RU, Congés) — RP/RPP peut se combiner directement avec un 2e créneau (Nuit, VT...) juste en dessous. Rien n'est écrit tant que tu n'as pas cliqué "✅ Tout remplir".</div>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>Choisis un type de journée, coche les jours concernés, puis change de type autant de fois que tu veux (Poste, RP, RPP, RU, Congés) — RP/RPP peut se combiner avec un 2e créneau (Nuit, VT...), Poste de travail peut se combiner avec Nuit, juste en dessous. Rien n'est écrit tant que tu n'as pas cliqué "✅ Tout remplir".</div>
 
             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
               {TYPES_JOURNEE.map(t => (
@@ -648,18 +680,31 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                 propose que Nuit (combinablesDisponibles filtré plus haut) --
                 les 7 autres absences ne combinent qu'avec RP/RPP, jamais RU
                 (elles le remplacent simplement, comme dans DayEditPopup). */}
-            {combinablesDisponibles.length>0 && (
-              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+            {combinablesDisponibles.length>0 && (<>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:typeJournee==="poste"?6:10}}>
                 {combinablesDisponibles.map(c => (
                   <button key={c.code} onClick={()=>choisirCombinable2(c.code)} disabled={fillBusy}
-                    title={`Se combine avec ${ancreActuelle} (2e créneau), comme dans le planning perso`}
+                    title={typeJournee==="poste" ? "S'ajoute en plus du poste (2e créneau), comme dans le planning perso" : `Se combine avec ${ancreActuelle} (2e créneau), comme dans le planning perso`}
                     style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:fillBusy?"default":"pointer",fontSize:12,fontWeight:700,opacity:fillBusy?.5:1,
                       background:combinable2===c.code?"#16a34a":"#f0fdf4",color:combinable2===c.code?"#fff":"#166534"}}>
                     {c.label}
                   </button>
                 ))}
               </div>
-            )}
+              {/* 06/09/2026 (Olivier -- "je doute que les gens comprennent
+                  qu'il s'agit de mettre une autre utilisation en bas de
+                  case") : rappel explicite, toujours visible dès que le
+                  bloc combinable "poste" apparaît (pas seulement une fois
+                  coché) -- Nuit est la SEULE chose combinable avec un poste
+                  de travail ; les 7 absences (VT/RU/RQ/RN/TC/TY/Maladie) ne
+                  se combinent qu'avec RP/RPP (module "RP"/"RPP" ci-dessus),
+                  jamais avec un poste -- là, elles le remplaceraient. */}
+              {typeJournee==="poste" && (
+                <div style={{fontSize:10,fontWeight:600,color:"#166534",background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
+                  ℹ️ Nuit s'ajoute en plus du poste, sans rien changer — décoche-la à tout moment pour revenir à une saisie de poste seul, pas besoin de retoucher au bouton "Poste de travail". (Congé/RU/RQ/RN/TC/TY/Maladie ne se combinent qu'avec RP ou RPP — avec un poste, ils le remplaceraient comme une saisie normale.)
+                </div>
+              )}
+            </>)}
             {/* 05/09/2026 (Olivier : "mais une nuit sur quel poste ? tu perds
                 la tete non ?") -- une vraie Nuit sans poste n'a pas de sens
                 opérationnel, exactement comme la section "Poste de nuit" du
@@ -694,7 +739,10 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                 autre popup. */}
             {combinablesDisponibles.length>0 && combinable2 && (
               <div style={{fontSize:10,fontWeight:600,color:"#0369a1",background:"#eff6ff",border:"1px solid #93c5fd",borderRadius:7,padding:"6px 9px",marginBottom:10}}>
-                💡 Les jours en bleu ont déjà {ancreActuelle} — coche-les aussi pour y ajouter "{combinablesDisponibles.find(c=>c.code===combinable2)?.label}", sans toucher au reste du jour.
+                {typeJournee==="poste"
+                  ? <>💡 Les jours en bleu ont déjà un poste de travail (peu importe lequel) — coche-les aussi pour y ajouter "{combinablesDisponibles.find(c=>c.code===combinable2)?.label}", sans jamais toucher au poste déjà en place.</>
+                  : <>💡 Les jours en bleu ont déjà {ancreActuelle} — coche-les aussi pour y ajouter "{combinablesDisponibles.find(c=>c.code===combinable2)?.label}", sans toucher au reste du jour.</>
+                }
               </div>
             )}
 
@@ -725,7 +773,14 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                   // créneau est ajouté. Jamais vrai pour un jour occupé par
                   // autre chose (poste, un autre repos, déjà 2 créneaux) --
                   // ceux-là restent bloqués comme avant, à éditer un par un.
-                  const dejaAncreCombinable = !!combinable2 && !!ancreActuelle && v?.equipe===ancreActuelle && !v?.equipe2;
+                  // 06/09/2026 (Olivier -- "poste de travail" + Nuit en
+                  // masse) : pour "poste", n'importe quel poste de travail
+                  // réel déjà en place (M/AM/J) devient combinable, peu
+                  // importe lequel -- jamais besoin qu'il corresponde à la
+                  // vacation/poste actuellement choisis (voir ecrireEntree).
+                  const dejaAncreCombinable = typeJournee==="poste"
+                    ? (!!combinable2 && !!v?.equipe && ["M","AM","J"].includes(v.equipe) && !v?.equipe2)
+                    : (!!combinable2 && !!ancreActuelle && v?.equipe===ancreActuelle && !v?.equipe2);
                   const occupeDb = occupeReel && griserSiOccupe && !dejaAncreCombinable;
                   const enAttenteLot = panierDates.has(dk);
                   const occupe = occupeDb || enAttenteLot;
@@ -745,7 +800,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
                     <button key={dk}
                       onClick={()=>toggleJourSelect(dk,occupe)}
                       disabled={bloque||fillBusy}
-                      title={dejaAncreCombinable ? `Déjà ${ancreActuelle} — coche pour ajouter "${COMBINABLES2.find(c=>c.code===combinable2)?.label||combinable2}" directement, sans toucher au reste` : occupeDb ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : enAttenteLot ? "Jour déjà dans une autre vague du lot — retire-le de cette vague si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
+                      title={dejaAncreCombinable ? (typeJournee==="poste" ? `Déjà un poste de travail — coche pour ajouter "${COMBINABLES2.find(c=>c.code===combinable2)?.label||combinable2}" directement, sans toucher au poste déjà en place` : `Déjà ${ancreActuelle} — coche pour ajouter "${COMBINABLES2.find(c=>c.code===combinable2)?.label||combinable2}" directement, sans toucher au reste`) : occupeDb ? "Jour déjà rempli — vide-le d'abord dans le planning si tu veux le remplir ici" : enAttenteLot ? "Jour déjà dans une autre vague du lot — retire-le de cette vague si tu veux le remplir ici" : occupeReel && !griserSiOccupe ? "Jour déjà occupé — reste sélectionnable pour Congés" : undefined}
                       style={{aspectRatio:"1",border:`1.5px solid ${isSel?"#0f4c81":dejaAncreCombinable?"#60a5fa":occupeDb?couleurDeja:enAttenteLot?"#f59e0b":occupeReel?"#fde68a":"#cbd5e1"}`,
                         borderRadius:6,background:isSel?"#0f4c81":dejaAncreCombinable?"#eff6ff":occupeDb?"#f1f5f9":enAttenteLot?"#fffbeb":"#fff",
                         color:isSel?"#fff":dejaAncreCombinable?"#1d4ed8":occupeDb?"#cbd5e1":enAttenteLot?"#b45309":"#334155",opacity:fillBusy&&!bloque?.5:1,

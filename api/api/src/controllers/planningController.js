@@ -117,9 +117,16 @@ async function getAllPublic(req, res) {
 // DayEditPopup), jamais ne se combinent. CA volontairement absent de la
 // liste des combinables : Congés a déjà son propre type de vague dans ce
 // module, avec sa règle d'écrasement dédiée.
+// 06/09/2026 (Olivier -- "cocher une case dans les touches bleues [poste de
+// travail] et la combiner avec les touches vertes") : M/AM/J (les vrais
+// codes équipe d'un poste de travail) ajoutés ici -- même règle (1)
+// ci-dessus, jamais restreinte côté DayEditPopup, transposée au
+// Remplissage rapide. "N" (poste de nuit) volontairement absent : une Nuit
+// ne peut jamais se combiner avec elle-même.
 const EQUIPE2_COMBINABLES_BULK = new Set(['N','VT','RU','RQ','RN','TC','TY','MA']);
-const ANCRES_POUR_NUIT = new Set(['RP','RPP','RU','NU']);
+const ANCRES_POUR_NUIT = new Set(['RP','RPP','RU','NU','M','AM','J']);
 const ANCRES_POUR_ABSENCE = new Set(['RP','RPP']);
+const POSTES_REELS_EQUIPE = new Set(['M','AM','J']);
 
 async function bulkFill(req, res) {
   const { cp } = req.params;
@@ -210,22 +217,41 @@ async function bulkFill(req, res) {
 // bloquante pour le reste du lot) :
 //  - le jour doit deja exister ET sa periode ordre=1 doit porter EXACTEMENT
 //    le code_equipe demande (jamais un autre code, meme proche -- ex RPP
-//    quand RP est demande) ;
+//    quand RP est demande) -- SAUF en mode `ancre_poste_libre` (06/09/2026,
+//    voir plus bas), ou n'importe quel poste de travail reel convient ;
 //  - aucune periode "2e creneau" (note='debut_nuit') ne doit deja exister
 //    sur ce jour (jamais un 2e 2e-creneau) ;
 //  - meme regle de combinaison que bulkFill (EQUIPE2_COMBINABLES_BULK /
 //    ANCRES_POUR_NUIT / ANCRES_POUR_ABSENCE), verifiee une seule fois avant
 //    la boucle puisqu'elle ne depend pas de la date.
+// 06/09/2026 (Olivier, "poste de travail" combiné en masse avec Nuit) :
+// nouveau mode `ancre_poste_libre` -- contrairement a RP/RPP/RU/NU (une
+// seule vraie "ancre" possible), un poste de travail a de multiples
+// variantes (vacation x poste) qu'il serait peu intuitif de faire re-choisir
+// exactement pour "debloquer" un jour deja rempli. Dans ce mode, `ancre`
+// est ignoree : n'importe quel jour dont l'ordre=1 porte deja un vrai poste
+// de travail (M/AM/J, jamais N -- une Nuit ne se combine jamais avec
+// elle-meme) devient eligible, SANS jamais toucher a ce poste (seul le 2e
+// creneau est insere, exactement comme le mode normal) -- le poste
+// bleu actuellement selectionne dans l'UI ne sert donc qu'a ecrire du neuf
+// sur les jours VIDES (bulkFill), jamais a ce mode.
 async function bulkAddCombo(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { dates, ancre, equipe2, code_poste2 } = req.body;
+  const { dates, ancre, ancre_poste_libre, equipe2, code_poste2 } = req.body;
   if (!Array.isArray(dates) || dates.length === 0) return res.status(400).json({ error: 'Dates requises' });
-  if (!ancre) return res.status(400).json({ error: 'ancre requise' });
+  if (!ancre_poste_libre && !ancre) return res.status(400).json({ error: 'ancre requise' });
   if (!equipe2 || !EQUIPE2_COMBINABLES_BULK.has(equipe2)) return res.status(400).json({ error: 'Code de 2e créneau invalide' });
-  const ancresValides = equipe2 === 'N' ? ANCRES_POUR_NUIT : ANCRES_POUR_ABSENCE;
-  if (!ancresValides.has(ancre)) return res.status(400).json({ error: 'Cette combinaison n\'est pas valide' });
+  if (ancre_poste_libre) {
+    // Seule une vraie Nuit peut se combiner avec un poste de travail réel --
+    // les 7 absences (VT/RU/RQ/RN/TC/TY/MA) n'ont jamais ce sens (elles
+    // remplaceraient le poste, jamais ne s'y ajoutent, voir toggleType1).
+    if (equipe2 !== 'N') return res.status(400).json({ error: 'Cette combinaison n\'est pas valide' });
+  } else {
+    const ancresValides = equipe2 === 'N' ? ANCRES_POUR_NUIT : ANCRES_POUR_ABSENCE;
+    if (!ancresValides.has(ancre)) return res.status(400).json({ error: 'Cette combinaison n\'est pas valide' });
+  }
   const estNuit = equipe2 === 'N';
   const appliques = [], ignores = [];
   const conn = await pool.getConnection();
@@ -240,7 +266,8 @@ async function bulkAddCombo(req, res) {
         'SELECT ordre, code_equipe, note FROM planning_periode WHERE planning_jour_id=?', [jour.id]
       );
       const p1 = periodes.find(p => p.ordre === 1);
-      if (!p1 || p1.code_equipe !== ancre) { ignores.push(date); continue; }
+      const ancreOk = ancre_poste_libre ? (p1 && POSTES_REELS_EQUIPE.has(p1.code_equipe)) : (p1 && p1.code_equipe === ancre);
+      if (!ancreOk) { ignores.push(date); continue; }
       if (periodes.some(p => p.note === 'debut_nuit')) { ignores.push(date); continue; }
       const nextOrdre = periodes.reduce((max, p) => Math.max(max, p.ordre), 0) + 1;
       await conn.query(

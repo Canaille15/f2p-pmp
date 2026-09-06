@@ -560,11 +560,15 @@ result[`${row.agent_id || agentId}-${date}`] = {
    * ne touche jamais à la période ordre=1 (l'ancre) ni à aucune autre
    * période déjà présente (note perso, grève, formation) -- pur ajout,
    * refusé silencieusement (date dans `ignores`) si l'ancre ne correspond
-   * pas exactement ou si un 2e créneau existe déjà. */
-  bulkAddCombo: (agentId, { dates, ancre, equipe2, codePoste2 }) =>
+   * pas exactement ou si un 2e créneau existe déjà.
+   * `anclePosteLibre` (06/09/2026, "poste de travail" + Nuit en masse) :
+   * ignore `ancre` -- accepte n'importe quel poste de travail réel déjà en
+   * place (M/AM/J), jamais besoin de le faire correspondre au poste
+   * actuellement choisi dans l'UI (voir bulkAddCombo, backend). */
+  bulkAddCombo: (agentId, { dates, ancre, anclePosteLibre, equipe2, codePoste2 }) =>
     apiFetch(`/planning/${agentId}/bulk-add-combo`, {
       method: 'POST',
-      body: JSON.stringify({ dates, ancre, equipe2, code_poste2: codePoste2 || null }),
+      body: JSON.stringify({ dates, ancre: ancre || null, ancre_poste_libre: !!anclePosteLibre, equipe2, code_poste2: codePoste2 || null }),
     }),
   /** Efface le planning perso sur une période, avec sauvegarde pour annulation. */
   bulkClear: (agentId, dateFrom, dateTo) =>
