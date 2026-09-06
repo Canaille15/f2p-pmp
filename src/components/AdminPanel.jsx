@@ -1050,15 +1050,25 @@ const VUE_LABELS = {
 function UsageStatsModal({ onClose }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  const [jourSelectionne, setJourSelectionne] = useState(null);
 
   useEffect(() => {
     api.usage.getStats()
-      .then(setData)
+      .then(d => {
+        setData(d);
+        // Sur mobile il n'y a pas de survol souris — le détail (title=) du
+        // graphique "Fréquence" resterait donc invisible sans jamais rien
+        // afficher de chiffré tant qu'aucune barre n'a été touchée. On
+        // pré-sélectionne le dernier jour pour qu'un chiffre soit visible
+        // dès l'ouverture, sans action de l'agent.
+        if (d.visitesParJour?.length) setJourSelectionne(d.visitesParJour[d.visitesParJour.length - 1].jour);
+      })
       .catch(() => setErr("Impossible de charger les statistiques d'utilisation."));
   }, []);
 
   const maxJour = data ? Math.max(1, ...data.visitesParJour.map(j => j.total)) : 1;
   const maxPage = data ? Math.max(1, ...data.topPages.map(p => p.total)) : 1;
+  const jourDetail = data?.visitesParJour.find(j => j.jour === jourSelectionne) || null;
 
   return (
     <Modal title="📊 Utilisation de l'appli" onClose={onClose} maxWidth={520}>
@@ -1117,11 +1127,25 @@ function UsageStatsModal({ onClose }) {
               <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 70, overflowX: "auto" }}>
                 {data.visitesParJour.map(j => (
                   <div key={j.jour} title={`${j.jour} — ${j.total} navigation(s), ${j.agents} agent(s)`}
-                    style={{ flex: "1 0 6px", minWidth: 6, background: "#1d4ed8", opacity: 0.85, borderRadius: "3px 3px 0 0", height: `${Math.max(4, (j.total / maxJour) * 100)}%` }} />
+                    onClick={() => setJourSelectionne(j.jour)}
+                    style={{
+                      flex: "1 0 6px", minWidth: 6, cursor: "pointer",
+                      background: j.jour === jourSelectionne ? "#0f4c81" : "#1d4ed8",
+                      opacity: j.jour === jourSelectionne ? 1 : 0.85,
+                      outline: j.jour === jourSelectionne ? "2px solid #93c5fd" : "none",
+                      outlineOffset: 1,
+                      borderRadius: "3px 3px 0 0", height: `${Math.max(4, (j.total / maxJour) * 100)}%`
+                    }} />
                 ))}
               </div>
             )}
-            <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 4 }}>Survoler une barre pour voir le détail du jour.</div>
+            {jourDetail ? (
+              <div style={{ fontSize: 11.5, color: "#1e293b", fontWeight: 700, marginTop: 6, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "6px 8px" }}>
+                📅 {jourDetail.jour} — {jourDetail.total} navigation(s) · {jourDetail.agents} agent(s)
+              </div>
+            ) : (
+              <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 4 }}>Touche (ou survole) une barre pour voir le détail du jour.</div>
+            )}
           </div>
         </div>
       )}
