@@ -223,6 +223,11 @@
   table.simple th { color: var(--text-secondary); font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
   .table-wrap { overflow-x: auto; }
 
+  /* Légende de couleurs (mini-calendrier du Remplissage rapide) */
+  .legend { display: flex; flex-direction: column; gap: 9px; margin: 10px 0 18px; }
+  .legend-row { display: flex; align-items: flex-start; gap: 11px; font-size: 13.5px; color: var(--text-primary); }
+  .legend-row .swatch { width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0; margin-top: 2px; }
+
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0 18px; }
   @media (max-width: 620px) { .grid2 { grid-template-columns: 1fr; } }
   .grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin: 10px 0 18px; }
@@ -307,7 +312,7 @@
   <div class="logo">🚆</div>
   <h1>Notice d'utilisation — F2P.PMP</h1>
   <p>L'outil de planning partagé de tous les agents PRCI et PAR de Paris Montparnasse. Ce guide explique, module par module, comment s'en servir et les règles qui s'appliquent derrière chaque écran.</p>
-  <div class="meta">Dernière mise à jour : 27 août 2026</div>
+  <div class="meta">Dernière mise à jour : 6 septembre 2026</div>
   <button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
 </div>
 
@@ -320,6 +325,7 @@
     <div class="mt-group">Partie 1 — Mon agenda personnel</div>
     <a href="#mon-planning">Saisir ma journée</a>
     <a href="#import-export">Importer / exporter</a>
+    <a href="#remplissage-rapide">Remplissage rapide</a>
     <a href="#conges">Congés</a>
     <a href="#rp-ru-rq">RP · RU · RQ</a>
     <a href="#fetes">Fêtes légales</a>
@@ -364,6 +370,7 @@
       <div class="group-label">Partie 1 — Mon agenda personnel</div>
       <a href="#mon-planning">Saisir ma journée</a>
       <a href="#import-export">Importer / exporter</a>
+      <a href="#remplissage-rapide">Remplissage rapide</a>
       <a href="#conges">Congés</a>
       <a href="#rp-ru-rq">RP · RU · RQ</a>
       <a href="#fetes">Fêtes légales</a>
@@ -450,6 +457,7 @@
           <div class="g" style="margin-top:14px">Partie 1 — Mon agenda personnel</div>
           <a href="#mon-planning">Saisir ma journée</a>
           <a href="#import-export">Importer / exporter</a>
+          <a href="#remplissage-rapide">Remplissage rapide</a>
           <a href="#conges">Congés</a>
           <a href="#rp-ru-rq">RP · RU · RQ</a>
           <a href="#fetes">Fêtes légales</a>
@@ -586,13 +594,77 @@
 
       <h3>📤 Exporter (.ics)</h3>
       <p>Génère un fichier <code>.ics</code> importable dans Google Calendar, Outlook ou l'app Calendrier d'iPhone — le mois affiché, l'année complète, ou une période personnalisée (Du/Au libre). Les notes perso restent privées et ne sont jamais exportées.</p>
+    </section>
 
-      <h3>🗂️ Remplissage rapide</h3>
-      <p>Pour remplir plusieurs jours d'un coup (par exemple toutes les matinées d'un poste sur un mois) : choisis le type de journée puis coche les jours voulus sur un mini-calendrier — ils s'écrivent tous en une seule action. Un bouton permet aussi d'effacer une période entière.</p>
+    <section class="module" id="remplissage-rapide">
+      <h2><span class="icon-chip">🗂️</span>Remplissage rapide</h2>
+      <p class="kicker">Remplir plusieurs jours d'un coup, même dispersés sur toute l'année — et effacer une période entière si besoin.</p>
+
+      <p>Utile quand tu dois saisir beaucoup de journées identiques (toutes les matinées d'un poste sur l'année, une série de RP...) : un mini-calendrier permet de cocher n'importe quels jours, même non consécutifs et sur plusieurs mois, puis d'écrire tout en une seule action. Le module propose aussi, séparément, un moyen d'effacer une période entière du planning pour repartir de zéro.</p>
+
+      <h3>1. Choisir ce que tu veux saisir</h3>
+      <p>En haut du module, 6 boutons : <span class="b">Poste de travail</span> <span class="b">RP</span> <span class="b">RPP</span> <span class="b">RU</span> <span class="b">NU</span> <span class="b">Congés</span>. RP et RPP restent bien deux types séparés ici (contrairement au compteur <a href="#rp-ru-rq">RP · RU · RQ</a>, qui les additionne pour le décompte) — choisis celui qui correspond réellement à ce que tu veux écrire.</p>
+      <ul>
+        <li><strong>Poste de travail</strong> — choisis d'abord la vacation (<span class="b">Matinée</span> <span class="b">Soirée</span> <span class="b">Nuit</span> <span class="b">Journée</span>), puis le poste : comme dans le popup de saisie normal, seuls les postes où tu es habilité pour cette vacation sont proposés.</li>
+        <li><strong>RP, RPP, RU, NU</strong> — rien d'autre à choisir, ces 4 s'écrivent directement avec leur propre code, sans poste ni horaire.</li>
+        <li><strong>Congés</strong> — choisis le statut, exactement les 3 mêmes états que partout ailleurs dans l'appli : <span class="b">✓ Accordé</span> <span class="b">⏳ Demandé</span> <span class="b">✕ Refusé</span>.</li>
+      </ul>
       <div class="callout rule">
-        <div class="callout-title">⚠️ Ce que « Effacer » ne touche jamais</div>
-        <p>Le bouton « Effacer cette période » efface tout le contenu du planning sur la période choisie, <strong>sauf</strong> les jours de congé déjà accordés (ils restent affichés et comptés normalement) et les jours de congé encore en attente (de toute façon jamais écrits dans le planning tant qu'ils ne sont pas accordés). Si la période en contient, le message avant confirmation te le précise explicitement. Pour effacer réellement un congé déjà accordé, il faut le faire un par un, directement depuis sa case (bouton Accordé → décocher → Enregistrer) — ce module ne le fera jamais à sa place.</p>
+        <div class="callout-title">📖 Ce que chaque statut Congés écrit réellement</div>
+        <p><span class="b">✓ Accordé</span> écrit vraiment le congé dans le planning de chaque jour coché, et <strong>écrase</strong> ce qu'il y avait déjà à cet endroit — même règle que partout ailleurs dans l'appli pour un congé accordé. Un bandeau d'avertissement te le rappelle avant de valider.</p>
+        <p><span class="b">⏳ Demandé</span> et <span class="b">✕ Refusé</span> n'écrivent <strong>jamais</strong> rien dans le planning perso — ils alimentent uniquement le suivi du module <a href="#conges">Congés</a> (le sablier sur la case, le solde théorique, la liste des refus). La journée déjà prévue ce jour-là reste affichée et comptée normalement tant que rien n'est accordé.</p>
       </div>
+
+      <h3>2. Combiner avec un 2<sup>e</sup> créneau (optionnel)</h3>
+      <p>Selon le type choisi, une rangée verte de boutons supplémentaires peut apparaître pour ajouter un 2<sup>e</sup> créneau à la case — comme dans le popup de saisie normal (voir <a href="#mon-planning">« Remplacer la nuit par un repos ou une absence »</a>).</p>
+      <table class="simple">
+        <thead><tr><th>Type de journée choisi</th><th>Combinables proposés en 2<sup>e</sup> créneau</th></tr></thead>
+        <tbody>
+          <tr><td><span class="b">RP</span> / <span class="b">RPP</span></td><td>Nuit, VT, RU, RQ, RN, TC, TY, Maladie (les 8)</td></tr>
+          <tr><td><span class="b">RU</span> / <span class="b">NU</span></td><td>Nuit uniquement</td></tr>
+          <tr><td><span class="b">Poste de travail</span> (si la vacation choisie n'est pas déjà « Nuit »)</td><td>Nuit uniquement</td></tr>
+          <tr><td><span class="b">Congés</span></td><td>Aucun — Congés a déjà son propre cycle de statuts (voir plus haut)</td></tr>
+        </tbody>
+      </table>
+      <div class="callout rule">
+        <div class="callout-title">📖 Pourquoi cette différence</div>
+        <p>Une vraie <strong>Nuit</strong> peut toujours s'ajouter en plus de n'importe quelle journée — RP, RPP, RU, NU ou un vrai poste de travail — sans jamais rien effacer : elle vient simplement se poser en bas de la case, comme le fait déjà le bouton « Nuit ↓ » du popup de saisie normal.</p>
+        <p>Les 7 autres codes (VT, RU, RQ, RN, TC, TY, Maladie) n'ont un sens en 2<sup>e</sup> créneau que pour <strong>remplacer la nuit qui aurait suivi un repos</strong> — c'est pour ça qu'ils ne sont proposés qu'avec RP ou RPP comme ancre. Avec un poste de travail réel, ils n'ont pas ce rôle : les combiner n'aurait aucun sens, ils <strong>remplaceraient</strong> le poste comme une saisie normale — c'est pourquoi seul « Nuit » est proposé quand tu choisis « Poste de travail ».</p>
+      </div>
+      <p>Dès que « Nuit » est cochée comme 2<sup>e</sup> créneau, une liste de postes (filtrée par tes habilitations Nuit) apparaît en dessous pour préciser sur quel poste se fait cette nuit — exactement comme la section « Poste de nuit » du popup de saisie normal. Ce choix reste optionnel, comme là-bas : tu peux valider sans en choisir un.</p>
+
+      <h3>3. Cocher les jours dans le mini-calendrier</h3>
+      <p>Une fois le type (et éventuellement le combinable) choisis, un petit calendrier mensuel apparaît — navigue avec <span class="b">‹</span> / <span class="b">›</span> et coche autant de jours que tu veux, même dispersés sur plusieurs mois ou plusieurs années.</p>
+      <div class="legend">
+        <div class="legend-row"><span class="swatch" style="background:#0f4c81"></span><div><strong>Bleu marine plein</strong> — le jour est coché pour la vague en cours.</div></div>
+        <div class="legend-row"><span class="swatch" style="background:#fff;border:1.5px solid #cbd5e1"></span><div><strong>Blanc, bordure grise</strong> — jour vide, disponible.</div></div>
+        <div class="legend-row"><span class="swatch" style="background:#f1f5f9;border:1.5px solid #94a3b8"></span><div><strong>Grisé, liseré coloré</strong> — jour déjà rempli par autre chose. Le liseré reprend la couleur (ta couleur personnalisée si tu en as choisi une, sinon la couleur par défaut) du code déjà présent, pour identifier de quoi il s'agit d'un coup d'œil, sans ouvrir le popup. Non cochable ici — il faut d'abord vider ce jour dans le planning perso.</div></div>
+        <div class="legend-row"><span class="swatch" style="background:#fffbeb;border:1.5px solid #f59e0b"></span><div><strong>Ambre</strong> — jour déjà mis de côté dans une <em>autre</em> vague du lot en attente, pas encore écrit en base (voir « Le lot » ci-dessous). Retire-le de cette vague si tu veux le remplir autrement ici.</div></div>
+        <div class="legend-row"><span class="swatch" style="background:#eff6ff;border:1.5px solid #60a5fa"></span><div><strong>Bleu clair</strong> — uniquement quand un combinable est choisi : le jour porte déjà exactement l'ancre sélectionnée, sans 2<sup>e</sup> créneau posé — cochable pour lui <strong>ajouter</strong> le combinable, sans jamais toucher à ce qui est déjà en place.</div></div>
+      </div>
+      <div class="callout tip">
+        <div class="callout-title">💡 Ajouter un combinable sur un jour déjà rempli (case bleu clair)</div>
+        <p>Pour <strong>Poste de travail</strong>, n'importe quel poste réel déjà en place ce jour-là (Matin, Soirée ou Journée, peu importe lequel) rend la case cochable pour y ajouter Nuit — pas besoin de re-choisir exactement le même poste/vacation dans les boutons du dessus, l'appli ne touche jamais au poste déjà présent, seule la Nuit s'ajoute.</p>
+        <p>Pour <strong>RP, RPP, RU ou NU</strong>, seul un jour portant <strong>exactement</strong> ce code précis (RP et pas RPP, par exemple) devient cochable de cette façon.</p>
+      </div>
+
+      <h3>4. Le lot en attente, et le remplissage final</h3>
+      <div class="callout rule">
+        <div class="callout-title">📖 Comment ça fonctionne — rien n'est écrit avant le bouton final</div>
+        <p>Tu peux changer de type de journée (Poste → RP → Congés...), de vacation, de poste ou de statut Congés <strong>autant de fois que tu veux</strong> avant de valider quoi que ce soit. À chaque changement, la sélection de jours en cours est automatiquement mise de côté dans un « lot en attente » (🧺) — aucune écriture réseau à ce stade — et le mini-calendrier redevient vide pour préparer la vague suivante. Le bouton <span class="btn-label">+ Ajouter cette vague au lot</span> fait la même chose manuellement, si tu veux enchaîner sans changer de type.</p>
+        <p>Le lot affiche chaque vague déjà mise de côté (son libellé + le nombre de jours), avec un <span class="b">✕</span> pour la retirer si tu changes d'avis — ses jours redeviennent alors disponibles ailleurs.</p>
+        <p>Un seul bouton final <span class="btn-label">✅ Tout remplir (N jours)</span> écrit <strong>toutes</strong> les vagues du lot en une seule action, y compris la sélection encore affichée à l'écran au moment du clic. Si un même jour se retrouve par erreur dans deux vagues différentes, l'appli bloque et te le signale précisément (avec les dates concernées) avant d'écrire quoi que ce soit — il faut retirer le doublon d'une des deux vagues pour continuer.</p>
+        <p>Une fois écrit, un message récapitule le nombre de jours réellement remplis et, s'il y en a, le nombre de jours ignorés parce que déjà occupés entre-temps (rien n'est jamais écrasé silencieusement, sauf le cas « Congés Accordé » vu plus haut). Un rappel « ✓ Vagues déjà appliquées cette session » reste affiché en bas du module tant que tu ne le fermes pas, pour garder une trace de ce qui vient d'être écrit.</p>
+      </div>
+
+      <h3>⚠️ Effacer une période</h3>
+      <p>Deuxième bloc du module, séparé du remplissage. Choisis une période (Du/Au) et clique <span class="btn-label">Effacer cette période</span> — l'appli affiche d'abord le nombre exact de jours qui seront effacés, avant toute confirmation.</p>
+      <div class="callout rule">
+        <div class="callout-title">📖 Ce qui n'est jamais effacé</div>
+        <p>Les <strong>notes perso</strong> survivent toujours à l'effacement, quel que soit le jour. Les <strong>congés déjà accordés</strong> et les <strong>congés encore en attente (demandés)</strong> dans la période choisie ne sont jamais effacés non plus — le message avant confirmation précise combien de jours de ce type se trouvent dans la période, et ils restent affichés et comptés normalement après l'effacement.</p>
+        <p>Pour effacer réellement un congé déjà accordé, il faut le faire un par un, directement depuis sa case dans le planning perso (bouton Accordé → décocher → Enregistrer) — ce module ne le fera jamais à sa place.</p>
+      </div>
+      <p>Un effacement reste <strong>annulable</strong> juste après, via le bouton <span class="btn-label">↩️ Annuler cet effacement</span> qui apparaît une fois l'action faite — tant que tu restes sur cette page sans la recharger.</p>
     </section>
 
     <hr class="divider">
