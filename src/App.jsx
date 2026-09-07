@@ -1250,6 +1250,47 @@ export const MOIS_L=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet",
 // simple caractère coloré sur fond transparent.
 const NAV_ARROW_STYLE={border:"1.5px solid var(--border)",background:"var(--bg-card)",color:"var(--text-primary)",borderRadius:8,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:18,fontWeight:700,flexShrink:0,padding:0,lineHeight:1};
 
+const MOIS_ABBR=["Janv.","Févr.","Mars","Avr.","Mai","Juin","Juil.","Août","Sept.","Oct.","Nov.","Déc."];
+
+// Sélecteur de mois maison, pour desktop uniquement (07/09, Olivier : le
+// picker natif du navigateur, correct sur mobile/tablette -- roue -- devient
+// "bof" sur ordi, où Chrome/Edge le rendent en une petite grille plate) --
+// composant racine (jamais imbriqué, cf. règle du projet), utilisé à la
+// place du input[type=month]+showPicker() natif quand window.innerWidth>640,
+// même seuil déjà utilisé ailleurs (HabilitationsModal) pour ce genre de bascule.
+function MonthPickerPopover({ year, month, onSelect, onClose }){
+  const [y,setY]=useState(year);
+  const today=new Date();
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:900,background:"rgba(15,23,42,.18)"}}>
+      <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"16%",left:"50%",transform:"translateX(-50%)",background:"var(--bg-card)",border:"1.5px solid var(--border)",borderRadius:14,boxShadow:"0 16px 40px rgba(0,0,0,.28)",padding:14,width:272}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <button onClick={()=>setY(v=>v-1)} aria-label="Année précédente" style={{...NAV_ARROW_STYLE,width:28,height:28,fontSize:15}}>‹</button>
+          <span style={{fontWeight:800,fontSize:15,color:"var(--text-primary)"}}>{y}</span>
+          <button onClick={()=>setY(v=>v+1)} aria-label="Année suivante" style={{...NAV_ARROW_STYLE,width:28,height:28,fontSize:15}}>›</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+          {MOIS_ABBR.map((m,i)=>{
+            const isSel = y===year && i===month;
+            return (
+              <button key={i} onClick={()=>{onSelect(y,i);onClose();}}
+                style={{padding:"9px 2px",borderRadius:8,border:isSel?"1.5px solid var(--accent-active)":"1.5px solid var(--border)",
+                  background:isSel?"var(--accent-active)":"var(--bg-page)",color:isSel?"#fff":"var(--text-primary)",
+                  fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                {m}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:12,paddingTop:10,borderTop:"1px solid var(--border)"}}>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"var(--text-muted)",fontSize:12,fontWeight:600,cursor:"pointer",padding:0}}>Fermer</button>
+          <button onClick={()=>{onSelect(today.getFullYear(),today.getMonth());onClose();}} style={{background:"none",border:"none",color:"var(--accent-active)",fontSize:12,fontWeight:700,cursor:"pointer",padding:0}}>Aujourd'hui</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getWeekDates(offset=0){
   const d=new Date();
   const _dow=d.getDay(); d.setDate(d.getDate()+(_dow===0?-6:1-_dow)+(offset*7)); // lundi (gère le cas dimanche=0)
@@ -1953,6 +1994,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
   };
   const swipeDay=useSwipeHandlers(()=>goToDay(1),()=>goToDay(-1));
   const dateJumpRef=useRef();
+  const [showMonthPicker,setShowMonthPicker]=useState(false);
   const [aleaTarget,setAleaTarget]=useState(null);
   const [previsionnelTarget,setPrevisionnelTarget]=useState(null);
   const [journeeSpecialeNoteTarget,setJourneeSpecialeNoteTarget]=useState(null);
@@ -2466,7 +2508,10 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <button onClick={()=>changerMoisNav(-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
-        <button onClick={()=>{try{dateJumpRef.current.showPicker();}catch(e){dateJumpRef.current&&dateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,width:150,flexShrink:0,border:"none",background:"none",padding:"4px 0",cursor:"pointer"}}>
+        <button onClick={()=>{
+          if(typeof window!=="undefined" && window.innerWidth>640){ setShowMonthPicker(true); return; }
+          try{dateJumpRef.current.showPicker();}catch(e){dateJumpRef.current&&dateJumpRef.current.click();}
+        }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,width:150,flexShrink:0,border:"none",background:"none",padding:"4px 0",cursor:"pointer"}}>
           <span style={{fontSize:14,fontWeight:700,color:"var(--text-primary)"}}>{MOIS_L[new Date(dateKey).getMonth()]} {new Date(dateKey).getFullYear()}</span>
           <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
         </button>
@@ -2478,8 +2523,19 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           constatation" en Pause Figée) : on ne navigue jamais qu'au mois,
           jamais à un jour précis, jumpToDate n'a donc besoin que du 1er du
           mois choisi (le jour n'a jamais influencé que la semaine/case
-          d'atterrissage, jamais un vrai choix de date). */}
+          d'atterrissage, jamais un vrai choix de date). Depuis ordi (>640px,
+          07/09 suite), ce picker natif -- jugé "bof" par Olivier sur
+          Windows/Chrome -- est remplacé par MonthPickerPopover ci-dessous ;
+          l'input reste le chemin mobile (roue native, toujours appréciée). */}
       <input ref={dateJumpRef} type="month" onChange={e=>{if(e.target.value)jumpToDate(e.target.value+"-01");}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
+      {showMonthPicker && (
+        <MonthPickerPopover
+          year={new Date(dateKey).getFullYear()}
+          month={new Date(dateKey).getMonth()}
+          onSelect={(y,m)=>jumpToDate(`${y}-${String(m+1).padStart(2,"0")}-01`)}
+          onClose={()=>setShowMonthPicker(false)}
+        />
+      )}
       {/* Semaine précédente/suivante (19/08, Olivier -- sur ordi, sans écran
           tactile, aucun moyen de changer de semaine sans passer par le
           sélecteur de date natif "moche et pas pratique". Décale weekOffset
@@ -9189,6 +9245,7 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
   }, [dayPopup, agent, schedule, agentProfiles]);
   const [monthOff,setMonthOff]=useState(0);
   const personalDateJumpRef=useRef();
+  const [showMonthPickerPerso,setShowMonthPickerPerso]=useState(false);
   const jumpToMonthDate=(dateStr)=>{
     const target=new Date(dateStr+"T12:00:00");
     const today=new Date();
@@ -9606,10 +9663,21 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
       <div className="f2ppmp-nav-row" style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:2}}>
           <button onClick={()=>setMonthOff(m=>m-1)} aria-label="Mois précédent" style={NAV_ARROW_STYLE}>‹</button>
-          <button onClick={()=>{try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}}} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,width:150,flexShrink:0,border:"none",background:"none",cursor:"pointer"}}>
+          <button onClick={()=>{
+            if(typeof window!=="undefined" && window.innerWidth>640){ setShowMonthPickerPerso(true); return; }
+            try{personalDateJumpRef.current.showPicker();}catch(e){personalDateJumpRef.current&&personalDateJumpRef.current.click();}
+          }} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,width:150,flexShrink:0,border:"none",background:"none",cursor:"pointer"}}>
             <span style={{fontSize:"clamp(13px,1.6vw,16px)",fontWeight:700,color:"var(--text-primary)",whiteSpace:"nowrap"}}>{MOIS_L[curMonth]} {curYear}</span>
             <span style={{fontSize:11,color:"var(--text-muted)"}}>▾</span>
           </button>
+          {showMonthPickerPerso && (
+            <MonthPickerPopover
+              year={curYear}
+              month={curMonth}
+              onSelect={(y,m)=>jumpToMonthDate(`${y}-${String(m+1).padStart(2,"0")}-01`)}
+              onClose={()=>setShowMonthPickerPerso(false)}
+            />
+          )}
           <button onClick={()=>setMonthOff(m=>m+1)} aria-label="Mois suivant" style={NAV_ARROW_STYLE}>›</button>
         </div>
         <button onClick={()=>{setMonthOff(0);window.dispatchEvent(new CustomEvent("f2ppmp:scrolltoday"));}} style={{display:"flex",alignItems:"center",gap:5,border:"1.5px solid #6366f1",background:monthOff===0?"#f1f5f9":"#eef2ff",color:monthOff===0?"#475569":"#4f46e5",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700,flexShrink:0}}>Aujourd'hui</button>
