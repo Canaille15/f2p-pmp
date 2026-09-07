@@ -8127,15 +8127,21 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
             </div>
           )}
 
-          {/* Actions — pastilles compactes (icône + légende inline), remplace
-              les anciens boutons carrés icône-au-dessus/légende-en-dessous :
-              même conditions d'affichage qu'avant, juste plus denses. */}
-          {canEdit&&!isEditing&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {/* Actions — grille à 2 colonnes fixes (07/09, suite : Olivier voulait
+              "date paye anticipé et maladie sur la même ligne" — avec le simple
+              flexWrap d'avant, un bouton optionnel absent (Motif si pas de
+              motifReglementaire, Annuler si aucune correction) décalait tout ce
+              qui suit, cassant l'appariement au hasard des cas. La grille fige
+              2 boutons par ligne quels que soient ceux présents, et "⏩ Anticipé"
+              est remonté juste après "🤒 Maladie" pour garantir qu'ils tombent
+              toujours ensemble sur la même ligne (2e ligne), pas seulement dans
+              le cas le plus courant. */}
+          {canEdit&&!isEditing&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
             <button onClick={()=>{setEditingCode(editKey);setEditVal(l.priseLe||"");}}
               title="Modifier la date de prise"
               style={{background:"#f1f5f9",border:"1px solid #cbd5e1",borderRadius:20,
                 padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,color:"#475569",
-                display:"inline-flex",alignItems:"center",gap:5}}>
+                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
               📅 Date
             </button>
             <button onClick={()=>setManualPayee(l.code,!l.estPayee,targetYear)}
@@ -8144,7 +8150,7 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
                 border:`1.5px solid ${l.estPayee?"#93c5fd":"#cbd5e1"}`,borderRadius:20,
                 padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
                 color:l.estPayee?"#1d4ed8":"#475569",
-                display:"inline-flex",alignItems:"center",gap:5}}>
+                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
               💶 Payé
             </button>
             {/* Perte pour cause de maladie (14/08) — masqué si la fête est déjà
@@ -8156,29 +8162,8 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
                 border:`1.5px solid ${l.override?.perdueMaladie?"#fca5a5":"#cbd5e1"}`,borderRadius:20,
                 padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
                 color:l.override?.perdueMaladie?"#b91c1c":"#475569",
-                display:"inline-flex",alignItems:"center",gap:5}}>
+                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
               🤒 Maladie
-            </button>}
-            {/* Bouton réinitialiser — visible seulement si une correction manuelle a été posée sur cette fête */}
-            {(l.override?.priseLe!==undefined||l.override?.estPayee!==undefined||l.override?.perdueMaladie!==undefined)&&<button
-              onClick={()=>setResetConfirmOuvert(resetConfirmOuvert===editKey?null:editKey)}
-              title="Annuler la correction manuelle et revenir au calcul automatique"
-              style={{background:resetConfirmOuvert===editKey?"#ffedd5":"#fff7ed",
-                border:`1.5px solid ${resetConfirmOuvert===editKey?"#f97316":"#fdba74"}`,borderRadius:20,
-                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,color:"#c2410c",
-                display:"inline-flex",alignItems:"center",gap:5}}>
-              ↺ Annuler
-            </button>}
-            {/* Bouton motif réglementaire */}
-            {l.motifReglementaire&&<button
-              onClick={()=>setMotifOuvert(motifVisible?null:editKey)}
-              title="Motif réglementaire"
-              style={{background:motifVisible?"#fce7f3":"#f1f5f9",
-                border:`1.5px solid ${motifVisible?"#f9a8d4":"#cbd5e1"}`,borderRadius:20,
-                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
-                color:motifVisible?"#9d174d":"#64748b",
-                display:"inline-flex",alignItems:"center",gap:5}}>
-              📋 Motif
             </button>}
             {/* Paiement anticipé — annulable, sans effet sur le calcul tant que "vu sur la feuille" n'est pas confirmé */}
             <button onClick={()=>{
@@ -8191,9 +8176,30 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
                 border:`1.5px solid ${paiementOuvert===editKey||l.paiementAnticipe?"#6ee7b7":"#cbd5e1"}`,borderRadius:20,
                 padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
                 color:l.paiementAnticipe?.moisVu?"#047857":l.paiementAnticipe?.moisDemande?"#b45309":"#64748b",
-                display:"inline-flex",alignItems:"center",gap:5}}>
+                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
               ⏩ Anticipé
             </button>
+            {/* Bouton réinitialiser — visible seulement si une correction manuelle a été posée sur cette fête */}
+            {(l.override?.priseLe!==undefined||l.override?.estPayee!==undefined||l.override?.perdueMaladie!==undefined)&&<button
+              onClick={()=>setResetConfirmOuvert(resetConfirmOuvert===editKey?null:editKey)}
+              title="Annuler la correction manuelle et revenir au calcul automatique"
+              style={{background:resetConfirmOuvert===editKey?"#ffedd5":"#fff7ed",
+                border:`1.5px solid ${resetConfirmOuvert===editKey?"#f97316":"#fdba74"}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,color:"#c2410c",
+                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
+              ↺ Annuler
+            </button>}
+            {/* Bouton motif réglementaire */}
+            {l.motifReglementaire&&<button
+              onClick={()=>setMotifOuvert(motifVisible?null:editKey)}
+              title="Motif réglementaire"
+              style={{background:motifVisible?"#fce7f3":"#f1f5f9",
+                border:`1.5px solid ${motifVisible?"#f9a8d4":"#cbd5e1"}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
+                color:motifVisible?"#9d174d":"#64748b",
+                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
+              📋 Motif
+            </button>}
           </div>}
 
           {/* Incohérence : fête marquée prise (planning) ET paiement anticipé encore en
