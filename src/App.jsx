@@ -8501,6 +8501,18 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
     if(next.has(dk)) next.delete(dk); else next.add(dk);
     return next;
   });
+  // Refonte visuelle "Version aboutie" (07/09, même principe que Fêtes le
+  // même jour, à partir de la maquette de comparaison validée par Olivier) :
+  // bandeau d'état + chips de filtre + liste plate repliée par défaut, à la
+  // place des 2 blocs "en attente"/"validées" toujours ouverts groupés par
+  // mois. Aucun mécanisme de calcul touché — uniquement la présentation.
+  const [openRows, setOpenRows] = useState(()=>new Set());
+  const toggleRow = (dk) => setOpenRows(prev=>{
+    const next = new Set(prev);
+    if(next.has(dk)) next.delete(dk); else next.add(dk);
+    return next;
+  });
+  const [filtreStatut, setFiltreStatut] = useState("tout"); // "tout" | "attente" | "ok"
 
   const allDates = useMemo(()=>{
     const obj = {};
@@ -8569,30 +8581,6 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
     verte.sort((a,b)=>(fiaMois[b]||"").localeCompare(fiaMois[a]||""));
     return {datesOrange: orange, datesVertes: verte};
   },[allDatesSorted.join(","), JSON.stringify(fiaMois), JSON.stringify(fiaDone)]);
-
-  const parMoisOrange = useMemo(()=>{
-    const groupes = {};
-    datesOrange.forEach(dk=>{
-      const moisKey = dk.slice(0,7);
-      if(!groupes[moisKey]) groupes[moisKey] = [];
-      groupes[moisKey].push(dk);
-    });
-    return Object.entries(groupes).sort(([a],[b])=>a.localeCompare(b));
-  },[datesOrange.join(",")]);
-
-  const parMoisVert = useMemo(()=>{
-    const groupes = {};
-    datesVertes.forEach(dk=>{
-      const moisKey = dk.slice(0,7);
-      if(!groupes[moisKey]) groupes[moisKey] = [];
-      groupes[moisKey].push(dk);
-    });
-    return Object.entries(groupes).sort(([,datesA],[,datesB])=>{
-      const fiaA = fiaMois[datesA[0]]||"";
-      const fiaB = fiaMois[datesB[0]]||"";
-      return fiaB.localeCompare(fiaA);
-    });
-  },[datesVertes.join(","), JSON.stringify(fiaMois)]);
 
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
   const firstDow = new Date(calYear, calMonth, 1).getDay();
@@ -8665,15 +8653,30 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
         </div>
       </div>}
 
-      <div style={{padding:"14px 18px",display:"flex",gap:10,flexWrap:"wrap"}}>
-        <div style={{flex:1,minWidth:110,background:"#f0fdfa",border:"1.5px solid #99f6e4",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-          <div style={{fontSize:22,fontWeight:900,color:"#0f766e",lineHeight:1}}>{nbValideesAnnee}</div>
-          <div style={{fontSize:10,fontWeight:700,color:"#134e4a",marginTop:3}}>validées {year}</div>
-        </div>
-        <div style={{flex:1,minWidth:110,background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-          <div style={{fontSize:22,fontWeight:900,color:"#c2410c",lineHeight:1}}>{nbFiaRestant}</div>
-          <div style={{fontSize:10,fontWeight:700,color:"#7c2d12",marginTop:3}}>en attente</div>
-        </div>
+      {/* ── Bandeau d'état + chips de filtre (07/09, remplace les 2 pastilles
+          chiffrées — plus besoin de les lire pour savoir s'il y a quelque
+          chose à faire, même principe déjà validé pour les Fêtes) ── */}
+      <div style={{margin:"14px 18px 12px",borderRadius:12,padding:"11px 14px",
+        display:"flex",alignItems:"center",gap:9,fontSize:12.5,fontWeight:700,
+        background:nbFiaRestant>0?"#fef3c7":"#f0fdf4",
+        color:nbFiaRestant>0?"#92400e":"#15803d",
+        border:`1px solid ${nbFiaRestant>0?"#fde68a":"#86efac"}`}}>
+        {nbFiaRestant>0 ? `⚠️ ${nbFiaRestant} pause${nbFiaRestant>1?"s":""} à vérifier` : "✅ Rien à traiter pour l'instant"}
+      </div>
+      <div style={{display:"flex",gap:7,padding:"0 18px 14px",flexWrap:"wrap"}}>
+        {[
+          {k:"tout",label:`Tout (${allDatesSorted.length})`,color:"#0f766e"},
+          {k:"attente",label:`⏳ À vérifier (${nbFiaRestant})`,color:"#f59e0b"},
+          {k:"ok",label:`✅ Validées (${nbValideesAnnee})`,color:"#16a34a"},
+        ].map(chip=>(
+          <button key={chip.k} onClick={()=>setFiltreStatut(chip.k)}
+            style={{borderRadius:999,padding:"7px 13px",fontSize:11.5,fontWeight:700,cursor:"pointer",
+              border:`1.5px solid ${filtreStatut===chip.k?chip.color:"#e2e8f0"}`,
+              background:filtreStatut===chip.k?chip.color:"#fff",
+              color:filtreStatut===chip.k?"#fff":"#64748b"}}>
+            {chip.label}
+          </button>
+        ))}
       </div>
 
       <div>
@@ -8728,163 +8731,116 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
           </div>
         </div>}
 
-        {/* ── Jours triés : en attente en haut, validées en bas ── */}
+        {/* ── Liste plate (tri déjà fait dans datesOrange/datesVertes),
+            filtrée par les chips, chaque ligne repliée par défaut ── */}
         {(()=>{
-          const renderGroupe = (moisKey, dates, isVert) => {
-            const [annee, mois] = moisKey.split("-").map(Number);
-            const nbMin = dates.length * 90;
-            const h = Math.floor(nbMin/60);
-            const m2 = nbMin%60;
-            const fiaRef = isVert ? fiaMois[dates[0]] : null;
-            const fiaLabel = fiaRef
-              ? `Constaté ${MOIS_L[parseInt(fiaRef.slice(5,7))-1]} ${fiaRef.slice(0,4)}`
-              : null;
-            return(
-              <div key={`${isVert?"v":"o"}-${moisKey}`} style={{borderBottom:"1px solid #f1f5f9"}}>
-                <div style={{
-                  padding:"7px 14px",
-                  background:isVert?"#E1F5EE":"#FAECE7",
-                  display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,
-                }}>
-                  <span style={{fontSize:12,fontWeight:700,color:isVert?"#04342C":"#712B13"}}>
-                    {MOIS_L[mois-1]} {annee}
-                  </span>
-                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    {fiaLabel&&<span style={{fontSize:10,background:"#9FE1CB",color:"#04342C",
-                      borderRadius:6,padding:"2px 7px",fontWeight:600}}>✅ {fiaLabel}</span>}
-                    <span style={{fontSize:11,color:isVert?"#0F6E56":"#993C1D",fontWeight:700}}>
-                      {dates.length} j · {h}h{String(m2).padStart(2,'0')}
-                    </span>
-                  </div>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:0}}>
-                  {dates.map(dk=>{
-                    const jourLabel = new Date(dk).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});
-                    const moisFia = fiaMois[dk]||"";
-                    const done = !!fiaDone[dk];
-                    const rappel = getPlanningRappel(schedule, agentId, dk);
-                    const overflow = done ? tcData?.detailPauses?.[dk] : null;
-                    return(
-                      <div key={dk} style={{
-                        display:"flex",alignItems:"center",gap:8,
-                        padding:"9px 14px 9px 12px",
-                        borderBottom:"1px solid #f8fafc",
-                        borderLeft:`4px solid ${done?"#1D9E75":"#D85A30"}`,
-                        background:done?"#E1F5EE":"#FAECE7",
-                      }}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:14,fontWeight:600,
-                            color:done?"#04342C":"#712B13",
-                            overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {done&&<span style={{marginRight:4}}>✅</span>}
-                            {jourLabel}
-                          </div>
-                          <div style={{fontSize:11,fontWeight:600,marginTop:3,
-                            color:rappel?(done?"#0F6E56":"#993C1D"):"#94a3b8",fontStyle:rappel?"normal":"italic"}}>
-                            {rappel ? `📋 ${rappel}` : "Planning vide ce jour-là"}
-                          </div>
-                          {overflow&&overflow.horsPlafond>0&&<div style={{fontSize:10,fontWeight:700,color:"#b45309",marginTop:4,
-                            background:"#fffbeb",border:"1px solid #fde68a",borderRadius:6,padding:"3px 7px",display:"inline-block"}}>
-                            ⚠️ {minToHM(overflow.horsPlafond)} non ajoutées (plafond TC) — à vérifier en heures sup
-                          </div>}
-                          {(()=>{
-                            const base = new Date(dk+"T00:00:00");
-                            const quickMois = Array.from({length:5}).map((_,i)=>{
-                              const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
-                              return {key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
-                                label:`${MOIS_L[d.getMonth()]} ${d.getFullYear()}`};
-                            });
-                            const estAutre = moisFia && !quickMois.some(o=>o.key===moisFia);
-                            const autreOuvert = autreMoisOpen.has(dk);
-                            const pillStyle = (active) => ({fontSize:11,fontWeight:700,borderRadius:999,
-                              padding:"6px 11px",cursor:done?"pointer":"not-allowed",whiteSpace:"nowrap",
-                              border:`1.5px solid ${active?"#0f766e":"#cbd5e1"}`,
-                              background:active?"#0f766e":"#fff",
-                              color:active?"#fff":"#64748b"});
-                            return(
-                              <div style={{marginTop:7}}>
-                                <span style={{fontSize:12,color:done?"#04342C":"#712B13",fontWeight:600,display:"block",marginBottom:6}}>
-                                  Mois de constatation
-                                </span>
-                                <div style={{display:"flex",gap:6,flexWrap:"wrap",
-                                    opacity:done?1:.45,pointerEvents:done?"auto":"none"}}
-                                  title={!done?"Marque d'abord cette pause comme vérifiée pour pouvoir choisir un mois":""}>
-                                  {quickMois.map(o=>(
-                                    <button key={o.key} type="button"
-                                      onClick={()=>setFiaMois(dk, moisFia===o.key?null:o.key)}
-                                      style={pillStyle(moisFia===o.key)}>
-                                      {o.label}
-                                    </button>
-                                  ))}
-                                  <button type="button" onClick={()=>toggleAutreMois(dk)}
-                                    style={{...pillStyle(estAutre),
-                                      borderStyle:estAutre?"solid":"dashed",
-                                      color:estAutre?"#fff":"#7c8698"}}>
-                                    {estAutre?`↦ ${MOIS_L[parseInt(moisFia.slice(5,7))-1]} ${moisFia.slice(0,4)}`:"Autre…"}
-                                  </button>
-                                </div>
-                                {autreOuvert&&done&&<input type="month"
-                                  defaultValue={estAutre?moisFia:""}
-                                  min={moisOptions[0]?.key} max={moisOptions[moisOptions.length-1]?.key}
-                                  onChange={e=>{ if(e.target.value){ setFiaMois(dk,e.target.value); toggleAutreMois(dk); } }}
-                                  style={{marginTop:7,fontSize:12,border:"1.5px solid #0f766e",
-                                    borderRadius:7,padding:"6px 8px",minHeight:34,background:"#fff",color:"#04342C"}}/>}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                        <div style={{display:"flex",gap:7,flexShrink:0,alignItems:"center"}}>
-                          <button onClick={()=>toggleFiaDone(dk)}
-                            title={done?"Repasser en attente":"Marquer vérifié — ajoute 1h30 au TC"}
-                            style={{background:done?"#1D9E75":"#fff",
-                              border:`1px solid ${done?"#0F6E56":"#F0997B"}`,
-                              color:done?"#fff":"#712B13",
-                              borderRadius:9,padding:"10px 13px",cursor:"pointer",
-                              fontSize:13,fontWeight:600,whiteSpace:"nowrap",minHeight:42}}>
-                            {done?"✓ Validée":"Vérifié ?"}
-                          </button>
-                          <button onClick={()=>toggleDate(dk)} title="Retirer cette journée"
-                            style={{background:"#fff",border:`1px solid ${done?"#9FE1CB":"#F0997B"}`,
-                              color:done?"#04342C":"#993C1D",borderRadius:9,padding:"10px 14px",
-                              cursor:"pointer",fontSize:16,fontWeight:600,minHeight:42,minWidth:42}}>×</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          };
+          const listeComplete = [...datesOrange, ...datesVertes];
+          const listeFiltree = listeComplete.filter(dk=>
+            filtreStatut==="tout" ? true : filtreStatut==="attente" ? !fiaDone[dk] : fiaDone[dk]);
 
-          const hasData = allDatesSorted.length > 0;
-          if(!hasData) return !showCal&&(
+          if(listeFiltree.length===0) return !showCal&&(
             <div style={{padding:"18px",textAlign:"center",fontSize:12,color:"#64748b",fontWeight:500}}>
-              Aucune pause figée enregistrée pour {year}.
+              {allDatesSorted.length===0
+                ? `Aucune pause figée enregistrée pour ${year}.`
+                : "Aucune pause figée dans cette catégorie."}
             </div>
           );
 
           return(
-            <div style={{display:"flex",flexDirection:"column",gap:0}}>
-              {parMoisOrange.length>0&&<>
-                <div style={{padding:"5px 14px",background:"#FAECE7",
-                  borderBottom:"1px solid #F0997B"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:"#712B13",letterSpacing:.5}}>
-                    ⏳ EN ATTENTE DE VÉRIFICATION ({datesOrange.length})
-                  </span>
-                </div>
-                {parMoisOrange.map(([moisKey,dates])=>renderGroupe(moisKey,dates,false))}
-              </>}
-
-              {parMoisVert.length>0&&<>
-                <div style={{padding:"5px 14px",background:"#E1F5EE",
-                  borderBottom:"1px solid #5DCAA5",
-                  borderTop:parMoisOrange.length>0?"2px solid #e2e8f0":"none"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:"#04342C",letterSpacing:.5}}>
-                    ✅ VALIDÉES ({datesVertes.length})
-                  </span>
-                </div>
-                {parMoisVert.map(([moisKey,dates])=>renderGroupe(moisKey,dates,true))}
-              </>}
+            <div style={{display:"flex",flexDirection:"column",gap:7,padding:"0 12px 16px"}}>
+              {listeFiltree.map(dk=>{
+                const jourLabel = new Date(dk).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});
+                const moisFia = fiaMois[dk]||"";
+                const done = !!fiaDone[dk];
+                const rappel = getPlanningRappel(schedule, agentId, dk);
+                const overflow = done ? tcData?.detailPauses?.[dk] : null;
+                const isOpen = openRows.has(dk);
+                const base = new Date(dk+"T00:00:00");
+                const quickMois = Array.from({length:5}).map((_,i)=>{
+                  const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
+                  return {key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
+                    label:`${MOIS_L[d.getMonth()]} ${d.getFullYear()}`};
+                });
+                const estAutre = moisFia && !quickMois.some(o=>o.key===moisFia);
+                const autreOuvert = autreMoisOpen.has(dk);
+                const pillStyle = (active) => done ? ({fontSize:11,fontWeight:700,borderRadius:999,
+                  padding:"6px 11px",cursor:"pointer",whiteSpace:"nowrap",
+                  border:`1.5px solid ${active?"#0f766e":"#cbd5e1"}`,
+                  background:active?"#0f766e":"#fff",
+                  color:active?"#fff":"#334155"}) : ({fontSize:11,fontWeight:700,borderRadius:999,
+                  padding:"6px 11px",cursor:"not-allowed",whiteSpace:"nowrap",
+                  border:`1.5px solid ${active?"#5eead4":"#94a3b8"}`,
+                  background:active?"#ccfbf1":"#e2e8f0",
+                  color:active?"#0f766e":"#334155"});
+                return(
+                  <div key={dk} style={{borderRadius:12,border:"1.5px solid #e2e8f0",overflow:"hidden",background:"#fff"}}>
+                    <div onClick={()=>toggleRow(dk)} style={{display:"flex",alignItems:"center",gap:10,padding:"11px 13px",cursor:"pointer"}}>
+                      <div style={{flexShrink:0,width:30,height:30,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,background:done?"#f0fdf4":"#fef3c7"}}>
+                        {done?"✅":"⏳"}
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13.5,fontWeight:700,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {jourLabel}
+                        </div>
+                        <div style={{fontSize:11,fontWeight:600,marginTop:2,color:rappel?"#64748b":"#94a3b8",fontStyle:rappel?"normal":"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {rappel ? `📋 ${rappel}` : "Planning vide ce jour-là"}
+                        </div>
+                      </div>
+                      <div style={{color:"#cbd5e1",fontSize:13,flexShrink:0,transform:isOpen?"rotate(90deg)":"none",transition:"transform .15s"}}>▶</div>
+                    </div>
+                    {isOpen&&<div style={{padding:"0 13px 13px 53px",borderTop:"1px dashed #e2e8f0",paddingTop:11}}>
+                      {overflow&&overflow.horsPlafond>0&&<div style={{fontSize:10,fontWeight:700,color:"#b45309",marginBottom:9,
+                        background:"#fffbeb",border:"1px solid #fde68a",borderRadius:6,padding:"4px 8px",display:"inline-block"}}>
+                        ⚠️ {minToHM(overflow.horsPlafond)} non ajoutées (plafond TC) — à vérifier en heures sup
+                      </div>}
+                      <div style={{marginBottom:10}}>
+                        <span style={{fontSize:11.5,fontWeight:600,color:"#475569",display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
+                          Mois de constatation
+                          {!done&&<span style={{fontSize:10,fontWeight:600,color:"#712B13",background:"#fde8dc",border:"1px solid #F0997B",borderRadius:5,padding:"2px 6px"}}>🔒 après vérification</span>}
+                        </span>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap",pointerEvents:done?"auto":"none"}}
+                          title={!done?"Marque d'abord cette pause comme vérifiée pour pouvoir choisir un mois":""}>
+                          {quickMois.map(o=>(
+                            <button key={o.key} type="button"
+                              onClick={()=>setFiaMois(dk, moisFia===o.key?null:o.key)}
+                              style={pillStyle(moisFia===o.key)}>
+                              {o.label}
+                            </button>
+                          ))}
+                          <button type="button" onClick={()=>toggleAutreMois(dk)}
+                            style={{...pillStyle(estAutre),
+                              borderStyle:estAutre?"solid":"dashed"}}>
+                            {estAutre?`↦ ${MOIS_L[parseInt(moisFia.slice(5,7))-1]} ${moisFia.slice(0,4)}`:"Autre…"}
+                          </button>
+                        </div>
+                        {autreOuvert&&done&&<input type="month"
+                          defaultValue={estAutre?moisFia:""}
+                          min={moisOptions[0]?.key} max={moisOptions[moisOptions.length-1]?.key}
+                          onChange={e=>{ if(e.target.value){ setFiaMois(dk,e.target.value); toggleAutreMois(dk); } }}
+                          style={{marginTop:7,fontSize:12,border:"1.5px solid #0f766e",
+                            borderRadius:7,padding:"6px 8px",minHeight:34,background:"#fff",color:"#04342C"}}/>}
+                      </div>
+                      <div style={{display:"flex",gap:7}}>
+                        <button onClick={()=>toggleFiaDone(dk)}
+                          title={done?"Repasser en attente":"Marquer vérifié — ajoute 1h30 au TC"}
+                          style={{background:done?"#16a34a":"#fff",
+                            border:`1.5px solid ${done?"#16a34a":"#fde68a"}`,
+                            color:done?"#fff":"#92400e",
+                            borderRadius:8,padding:"8px 12px",cursor:"pointer",
+                            fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>
+                          {done?"✓ Validée":"Vérifié ?"}
+                        </button>
+                        <button onClick={()=>toggleDate(dk)} title="Retirer cette journée"
+                          style={{background:"#fff",border:"1.5px solid #f1d3d3",
+                            color:"#b91c1c",borderRadius:8,padding:"8px 12px",
+                            cursor:"pointer",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>
+                          ✕ Retirer
+                        </button>
+                      </div>
+                    </div>}
+                  </div>
+                );
+              })}
             </div>
           );
         })()}
