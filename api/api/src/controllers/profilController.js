@@ -171,4 +171,22 @@ async function resetPin(req, res) {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
-module.exports = { getProfil, updateProfil, setRoulement, getRoulementActif, setHabilitations, addFamille, resetPin };
+// PUT /api/profil/:cp/clear-pin — remet l'agent "comme s'il ne s'était jamais
+// connecté" (pin_hash -> NULL), contrairement à resetPin qui lui attribue un
+// nouveau PIN. Ajouté le 10/09 pour annuler des comptes Réserve régionale
+// activés par erreur pendant des tests (Olivier : "refaire leur fiche comme
+// s'il ne s'était jamais co").
+async function clearPin(req, res) {
+  const { cp } = req.params;
+  if (!req.agent.is_admin)
+    return res.status(403).json({ error: 'Réservé aux administrateurs' });
+  try {
+    const [result] = await pool.query('UPDATE auth SET pin_hash=NULL WHERE cp_agent=?', [cp]);
+    if (result.affectedRows === 0)
+      return res.status(404).json({ error: 'Agent introuvable dans auth' });
+    await pool.query('DELETE FROM session WHERE cp_agent=?', [cp]);
+    res.json({ message: 'PIN effacé' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
+module.exports = { getProfil, updateProfil, setRoulement, getRoulementActif, setHabilitations, addFamille, resetPin, clearPin };

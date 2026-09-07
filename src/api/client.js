@@ -187,6 +187,10 @@ export const agents = {
   resetPin: (cp, newPin) =>
     apiFetch(`/profil/${cp}/pin`, { method: 'PUT', body: JSON.stringify({ pin: newPin }) }),
 
+  /** Efface le PIN (remet l'agent "comme s'il ne s'était jamais connecté") */
+  clearPin: (cp) =>
+    apiFetch(`/profil/${cp}/clear-pin`, { method: 'PUT' }),
+
   /**
    * Bascule le statut Réserve/Roulement d'un agent (admin) — type_roulement
    * réutilisé mais seules 'Réserve' et '3x8' sont écrites par ce chemin.

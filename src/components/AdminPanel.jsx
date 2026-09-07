@@ -55,6 +55,9 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   // Statut actif/quitté (16/08) — par défaut on ne montre que les actifs,
   // un agent quitté reste consultable via ce filtre (historique jamais supprimé).
   const [statutFilter, setStatutFilter] = useState("actif");
+  // Tri "PIN actif ou non" (10/09, demandé par Olivier) — cycle TOUS → SANS →
+  // AVEC → TOUS, même principe de bouton cyclique que "Voir les quittés".
+  const [pinFilter, setPinFilter] = useState("TOUS"); // "TOUS" | "SANS" | "AVEC"
   const [modal, setModal]             = useState(null); // "create" | { type:"delete"|"reset", agent }
   const [usageOpen, setUsageOpen]     = useState(false); // 02/09 : suivi d'usage anonyme
   const [msg, setMsg]                 = useState(null); // { type:"ok"|"err", text }
@@ -221,7 +224,8 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
     const matchDpx = !dpxOnly || a.is_dpx;
     const matchAdjointDpx = !adjointDpxOnly || a.is_adjoint_dpx;
     const matchStatut = (a.statut || "actif") === statutFilter;
-    return matchSearch && matchFamille && matchReserve && matchAfo && matchAdmin && matchDpx && matchAdjointDpx && matchStatut;
+    const matchPin = pinFilter === "TOUS" || (pinFilter === "SANS" ? !a.has_pin : a.has_pin);
+    return matchSearch && matchFamille && matchReserve && matchAfo && matchAdmin && matchDpx && matchAdjointDpx && matchStatut && matchPin;
   });
   const nbReserve = agents.filter(a => a.is_reserve && (a.statut || "actif") === "actif").length;
   const nbAfo = agents.filter(a => a.is_afo && (a.statut || "actif") === "actif").length;
@@ -229,6 +233,12 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   const nbDpx = agents.filter(a => a.is_dpx && (a.statut || "actif") === "actif").length;
   const nbAdjointDpx = agents.filter(a => a.is_adjoint_dpx && (a.statut || "actif") === "actif").length;
   const nbQuittes = agents.filter(a => a.statut === "quitte").length;
+  const nbSansPin = agents.filter(a => !a.has_pin && (a.statut || "actif") === "actif").length;
+  const nbAvecPin = agents.filter(a => a.has_pin && (a.statut || "actif") === "actif").length;
+  // Comptes Réserve régionale déjà pourvus d'un PIN (10/09, Olivier : "c'est
+  // nous qui avons fait des test avec 2 compte") — à réinitialiser en bloc
+  // "comme s'ils ne s'étaient jamais connectés", cf. handleBulkClearPin.
+  const agentsReserveAvecPin = agents.filter(a => a.is_reserve && a.has_pin);
 
   // ─── Actions ─────────────────────────────────────────────────────────────────
   async function handleCreate(data) {
@@ -361,6 +371,22 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       afficherMsg("err", e.message || "Erreur réinitialisation");
     }
   }
+  // 10/09 — remet en bloc chaque agent Réserve régionale déjà pourvu d'un PIN
+  // "comme s'il ne s'était jamais connecté" (pin_hash -> NULL). Un agent
+  // Réserve régionale ne peut de toute façon plus se créer de PIN lui-même
+  // (règle du 18/08) — seul un admin pourra lui en redonner un ensuite via
+  // "🔑 PIN" sur sa fiche, exactement comme pour un tout nouveau compte.
+  async function handleBulkClearPin(liste) {
+    let ok = 0, erreurs = [];
+    for (const a of liste) {
+      try { await api.agents.clearPin(a.cp); ok++; }
+      catch (e) { erreurs.push(`${a.prenom} ${a.nom}`); }
+    }
+    setModal(null);
+    charger();
+    if (erreurs.length) afficherMsg("err", `${ok} PIN effacé(s), échec pour ${erreurs.join(", ")}`);
+    else afficherMsg("ok", `${ok} PIN effacé(s) — ${ok > 1 ? "ces comptes sont" : "ce compte est"} comme jamais connecté(s)`);
+  }
 
   // ─── RENDU ───────────────────────────────────────────────────────────────────
   return (
@@ -469,6 +495,26 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               }}>
               {statutFilter === "quitte" ? `🚪 Quittés (${nbQuittes})` : `🚪 Voir les quittés (${nbQuittes})`}
             </button>
+            <button onClick={() => setPinFilter(f => f === "TOUS" ? "SANS" : f === "SANS" ? "AVEC" : "TOUS")}
+              title="Cliquer pour trier par statut de PIN"
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: pinFilter === "SANS" ? "#b91c1c" : pinFilter === "AVEC" ? "#15803d" : "var(--bg-page)",
+                color: pinFilter === "TOUS" ? "var(--text-secondary)" : "#fff"
+              }}>
+              {pinFilter === "SANS" ? `⚠️ Sans PIN (${nbSansPin})` : pinFilter === "AVEC" ? `✅ Avec PIN (${nbAvecPin})` : "🔑 Tri PIN"}
+            </button>
+            {agentsReserveAvecPin.length > 0 && (
+              <button onClick={() => setModal("bulkClearPin")}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, border: "1px solid #fca5a5", cursor: "pointer",
+                  fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                  background: "#fef2f2", color: "#b91c1c"
+                }}>
+                🧹 Réserve régionale avec PIN — à réinitialiser ({agentsReserveAvecPin.length})
+              </button>
+            )}
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
             <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
@@ -660,6 +706,9 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       )}
       {modal?.type === "reset" && (
         <ModalResetPin agent={modal.agent} onConfirm={(pin) => handleResetPin(modal.agent, pin)} onClose={() => setModal(null)} />
+      )}
+      {modal === "bulkClearPin" && (
+        <ModalBulkClearPin agents={agentsReserveAvecPin} onConfirm={() => handleBulkClearPin(agentsReserveAvecPin)} onClose={() => setModal(null)} />
       )}
       {usageOpen && <UsageStatsModal onClose={() => setUsageOpen(false)} />}
     </div>
@@ -1016,6 +1065,41 @@ function ModalResetPin({ agent, onConfirm, onClose }) {
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
           <button onClick={submit} style={{ flex: 1, padding: "10px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Réinitialiser</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── MODAL EFFACEMENT GROUPÉ DES PIN (Réserve régionale) ───────────────────────
+// 10/09, demandé par Olivier : "c'est nous qui avons fait des test avec 2
+// compte [...] il faut refaire leur fiche comme s'il ne s'était jamais co."
+// Efface pin_hash (→ NULL) pour chaque agent listé -- l'agent redevient
+// "sans PIN", exactement l'état d'un compte jamais activé. Comme un agent
+// Réserve régionale ne peut pas se recréer de PIN lui-même (règle du 18/08),
+// seul un admin pourra lui en redonner un ensuite via "🔑 PIN" sur sa fiche.
+function ModalBulkClearPin({ agents, onConfirm, onClose }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal title="🧹 Réinitialiser les PIN — Réserve régionale" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: 12, color: "#b91c1c", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 12px" }}>
+          ⚠️ Efface le PIN de {agents.length} compte{agents.length > 1 ? "s" : ""} "Réserve régionale" — {agents.length > 1 ? "ils redeviennent" : "il redevient"} "sans PIN", comme jamais connecté{agents.length > 1 ? "s" : ""}. Leur connexion sera bloquée jusqu'à ce qu'un admin leur donne un nouveau PIN (bouton "🔑 PIN" sur leur fiche).
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+          {agents.map(a => (
+            <div key={a.cp} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "6px 10px", background: "#f8fafc", borderRadius: 8 }}>
+              <span style={{ fontWeight: 700, color: "#0f172a" }}>{a.prenom} {a.nom}</span>
+              <span style={{ fontFamily: "monospace", color: "#64748b", marginLeft: "auto" }}>{a.cp}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onClose} disabled={busy} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: busy ? "wait" : "pointer", fontWeight: 600 }}>Annuler</button>
+          <button onClick={async () => { setBusy(true); await onConfirm(); }} disabled={busy}
+            style={{ flex: 1, padding: "10px", background: "#b91c1c", color: "#fff", border: "none", borderRadius: 8, cursor: busy ? "wait" : "pointer", fontWeight: 700 }}>
+            {busy ? "⏳ Effacement…" : `Effacer ces ${agents.length} PIN`}
+          </button>
         </div>
       </div>
     </Modal>

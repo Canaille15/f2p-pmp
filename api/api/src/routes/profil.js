@@ -8,4 +8,5 @@ router.get('/:cp/roulement/actif',   authMiddleware, c.getRoulementActif);
 router.put('/:cp/habilitations',     authMiddleware, c.setHabilitations);
 router.post('/:cp/famille',          authMiddleware, c.addFamille);
 router.put('/:cp/pin',               authMiddleware, c.resetPin);
+router.put('/:cp/clear-pin',         authMiddleware, c.clearPin);
 module.exports = router;
