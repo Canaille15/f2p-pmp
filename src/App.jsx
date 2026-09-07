@@ -8518,7 +8518,16 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
     const obj = {};
     (pausesData||[]).forEach(p=>{
       const dk = String(p.date_jour).slice(0,10);
-      if(dk>=start && dk<=end) obj[dk] = true;
+      // Pas de quota annuel sur Pause Figée, contrairement à Congés/RP (qui ont
+      // un budget de jours par année civile à suivre finement) — ici on ne
+      // surveille que des heures dues, sans "compteur de l'année". Une pause
+      // pas encore vérifiée doit donc rester automatiquement visible tant
+      // qu'elle n'est pas traitée, quelle que soit l'année consultée ensuite —
+      // pas de mécanisme de report manuel comme pour Congés/Fêtes (confirmé
+      // par Olivier le 07/09 : "pas de quota annuel [...] on fait ça pour
+      // suivre finement les compteurs, pas ici").
+      const reportAutoAnneesPrecedentes = dk<start && !p.fia_done;
+      if((dk>=start && dk<=end) || reportAutoAnneesPrecedentes) obj[dk] = true;
     });
     return obj;
   },[pausesData, start, end]);
@@ -8749,7 +8758,13 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
           return(
             <div style={{display:"flex",flexDirection:"column",gap:7,padding:"0 12px 16px"}}>
               {listeFiltree.map(dk=>{
-                const jourLabel = new Date(dk).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});
+                // Pause reportée automatiquement d'une année précédente (voir
+                // allDates) — l'année est ajoutée au libellé pour lever
+                // l'ambiguïté, puisque le format habituel ("lundi 20 décembre")
+                // ne la mentionne jamais autrement.
+                const estReportee = dk<start;
+                const jourLabel = new Date(dk).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"})
+                  + (estReportee ? ` ${dk.slice(0,4)}` : "");
                 const moisFia = fiaMois[dk]||"";
                 const done = !!fiaDone[dk];
                 const rappel = getPlanningRappel(schedule, agentId, dk);
