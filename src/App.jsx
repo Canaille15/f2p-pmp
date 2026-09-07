@@ -7659,13 +7659,20 @@ export function computeFetesLignes(agent, schedule, agentProfiles, year, asOfDat
       anneePayeFinal = ay; moisPayeFinal = am;
     }
 
-    // Statut final
+    // Statut final — priseLeFinal/estPayee vérifiés AVANT "futur" (bug trouvé
+    // le 07/09 en audit : une fête future dont le code est déjà présent dans
+    // un roulement pré-importé — dateFete > today mais priseLeFinal trouvé
+    // dans la fenêtre de recherche, qui commence à dateFete lui-même — se
+    // retrouvait affichée "🔜 À venir" au lieu de "✅ Prise", malgré le badge
+    // vert "· {date}" affiché juste à côté dans la même carte, contradictoire
+    // au premier coup d'œil. Aucun changement pour une fête déjà passée
+    // (dateFete>today toujours faux, comportement strictement identique).
     let statut = "attente";
     if(estPerdue)         statut = "perdue";
     else if(estPerdueProbable) statut = "perdue_probable";
-    else if(dateFete > today)  statut = "futur";
     else if(priseLeFinal)      statut = "prise";
     else if(estPayee)          statut = "payee";
+    else if(dateFete > today)  statut = "futur";
     else if(today > limiteDate)statut = "payee_auto";
     else                       statut = "attente";
 
