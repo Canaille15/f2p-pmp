@@ -2473,7 +2473,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         <button onClick={()=>changerMoisNav(1)} aria-label="Mois suivant" style={NAV_ARROW_STYLE}>›</button>
         <button onClick={goToToday} style={{display:"flex",alignItems:"center",gap:6,border:"none",background:weekOffset===0?"#f1f5f9":"#E6F1FB",color:weekOffset===0?"#475569":"#0C447C",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:"clamp(12px,1.4vw,15px)",fontWeight:700}}>📅 Aujourd'hui</button>
       </div>
-      <input ref={dateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
+      {/* type="month" plutôt que "date" (07/09, Olivier -- "plus moderne et
+          fluide", même roue mois/année déjà utilisée pour "Mois de
+          constatation" en Pause Figée) : on ne navigue jamais qu'au mois,
+          jamais à un jour précis, jumpToDate n'a donc besoin que du 1er du
+          mois choisi (le jour n'a jamais influencé que la semaine/case
+          d'atterrissage, jamais un vrai choix de date). */}
+      <input ref={dateJumpRef} type="month" onChange={e=>{if(e.target.value)jumpToDate(e.target.value+"-01");}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
       {/* Semaine précédente/suivante (19/08, Olivier -- sur ordi, sans écran
           tactile, aucun moyen de changer de semaine sans passer par le
           sélecteur de date natif "moche et pas pratique". Décale weekOffset
@@ -9629,7 +9635,12 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
     </div>
     {showRemplissage && <RemplissageMasseModal agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} schedule={schedule} setSchedule={setSchedule} onClose={()=>setShowRemplissage(false)} onOuvrirJour={ouvrirJourDepuisRemplissage}/>}
 
-    <input ref={personalDateJumpRef} type="date" onChange={e=>{if(e.target.value)jumpToMonthDate(e.target.value);}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
+    {/* type="month" plutôt que "date" (07/09, Olivier -- "plus moderne et
+        fluide") : jumpToMonthDate n'a jamais lu que l'année et le mois de la
+        chaîne reçue (jour totalement ignoré), donc aucune perte de précision
+        -- juste la roue mois/année déjà utilisée pour "Mois de constatation"
+        en Pause Figée, plutôt que le calendrier complet jour par jour. */}
+    <input ref={personalDateJumpRef} type="month" onChange={e=>{if(e.target.value)jumpToMonthDate(e.target.value+"-01");}} style={{position:"absolute",width:0,height:0,opacity:0,pointerEvents:"none",border:"none"}}/>
     {/* ── VUE MOIS (seule vue restante depuis le 04/08, voir CLAUDE.md) ── */}
     <>
 
