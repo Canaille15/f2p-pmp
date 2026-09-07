@@ -8336,13 +8336,23 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
   return(
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.3)"}}>
-        <div style={{background:"linear-gradient(135deg,#831843,#9d174d)",padding:"18px 20px",display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",position:"sticky",top:0}}>
-          <div style={{flex:"1 1 auto",minWidth:0}}>
-            <div style={{color:"#fff",fontSize:16,fontWeight:800,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🩷 Fêtes légales {year}</div>
-            <div style={{color:"rgba(255,255,255,.9)",fontSize:11,marginTop:2,fontWeight:600}}>Réf. GRH00143</div>
+        {/* En-tête sur 2 lignes (07/09, signalé par Olivier sur un vrai téléphone :
+            le titre "Fêtes légales" était tronqué en "Fêtes lég…" — le sélecteur
+            d'année (4 pastilles, largeur fixe) partageait la même ligne que le
+            titre et l'écrasait sur un écran étroit). Ligne 1 : titre seul, jamais
+            tronqué désormais (l'année n'est plus répétée dans le texte, déjà
+            visible en gros dans le sélecteur juste en dessous). Ligne 2 : Réf. +
+            sélecteur d'année, avec repli à la ligne si l'écran est vraiment très
+            étroit. */}
+        <div style={{background:"linear-gradient(135deg,#831843,#9d174d)",padding:"14px 20px 12px",position:"sticky",top:0}}>
+          <div style={{display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{color:"#fff",fontSize:16,fontWeight:800,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>🩷 Fêtes légales</div>
+            <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.9,flexShrink:0}}>✕</button>
           </div>
-          {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
-          <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.9,flexShrink:0}}>✕</button>
+          <div style={{display:"flex",gap:10,justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",marginTop:6}}>
+            <div style={{color:"rgba(255,255,255,.9)",fontSize:11,fontWeight:600}}>Réf. GRH00143</div>
+            {availableYears&&onYearChange&&<YearSwitcher year={year} availableYears={availableYears} onChange={onYearChange}/>}
+          </div>
         </div>
 
         <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:14}}>
@@ -8369,8 +8379,12 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
             </div>
           )}
 
-          {/* Chips de filtre, avec compteur live */}
-          <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2}}>
+          {/* Chips de filtre, avec compteur live — flexWrap plutôt qu'un scroll
+              horizontal caché (07/09, signalé par Olivier : la 5e chip "Perdues"
+              restait hors écran sur mobile sans indice visuel qu'il fallait
+              glisser) : les 5 chips passent sur 2 lignes si l'écran est étroit,
+              toutes visibles d'un coup sans geste à découvrir. */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {CHIPS_FETES.map(c=>(
               <button key={c.key} onClick={()=>setFiltreStatut(c.key)}
                 style={{
