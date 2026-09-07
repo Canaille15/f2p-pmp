@@ -8486,6 +8486,21 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
   // inline, jamais un window.confirm() natif (cohérent avec le reste de
   // l'appli, ex. reset de la palette de couleurs le 17/07).
   const [confirmDelete, setConfirmDelete] = useState(null);
+  // Mois de constatation : sélecteur remplacé par des pastilles (07/09,
+  // demandé par Olivier après une maquette de comparaison) — 5 pastilles
+  // rapides ancrées sur le mois de la pause elle-même (pas "aujourd'hui" :
+  // la constatation tombe presque toujours dans les mois qui suivent la
+  // pause, quelle que soit la date de consultation) + une pastille "Autre…"
+  // qui ouvre un vrai sélecteur mois/année pour les cas qui traînent plus
+  // longtemps — garde donc exactement la même plage que l'ancien <select>
+  // (moisOptions, 3 ans en arrière → +12 mois), rien n'est perdu, juste
+  // atteint en un tap de plus pour le cas rare.
+  const [autreMoisOpen, setAutreMoisOpen] = useState(()=>new Set());
+  const toggleAutreMois = (dk) => setAutreMoisOpen(prev=>{
+    const next = new Set(prev);
+    if(next.has(dk)) next.delete(dk); else next.add(dk);
+    return next;
+  });
 
   const allDates = useMemo(()=>{
     const obj = {};
@@ -8772,30 +8787,51 @@ function PauseFigeeDashboardModal({agent, schedule, pausesData, loading, loadErr
                             background:"#fffbeb",border:"1px solid #fde68a",borderRadius:6,padding:"3px 7px",display:"inline-block"}}>
                             ⚠️ {minToHM(overflow.horsPlafond)} non ajoutées (plafond TC) — à vérifier en heures sup
                           </div>}
-                          <div style={{display:"flex",alignItems:"center",gap:7,marginTop:7,flexWrap:"wrap"}}>
-                            <span style={{fontSize:12,color:done?"#04342C":"#712B13",fontWeight:600,whiteSpace:"nowrap"}}>
-                              Mois de constatation :
-                            </span>
-                            <select value={moisFia} disabled={!done}
-                              title={!done?"Marque d'abord cette pause comme vérifiée pour pouvoir choisir un mois":""}
-                              onChange={e=>setFiaMois(dk,e.target.value)}
-                              style={{fontSize:13,
-                                border:`1px solid ${done?"#5DCAA5":"#e2e8f0"}`,
-                                borderRadius:8,padding:"6px 9px",minHeight:36,
-                                background:done?"#fff":"#f1f5f9",
-                                color:done?"#04342C":"#94a3b8",fontWeight:500,
-                                cursor:done?"pointer":"not-allowed",outline:"none",maxWidth:180}}>
-                              <option value="">— Sélectionner le mois —</option>
-                              {moisOptions.map(o=>(
-                                <option key={o.key} value={o.key}>{o.label}</option>
-                              ))}
-                            </select>
-                            {moisFia&&<span style={{fontSize:12,
-                              background:done?"#9FE1CB":"#F0997B",
-                              color:done?"#04342C":"#712B13",borderRadius:7,padding:"3px 8px",fontWeight:600}}>
-                              Fiche {moisFia.slice(5,7)}/{moisFia.slice(0,4)}
-                            </span>}
-                          </div>
+                          {(()=>{
+                            const base = new Date(dk+"T00:00:00");
+                            const quickMois = Array.from({length:5}).map((_,i)=>{
+                              const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
+                              return {key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
+                                label:`${MOIS_L[d.getMonth()]} ${d.getFullYear()}`};
+                            });
+                            const estAutre = moisFia && !quickMois.some(o=>o.key===moisFia);
+                            const autreOuvert = autreMoisOpen.has(dk);
+                            const pillStyle = (active) => ({fontSize:11,fontWeight:700,borderRadius:999,
+                              padding:"6px 11px",cursor:done?"pointer":"not-allowed",whiteSpace:"nowrap",
+                              border:`1.5px solid ${active?"#0f766e":"#cbd5e1"}`,
+                              background:active?"#0f766e":"#fff",
+                              color:active?"#fff":"#64748b"});
+                            return(
+                              <div style={{marginTop:7}}>
+                                <span style={{fontSize:12,color:done?"#04342C":"#712B13",fontWeight:600,display:"block",marginBottom:6}}>
+                                  Mois de constatation
+                                </span>
+                                <div style={{display:"flex",gap:6,flexWrap:"wrap",
+                                    opacity:done?1:.45,pointerEvents:done?"auto":"none"}}
+                                  title={!done?"Marque d'abord cette pause comme vérifiée pour pouvoir choisir un mois":""}>
+                                  {quickMois.map(o=>(
+                                    <button key={o.key} type="button"
+                                      onClick={()=>setFiaMois(dk, moisFia===o.key?null:o.key)}
+                                      style={pillStyle(moisFia===o.key)}>
+                                      {o.label}
+                                    </button>
+                                  ))}
+                                  <button type="button" onClick={()=>toggleAutreMois(dk)}
+                                    style={{...pillStyle(estAutre),
+                                      borderStyle:estAutre?"solid":"dashed",
+                                      color:estAutre?"#fff":"#7c8698"}}>
+                                    {estAutre?`↦ ${MOIS_L[parseInt(moisFia.slice(5,7))-1]} ${moisFia.slice(0,4)}`:"Autre…"}
+                                  </button>
+                                </div>
+                                {autreOuvert&&done&&<input type="month"
+                                  defaultValue={estAutre?moisFia:""}
+                                  min={moisOptions[0]?.key} max={moisOptions[moisOptions.length-1]?.key}
+                                  onChange={e=>{ if(e.target.value){ setFiaMois(dk,e.target.value); toggleAutreMois(dk); } }}
+                                  style={{marginTop:7,fontSize:12,border:"1.5px solid #0f766e",
+                                    borderRadius:7,padding:"6px 8px",minHeight:34,background:"#fff",color:"#04342C"}}/>}
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div style={{display:"flex",gap:7,flexShrink:0,alignItems:"center"}}>
                           <button onClick={()=>toggleFiaDone(dk)}
