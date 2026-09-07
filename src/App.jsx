@@ -7833,6 +7833,18 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
   const [paiementOuvert, setPaiementOuvert] = useState(null);
   const [paiementMoisVal, setPaiementMoisVal] = useState("");
   const [ouvertN1, setOuvertN1] = useState(true);
+  // Version aboutie (06/09, demandé par Olivier après avoir vu la maquette de
+  // comparaison) : lignes compactes repliables plutôt que des cartes toujours
+  // grandes ouvertes — chaque ligne garde son propre état d'ouverture (Set
+  // d'editKey), en plus des états déjà existants (editingCode/motifOuvert/...)
+  // qui forcent aussi l'ouverture quand une action les déclenche.
+  const [openRows, setOpenRows] = useState(() => new Set());
+  const toggleOpen = (key) => setOpenRows(prev => {
+    const n = new Set(prev);
+    if(n.has(key)) n.delete(key); else n.add(key);
+    return n;
+  });
+  const [filtreStatut, setFiltreStatut] = useState("tout");
 
   // Écrit (ou retire) le code de la fête directement dans le planning perso, le jour
   // de la prise manuelle choisie dans ce tableau de bord — pour que la fête saisie
@@ -7989,88 +8001,75 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
     return d;
   };
 
-  // Carte détaillée d'une fête, réutilisée pour l'année en cours (year) et le report N-1 (yearMoins1)
+  // Carte compacte d'une fête (Version aboutie, 06/09) — bandeau replié par
+  // défaut, pastille de statut toujours visible même repliée, actions/sous-
+  // panneaux uniquement dans la zone dépliée (ouverte automatiquement dès
+  // qu'une action les nécessite, via isOpen ci-dessous — jamais besoin de
+  // déplier "à la main" pour éditer une date par ex.). Toute la logique de
+  // calcul/écriture (handlers, garde-fous) est reprise à l'identique de
+  // l'ancienne version, seule la présentation change. Réutilisée pour
+  // l'année en cours (year) et le report N-1 (yearMoins1), inchangé.
   const renderFeteCard = (l, targetYear) => {
-    // Une fête épargnée au CET prime toujours sur son statut réglementaire
-    // habituel (déjà vrai pour le badge, voir plus bas) — le fond de la
-    // carte doit suivre pareil (08/08, demandé par Olivier : "le fonds
-    // devrait passé en vert comme les autres traité, ca semble plus
-    // coherent") : sans ça, une fête encore "en attente" au moment où elle a
-    // été épargnée gardait un fond ambre malgré le badge violet "Épargnée
-    // CET", ce qui donnait une carte à l'aspect contradictoire.
     const s = l.override?.epargneCet ? statutStyle.prise : (statutStyle[l.statut]||statutStyle.futur);
     const editKey = `${targetYear}:${l.code}`;
     const isEditing = editingCode===editKey;
     const motifVisible = motifOuvert===editKey;
     const priseLe = labelPriseLe(l);
-    return(
-      <div key={editKey} style={{
-        borderBottom:"1px solid #f1f5f9",
-        background:s.bg,
-      }}>
-        {/* Ligne principale */}
-        <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px"}}>
-
-          {/* Badge code fête */}
+    const isOpen = openRows.has(editKey) || isEditing || motifVisible || resetConfirmOuvert===editKey || paiementOuvert===editKey;
+    return (
+      <div key={editKey} style={{borderBottom:"1px solid #f1f5f9",background:"#fff"}}>
+        {/* Ligne résumé — toujours visible, cliquable pour déplier */}
+        <div onClick={()=>toggleOpen(editKey)} style={{
+          display:"flex",alignItems:"center",gap:9,padding:"10px 12px",
+          borderLeft:`4px solid ${s.border}`,cursor:"pointer",
+        }}>
           <span style={{
-            background:"#ec4899",color:"#fff",
-            borderRadius:8,padding:"5px 10px",
-            fontFamily:"monospace",fontSize:13,fontWeight:800,
-            flexShrink:0,minWidth:44,textAlign:"center",
-          }}>🩷{l.code}</span>
-
-          {/* Nom + date fête */}
+            background:"#ec4899",color:"#fff",borderRadius:7,padding:"4px 8px",
+            fontFamily:"monospace",fontSize:12,fontWeight:800,flexShrink:0,minWidth:36,textAlign:"center",
+          }}>{l.code}</span>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:14,fontWeight:700,color:"#1e293b",
+            <div style={{fontSize:13,fontWeight:700,color:"#1e293b",
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
               {l.label}
-              {l.estDimanche&&<span style={{fontSize:11,color:"#dc2626",marginLeft:6,fontWeight:800}}>⚠️Dim.</span>}
+              {l.estDimanche&&<span style={{fontSize:10,color:"#dc2626",marginLeft:5,fontWeight:800}}>⚠️Dim.</span>}
             </div>
-            <div style={{fontSize:11,color:"#475569",marginTop:2,display:"flex",gap:7,flexWrap:"wrap"}}>
+            <div style={{fontSize:10.5,color:"#64748b",marginTop:1,display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
               <span style={{fontFamily:"monospace"}}>
-                {new Date(l.dateFete).toLocaleDateString("fr-FR",{
-                  weekday:"short",day:"2-digit",month:"2-digit",
-                  year:targetYear!==year?"2-digit":undefined
-                })}
+                {new Date(l.dateFete).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",
+                  year:targetYear!==year?"2-digit":undefined})}
               </span>
-              <span style={{color:"#64748b"}}>→</span>
-              <span style={{
-                fontWeight:700,
-                color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#475569"
-              }}>
-                {new Date(l.limiteDate).toLocaleDateString("fr-FR",{
-                  day:"2-digit",month:"short",
-                  year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined
-                })}
+              <span>→</span>
+              <span style={{fontWeight:700,color:today>l.limiteDate&&!l.priseLe?"#dc2626":"#64748b"}}>
+                {new Date(l.limiteDate).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",
+                  year:parseInt(l.limiteDate.slice(0,4))!==year?"numeric":undefined})}
               </span>
+              {priseLe&&!l.override?.epargneCet&&<span style={{color:"#16a34a",fontWeight:700}}>· {priseLe}</span>}
+              {l.paiementAnticipe?.moisDemande&&!l.paiementAnticipe?.moisVu&&!l.priseLe&&
+                <span style={{color:"#059669",fontWeight:800}}>· ⏩ Anticipé</span>}
             </div>
-            {l.paiementAnticipe?.moisDemande&&!l.paiementAnticipe?.moisVu&&!l.priseLe&&
-              <div style={{fontSize:11,color:"#059669",fontWeight:800,marginTop:3,whiteSpace:"normal"}}>⏩ Anticipé demandé</div>}
           </div>
-
-          {/* Statut badge — une fête épargnée au CET (07/08) prime toujours
-              sur le badge réglementaire habituel, quel que soit l.statut.
-              Perdue pour maladie (14/08) : distincte d'une perte réglementaire
+          {/* Statut badge — une fête épargnée au CET (07/08) prime toujours sur
+              le badge réglementaire habituel, quel que soit l.statut. Perdue
+              pour maladie (14/08) : distincte d'une perte réglementaire
               (dimanche) pour qu'on comprenne d'où vient la perte au coup d'œil. */}
           <span style={{
             background:l.override?.epargneCet?"#ede9fe":l.override?.perdueMaladie?"#fef2f2":s.badge,
             color:l.override?.epargneCet?"#5b21b6":l.override?.perdueMaladie?"#991b1b":s.badgeTc,
-            borderRadius:20,padding:"5px 12px",
-            fontSize:12,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
+            borderRadius:20,padding:"4px 10px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",flexShrink:0,
           }}>
-            {l.override?.epargneCet ? "🏦 Épargnée CET" : l.override?.perdueMaladie ? "🤒 Perdue (maladie)" : <>{s.icon} {s.label}</>}
+            {l.override?.epargneCet ? "🏦 CET" : l.override?.perdueMaladie ? "🤒 Maladie" : <>{s.icon} {s.label}</>}
             {l.statut==="payee"&&!l.override?.epargneCet&&` ${MOIS_NOMS[l.moisPaye-1]}`}
             {l.statut==="payee_auto"&&!l.override?.epargneCet&&` ${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==year?` ${l.anneePaye}`:""}`}
           </span>
+          <span style={{color:"#cbd5e1",fontSize:12,flexShrink:0,
+            transform:isOpen?"rotate(180deg)":"none",transition:"transform .15s"}}>▾</span>
         </div>
 
-        {/* Ligne prise le + actions */}
-        <div style={{display:"flex",alignItems:"center",gap:8,
-          padding:"0 14px 11px",flexWrap:"wrap"}}>
+        {isOpen&&<div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:9}}>
 
-          {/* Prise le */}
+          {/* Prise le — détail + édition */}
           {isEditing?(
-            <div style={{display:"flex",gap:6,alignItems:"center",flex:1,flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
               <input type="date" defaultValue={l.priseLe||""}
                 onChange={e=>setEditVal(e.target.value)}
                 style={{border:"1px solid #cbd5e1",borderRadius:7,padding:"6px 9px",
@@ -8090,7 +8089,7 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
                   borderRadius:7,padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕</button>
             </div>
           ):(
-            <div style={{flex:1,fontSize:12}}>
+            <div style={{fontSize:12}}>
               {l.override?.epargneCet
                 ? <span style={{color:"#5b21b6",fontWeight:700}}>
                     🏦 Épargnée au CET — {l.override.epargneCet.sousCompte==="courant"?"Compte courant":"Compte fin d'activité"}
@@ -8128,68 +8127,58 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
             </div>
           )}
 
-          {/* Boutons actions — icone + legende toujours visible (05/08, demande
-              par Olivier) : auparavant icone seule + title au survol, invisible
-              au doigt sur mobile ("il faut passer la souris... sur le tel on a
-              rien"). Option 2 retenue (icone en haut, legende minuscule en
-              dessous) pour rester compact et garder les 5 boutons alignes sur
-              une seule ligne meme a l'etroit. title conserve en plus, pour le
-              survol desktop. */}
-          {canEdit&&!isEditing&&<div style={{display:"flex",gap:6,flexShrink:0}}>
+          {/* Actions — pastilles compactes (icône + légende inline), remplace
+              les anciens boutons carrés icône-au-dessus/légende-en-dessous :
+              même conditions d'affichage qu'avant, juste plus denses. */}
+          {canEdit&&!isEditing&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             <button onClick={()=>{setEditingCode(editKey);setEditVal(l.priseLe||"");}}
               title="Modifier la date de prise"
-              style={{background:"#f1f5f9",border:"1px solid #cbd5e1",borderRadius:8,
-                padding:"6px 4px",cursor:"pointer",width:52,
-                display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span style={{fontSize:15}}>📅</span>
-              <span style={{fontSize:9,fontWeight:600,color:"#475569"}}>Date</span>
+              style={{background:"#f1f5f9",border:"1px solid #cbd5e1",borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,color:"#475569",
+                display:"inline-flex",alignItems:"center",gap:5}}>
+              📅 Date
             </button>
             <button onClick={()=>setManualPayee(l.code,!l.estPayee,targetYear)}
               title={l.estPayee?"Non payé":"Marquer payé"}
               style={{background:l.estPayee?"#dbeafe":"#f1f5f9",
-                border:`1.5px solid ${l.estPayee?"#93c5fd":"#cbd5e1"}`,
-                borderRadius:8,padding:"6px 4px",cursor:"pointer",width:52,
-                display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span style={{fontSize:15}}>💶</span>
-              <span style={{fontSize:9,fontWeight:600,color:"#475569"}}>Payé</span>
+                border:`1.5px solid ${l.estPayee?"#93c5fd":"#cbd5e1"}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
+                color:l.estPayee?"#1d4ed8":"#475569",
+                display:"inline-flex",alignItems:"center",gap:5}}>
+              💶 Payé
             </button>
-            {/* Perte pour cause de maladie (14/08, demandé par Olivier) — masqué
-                si la fête est déjà prise ou épargnée au CET (incohérent avec
-                "perdue"), annulable via le même bouton "↺ Annuler" ci-dessous
-                (qui efface tout override, ou en re-cliquant ce bouton). */}
+            {/* Perte pour cause de maladie (14/08) — masqué si la fête est déjà
+                prise ou épargnée au CET, annulable via "↺ Annuler" ci-dessous. */}
             {!l.priseLe && !l.override?.epargneCet && <button
               onClick={()=>toggleMaladiePerdue(l.code,targetYear)}
               title={l.override?.perdueMaladie?"Retirer la perte maladie":"Marquer perdue pour cause de maladie"}
               style={{background:l.override?.perdueMaladie?"#fee2e2":"#f1f5f9",
-                border:`1.5px solid ${l.override?.perdueMaladie?"#fca5a5":"#cbd5e1"}`,
-                borderRadius:8,padding:"6px 4px",cursor:"pointer",width:52,
-                display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span style={{fontSize:15}}>🤒</span>
-              <span style={{fontSize:9,fontWeight:600,color:"#475569"}}>Maladie</span>
+                border:`1.5px solid ${l.override?.perdueMaladie?"#fca5a5":"#cbd5e1"}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
+                color:l.override?.perdueMaladie?"#b91c1c":"#475569",
+                display:"inline-flex",alignItems:"center",gap:5}}>
+              🤒 Maladie
             </button>}
             {/* Bouton réinitialiser — visible seulement si une correction manuelle a été posée sur cette fête */}
             {(l.override?.priseLe!==undefined||l.override?.estPayee!==undefined||l.override?.perdueMaladie!==undefined)&&<button
               onClick={()=>setResetConfirmOuvert(resetConfirmOuvert===editKey?null:editKey)}
               title="Annuler la correction manuelle et revenir au calcul automatique"
               style={{background:resetConfirmOuvert===editKey?"#ffedd5":"#fff7ed",
-                border:`1.5px solid ${resetConfirmOuvert===editKey?"#f97316":"#fdba74"}`,borderRadius:8,
-                padding:"6px 4px",cursor:"pointer",width:52,
-                display:"flex",flexDirection:"column",alignItems:"center",gap:2,
-                color:"#c2410c"}}>
-              <span style={{fontSize:15}}>↺</span>
-              <span style={{fontSize:9,fontWeight:600}}>Annuler</span>
+                border:`1.5px solid ${resetConfirmOuvert===editKey?"#f97316":"#fdba74"}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,color:"#c2410c",
+                display:"inline-flex",alignItems:"center",gap:5}}>
+              ↺ Annuler
             </button>}
             {/* Bouton motif réglementaire */}
             {l.motifReglementaire&&<button
               onClick={()=>setMotifOuvert(motifVisible?null:editKey)}
               title="Motif réglementaire"
               style={{background:motifVisible?"#fce7f3":"#f1f5f9",
-                border:`1.5px solid ${motifVisible?"#f9a8d4":"#cbd5e1"}`,
-                borderRadius:8,padding:"6px 4px",cursor:"pointer",width:52,
-                display:"flex",flexDirection:"column",alignItems:"center",gap:2,
-                color:motifVisible?"#9d174d":"#64748b"}}>
-              <span style={{fontSize:15}}>📋</span>
-              <span style={{fontSize:9,fontWeight:600}}>Motif</span>
+                border:`1.5px solid ${motifVisible?"#f9a8d4":"#cbd5e1"}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
+                color:motifVisible?"#9d174d":"#64748b",
+                display:"inline-flex",alignItems:"center",gap:5}}>
+              📋 Motif
             </button>}
             {/* Paiement anticipé — annulable, sans effet sur le calcul tant que "vu sur la feuille" n'est pas confirmé */}
             <button onClick={()=>{
@@ -8199,145 +8188,150 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
               }}
               title="Paiement anticipé"
               style={{background:paiementOuvert===editKey?"#ecfdf5":l.paiementAnticipe?.moisVu?"#ecfdf5":l.paiementAnticipe?.moisDemande?"#fffbeb":"#f1f5f9",
-                border:`1.5px solid ${paiementOuvert===editKey||l.paiementAnticipe?"#6ee7b7":"#cbd5e1"}`,
-                borderRadius:8,padding:"6px 4px",cursor:"pointer",width:52,
-                display:"flex",flexDirection:"column",alignItems:"center",gap:2,
-                color:l.paiementAnticipe?.moisVu?"#047857":l.paiementAnticipe?.moisDemande?"#b45309":"#64748b"}}>
-              <span style={{fontSize:15}}>⏩</span>
-              <span style={{fontSize:9,fontWeight:600}}>Anticipé</span>
+                border:`1.5px solid ${paiementOuvert===editKey||l.paiementAnticipe?"#6ee7b7":"#cbd5e1"}`,borderRadius:20,
+                padding:"6px 12px",cursor:"pointer",fontSize:12,fontWeight:700,
+                color:l.paiementAnticipe?.moisVu?"#047857":l.paiementAnticipe?.moisDemande?"#b45309":"#64748b",
+                display:"inline-flex",alignItems:"center",gap:5}}>
+              ⏩ Anticipé
             </button>
           </div>}
-        </div>
 
-        {/* Incohérence : fête marquée prise (planning) ET paiement anticipé encore en
-            attente — les deux ne peuvent pas coexister (soit RC pris, soit payée),
-            il faut choisir. Signalé par Olivier le 14/07 : ce cas pouvait se produire
-            silencieusement (ex: fête tapée directement dans le planning après avoir
-            demandé un paiement anticipé) sans qu'il soit jamais demandé de trancher. */}
-        {l.priseLe && l.paiementAnticipe?.moisDemande && !l.paiementAnticipe?.moisVu && (
-          <div style={{
-            margin:"0 14px 12px", background:"#fef3c7", border:"1.5px solid #f59e0b",
-            borderRadius:8, padding:"10px 13px",
-          }}>
-            <div style={{fontSize:12,color:"#78350f",fontWeight:700,marginBottom:8,lineHeight:1.5}}>
-              ⚠️ Vous avez demandé un paiement par anticipation pour la fête "{l.label}". Si vous confirmez que cette fête est prise, votre demande de paiement par anticipation sera annulée dans le tableau des fêtes.
-            </div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              <button onClick={()=>annulerPaiementAnticipe(l.code,targetYear)}
-                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,
-                  padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34,fontWeight:700}}>
-                ✓ Confirmer la fête (annule le paiement anticipé)
-              </button>
-              <button onClick={()=>setManualDate(l.code,"",targetYear)}
-                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,
-                  padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>
-                ✕ Annuler la prise (garde le paiement anticipé)
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Motif réglementaire déroulant */}
-        {motifVisible&&l.motifReglementaire&&<div style={{
-          margin:"0 14px 12px",
-          background:l.estPerdue?"#fef2f2":l.code==="VN"?"#faf5ff":"#f8fafc",
-          borderRadius:8,padding:"10px 13px",
-          fontSize:12,lineHeight:1.55,
-          color:l.estPerdue?"#991b1b":l.code==="VN"?"#6b21a8":"#334155",
-          border:`1.5px solid ${l.estPerdue?"#fecaca":l.code==="VN"?"#e9d5ff":"#cbd5e1"}`,
-        }}>
-          {l.estPerdue&&<div style={{fontWeight:800,fontSize:13,marginBottom:4}}>❌ PERDUE</div>}
-          {l.motifReglementaire}
-        </div>}
-
-        {/* Confirmation avant réinitialisation complète — annulable, pour éviter
-            une perte accidentelle (ex: paiement anticipé confirmé effacé sans le vouloir) */}
-        {resetConfirmOuvert===editKey&&<div style={{
-          margin:"0 14px 12px",background:"#fff7ed",border:"1.5px solid #fdba74",
-          borderRadius:8,padding:"10px 13px",
-        }}>
-          <div style={{fontSize:12,color:"#7c2d12",fontWeight:700,marginBottom:8}}>
-            ↺ Annuler TOUTES les corrections manuelles de "{l.label}" (date de prise, paiement, paiement anticipé) et revenir au calcul 100% automatique ?
-          </div>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>{resetManuel(l.code,targetYear);setResetConfirmOuvert(null);}}
-              style={{background:"#c2410c",color:"#fff",border:"none",borderRadius:7,
-                padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>Oui, annuler tout</button>
-            <button onClick={()=>setResetConfirmOuvert(null)}
-              style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,
-                padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>Non, garder</button>
-          </div>
-        </div>}
-
-        {/* Paiement anticipé déroulant */}
-        {paiementOuvert===editKey&&<div style={{
-          margin:"0 14px 12px",background:"#ecfdf5",border:"1.5px solid #6ee7b7",
-          borderRadius:8,padding:"10px 13px",
-        }}>
-          <div style={{fontSize:12,fontWeight:800,color:"#047857",marginBottom:8}}>⏩ Paiement anticipé</div>
-          {!l.paiementAnticipe?.moisDemande ? (
-            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-              <span style={{fontSize:12,color:"#334155"}}>Mois où le paiement doit avoir lieu :</span>
-              <input type="month" value={paiementMoisVal} onChange={e=>setPaiementMoisVal(e.target.value)}
-                style={{border:"1px solid #6ee7b7",borderRadius:7,padding:"6px 9px",fontSize:13,minHeight:34}}/>
-              <button onClick={()=>demanderPaiementAnticipe(l.code,paiementMoisVal,targetYear)}
-                disabled={!paiementMoisVal}
-                style={{background:"#059669",color:"#fff",border:"none",borderRadius:7,
-                  padding:"6px 12px",cursor:paiementMoisVal?"pointer":"default",fontSize:13,minHeight:34,
-                  opacity:paiementMoisVal?1:.5}}>Demander</button>
-            </div>
-          ) : !l.paiementAnticipe?.moisVu ? (
-            <div>
-              <div style={{fontSize:12,color:"#334155",marginBottom:8}}>
-                Demandé pour <b>{MOIS_NOMS[parseInt(l.paiementAnticipe.moisDemande.slice(5,7),10)-1]} {l.paiementAnticipe.moisDemande.slice(0,4)}</b>.
-                Le calcul de la fête reste inchangé tant que ce n'est pas confirmé.
+          {/* Incohérence : fête marquée prise (planning) ET paiement anticipé encore en
+              attente — les deux ne peuvent pas coexister (soit RC pris, soit payée),
+              il faut choisir. Signalé par Olivier le 14/07 : ce cas pouvait se produire
+              silencieusement (ex: fête tapée directement dans le planning après avoir
+              demandé un paiement anticipé) sans qu'il soit jamais demandé de trancher. */}
+          {l.priseLe && l.paiementAnticipe?.moisDemande && !l.paiementAnticipe?.moisVu && (
+            <div style={{
+              background:"#fef3c7", border:"1.5px solid #f59e0b",
+              borderRadius:8, padding:"10px 13px",
+            }}>
+              <div style={{fontSize:12,color:"#78350f",fontWeight:700,marginBottom:8,lineHeight:1.5}}>
+                ⚠️ Vous avez demandé un paiement par anticipation pour la fête "{l.label}". Si vous confirmez que cette fête est prise, votre demande de paiement par anticipation sera annulée dans le tableau des fêtes.
               </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <button onClick={()=>annulerPaiementAnticipe(l.code,targetYear)}
+                  style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:7,
+                    padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34,fontWeight:700}}>
+                  ✓ Confirmer la fête (annule le paiement anticipé)
+                </button>
+                <button onClick={()=>setManualDate(l.code,"",targetYear)}
+                  style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,
+                    padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>
+                  ✕ Annuler la prise (garde le paiement anticipé)
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Motif réglementaire déroulant */}
+          {motifVisible&&l.motifReglementaire&&<div style={{
+            background:l.estPerdue?"#fef2f2":l.code==="VN"?"#faf5ff":"#f8fafc",
+            borderRadius:8,padding:"10px 13px",
+            fontSize:12,lineHeight:1.55,
+            color:l.estPerdue?"#991b1b":l.code==="VN"?"#6b21a8":"#334155",
+            border:`1.5px solid ${l.estPerdue?"#fecaca":l.code==="VN"?"#e9d5ff":"#cbd5e1"}`,
+          }}>
+            {l.estPerdue&&<div style={{fontWeight:800,fontSize:13,marginBottom:4}}>❌ PERDUE</div>}
+            {l.motifReglementaire}
+          </div>}
+
+          {/* Confirmation avant réinitialisation complète — annulable, pour éviter
+              une perte accidentelle (ex: paiement anticipé confirmé effacé sans le vouloir) */}
+          {resetConfirmOuvert===editKey&&<div style={{
+            background:"#fff7ed",border:"1.5px solid #fdba74",
+            borderRadius:8,padding:"10px 13px",
+          }}>
+            <div style={{fontSize:12,color:"#7c2d12",fontWeight:700,marginBottom:8}}>
+              ↺ Annuler TOUTES les corrections manuelles de "{l.label}" (date de prise, paiement, paiement anticipé) et revenir au calcul 100% automatique ?
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>{resetManuel(l.code,targetYear);setResetConfirmOuvert(null);}}
+                style={{background:"#c2410c",color:"#fff",border:"none",borderRadius:7,
+                  padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>Oui, annuler tout</button>
+              <button onClick={()=>setResetConfirmOuvert(null)}
+                style={{background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:7,
+                  padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>Non, garder</button>
+            </div>
+          </div>}
+
+          {/* Paiement anticipé déroulant */}
+          {paiementOuvert===editKey&&<div style={{
+            background:"#ecfdf5",border:"1.5px solid #6ee7b7",
+            borderRadius:8,padding:"10px 13px",
+          }}>
+            <div style={{fontSize:12,fontWeight:800,color:"#047857",marginBottom:8}}>⏩ Paiement anticipé</div>
+            {!l.paiementAnticipe?.moisDemande ? (
               <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-                <span style={{fontSize:12,color:"#334155"}}>Vu sur feuille de paie de :</span>
+                <span style={{fontSize:12,color:"#334155"}}>Mois où le paiement doit avoir lieu :</span>
                 <input type="month" value={paiementMoisVal} onChange={e=>setPaiementMoisVal(e.target.value)}
                   style={{border:"1px solid #6ee7b7",borderRadius:7,padding:"6px 9px",fontSize:13,minHeight:34}}/>
-                <button onClick={()=>confirmerVuFeuillePaie(l.code,paiementMoisVal,targetYear)}
+                <button onClick={()=>demanderPaiementAnticipe(l.code,paiementMoisVal,targetYear)}
                   disabled={!paiementMoisVal}
                   style={{background:"#059669",color:"#fff",border:"none",borderRadius:7,
                     padding:"6px 12px",cursor:paiementMoisVal?"pointer":"default",fontSize:13,minHeight:34,
-                    opacity:paiementMoisVal?1:.5}}>✓ Confirmer</button>
+                    opacity:paiementMoisVal?1:.5}}>Demander</button>
+              </div>
+            ) : !l.paiementAnticipe?.moisVu ? (
+              <div>
+                <div style={{fontSize:12,color:"#334155",marginBottom:8}}>
+                  Demandé pour <b>{MOIS_NOMS[parseInt(l.paiementAnticipe.moisDemande.slice(5,7),10)-1]} {l.paiementAnticipe.moisDemande.slice(0,4)}</b>.
+                  Le calcul de la fête reste inchangé tant que ce n'est pas confirmé.
+                </div>
+                <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:12,color:"#334155"}}>Vu sur feuille de paie de :</span>
+                  <input type="month" value={paiementMoisVal} onChange={e=>setPaiementMoisVal(e.target.value)}
+                    style={{border:"1px solid #6ee7b7",borderRadius:7,padding:"6px 9px",fontSize:13,minHeight:34}}/>
+                  <button onClick={()=>confirmerVuFeuillePaie(l.code,paiementMoisVal,targetYear)}
+                    disabled={!paiementMoisVal}
+                    style={{background:"#059669",color:"#fff",border:"none",borderRadius:7,
+                      padding:"6px 12px",cursor:paiementMoisVal?"pointer":"default",fontSize:13,minHeight:34,
+                      opacity:paiementMoisVal?1:.5}}>✓ Confirmer</button>
+                  <button onClick={()=>{annulerPaiementAnticipe(l.code,targetYear);setPaiementOuvert(null);}}
+                    style={{background:"#fef2f2",color:"#b91c1c",border:"1px solid #fecaca",borderRadius:7,
+                      padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕ Annuler</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontSize:12,color:"#047857",fontWeight:700}}>
+                  ✅ Vu sur feuille de paie de {MOIS_NOMS[parseInt(l.paiementAnticipe.moisVu.slice(5,7),10)-1]} {l.paiementAnticipe.moisVu.slice(0,4)}
+                </span>
                 <button onClick={()=>{annulerPaiementAnticipe(l.code,targetYear);setPaiementOuvert(null);}}
                   style={{background:"#fef2f2",color:"#b91c1c",border:"1px solid #fecaca",borderRadius:7,
                     padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕ Annuler</button>
               </div>
-            </div>
-          ) : (
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <span style={{fontSize:12,color:"#047857",fontWeight:700}}>
-                ✅ Vu sur feuille de paie de {MOIS_NOMS[parseInt(l.paiementAnticipe.moisVu.slice(5,7),10)-1]} {l.paiementAnticipe.moisVu.slice(0,4)}
-              </span>
-              <button onClick={()=>{annulerPaiementAnticipe(l.code,targetYear);setPaiementOuvert(null);}}
-                style={{background:"#fef2f2",color:"#b91c1c",border:"1px solid #fecaca",borderRadius:7,
-                  padding:"6px 12px",cursor:"pointer",fontSize:13,minHeight:34}}>✕ Annuler</button>
-            </div>
-          )}
+            )}
+          </div>}
         </div>}
       </div>
     );
   };
 
-  const groupeStyle = {
-    aTraiter: {bg:"#fff7ed", border:"#fed7aa", text:"#9a3412"},
-    perdues:  {bg:"#fef2f2", border:"#fecaca", text:"#991b1b"},
-    reglees:  {bg:"#f0fdf4", border:"#bbf7d0", text:"#166534"},
-    aVenir:   {bg:"#f8fafc", border:"#e2e8f0", text:"#334155"},
-  };
-  const renderGroupe = (titre, icone, items, style) => items.length>0 && (
-    <div>
-      <div style={{fontSize:13,fontWeight:800,color:style.text,background:style.bg,
-        border:`1px solid ${style.border}`,borderRadius:8,padding:"7px 11px",marginBottom:8}}>
-        {icone} {titre} ({items.length})
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:0,border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
-        {items.map(l=>renderFeteCard(l, year))}
-      </div>
-    </div>
-  );
+  // ── Version aboutie (06/09, demandé par Olivier : "fais le, on annulera
+  // ou ameliorera si ca va pas") ── remplace l'ancien regroupement en 4 blocs
+  // toujours ouverts (renderGroupe) par : un bandeau d'état (à traiter / rien
+  // à faire), des chips de filtre avec compteur, une liste plate triée par
+  // priorité (à traiter → réglées → à venir → perdues), lignes repliées par
+  // défaut. Le calcul des 4 groupes eux-mêmes (groupeATraiter/Reglees/
+  // AVenir/Perdues, plus haut dans le composant) n'est pas modifié — seul
+  // l'affichage change. En-tête gardée en pink/magenta (pas navy comme la
+  // maquette de comparaison) : le module a déjà une identité de marque rose
+  // (badges 🩷 du calendrier, carte "FETE" en #db2777) — la maquette navy ne
+  // servait qu'à unifier visuellement la page de comparaison elle-même.
+  const CHIPS_FETES = [
+    {key:"tout", label:"Tout", count:lignes.length},
+    {key:"aTraiter", label:"À traiter", count:groupeATraiter.length},
+    {key:"reglees", label:"Réglées", count:groupeReglees.length},
+    {key:"aVenir", label:"À venir", count:groupeAVenir.length},
+    {key:"perdues", label:"Perdues", count:groupePerdues.length},
+  ];
+  const listeAffichee =
+    filtreStatut==="aTraiter" ? groupeATraiter :
+    filtreStatut==="reglees" ? groupeReglees :
+    filtreStatut==="aVenir" ? groupeAVenir :
+    filtreStatut==="perdues" ? groupePerdues :
+    [...groupeATraiter, ...groupeReglees, ...groupeAVenir, ...groupePerdues];
 
   return(
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:700,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
@@ -8351,31 +8345,59 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
           <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:20,cursor:"pointer",opacity:.9,flexShrink:0}}>✕</button>
         </div>
 
-        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:16}}>
+        <div style={{padding:"18px 20px",display:"flex",flexDirection:"column",gap:14}}>
 
           {lignes.length===0 && fetesReportN1.length===0 && (
             <div style={{fontSize:12,color:"#475569",textAlign:"center",padding:12}}>Aucune fête à afficher.</div>
           )}
 
-          {/* Épargner directement au CET depuis Fêtes (07/08, demandé par
-              Olivier — RCF, repos compensateur de fêtes). Contrairement aux
-              autres compteurs, on ne saisit pas un simple nombre de jours :
-              l'agent choisit précisément QUELLE fête est épargnée (suivi fin
-              demandé) — widget dédié, voir CetView.jsx EpargneFetesCetWidget.
-              feteOptions inclut l'année en cours ET le report N-1 (chaque
-              fête garde sa propre année, celle qui compte pour l'affichage
-              "🏦 Épargnée au CET" dans les deux vues) — exclut les fêtes déjà
-              épargnées et celles perdues (non éligibles, demandé par Olivier
-              : "lorsqu'une fête est dans les fete perdu [...] elle ne peut
-              pas etre mise en epargne"). */}
-          <EpargneFetesCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={year} fetes={feteOptions}/>
+          {/* Bandeau d'état — remplace la simple liste : dit d'un coup d'œil
+              s'il y a quelque chose à faire ou non. */}
+          {groupeATraiter.length>0 ? (
+            <div style={{background:"#fef3c7",border:"1.5px solid #f59e0b",borderRadius:10,
+              padding:"10px 14px",display:"flex",alignItems:"center",gap:9}}>
+              <span style={{fontSize:17}}>⚠️</span>
+              <span style={{fontSize:13,fontWeight:800,color:"#92400e"}}>
+                {groupeATraiter.length} fête{groupeATraiter.length>1?"s":""} à traiter
+              </span>
+            </div>
+          ) : (
+            <div style={{background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:10,
+              padding:"10px 14px",display:"flex",alignItems:"center",gap:9}}>
+              <span style={{fontSize:17}}>✅</span>
+              <span style={{fontSize:13,fontWeight:800,color:"#166534"}}>Rien à faire pour l'instant</span>
+            </div>
+          )}
 
-          {renderGroupe("À traiter", "⚠️", groupeATraiter, groupeStyle.aTraiter)}
-          {renderGroupe("Réglées", "✅", groupeReglees, groupeStyle.reglees)}
-          {renderGroupe("À venir", "🔜", groupeAVenir, groupeStyle.aVenir)}
-          {renderGroupe("Perdues", "❌", groupePerdues, groupeStyle.perdues)}
+          {/* Chips de filtre, avec compteur live */}
+          <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2}}>
+            {CHIPS_FETES.map(c=>(
+              <button key={c.key} onClick={()=>setFiltreStatut(c.key)}
+                style={{
+                  flexShrink:0,borderRadius:20,padding:"6px 12px",fontSize:12,fontWeight:700,
+                  cursor:"pointer",whiteSpace:"nowrap",
+                  background:filtreStatut===c.key?"#9d174d":"#f1f5f9",
+                  color:filtreStatut===c.key?"#fff":"#475569",
+                  border:`1.5px solid ${filtreStatut===c.key?"#9d174d":"#e2e8f0"}`,
+                }}>
+                {c.label} ({c.count})
+              </button>
+            ))}
+          </div>
 
-          {/* ── Report N-1 (fêtes de fin d'année précédente encore en délai) ── */}
+          {/* Liste plate triée par priorité (à traiter → réglées → à venir →
+              perdues), ou filtrée sur un seul groupe si un chip est actif. */}
+          <div style={{display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+            {listeAffichee.length===0
+              ? <div style={{padding:18,textAlign:"center",fontSize:12,color:"#94a3b8"}}>Aucune fête dans cette catégorie.</div>
+              : listeAffichee.map(l=>renderFeteCard(l, year))}
+          </div>
+
+          {/* ── Report N-1 (fêtes de fin d'année précédente encore en délai) —
+              reste une section séparée titrée, pas fondue dans la liste plate
+              ci-dessus : ce sont des fêtes d'une AUTRE année, une simplification
+              plus sûre que la maquette (qui les mélangeait) sans rien perdre en
+              clarté. ── */}
           {fetesReportN1.length>0&&<div style={{borderTop:"2px solid #e2e8f0",paddingTop:14}}>
             <div onClick={()=>setOuvertN1(o=>!o)}
               style={{background:"#fdf2f8",border:"1px solid #fbcfe8",borderRadius:8,padding:"9px 12px",
@@ -8394,21 +8416,16 @@ function FetesDashboardModal({agent, schedule, setSchedule, agentProfiles, setAg
             </div>}
           </div>}
 
-          {/* ── Légende ── */}
-          <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",borderTop:"1px solid #e2e8f0",paddingTop:12}}>
-            {[
-              {bg:"#16a34a",l:"Prise"},
-              {bg:"#f59e0b",l:"Attente"},
-              {bg:"#3b82f6",l:"Payée"},
-              {bg:"#dc2626",l:"Perdue"},
-              {bg:"#ea580c",l:"Prob. perdue"},
-              {bg:"#64748b",l:"À venir"},
-            ].map(({bg,l})=>(
-              <span key={l} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:11}}>
-                <span style={{width:10,height:10,borderRadius:"50%",background:bg,flexShrink:0}}/>
-                <span style={{color:"#334155",fontWeight:600}}>{l}</span>
-              </span>
-            ))}
+          {/* Épargner directement au CET depuis Fêtes (07/08) — déplacé en bas
+              (widget déjà replié par défaut, faible risque) comme dans la
+              maquette, pour laisser la liste des fêtes en premier. Contrairement
+              aux autres compteurs, on ne saisit pas un simple nombre de jours :
+              l'agent choisit précisément QUELLE fête est épargnée — widget dédié,
+              voir CetView.jsx EpargneFetesCetWidget. feteOptions inclut l'année
+              en cours ET le report N-1, exclut les fêtes déjà épargnées et celles
+              perdues (non éligibles). */}
+          <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+            <EpargneFetesCetWidget agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={year} fetes={feteOptions}/>
           </div>
         </div>
       </div>
