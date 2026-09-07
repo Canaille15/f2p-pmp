@@ -6409,7 +6409,16 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
 
           {/* Saisie "du ... au ..." (13/08, demandé par Olivier) : écrit le
               code du compteur dans le planning perso pour toute la période en
-              un seul geste — bloque tout si un seul jour est déjà occupé. */}
+              un seul geste — bloque tout si un seul jour est déjà occupé.
+              Retirée pour RP/RU/RQ (07/09, demandé par Olivier -- "on ne
+              rentre jamais bcp de jour et avec le remplissage rapide c'est
+              plus utile") : rarement utilisée pour ces 3 compteurs et
+              redondante avec le module Remplissage rapide (RP/RU en type
+              principal, RQ via son propre mini-calendrier "jours dispersés",
+              resté intact -- seul ce bloc Du/Au disparaît). Gardée pour
+              RN/TY/Maladie -- Maladie en dépend directement via
+              MaladiePertesSection ci-dessous. */}
+          {!["RP","RU","RQ"].includes(label) && (
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>+ Ajouter une période</div>
             <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
@@ -6434,6 +6443,7 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
               <MaladiePertesSection agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} year={year} periodeDu={periodeDu} periodeAu={periodeAu}/>
             )}
           </div>
+          )}
 
           {/* Mini-calendrier multi-jours (13/08, demandé par Olivier) : pour
               les jours dispersés dans un même mois (ex. "tous les repos du
