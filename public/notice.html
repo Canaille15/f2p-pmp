@@ -4,6 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Notice F2P.PMP</title>
+<script>
+  // Suit le mode choisi dans l'appli (bouton ☀️/🌙, App.jsx) plutôt que
+  // uniquement le réglage système -- même clé localStorage exacte que
+  // usePersist("themeMode",...), page statique sur le même domaine donc
+  // lecture directe possible. Si l'agent n'a jamais ouvert l'appli sur cet
+  // appareil (clé absente), on ne touche à rien : le mode système
+  // (@media prefers-color-scheme, déjà en place) reste le repli.
+  (function(){
+    try {
+      var stored = localStorage.getItem("f2ppmp_themeMode");
+      if (stored) {
+        var mode = JSON.parse(stored);
+        if (mode === "dark" || mode === "light") {
+          document.documentElement.setAttribute("data-theme", mode);
+        }
+      }
+    } catch (e) {}
+  })();
+</script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=JetBrains+Mono:wght@500;700&display=swap');
 
