@@ -603,10 +603,10 @@
       <p>Utile quand tu dois saisir beaucoup de journées identiques (toutes les matinées d'un poste sur l'année, une série de RP...) : un mini-calendrier permet de cocher n'importe quels jours, même non consécutifs et sur plusieurs mois, puis d'écrire tout en une seule action. Le module propose aussi, séparément, un moyen d'effacer une période entière du planning pour repartir de zéro.</p>
 
       <h3>1. Choisir ce que tu veux saisir</h3>
-      <p>En haut du module, 6 boutons : <span class="b">Poste de travail</span> <span class="b">RP</span> <span class="b">RPP</span> <span class="b">RU</span> <span class="b">NU</span> <span class="b">Congés</span>. RP et RPP restent bien deux types séparés ici (contrairement au compteur <a href="#rp-ru-rq">RP · RU · RQ</a>, qui les additionne pour le décompte) — choisis celui qui correspond réellement à ce que tu veux écrire.</p>
+      <p>En haut du module, 7 boutons : <span class="b">Poste de travail</span> <span class="b">RP</span> <span class="b">RPP</span> <span class="b">RU</span> <span class="b">RQ</span> <span class="b">NU</span> <span class="b">Congés</span>. RP et RPP restent bien deux types séparés ici (contrairement au compteur <a href="#rp-ru-rq">RP · RU · RQ</a>, qui les additionne pour le décompte) — choisis celui qui correspond réellement à ce que tu veux écrire.</p>
       <ul>
         <li><strong>Poste de travail</strong> — choisis d'abord la vacation (<span class="b">Matinée</span> <span class="b">Soirée</span> <span class="b">Nuit</span> <span class="b">Journée</span>), puis le poste : comme dans le popup de saisie normal, seuls les postes où tu es habilité pour cette vacation sont proposés.</li>
-        <li><strong>RP, RPP, RU, NU</strong> — rien d'autre à choisir, ces 4 s'écrivent directement avec leur propre code, sans poste ni horaire.</li>
+        <li><strong>RP, RPP, RU, RQ, NU</strong> — rien d'autre à choisir, ces 5 s'écrivent directement avec leur propre code, sans poste ni horaire.</li>
         <li><strong>Congés</strong> — choisis le statut, exactement les 3 mêmes états que partout ailleurs dans l'appli : <span class="b">✓ Accordé</span> <span class="b">⏳ Demandé</span> <span class="b">✕ Refusé</span>.</li>
       </ul>
       <div class="callout rule">
@@ -621,7 +621,7 @@
         <thead><tr><th>Type de journée choisi</th><th>Combinables proposés en 2<sup>e</sup> créneau</th></tr></thead>
         <tbody>
           <tr><td><span class="b">RP</span> / <span class="b">RPP</span></td><td>Nuit, VT, RU, RQ, RN, TC, TY, Maladie (les 8)</td></tr>
-          <tr><td><span class="b">RU</span> / <span class="b">NU</span></td><td>Nuit uniquement</td></tr>
+          <tr><td><span class="b">RU</span> / <span class="b">RQ</span> / <span class="b">NU</span></td><td>Nuit uniquement</td></tr>
           <tr><td><span class="b">Poste de travail</span> (si la vacation choisie n'est pas déjà « Nuit »)</td><td>Nuit uniquement</td></tr>
           <tr><td><span class="b">Congés</span></td><td>Aucun — Congés a déjà son propre cycle de statuts (voir plus haut)</td></tr>
         </tbody>
@@ -645,7 +645,7 @@
       <div class="callout tip">
         <div class="callout-title">💡 Ajouter un combinable sur un jour déjà rempli (case bleu clair)</div>
         <p>Pour <strong>Poste de travail</strong>, n'importe quel poste réel déjà en place ce jour-là (Matin, Soirée ou Journée, peu importe lequel) rend la case cochable pour y ajouter Nuit — pas besoin de re-choisir exactement le même poste/vacation dans les boutons du dessus, l'appli ne touche jamais au poste déjà présent, seule la Nuit s'ajoute.</p>
-        <p>Pour <strong>RP, RPP, RU ou NU</strong>, seul un jour portant <strong>exactement</strong> ce code précis (RP et pas RPP, par exemple) devient cochable de cette façon.</p>
+        <p>Pour <strong>RP, RPP, RU, RQ ou NU</strong>, seul un jour portant <strong>exactement</strong> ce code précis (RP et pas RPP, par exemple) devient cochable de cette façon.</p>
       </div>
 
       <h3>4. Le lot en attente, et le remplissage final</h3>
@@ -704,7 +704,7 @@
         <li><span class="b">RU</span> a la même mécanique de report.</li>
         <li><span class="b">RQ</span> fonctionne différemment : pas de report par date choisie — le solde restant en fin d'année devient automatiquement l'acquis de départ de l'année suivante (sauf si tu corriges manuellement l'acquis d'une année précise).</li>
       </ul>
-      <p>Chaque module propose aussi un mini-calendrier « Sélectionner des jours (dispersés) » pour cocher plusieurs jours non consécutifs d'un coup (ex. tous les RP d'un mois) plutôt que de les saisir un par un.</p>
+      <p><strong>RP</strong> et <strong>RU</strong> proposent en plus un mini-calendrier « Sélectionner des jours (dispersés) » pour cocher plusieurs jours non consécutifs d'un coup (ex. tous les RP d'un mois) plutôt que de les saisir un par un. <strong>RQ</strong> n'a plus ce mini-calendrier ici — pour saisir plusieurs RQ d'un coup, passe par <a href="#remplissage-rapide">Remplissage rapide</a>, qui propose désormais RQ comme type à part entière.</p>
     </section>
 
     <section class="module" id="fetes">
