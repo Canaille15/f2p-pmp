@@ -124,7 +124,12 @@ async function getAllPublic(req, res) {
 // Remplissage rapide. "N" (poste de nuit) volontairement absent : une Nuit
 // ne peut jamais se combiner avec elle-même.
 const EQUIPE2_COMBINABLES_BULK = new Set(['N','VT','RU','RQ','RN','TC','TY','MA']);
-const ANCRES_POUR_NUIT = new Set(['RP','RPP','RU','NU','M','AM','J']);
+// RQ ajouté aux ancres Nuit le 07/09/2026 (Olivier, Remplissage rapide --
+// RQ devient un type primaire à part entière, même mécanique que RU/NU déjà
+// en place) : jamais restreint côté toggleType1 (DayEditPopup.jsx, aucune
+// condition sur type1 pour une vraie Nuit) -- ce Set ne fait que le
+// répercuter côté écriture en masse.
+const ANCRES_POUR_NUIT = new Set(['RP','RPP','RU','RQ','NU','M','AM','J']);
 const ANCRES_POUR_ABSENCE = new Set(['RP','RPP']);
 const POSTES_REELS_EQUIPE = new Set(['M','AM','J']);
 

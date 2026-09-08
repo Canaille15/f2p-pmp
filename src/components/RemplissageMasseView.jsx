@@ -52,6 +52,12 @@ const TYPES_JOURNEE = [
   { code:"rp",     label:"RP" },
   { code:"rpp",    label:"RPP" },
   { code:"ru",     label:"RU" },
+  // RQ (07/09/2026, demandé par Olivier -- suite au retrait du mini-
+  // calendrier "jours dispersés" de son propre module, qui laissait RQ sans
+  // aucun outil d'ajout en masse) : même mécanique que RU/NU ci-dessus --
+  // ancre autonome, combinable avec une vraie Nuit uniquement (voir
+  // combinablesDisponibles plus bas).
+  { code:"rq",     label:"RQ" },
   { code:"nu",     label:"NU" },
   { code:"conges", label:"Congés" },
 ];
@@ -186,7 +192,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       const label = `${VACATIONS.find(v=>v.code===vacation)?.label||vacation} · ${postesDispo.find(p=>p.code===posteCode)?.label||posteCode}${combinable2==="N" ? ` + Nuit${posteNuitLabel?` · ${posteNuitLabel}`:""}` : ""}`;
       return { id, type:"poste", label, dates, write:{ kind:"planning", codeEquipe:vacation, codePoste:posteCode, jsCode, horaires, overwrite:false, equipe2: combinable2||null, codePoste2: combinable2==="N" ? (posteNuit||null) : null } };
     }
-    if (typeJournee==="rp" || typeJournee==="rpp" || typeJournee==="ru" || typeJournee==="nu") {
+    if (typeJournee==="rp" || typeJournee==="rpp" || typeJournee==="ru" || typeJournee==="rq" || typeJournee==="nu") {
       // 05/09/2026 (Olivier : "et RU est peut etre combiné avec une nuit ?"
       // puis correction "att c'etait NU avec une nuit") -- ni RU ni NU ne
       // sont une ancre pour CODES_COMBINABLES_EQUIPE2 (RU/NU+VT/RQ/... se
@@ -197,7 +203,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
       // condition sur type1). combinablesDisponibles (calculé plus bas dans
       // le composant) restreint déjà les boutons proposés pour "ru"/"nu" à
       // Nuit seule -- ici on fait juste confiance à `combinable2`.
-      const codeEquipe = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="nu" ? "NU" : "RU";
+      const codeEquipe = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="nu" ? "NU" : typeJournee==="rq" ? "RQ" : "RU";
       const combo = COMBINABLES2.find(c=>c.code===combinable2);
       // 05/09/2026 (Olivier : "mais une nuit sur quel poste ?") -- le poste
       // de la Nuit n'est jamais devine, jamais imposé non plus (comme dans
@@ -275,7 +281,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   // RU/NU+VT/RQ/... se remplacent simplement, jamais ne se combinent). D'où :
   // RP/RPP proposent les 8 combinables (Nuit + les 7 absences), RU et NU ne
   // proposent QUE Nuit (seule combinaison valide avec RU/NU comme ancre).
-  const ancreActuelle = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="ru" ? "RU" : typeJournee==="nu" ? "NU" : null;
+  const ancreActuelle = typeJournee==="rpp" ? "RPP" : typeJournee==="rp" ? "RP" : typeJournee==="ru" ? "RU" : typeJournee==="rq" ? "RQ" : typeJournee==="nu" ? "NU" : null;
   // 06/09/2026 (Olivier -- "cocher une case dans les touches bleues [poste
   // de travail] et la combiner avec les touches vertes") : pour "poste",
   // seule Nuit est proposée (jamais les 7 absences, qui n'ont de sens
@@ -283,7 +289,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
   // DayEditPopup.jsx) -- et jamais si la vacation choisie est déjà "Nuit"
   // (une Nuit ne se combine jamais avec elle-même).
   const combinablesDisponibles = (typeJournee==="rp"||typeJournee==="rpp") ? COMBINABLES2
-    : (typeJournee==="ru"||typeJournee==="nu") ? COMBINABLES2.filter(c=>c.code==="N")
+    : (typeJournee==="ru"||typeJournee==="rq"||typeJournee==="nu") ? COMBINABLES2.filter(c=>c.code==="N")
     : (typeJournee==="poste" && vacation!=="N") ? COMBINABLES2.filter(c=>c.code==="N")
     : [];
 
@@ -358,7 +364,7 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
     // bulkAddCombo, qui n'écrit QUE le 2e créneau, sans jamais toucher à
     // l'ancre déjà en place ni à aucune autre période du jour (note perso,
     // grève, formation).
-    if (equipe2 && (entree.type==="rp"||entree.type==="rpp"||entree.type==="ru"||entree.type==="nu"||entree.type==="poste")) {
+    if (equipe2 && (entree.type==="rp"||entree.type==="rpp"||entree.type==="ru"||entree.type==="rq"||entree.type==="nu"||entree.type==="poste")) {
       const estPoste = entree.type==="poste";
       const datesVides = [], datesDejaAncrees = [];
       entree.dates.forEach(d => {

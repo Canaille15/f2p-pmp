@@ -6470,8 +6470,10 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
               rentre jamais bcp de jour et avec le remplissage rapide c'est
               plus utile") : rarement utilisée pour ces 3 compteurs et
               redondante avec le module Remplissage rapide (RP/RU en type
-              principal, RQ via son propre mini-calendrier "jours dispersés",
-              resté intact -- seul ce bloc Du/Au disparaît). Gardée pour
+              principal, RQ via son propre mini-calendrier "jours dispersés").
+              Ce mini-calendrier RQ a ensuite été retiré lui aussi le même
+              jour (voir plus bas) -- RQ n'a donc plus AUCUN outil d'ajout en
+              masse ici, seulement la saisie jour par jour. Gardée pour
               RN/TY/Maladie -- Maladie en dépend directement via
               MaladiePertesSection ci-dessous. */}
           {!["RP","RU","RQ"].includes(label) && (
@@ -6510,9 +6512,16 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
               devenu strictement redondant avec son propre sélecteur "type de
               journée" (RemplissageMasseView.jsx), qui fait exactement la même
               chose en mieux (regroupé avec les postes de travail, la même
-              écriture bulk-fill). Maladie/RQ/RN/TY gardent ce widget intact,
-              jamais couverts par Remplissage rapide. */}
-          {label!=="RP" && label!=="RU" && (
+              écriture bulk-fill).
+              Retiré pour RQ le 07/09 (demandé par Olivier, une fois le bloc
+              Du/Au déjà retiré le même jour) : risque signalé avant d'agir —
+              RQ n'a alors plus AUCUN outil d'ajout en masse dans ce module
+              (reste la saisie jour par jour dans le popup normal, ou le "2e
+              créneau" de Remplissage rapide, qui exige un RP/RPP déjà posé,
+              pas une vraie entrée RQ autonome) — accepté explicitement par
+              Olivier malgré ce risque. Maladie/RN/TY gardent ce widget
+              intact, jamais couverts par Remplissage rapide. */}
+          {!["RP","RU","RQ"].includes(label) && (
           <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
             <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>+ Sélectionner des jours (dispersés)</div>
             <div style={{fontSize:10,fontWeight:500,color:"#475569",marginBottom:8}}>
