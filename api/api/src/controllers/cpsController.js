@@ -94,7 +94,7 @@ async function importCps(req, res) {
     res.json({ message: 'Import CPS enregistré', nb: entries?.length||0, nb_clears: clearsList.length, batch_id: batchId });
   } catch (err) {
     await conn.rollback();
-    console.error(err); res.status(500).json({ error: 'Erreur serveur' });
+    console.error(err); res.status(500).json({ error: 'Erreur serveur : ' + err.message });
   } finally { conn.release(); }
 }
 
