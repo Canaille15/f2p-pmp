@@ -45,6 +45,41 @@
   --chart-line-1: #d97706;
   --chart-line-2: #3b82f6;
   --chart-line-3: #10b981;
+  /* Heatmap "Postes non tenus x mois" (StatsEquipeView.jsx, 09/09, proposition
+     validée par Olivier -- "fait ca et on voit si on garde") -- rampe
+     séquentielle 0->5 (un seul poste par cellule, magnitude = fréquence),
+     jamais redéfinie en sombre pour --prci/--par (mêmes teintes bleu/vert que
+     FAMILLES dans App.jsx sur les deux thèmes). Direction du dégradé
+     volontairement inversée entre thèmes (plus foncé = plus de signalements
+     en clair, plus clair = plus de signalements en sombre), chaque palier
+     garde une couleur de texte fixe choisie pour son propre fond (voir
+     heatCellStyle). */
+  --prci: #3b82f6;
+  --par: #10b981;
+  --cell-0: #f1f5f9;
+  --cell-0-border: #e2e8f0;
+  --cell-1: #dbeafe;
+  --cell-2: #93c5fd;
+  --cell-3: #60a5fa;
+  --cell-4: #3b82f6;
+  --cell-5: #1d4ed8;
+  --tooltip-bg: #ffffff;
+  /* Couleur de texte par palier (YIQ, même convention que FimPdfView.jsx) --
+     JAMAIS un simple fixe par index de bucket : la rampe s'inverse entre
+     clair et sombre (voir commentaire plus haut), donc un texte figé par
+     bucket devient illisible dans l'autre thème (bug réel trouvé en testant
+     --cell-5 clair très foncé -> texte blanc correct, mais --cell-5 sombre
+     très clair -> texte blanc resté à tort, contraste ~1.4:1). Chaque
+     palier reçoit son propre token, calculé pour SA vraie couleur de fond
+     dans CE thème -- 2 paliers se retrouvent d'ailleurs avec exactement la
+     même couleur de fond que l'autre thème (dark cell-3=#3b82f6=light
+     cell-4 ; dark cell-4=#60a5fa=light cell-3 ; dark cell-5=#93c5fd=light
+     cell-2), leur texte est donc volontairement identique par cohérence. */
+  --cell-1-text: #1e293b;
+  --cell-2-text: #1e293b;
+  --cell-3-text: #0b1120;
+  --cell-4-text: #ffffff;
+  --cell-5-text: #ffffff;
 }
 :root[data-theme="dark"] {
   --bg-page: #0a0e1a;
@@ -60,6 +95,19 @@
   --chart-line-1: #d97706;
   --chart-line-2: #3b82f6;
   --chart-line-3: #16a34a;
+  --cell-0: #182238;
+  --cell-0-border: #26324a;
+  --cell-1: #1e3a5f;
+  --cell-2: #2c5698;
+  --cell-3: #3b82f6;
+  --cell-4: #60a5fa;
+  --cell-5: #93c5fd;
+  --tooltip-bg: #1a2540;
+  --cell-1-text: #e2e8f0;
+  --cell-2-text: #e2e8f0;
+  --cell-3-text: #ffffff;
+  --cell-4-text: #0b1120;
+  --cell-5-text: #1e293b;
 }
 body { background: var(--bg-page); transition: background .15s; }
 

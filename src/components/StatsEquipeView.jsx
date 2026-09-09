@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import api from "../api/client";
 
 // ─── Stat'Equip ──────────────────────────────────────────────────────────────
@@ -328,7 +328,7 @@ export default function StatsEquipeView() {
           <DispoSection data={data.dispo} />
 
           {/* Postes non tenus */}
-          <PostesNonTenusSection data={data.postesNonTenus} />
+          <PostesNonTenusSection data={data.postesNonTenus} year={year} />
 
           {/* Formation (27/08, regroupée le même jour -- Olivier : "ce serait
               pas mieux de regruper dans sat equip les stat de formation ?" /
@@ -714,38 +714,255 @@ function DispoSection({ data }) {
   );
 }
 
-function PostesNonTenusSection({ data }) {
+// Postes non tenus -- carte de chaleur poste/mois (09/09, proposition d'Olivier
+// après un mockup validé : "montre moi a quoi ca pourrait ressembler ?" puis
+// "mais on perds lla liste avec les dates ?" -- corrigé dans le mockup avant
+// d'être porté ici : la heatmap est une VUE SUPPLÉMENTAIRE au-dessus des mêmes
+// données, jamais un remplacement -- la liste détaillée d'aujourd'hui (groupée
+// par poste puis service, chaque occurrence avec sa date+motif) reste
+// intégralement disponible via l'onglet "Liste complète", et cliquer une case
+// y saute directement, filtrée sur ce poste/mois précis, avec un surlignage
+// temporaire. Instruction finale : "fait ca et on voit si on garde" -- trial
+// isolé à cette seule section, à revenir en arrière si jugé non concluant.
+const HEAT_MOIS = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
+
+function bucketHeat(v) { return v <= 0 ? 0 : v >= 5 ? 5 : v; }
+
+// Rampe séquentielle 0-5 -- direction du dégradé volontairement différente
+// clair/sombre (plus foncé = plus de signalements en clair, plus clair = plus
+// de signalements en sombre). Bug trouvé en testant en conditions réelles :
+// une couleur de texte FIXE par palier (ex. v5 toujours blanc) devenait
+// illisible une fois la rampe inversée en sombre (v5 y est la couleur la
+// PLUS CLAIRE, texte blanc dessus = ~1.4:1) -- chaque palier a donc son
+// propre token de texte (--cell-N-text, theme.css), calculé pour sa vraie
+// couleur de fond dans le thème courant, jamais un hex figé ici.
+function heatCellStyle(v) {
+  const b = bucketHeat(v);
+  if (b === 0) return { background: "var(--cell-0)", border: "1px solid var(--cell-0-border)", color: "var(--text-muted)", fontWeight: 500 };
+  const parPalier = {
+    1: { background: "var(--cell-1)", color: "var(--cell-1-text)" },
+    2: { background: "var(--cell-2)", color: "var(--cell-2-text)" },
+    3: { background: "var(--cell-3)", color: "var(--cell-3-text)" },
+    4: { background: "var(--cell-4)", color: "var(--cell-4-text)" },
+    5: { background: "var(--cell-5)", color: "var(--cell-5-text)" },
+  };
+  return { ...parPalier[b], border: "1px solid transparent", fontWeight: 700 };
+}
+
+// Reprend les groupes déjà construits par groupPostesNonTenus (par poste,
+// détail par service) pour en dériver les lignes de la heatmap : famille
+// déduite du préfixe du 1er code (PI=PRCI, PA=PAR -- fiable, un même poste ne
+// mélange jamais les deux familles), entrées aplaties (tous services
+// confondus) pour le décompte mensuel ET pour la liste filtrée par mois lors
+// d'un clic sur une case.
+function buildHeatRows(groupes) {
+  return groupes.map(g => {
+    const codes = [...g.codes];
+    const famille = codes[0]?.startsWith("PA") ? "par" : "prci";
+    const entries = [];
+    Object.values(g.parService).forEach(s => {
+      s.entries.forEach(e => entries.push({ ...e, service: s.service }));
+    });
+    const values = Array(12).fill(0);
+    entries.forEach(e => {
+      const m = parseInt(String(e.date_jour).slice(5, 7), 10) - 1;
+      if (m >= 0 && m < 12) values[m]++;
+    });
+    return { label: g.label, codeAffiche: codeAffichePoste(g.codes), famille, nb: g.nb, entries, values };
+  });
+}
+
+function PostesNonTenusSection({ data, year }) {
   const [ouvert, setOuvert] = useState(false);
+  const [vue, setVue] = useState("grid"); // "grid" | "liste"
+  const [filtre, setFiltre] = useState(null); // {label, month} -- posé au clic sur une case
+  const [hoverCell, setHoverCell] = useState(null); // {label, month}
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [highlightLabel, setHighlightLabel] = useState(null);
+  const posteRefs = useRef({});
+
   const groupes = useMemo(() => groupPostesNonTenus(data.parPoste), [data.parPoste]);
+  const heatRows = useMemo(() => buildHeatRows(groupes), [groupes]);
+  // Ligne d'agrégat "Total équipe" -- jamais dans la même échelle colorée que
+  // les cellules (magnitude bien plus grande, mélanger les deux tromperait
+  // l'oeil), gardée en style neutre non chauffé.
+  const monthTotals = useMemo(() => HEAT_MOIS.map((_, m) => heatRows.reduce((s, r) => s + r.values[m], 0)), [heatRows]);
+
+  function ouvrirDansListe(label, month) {
+    setVue("liste");
+    setFiltre({ label, month });
+    setHoverCell(null);
+    requestAnimationFrame(() => {
+      const el = posteRefs.current[label];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setHighlightLabel(label);
+        setTimeout(() => setHighlightLabel(l => (l === label ? null : l)), 1500);
+      }
+    });
+  }
+
+  const cellDetail = hoverCell
+    ? (heatRows.find(r => r.label === hoverCell.label)?.entries.filter(
+        e => parseInt(String(e.date_jour).slice(5, 7), 10) - 1 === hoverCell.month
+      ) || [])
+    : [];
+
   return (
     <div style={card}>
       <SectionHeader icon="⚠️" titre="Postes non tenus (signalements manuels)" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} />
       <Tuile label="Total" valeur={data.total} large />
       {ouvert && (
-        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-          {groupes.map(g => (
-            <div key={g.label} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-              <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 12.5, marginBottom: 6 }}>
-                {g.label} ({codeAffichePoste(g.codes)}) — {g.nb} fois
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            <button onClick={() => setVue("grid")}
+              style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer", fontSize: 11.5, fontWeight: 700, background: vue === "grid" ? "var(--accent-active)" : "var(--bg-page)", color: vue === "grid" ? "#fff" : "var(--text-secondary)" }}>
+              🔥 Carte de chaleur
+            </button>
+            <button onClick={() => { setVue("liste"); setFiltre(null); setHoverCell(null); }}
+              style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", cursor: "pointer", fontSize: 11.5, fontWeight: 700, background: vue === "liste" ? "var(--accent-active)" : "var(--bg-page)", color: vue === "liste" ? "#fff" : "var(--text-secondary)" }}>
+              📋 Liste complète
+            </button>
+          </div>
+
+          {vue === "grid" ? (
+            <>
+              <div style={{ overflowX: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "140px repeat(12, 38px) 52px", gap: 3, minWidth: 720, alignItems: "stretch" }}>
+                  <div />
+                  {HEAT_MOIS.map(m => (
+                    <div key={m} style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textAlign: "center", paddingBottom: 6, textTransform: "uppercase", letterSpacing: .03 }}>{m}</div>
+                  ))}
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", textAlign: "center", paddingBottom: 6, textTransform: "uppercase", letterSpacing: .03 }}>Total</div>
+
+                  {heatRows.map(row => (
+                    <Fragment key={row.label}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 600, color: "var(--text-primary)", paddingRight: 8, minWidth: 0 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: row.famille === "prci" ? "var(--prci)" : "var(--par)" }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.label}</span>
+                      </div>
+                      {row.values.map((v, m) => {
+                        const isHover = hoverCell?.label === row.label && hoverCell?.month === m;
+                        return (
+                          <div key={m} tabIndex={0} role="button"
+                            aria-label={`${row.label}, ${HEAT_MOIS[m]} — ${v} fois`}
+                            onMouseEnter={e => { setHoverCell({ label: row.label, month: m }); setTooltipPos({ x: e.clientX, y: e.clientY }); }}
+                            onMouseMove={e => setTooltipPos({ x: e.clientX, y: e.clientY })}
+                            onMouseLeave={() => setHoverCell(null)}
+                            onFocus={e => { const r = e.target.getBoundingClientRect(); setHoverCell({ label: row.label, month: m }); setTooltipPos({ x: r.left, y: r.bottom }); }}
+                            onBlur={() => setHoverCell(null)}
+                            onClick={() => ouvrirDansListe(row.label, m)}
+                            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ouvrirDansListe(row.label, m); } }}
+                            style={{
+                              position: "relative", borderRadius: 6, minHeight: 30, display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: 11, cursor: "pointer", transition: "transform .1s",
+                              transform: isHover ? "scale(1.1)" : "scale(1)", zIndex: isHover ? 3 : 1,
+                              outline: isHover ? "2px solid var(--accent-active)" : "none", outlineOffset: 1,
+                              ...heatCellStyle(v),
+                            }}>
+                            {v > 0 ? v : ""}
+                          </div>
+                        );
+                      })}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 800, color: "var(--text-primary)", background: "var(--bg-page)", borderRadius: 6, border: "1px solid var(--border)" }}>
+                        {row.nb}
+                      </div>
+                    </Fragment>
+                  ))}
+
+                  <div style={{ gridColumn: "1 / -1", height: 1, background: "var(--border)", margin: "6px 0 3px" }} />
+                  <div style={{ display: "flex", alignItems: "center", fontSize: 11, fontWeight: 700, color: "var(--text-secondary)" }}>Total équipe</div>
+                  {monthTotals.map((t, m) => (
+                    <div key={m} style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "var(--text-primary)", background: "var(--bg-page)", border: "1px dashed var(--border)", borderRadius: 6, minHeight: 26 }}>{t}</div>
+                  ))}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11.5, fontWeight: 800, color: "#fff", background: "var(--accent-active)", borderRadius: 6 }}>
+                    {monthTotals.reduce((a, b) => a + b, 0)}
+                  </div>
+                </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 4 }}>
-                {Object.values(g.parService).sort((a, b) => b.nb - a.nb).map(s => (
-                  <div key={s.service}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-secondary)" }}>
-                      {s.service} — {s.nb} fois
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 10, marginTop: 2 }}>
-                      {s.entries.map((e, i) => (
-                        <div key={i} style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-                          {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>💡 Clique une case pour voir ses dates et motifs exacts dans la liste complète.</div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>Fréquence :</span>
+                <div style={{ display: "flex", gap: 2 }}>
+                  {[0, 1, 2, 3, 4, 5].map(n => (
+                    <span key={n} title={n === 5 ? "5+" : String(n)} style={{ width: 20, height: 13, borderRadius: 3, display: "inline-block", ...heatCellStyle(n) }} />
+                  ))}
+                </div>
+                <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>0 → 5 fois ou plus dans le mois</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto", fontSize: 11, color: "var(--text-secondary)" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--prci)" }} /> PRCI</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--par)" }} /> PAR</span>
+                </div>
+              </div>
+
+              {hoverCell && (
+                <div style={{ position: "fixed", left: tooltipPos.x + 14, top: tooltipPos.y + 14, zIndex: 50, background: "var(--tooltip-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", boxShadow: "0 8px 24px var(--shadow-card)", fontSize: 11.5, minWidth: 190, maxWidth: 230, pointerEvents: "none" }}>
+                  <div style={{ fontWeight: 800, color: "var(--text-primary)", marginBottom: 2, fontSize: 12.5 }}>{hoverCell.label}</div>
+                  <div style={{ color: "var(--text-secondary)", marginBottom: 6 }}>{HEAT_MOIS[hoverCell.month]} {year} — {cellDetail.length} fois</div>
+                  {cellDetail.length ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      {cellDetail.slice(0, 4).map((e, i) => (
+                        <div key={i} style={{ color: "var(--text-secondary)", display: "flex", justifyContent: "space-between", gap: 8 }}>
+                          <span>{e.motif || "Motif non précisé"}</span><b style={{ color: "var(--text-primary)", fontWeight: 700 }}>{fmtDate(e.date_jour)}</b>
                         </div>
                       ))}
+                      {cellDetail.length > 4 && <div style={{ color: "var(--text-muted)" }}>… +{cellDetail.length - 4} autre(s)</div>}
                     </div>
-                  </div>
-                ))}
+                  ) : (
+                    <div style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Aucun signalement ce mois-ci</div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              {filtre && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: "var(--bg-page)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 13px", marginBottom: 14, fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>
+                  <span>📍 Filtré : {filtre.label} — {HEAT_MOIS[filtre.month]} {year}</span>
+                  <button onClick={() => setFiltre(null)} style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent-active)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ Voir tout</button>
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {heatRows.filter(r => !filtre || r.label === filtre.label).map(row => {
+                  const entriesFiltrees = filtre
+                    ? row.entries.filter(e => parseInt(String(e.date_jour).slice(5, 7), 10) - 1 === filtre.month)
+                    : row.entries;
+                  const parService = {};
+                  entriesFiltrees.forEach(e => {
+                    if (!parService[e.service]) parService[e.service] = { service: e.service, nb: 0, entries: [] };
+                    parService[e.service].nb++;
+                    parService[e.service].entries.push(e);
+                  });
+                  return (
+                    <div key={row.label} ref={el => { posteRefs.current[row.label] = el; }}
+                      style={{ borderTop: "1px solid var(--border)", paddingTop: 8, borderRadius: 6, transition: "background .3s", background: highlightLabel === row.label ? "rgba(59,130,246,.15)" : "transparent" }}>
+                      <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 12.5, marginBottom: 6 }}>
+                        {row.label} ({row.codeAffiche}) — {filtre ? `${entriesFiltrees.length} ce mois-ci` : `${row.nb} fois`}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 4 }}>
+                        {Object.values(parService).sort((a, b) => b.nb - a.nb).map(s => (
+                          <div key={s.service}>
+                            <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-secondary)" }}>
+                              {s.service} — {s.nb} fois
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 10, marginTop: 2 }}>
+                              {s.entries.map((e, i) => (
+                                <div key={i} style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                                  {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {!entriesFiltrees.length && <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>Aucun signalement</div>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>
