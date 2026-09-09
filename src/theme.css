@@ -31,6 +31,20 @@
      côté sombre pour bien ressortir sur le bleu-marine (19/08, Olivier :
      "ameliore aussi prci par sous le logo f2p"). */
   --brand-subtitle: #94a3b8;
+  /* Séries du graphique "Couverture Réserve régionale — évolution par année"
+     (StatsEquipeView.jsx, 09/09, Olivier : "tu peux faire un graphique dans
+     le temps pour suivre l'évolution ?") — validées via le validateur de
+     palette du skill dataviz (bande de luminosité, plancher CVD deutan/
+     protan/tritan, plancher vision normale, contraste vs surface) : Global
+     ambre distinct de PRCI/PAR pour ne jamais se confondre avec les badges
+     famille bleu/vert déjà utilisés partout ailleurs dans l'appli (PRCI/PAR
+     reprennent volontairement ces mêmes teintes, cohérence avec FAMILLES
+     dans App.jsx). --chart-line-3 (PAR) re-stepped en sombre uniquement --
+     le vert clair #10b981 sort de la bande de luminosité sombre 0.48-0.67 ;
+     --chart-line-1/2 passent déjà les deux bandes tels quels. */
+  --chart-line-1: #d97706;
+  --chart-line-2: #3b82f6;
+  --chart-line-3: #10b981;
 }
 :root[data-theme="dark"] {
   --bg-page: #0a0e1a;
@@ -43,6 +57,9 @@
   --accent-active: #60a5fa;
   --brand-text: #7dd3fc;
   --brand-subtitle: #b6c3d6;
+  --chart-line-1: #d97706;
+  --chart-line-2: #3b82f6;
+  --chart-line-3: #16a34a;
 }
 body { background: var(--bg-page); transition: background .15s; }
 

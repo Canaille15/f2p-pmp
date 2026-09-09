@@ -467,13 +467,169 @@ function ReserveRoulementSection({ data }) {
 // haut), plus de carte/titre séparé, juste un filet + un petit titre pour se
 // distinguer des tuiles au-dessus. Repliable, ouvert par défaut (c'est la
 // donnée elle-même, pas un détail secondaire).
+// Les 3 séries du graphique juste en dessous -- couleurs theme-aware (voir
+// theme.css, --chart-line-1/2/3), validées CVD via scripts/validate_palette.js
+// du skill dataviz. PRCI/PAR reprennent volontairement les mêmes teintes que
+// FAMILLES (App.jsx, bleu/vert), Global en ambre pour ne jamais s'y confondre.
+const COVERAGE_SERIES = [
+  { key: "global", label: "Global", color: "var(--chart-line-1)" },
+  { key: "PRCI", label: "PRCI", color: "var(--chart-line-2)" },
+  { key: "PAR", label: "PAR", color: "var(--chart-line-3)" },
+];
+
+// Graphique "évolution par année" (09/09, Olivier : "tu peux faire un
+// graphique dans le temps pour suivre l'évolution ?") -- ligne par série,
+// nesté dans le même bloc repliable que le tableau juste en dessous (ouvert
+// par défaut, donc visible sans clic). SVG à taille fixe (pas de scale
+// responsive) dans un wrapper overflow-x:auto -- même convention déjà
+// utilisée par toutes les tables de ce fichier pour rester lisible sur
+// mobile plutôt que de faire rétrécir le texte en dessous du lisible.
+// Un point à denominateur=0 (ex: année+1 avant tout import CPS) coupe la
+// ligne plutôt que de tracer un faux 0% -- 0% coché serait une vraie valeur
+// fausse, pas juste "pas encore mesuré".
+function CoverageEvolutionChart({ data, anneeActuelle }) {
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const rows = useMemo(() => [...data].sort((a, b) => a.annee - b.annee), [data]);
+  const n = rows.length;
+  if (n < 2) return null;
+
+  const W = 560, H = 190;
+  const padL = 32, padR = 14, padT = 12, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const xAt = (i) => padL + (plotW * i) / (n - 1);
+  const yAt = (pct) => padT + plotH - (plotH * Math.max(0, Math.min(100, pct))) / 100;
+  const colW = plotW / (n - 1);
+
+  const series = COVERAGE_SERIES.map(s => ({
+    ...s,
+    points: rows.map((r, i) => (r[s.key].denominateur > 0 ? { i, x: xAt(i), y: yAt(r[s.key].pct), pct: r[s.key].pct } : null)),
+  }));
+
+  // Segments continus -- une ligne coupée par un trou plutôt qu'un point relié en biais.
+  const segmentsOf = (points) => {
+    const segs = []; let cur = [];
+    points.forEach(p => { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = []; } });
+    if (cur.length) segs.push(cur);
+    return segs;
+  };
+
+  // Étiquettes directes de fin de ligne (≤4 séries -> toujours direct-labeled
+  // en plus de la légende) -- anti-collision par tri + écart mini, avec un
+  // fin connecteur si l'étiquette a dû être déplacée de sa vraie position.
+  const MIN_GAP = 15;
+  const rawLabels = series
+    .map(s => { const last = [...s.points].reverse().find(Boolean); return last ? { key: s.key, label: s.label, color: s.color, x: last.x, origY: last.y, y: last.y, pct: last.pct } : null; })
+    .filter(Boolean)
+    .sort((a, b) => a.y - b.y);
+  for (let k = 1; k < rawLabels.length; k++) {
+    if (rawLabels[k].y - rawLabels[k - 1].y < MIN_GAP) rawLabels[k].y = rawLabels[k - 1].y + MIN_GAP;
+  }
+  // Si la pile déborde en bas du tracé (cas réel : plusieurs séries à
+  // quelques % d'écart, toutes collées près de la ligne 0%), translater
+  // TOUTE la pile vers le haut plutôt que d'écrêter chaque étiquette une
+  // par une -- un clamp individuel les aurait toutes ramenées au même
+  // plafond, recréant exactement la collision que cet algorithme est censé
+  // éviter (bug réel vérifié le 09/09 : "PAR 7%"/"Global 6.8%"/"PRCI 6.7%"
+  // se chevauchaient toutes les trois au même endroit après le clamp).
+  if (rawLabels.length) {
+    const maxBottom = padT + plotH;
+    const overflow = rawLabels[rawLabels.length - 1].y - maxBottom;
+    if (overflow > 0) rawLabels.forEach(l => { l.y -= overflow; });
+    const underflow = padT - rawLabels[0].y;
+    if (underflow > 0) rawLabels.forEach(l => { l.y += underflow; });
+  }
+  const labels = rawLabels.map(l => ({ ...l, moved: Math.abs(l.y - l.origY) > 1 }));
+
+  const yTicks = [0, 25, 50, 75, 100];
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      {/* Légende -- toujours présente pour >=2 séries */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 8 }}>
+        {COVERAGE_SERIES.map(s => (
+          <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 14, height: 2, borderRadius: 1, background: s.color, display: "inline-block" }} />
+            <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ position: "relative", width: W }}>
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Couverture Réserve régionale, évolution par année">
+            {yTicks.map(t => (
+              <g key={t}>
+                <line x1={padL} x2={W - padR} y1={yAt(t)} y2={yAt(t)} stroke="var(--border)" strokeWidth="1" />
+                <text x={padL - 6} y={yAt(t) + 3} textAnchor="end" fontSize="9.5" fill="var(--text-muted)">{t}%</text>
+              </g>
+            ))}
+            {hoverIdx != null && (
+              <line x1={xAt(hoverIdx)} x2={xAt(hoverIdx)} y1={padT} y2={padT + plotH} stroke="var(--text-muted)" strokeWidth="1" opacity="0.5" />
+            )}
+            {series.map(s => segmentsOf(s.points).map((seg, si) => (
+              <polyline key={`${s.key}-${si}`} points={seg.map(p => `${p.x},${p.y}`).join(" ")}
+                fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            )))}
+            {series.map(s => s.points.map((p, i) => p && (
+              <circle key={`${s.key}-pt-${i}`} cx={p.x} cy={p.y} r={hoverIdx === i ? 5.5 : 4}
+                fill={s.color} stroke="var(--bg-card)" strokeWidth="2" style={{ transition: "r .1s" }} />
+            )))}
+            {labels.map(l => (
+              <g key={l.key}>
+                {l.moved && <line x1={l.x + 4} x2={l.x + 12} y1={l.origY} y2={l.y} stroke="var(--text-muted)" strokeWidth="1" />}
+                <text x={l.x + 14} y={l.y + 3} fontSize="10.5" fontWeight="700" fill="var(--text-primary)">{l.label} {fmtPct(l.pct)}</text>
+              </g>
+            ))}
+            {rows.map((r, i) => (
+              <text key={r.annee} x={xAt(i)} y={H - 8} textAnchor="middle" fontSize="10.5"
+                fontWeight={r.annee === anneeActuelle ? 800 : 600}
+                fill={r.annee === anneeActuelle ? "var(--text-primary)" : "var(--text-secondary)"}>{r.annee}</text>
+            ))}
+            {rows.map((r, i) => (
+              <rect key={`hit-${r.annee}`} x={xAt(i) - colW / 2} y={padT} width={colW} height={plotH}
+                fill="transparent" style={{ cursor: "pointer" }} tabIndex={0} role="button"
+                aria-label={`${r.annee} : Global ${r.global.denominateur > 0 ? fmtPct(r.global.pct) : "aucune donnée"}, PRCI ${r.PRCI.denominateur > 0 ? fmtPct(r.PRCI.pct) : "aucune donnée"}, PAR ${r.PAR.denominateur > 0 ? fmtPct(r.PAR.pct) : "aucune donnée"}`}
+                onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
+                onFocus={() => setHoverIdx(i)} onBlur={() => setHoverIdx(null)} />
+            ))}
+          </svg>
+          {hoverIdx != null && (
+            <div style={{
+              position: "absolute", top: 4,
+              left: `${Math.min(Math.max((xAt(hoverIdx) / W) * 100, 18), 82)}%`,
+              transform: "translateX(-50%)", background: "var(--bg-card)", border: "1px solid var(--border)",
+              borderRadius: 8, padding: "6px 10px", boxShadow: "0 2px 8px var(--shadow-card)",
+              pointerEvents: "none", minWidth: 130, zIndex: 2,
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)", marginBottom: 3 }}>{rows[hoverIdx].annee}</div>
+              {COVERAGE_SERIES.map(s => {
+                const cell = rows[hoverIdx][s.key];
+                return (
+                  <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                    <span style={{ width: 10, height: 2, background: s.color, display: "inline-block", borderRadius: 1 }} />
+                    <span style={{ color: "var(--text-secondary)" }}>{s.label}</span>
+                    <span style={{ marginLeft: "auto", fontWeight: 700, color: "var(--text-primary)" }}>
+                      {cell.denominateur > 0 ? fmtPct(cell.pct) : "—"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CoverageParAnneeTable({ data, anneeActuelle }) {
   const [ouvert, setOuvert] = useState(true);
   return (
     <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
       <SectionHeader icon="📈" titre="Évolution par année" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail" />
       {ouvert && (
-        <div style={{ overflowX: "auto", marginTop: 10 }}>
+        <div style={{ marginTop: 10 }}>
+          <CoverageEvolutionChart data={data} anneeActuelle={anneeActuelle} />
+          <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
             <thead>
               <tr style={{ textAlign: "left", color: "var(--text-muted)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
@@ -497,6 +653,7 @@ function CoverageParAnneeTable({ data, anneeActuelle }) {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
