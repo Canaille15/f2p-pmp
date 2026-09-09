@@ -13,6 +13,26 @@ import api from "../api/client";
 
 const NAVY = { from: "#0f4c81", to: "#1e3a5f", bgLight: "#eff6ff", borderLight: "#bfdbfe" };
 
+// Sous-onglets (09/09, demande d'Olivier -- "la page s'allonge à chaque
+// ajout [...] je proposerais de la découper en sous-onglets [...] pour
+// rester lisible sur mobile", "tente pour voir [...] tu fais attention de
+// ne rien effacer. et sans risque") -- regroupe les ~9 sections existantes
+// en 4 groupes affichés un par un, sans toucher au rendu ni à la logique
+// d'AUCUNE section : chacune garde son JSX, son état interne (ouvert/fermé,
+// tri...) et ses props strictement identiques à avant ce chantier, seul le
+// regroupement/l'affichage conditionnel change. Répartition (proposée à
+// Olivier, non contestée) : Effectifs = démographie (vue d'ensemble,
+// grades, Réserve/Roulement, âge) ; Couverture = qui couvre quoi (Réserve
+// régionale + évolution, Dispo) ; Formation = compétences (sessions AFO +
+// étude de poste, habilitations) ; Alertes = ce qui appelle une action
+// (congés/VT refusés, postes non tenus).
+const TABS = [
+  { key: "effectifs", label: "👥 Effectifs" },
+  { key: "couverture", label: "🔁 Couverture" },
+  { key: "formation", label: "🎓 Formation" },
+  { key: "alertes", label: "⚠️ Alertes" },
+];
+
 // Table de libellés recopiée telle quelle depuis HAB_PRCI/HAB_PAR (App.jsx,
 // non exportés) — code = code_poste réel de la table `habilitation`. Toujours
 // afficher nom ET code ensemble (Olivier : "sinon trop fastidieux à lire").
@@ -198,6 +218,7 @@ export default function StatsEquipeView() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [triHab, setTriHab] = useState("planning"); // "planning" | "nombre"
+  const [tab, setTab] = useState("effectifs"); // "effectifs" | "couverture" | "formation" | "alertes"
 
   const availableYears = useMemo(() => {
     const cur = new Date().getFullYear();
@@ -243,165 +264,199 @@ export default function StatsEquipeView() {
       ) : !data ? null : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Vue d'ensemble équipe : effectifs + % temps partiel (visuel dédié, pas un simple chiffre) */}
-          <div style={card}>
-            <div style={sectionTitle}>Vue d'ensemble équipe</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-              <Tuile label="Agents global" valeur={data.headcounts.totalAgents} />
-              <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} sousLabel={`dont ${data.reserveRoulement.actuel.nbReserve} réserve · ${data.reserveRoulement.actuel.nbRoulement} roulement`} />
-              <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} sousLabel="compte à part" />
-            </div>
-            {/* 25/08 (Olivier) : "tu mets en ligne 2 : le decompte des AFO,
-                encadrement et ASFP en dernier" -- grille séparée plutôt qu'un
-                seul auto-fit continu, pour que ces 3 tuiles restent TOUJOURS
-                groupées sur leur propre ligne quelle que soit la largeur
-                d'écran (un seul grid auto-fit n'aurait pas garanti que la
-                "ligne 2" corresponde toujours à ces 3-là). */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 10 }}>
-              <Tuile label="AFO" valeur={data.headcounts.totalAfo} sousLabel="toutes catégories confondues" />
-              <Tuile label="Encadrement" valeur={data.headcounts.totalEncadrement} sousLabel="DPX / Adj DPX — compte à part" />
-              <Tuile label="ASFP" valeur={data.headcounts.totalAsfp} sousLabel="Assistant Formation Pro — compte à part" />
-            </div>
-            {/* Par grade (18/08, demande d'Olivier : "decompté les Cadre Op
-                [...] Maitrises [...] Maytises 2", puis en suite immédiate :
-                "affine chaque groupe pour mettre un decompte en nombre des
-                agent et reserve regionale [...] tu garde le global par
-                groupe") — axe indépendant des catégories ci-dessus (un agent
-                peut être Cadre Op ET DPX, par exemple), jamais soustrait des
-                autres tuiles. Le total global par groupe est conservé
-                (valeur de la tuile), le détail équipe/réserve régionale est
-                ajouté en sous-label, même principe que "Agents équipe"
-                au-dessus. */}
-            <div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: .04, marginBottom: 8 }}>Par grade</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-                <Tuile label="Cadre Op (CP6/CO6)" valeur={data.gradesDetail.cadreOp.total} sousLabel={`dont ${data.gradesDetail.cadreOp.equipe} équipe · ${data.gradesDetail.cadreOp.reserve} réserve régionale`} />
-                <Tuile label="Maîtrise (CP5/CO5)" valeur={data.gradesDetail.maitrise.total} sousLabel={`dont ${data.gradesDetail.maitrise.equipe} équipe · ${data.gradesDetail.maitrise.reserve} réserve régionale`} />
-                <Tuile label="Maîtrise 2 (CP4/CO4)" valeur={data.gradesDetail.maitrise2.total} sousLabel={`dont ${data.gradesDetail.maitrise2.equipe} équipe · ${data.gradesDetail.maitrise2.reserve} réserve régionale`} />
+          {/* Sous-onglets (09/09) -- regroupe les sections ci-dessous en 4
+              groupes, affichés un par un. Aucune section n'est modifiée ni
+              retirée : chaque bloc ci-dessous est EXACTEMENT le même JSX
+              qu'avant ce chantier, juste déplacé sous le bon onglet. */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                style={{
+                  padding: "8px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                  fontSize: 12.5, fontWeight: 700,
+                  background: tab === t.key ? NAVY.from : "var(--bg-page)",
+                  color: tab === t.key ? "#fff" : "var(--text-secondary)",
+                }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {tab === "effectifs" && (
+            <>
+              {/* Vue d'ensemble équipe : effectifs + % temps partiel (visuel dédié, pas un simple chiffre) */}
+              <div style={card}>
+                <div style={sectionTitle}>Vue d'ensemble équipe</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+                  <Tuile label="Agents global" valeur={data.headcounts.totalAgents} />
+                  <Tuile label="Agents équipe" valeur={data.headcounts.totalEquipe} sousLabel={`dont ${data.reserveRoulement.actuel.nbReserve} réserve · ${data.reserveRoulement.actuel.nbRoulement} roulement`} />
+                  <Tuile label="Réserve régionale" valeur={data.headcounts.totalReserve} sousLabel="compte à part" />
+                </div>
+                {/* 25/08 (Olivier) : "tu mets en ligne 2 : le decompte des AFO,
+                    encadrement et ASFP en dernier" -- grille séparée plutôt qu'un
+                    seul auto-fit continu, pour que ces 3 tuiles restent TOUJOURS
+                    groupées sur leur propre ligne quelle que soit la largeur
+                    d'écran (un seul grid auto-fit n'aurait pas garanti que la
+                    "ligne 2" corresponde toujours à ces 3-là). */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 10 }}>
+                  <Tuile label="AFO" valeur={data.headcounts.totalAfo} sousLabel="toutes catégories confondues" />
+                  <Tuile label="Encadrement" valeur={data.headcounts.totalEncadrement} sousLabel="DPX / Adj DPX — compte à part" />
+                  <Tuile label="ASFP" valeur={data.headcounts.totalAsfp} sousLabel="Assistant Formation Pro — compte à part" />
+                </div>
+                {/* Par grade (18/08, demande d'Olivier : "decompté les Cadre Op
+                    [...] Maitrises [...] Maytises 2", puis en suite immédiate :
+                    "affine chaque groupe pour mettre un decompte en nombre des
+                    agent et reserve regionale [...] tu garde le global par
+                    groupe") — axe indépendant des catégories ci-dessus (un agent
+                    peut être Cadre Op ET DPX, par exemple), jamais soustrait des
+                    autres tuiles. Le total global par groupe est conservé
+                    (valeur de la tuile), le détail équipe/réserve régionale est
+                    ajouté en sous-label, même principe que "Agents équipe"
+                    au-dessus. */}
+                <div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: .04, marginBottom: 8 }}>Par grade</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+                    <Tuile label="Cadre Op (CP6/CO6)" valeur={data.gradesDetail.cadreOp.total} sousLabel={`dont ${data.gradesDetail.cadreOp.equipe} équipe · ${data.gradesDetail.cadreOp.reserve} réserve régionale`} />
+                    <Tuile label="Maîtrise (CP5/CO5)" valeur={data.gradesDetail.maitrise.total} sousLabel={`dont ${data.gradesDetail.maitrise.equipe} équipe · ${data.gradesDetail.maitrise.reserve} réserve régionale`} />
+                    <Tuile label="Maîtrise 2 (CP4/CO4)" valeur={data.gradesDetail.maitrise2.total} sousLabel={`dont ${data.gradesDetail.maitrise2.equipe} équipe · ${data.gradesDetail.maitrise2.reserve} réserve régionale`} />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Réserve / Roulement — historique mensuel, jamais recalculé rétroactivement */}
-          <ReserveRoulementSection data={data.reserveRoulement} />
+              {/* Réserve / Roulement — historique mensuel, jamais recalculé rétroactivement */}
+              <ReserveRoulementSection data={data.reserveRoulement} />
 
-          {/* Couverture Réserve régionale — tuiles de l'année consultée + évolution
-              par année, réunies dans une seule carte (18/08, Olivier : "tu peux pas
-              ameliorer ca au meme endroit ?" — les 2 cartes séparées faisaient
-              doublon, la ligne surlignée du tableau ci-dessous porte d'ailleurs
-              exactement les mêmes 3 chiffres que les tuiles). */}
-          <div style={card}>
-            <div style={sectionTitle}>🔁 Couverture des postes par la Réserve régionale</div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
-              Part des journées CPS couvertes par la réserve régionale, sur le total des journées importées cette année.
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
-              <Tuile label="Global" valeur={fmtPct(data.coverageReserve.global.pct)} sousLabel={`${data.coverageReserve.global.numerateur} / ${data.coverageReserve.global.denominateur} j.`} />
-              <Tuile label="PRCI" valeur={fmtPct(data.coverageReserve.PRCI.pct)} sousLabel={`${data.coverageReserve.PRCI.numerateur} / ${data.coverageReserve.PRCI.denominateur} j.`} />
-              <Tuile label="PAR" valeur={fmtPct(data.coverageReserve.PAR.pct)} sousLabel={`${data.coverageReserve.PAR.numerateur} / ${data.coverageReserve.PAR.denominateur} j.`} />
-            </div>
-            {data.coverageReserveParAnnee && <CoverageParAnneeTable data={data.coverageReserveParAnnee} anneeActuelle={year} />}
-          </div>
+              {/* Âge moyen (09/09, étendu -- mockup validé par Olivier : "tu peux
+                  faire ca, sans rien casser" -- évolution par année (même
+                  mécanisme que la courbe de couverture) + pyramide des âges
+                  Équipe/Réserve régionale, regroupées dans la même carte
+                  (même principe que FormationSection : sous-sections avec
+                  GroupeLabel plutôt que des cartes séparées, tout concerne le
+                  même sujet "âge"). */}
+              <div style={card}>
+                <div style={sectionTitle}>🎂 Âge moyen (hors Réserve régionale)</div>
+                <Tuile label="Âge moyen" valeur={data.ageMoyenHorsReserve.moyenne != null ? `${data.ageMoyenHorsReserve.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsReserve.nbAgentsInclus} agent(s)`} large />
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+                  Estimé à partir des 2 premiers chiffres du CP (année de naissance). {data.ageMoyenHorsReserve.nbAgentsExclusParseEchec > 0 && `${data.ageMoyenHorsReserve.nbAgentsExclusParseEchec} agent(s) exclu(s), CP non reconnu.`}
+                </div>
 
-          {/* Congés / VT refusés — anonymisés */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-            <div style={card}>
-              <div style={sectionTitle}>🗓️ Congés refusés</div>
-              <Tuile label="Jours refusés (équipe)" valeur={data.congesRefuses.nbJours} sousLabel={`${data.congesRefuses.nbAgentsConcernes} agent(s) concerné(s)`} large />
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
-            </div>
-            <div style={card}>
-              {/* 29/08 (Olivier) : "deplace le % de temps partiel et met le
-                  avec vt refusé. c'est plus loqique" -- les deux parlent de
-                  VT (temps partiel), regroupés dans la même carte plutôt que
-                  Temps partiel isolé dans "Vue d'ensemble équipe". */}
-              <div style={sectionTitle}>🕒 VT (temps partiel)</div>
-              <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                <Tuile label="Temps partiel" valeur={fmtPct(data.headcounts.pctTempsPartiel)} sousLabel={`${data.headcounts.nbTempsPartiel} agent(s) · Temps plein ${fmtPct(pctTempsPlein)}`} large />
-                <Tuile label="Jours refusés (équipe)" valeur={data.vtRefuses.nbJours} sousLabel={`${data.vtRefuses.nbAgentsConcernes} agent(s) concerné(s)`} large />
+                {data.ageMoyenParAnnee && <AgeEvolutionSection data={data.ageMoyenParAnnee} anneeActuelle={year} />}
+
+                {data.agePyramide && (
+                  <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                    <GroupeLabel>Pyramide des âges — Équipe / Réserve régionale</GroupeLabel>
+                    <AgePyramide data={data.agePyramide} />
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Jours refusés : chiffre global anonymisé — aucun détail par agent.</div>
-            </div>
-          </div>
+            </>
+          )}
 
-          {/* Dispo — anonyme, pas de nom d'agent (impossible à attribuer de façon fiable) */}
-          <DispoSection data={data.dispo} />
-
-          {/* Postes non tenus */}
-          <PostesNonTenusSection data={data.postesNonTenus} year={year} />
-
-          {/* Formation (27/08, regroupée le même jour -- Olivier : "ce serait
-              pas mieux de regruper dans sat equip les stat de formation ?" /
-              "tu legende bien les choses") : les 2 mécanismes de formation
-              (sessions AFO et étude de poste, structurellement indépendants
-              -- l'un vient de formation_session, l'autre du planning perso)
-              regroupés sous UN SEUL titre "Formation" pour que ce ne soit
-              plus 2 cartes presque homonymes éparpillées dans la page, mais
-              chacun garde son propre sous-titre explicite pour ne jamais
-              laisser croire que c'est la même donnée. */}
-          <FormationSection formationInterne={data.formationInterne} etudePoste={data.etudePoste} />
-
-          {/* Âge moyen (09/09, étendu -- mockup validé par Olivier : "tu peux
-              faire ca, sans rien casser" -- évolution par année (même
-              mécanisme que la courbe de couverture ci-dessus) + pyramide des
-              âges Équipe/Réserve régionale, regroupées dans la même carte
-              (même principe que FormationSection : sous-sections avec
-              GroupeLabel plutôt que des cartes séparées, tout concerne le
-              même sujet "âge"). */}
-          <div style={card}>
-            <div style={sectionTitle}>🎂 Âge moyen (hors Réserve régionale)</div>
-            <Tuile label="Âge moyen" valeur={data.ageMoyenHorsReserve.moyenne != null ? `${data.ageMoyenHorsReserve.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsReserve.nbAgentsInclus} agent(s)`} large />
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-              Estimé à partir des 2 premiers chiffres du CP (année de naissance). {data.ageMoyenHorsReserve.nbAgentsExclusParseEchec > 0 && `${data.ageMoyenHorsReserve.nbAgentsExclusParseEchec} agent(s) exclu(s), CP non reconnu.`}
-            </div>
-
-            {data.ageMoyenParAnnee && <AgeEvolutionSection data={data.ageMoyenParAnnee} anneeActuelle={year} />}
-
-            {data.agePyramide && (
-              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-                <GroupeLabel>Pyramide des âges — Équipe / Réserve régionale</GroupeLabel>
-                <AgePyramide data={data.agePyramide} />
+          {tab === "couverture" && (
+            <>
+              {/* Couverture Réserve régionale — tuiles de l'année consultée + évolution
+                  par année, réunies dans une seule carte (18/08, Olivier : "tu peux pas
+                  ameliorer ca au meme endroit ?" — les 2 cartes séparées faisaient
+                  doublon, la ligne surlignée du tableau ci-dessous porte d'ailleurs
+                  exactement les mêmes 3 chiffres que les tuiles). */}
+              <div style={card}>
+                <div style={sectionTitle}>🔁 Couverture des postes par la Réserve régionale</div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
+                  Part des journées CPS couvertes par la réserve régionale, sur le total des journées importées cette année.
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+                  <Tuile label="Global" valeur={fmtPct(data.coverageReserve.global.pct)} sousLabel={`${data.coverageReserve.global.numerateur} / ${data.coverageReserve.global.denominateur} j.`} />
+                  <Tuile label="PRCI" valeur={fmtPct(data.coverageReserve.PRCI.pct)} sousLabel={`${data.coverageReserve.PRCI.numerateur} / ${data.coverageReserve.PRCI.denominateur} j.`} />
+                  <Tuile label="PAR" valeur={fmtPct(data.coverageReserve.PAR.pct)} sousLabel={`${data.coverageReserve.PAR.numerateur} / ${data.coverageReserve.PAR.denominateur} j.`} />
+                </div>
+                {data.coverageReserveParAnnee && <CoverageParAnneeTable data={data.coverageReserveParAnnee} anneeActuelle={year} />}
               </div>
-            )}
-          </div>
 
-          {/* Habilitations par poste */}
-          <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-              <div style={{ ...sectionTitle, marginBottom: 0 }}>🛠️ Agents habilités par poste</div>
-              <div style={{ display: "flex", gap: 4 }}>
-                <button onClick={() => setTriHab("planning")}
-                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "planning" ? NAVY.from : "var(--bg-page)", color: triHab === "planning" ? "#fff" : "var(--text-secondary)" }}>
-                  Ordre planning
-                </button>
-                <button onClick={() => setTriHab("nombre")}
-                  style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "nombre" ? NAVY.from : "var(--bg-page)", color: triHab === "nombre" ? "#fff" : "var(--text-secondary)" }}>
-                  Nombre d'agents
-                </button>
+              {/* Dispo — anonyme, pas de nom d'agent (impossible à attribuer de façon fiable) */}
+              <DispoSection data={data.dispo} />
+            </>
+          )}
+
+          {tab === "formation" && (
+            <>
+              {/* Formation (27/08, regroupée le même jour -- Olivier : "ce serait
+                  pas mieux de regruper dans sat equip les stat de formation ?" /
+                  "tu legende bien les choses") : les 2 mécanismes de formation
+                  (sessions AFO et étude de poste, structurellement indépendants
+                  -- l'un vient de formation_session, l'autre du planning perso)
+                  regroupés sous UN SEUL titre "Formation" pour que ce ne soit
+                  plus 2 cartes presque homonymes éparpillées dans la page, mais
+                  chacun garde son propre sous-titre explicite pour ne jamais
+                  laisser croire que c'est la même donnée. */}
+              <FormationSection formationInterne={data.formationInterne} etudePoste={data.etudePoste} />
+
+              {/* Habilitations par poste */}
+              <div style={card}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                  <div style={{ ...sectionTitle, marginBottom: 0 }}>🛠️ Agents habilités par poste</div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button onClick={() => setTriHab("planning")}
+                      style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "planning" ? NAVY.from : "var(--bg-page)", color: triHab === "planning" ? "#fff" : "var(--text-secondary)" }}>
+                      Ordre planning
+                    </button>
+                    <button onClick={() => setTriHab("nombre")}
+                      style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: triHab === "nombre" ? NAVY.from : "var(--bg-page)", color: triHab === "nombre" ? "#fff" : "var(--text-secondary)" }}>
+                      Nombre d'agents
+                    </button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
+                  Habilitations actives (table Habilitations) — indépendant du module Formation.
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                    <thead>
+                      <tr style={{ textAlign: "left", color: "var(--text-muted)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
+                        <th style={{ padding: "4px 8px", fontWeight: 700 }}>Poste</th>
+                        <th style={{ padding: "4px 8px", fontWeight: 700 }}>Agents habilités</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {completerAvecPostesConnus(data.habilitationsParPoste).sort((a, b) => triHab === "planning" ? ordrePoste(a.code_poste) - ordrePoste(b.code_poste) : b.nbAgents - a.nbAgents).map(h => (
+                        <tr key={h.code_poste} style={{ borderTop: "1px solid var(--border)" }}>
+                          <td style={{ padding: "6px 8px", fontWeight: 600, color: "var(--text-primary)" }}>{labelPoste(h.code_poste)}</td>
+                          <td style={{ padding: "6px 8px", fontWeight: 700, color: "var(--text-primary)" }}>{h.nbAgents}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-            <div style={{ fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 }}>
-              Habilitations actives (table Habilitations) — indépendant du module Formation.
-            </div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
-                <thead>
-                  <tr style={{ textAlign: "left", color: "var(--text-muted)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
-                    <th style={{ padding: "4px 8px", fontWeight: 700 }}>Poste</th>
-                    <th style={{ padding: "4px 8px", fontWeight: 700 }}>Agents habilités</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {completerAvecPostesConnus(data.habilitationsParPoste).sort((a, b) => triHab === "planning" ? ordrePoste(a.code_poste) - ordrePoste(b.code_poste) : b.nbAgents - a.nbAgents).map(h => (
-                    <tr key={h.code_poste} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td style={{ padding: "6px 8px", fontWeight: 600, color: "var(--text-primary)" }}>{labelPoste(h.code_poste)}</td>
-                      <td style={{ padding: "6px 8px", fontWeight: 700, color: "var(--text-primary)" }}>{h.nbAgents}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+            </>
+          )}
+
+          {tab === "alertes" && (
+            <>
+              {/* Congés / VT refusés — anonymisés */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+                <div style={card}>
+                  <div style={sectionTitle}>🗓️ Congés refusés</div>
+                  <Tuile label="Jours refusés (équipe)" valeur={data.congesRefuses.nbJours} sousLabel={`${data.congesRefuses.nbAgentsConcernes} agent(s) concerné(s)`} large />
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Chiffre global anonymisé — aucun détail par agent.</div>
+                </div>
+                <div style={card}>
+                  {/* 29/08 (Olivier) : "deplace le % de temps partiel et met le
+                      avec vt refusé. c'est plus loqique" -- les deux parlent de
+                      VT (temps partiel), regroupés dans la même carte plutôt que
+                      Temps partiel isolé dans "Vue d'ensemble équipe". */}
+                  <div style={sectionTitle}>🕒 VT (temps partiel)</div>
+                  <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                    <Tuile label="Temps partiel" valeur={fmtPct(data.headcounts.pctTempsPartiel)} sousLabel={`${data.headcounts.nbTempsPartiel} agent(s) · Temps plein ${fmtPct(pctTempsPlein)}`} large />
+                    <Tuile label="Jours refusés (équipe)" valeur={data.vtRefuses.nbJours} sousLabel={`${data.vtRefuses.nbAgentsConcernes} agent(s) concerné(s)`} large />
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Jours refusés : chiffre global anonymisé — aucun détail par agent.</div>
+                </div>
+              </div>
+
+              {/* Postes non tenus */}
+              <PostesNonTenusSection data={data.postesNonTenus} year={year} />
+            </>
+          )}
 
         </div>
       )}
