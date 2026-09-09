@@ -80,6 +80,20 @@
   --cell-3-text: #0b1120;
   --cell-4-text: #ffffff;
   --cell-5-text: #ffffff;
+  /* Pyramide des âges + évolution de l'âge moyen (StatsEquipeView.jsx, 09/09,
+     portage du mockup validé par Olivier -- "tu peux faire ca, sans rien
+     casser") -- violet/rose, validées via le validateur de palette du skill
+     dataviz (CVD/vision normale/contraste, PASS en clair et en sombre avec
+     les mêmes hex). Choisies pour NE JAMAIS chevaucher les teintes
+     amber/bleu/vert déjà utilisées juste au-dessus sur la même page par le
+     graphique "Couverture Réserve régionale" (--chart-line-1/2/3) -- un
+     premier candidat partageait par erreur l'amber du "Global" avec la
+     "Réserve régionale" de la pyramide, source de confusion visuelle entre
+     deux graphiques qui racontent des choses différentes. --age-equipe sert
+     aussi de couleur unique à l'évolution de l'âge moyen (une seule série,
+     "hors Réserve régionale" -- cohérent avec le sens de la couleur). */
+  --age-equipe: #7c3aed;
+  --age-reserve: #db2777;
 }
 :root[data-theme="dark"] {
   --bg-page: #0a0e1a;

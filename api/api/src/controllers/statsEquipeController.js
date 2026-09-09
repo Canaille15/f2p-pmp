@@ -193,6 +193,43 @@ async function getStats(req, res) {
       nbAgentsExclusParseEchec,
     };
 
+    // ─── Pyramide des âges Équipe / Réserve régionale (09/09, portage du
+    // mockup validé par Olivier — "tu peux faire ca, sans rien casser") —
+    // même règle d'âge que ageMoyenHorsReserve (parseAnneeNaissance sur le
+    // CP), répartie par tranche et par groupe plutôt qu'une seule moyenne.
+    // "Équipe" reprend equipeSet (déjà net de Réserve régionale, Encadrement
+    // ET ASFP), "Réserve régionale" reprend reserveSet — les deux ensembles
+    // déjà calculés plus haut, aucune nouvelle requête nécessaire. Un agent
+    // Encadrement n'apparaît dans aucune des deux colonnes, cohérent avec le
+    // reste du module (compté à part, jamais dans "Agents équipe").
+    const AGE_BRACKETS = [
+      { label: "< 25", min: -Infinity, max: 24 },
+      { label: "25-29", min: 25, max: 29 },
+      { label: "30-34", min: 30, max: 34 },
+      { label: "35-39", min: 35, max: 39 },
+      { label: "40-44", min: 40, max: 44 },
+      { label: "45-49", min: 45, max: 49 },
+      { label: "50-54", min: 50, max: 54 },
+      { label: "55-59", min: 55, max: 59 },
+      { label: "60+", min: 60, max: Infinity },
+    ];
+    const pyramideEquipe = new Array(AGE_BRACKETS.length).fill(0);
+    const pyramideReserve = new Array(AGE_BRACKETS.length).fill(0);
+    ageRows.forEach(r => {
+      const naissance = parseAnneeNaissance(r.cp);
+      if (naissance == null) return;
+      const age = year - naissance;
+      const idx = AGE_BRACKETS.findIndex(b => age >= b.min && age <= b.max);
+      if (idx === -1) return;
+      if (equipeSet.has(r.cp)) pyramideEquipe[idx]++;
+      else if (reserveSet.has(r.cp)) pyramideReserve[idx]++;
+    });
+    const agePyramide = {
+      brackets: AGE_BRACKETS.map((b, i) => ({ label: b.label, equipe: pyramideEquipe[i], reserve: pyramideReserve[i] })),
+      totalEquipe: pyramideEquipe.reduce((a, b) => a + b, 0),
+      totalReserve: pyramideReserve.reduce((a, b) => a + b, 0),
+    };
+
     // ─── Couverture Réserve régionale (#4) ───────────────────────────────────
     const coverageReserve = await computeCoverageReserve(from, to);
 
@@ -208,6 +245,26 @@ async function getStats(req, res) {
       const cov = y === year ? coverageReserve : await computeCoverageReserve(`${y}-01-01`, `${y}-12-31`);
       coverageReserveParAnnee.push({ annee: y, ...cov });
     }
+
+    // ─── Âge moyen hors Réserve régionale, évolution par année (09/09,
+    // portage du mockup) — même fenêtre de 5 ans que coverageReserveParAnnee.
+    // Approximation assumée, comme ailleurs dans ce module (is_reserve n'est
+    // lui non plus jamais historisé, voir computeCoverageReserve) : recalcule
+    // l'âge de l'effectif ACTUEL à chaque année de la fenêtre (year -
+    // naissance), sans reconstituer qui était réellement en poste chaque
+    // année passée — jamais stocké.
+    function computeAgeMoyenAnnee(y) {
+      let somme = 0, n = 0;
+      ageRows.forEach(r => {
+        if (r.is_reserve) return;
+        const naissance = parseAnneeNaissance(r.cp);
+        if (naissance == null) return;
+        somme += (y - naissance);
+        n++;
+      });
+      return { annee: y, moyenne: n ? Math.round((somme / n) * 10) / 10 : null, nbAgentsInclus: n };
+    }
+    const ageMoyenParAnnee = anneesCoverage.map(y => computeAgeMoyenAnnee(y));
 
     // ─── Postes non tenus (#7) ──────────────────────────────────────────────
     const [nonTenusRows] = await pool.query(
@@ -436,6 +493,8 @@ async function getStats(req, res) {
       headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, totalAsfp, totalCadreOp, totalMaitrise, totalMaitrise2, nbTempsPartiel, pctTempsPartiel },
       gradesDetail,
       ageMoyenHorsReserve,
+      agePyramide,
+      ageMoyenParAnnee,
       coverageReserve,
       coverageReserveParAnnee,
       congesRefuses,

@@ -341,13 +341,28 @@ export default function StatsEquipeView() {
               laisser croire que c'est la même donnée. */}
           <FormationSection formationInterne={data.formationInterne} etudePoste={data.etudePoste} />
 
-          {/* Âge moyen */}
+          {/* Âge moyen (09/09, étendu -- mockup validé par Olivier : "tu peux
+              faire ca, sans rien casser" -- évolution par année (même
+              mécanisme que la courbe de couverture ci-dessus) + pyramide des
+              âges Équipe/Réserve régionale, regroupées dans la même carte
+              (même principe que FormationSection : sous-sections avec
+              GroupeLabel plutôt que des cartes séparées, tout concerne le
+              même sujet "âge"). */}
           <div style={card}>
             <div style={sectionTitle}>🎂 Âge moyen (hors Réserve régionale)</div>
             <Tuile label="Âge moyen" valeur={data.ageMoyenHorsReserve.moyenne != null ? `${data.ageMoyenHorsReserve.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsReserve.nbAgentsInclus} agent(s)`} large />
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
               Estimé à partir des 2 premiers chiffres du CP (année de naissance). {data.ageMoyenHorsReserve.nbAgentsExclusParseEchec > 0 && `${data.ageMoyenHorsReserve.nbAgentsExclusParseEchec} agent(s) exclu(s), CP non reconnu.`}
             </div>
+
+            {data.ageMoyenParAnnee && <AgeEvolutionSection data={data.ageMoyenParAnnee} anneeActuelle={year} />}
+
+            {data.agePyramide && (
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                <GroupeLabel>Pyramide des âges — Équipe / Réserve régionale</GroupeLabel>
+                <AgePyramide data={data.agePyramide} />
+              </div>
+            )}
           </div>
 
           {/* Habilitations par poste */}
@@ -497,8 +512,27 @@ function CoverageEvolutionChart({ data, anneeActuelle }) {
   const padL = 32, padR = 14, padT = 12, padB = 26;
   const plotW = W - padL - padR, plotH = H - padT - padB;
   const xAt = (i) => padL + (plotW * i) / (n - 1);
-  const yAt = (pct) => padT + plotH - (plotH * Math.max(0, Math.min(100, pct))) / 100;
   const colW = plotW / (n - 1);
+
+  // Domaine Y auto-scalé sur la vraie plage de données, plutôt qu'un axe fixe
+  // 0-100% (09/09, correctif du "le graphique est moche" signalé par Olivier
+  // -- les vraies valeurs de couverture Réserve régionale tournent autour de
+  // 5-8%, un axe 0-100 les écrasait toutes en bas du tracé, quasi plates,
+  // rendant le mouvement d'une année à l'autre invisible). Marge de 35% de
+  // l'amplitude de chaque côté (mini 1.5 point pour ne jamais réduire un
+  // écart réel à un trait plat), jamais en dehors de 0-100 (ce sont de vrais
+  // pourcentages). Repli sur 0-100 si aucune donnée mesurée.
+  const allPct = [];
+  COVERAGE_SERIES.forEach(s => rows.forEach(r => { if (r[s.key].denominateur > 0) allPct.push(r[s.key].pct); }));
+  let yMin = 0, yMax = 100;
+  if (allPct.length) {
+    const lo = Math.min(...allPct), hi = Math.max(...allPct);
+    const pad = Math.max((hi - lo) * 0.35, 1.5);
+    yMin = Math.max(0, lo - pad);
+    yMax = Math.min(100, hi + pad);
+    if (yMax - yMin < 3) { yMax = Math.min(100, yMax + 1.5); yMin = Math.max(0, yMin - 1.5); }
+  }
+  const yAt = (pct) => padT + plotH - (plotH * (Math.max(yMin, Math.min(yMax, pct)) - yMin)) / (yMax - yMin);
 
   const series = COVERAGE_SERIES.map(s => ({
     ...s,
@@ -540,7 +574,9 @@ function CoverageEvolutionChart({ data, anneeActuelle }) {
   }
   const labels = rawLabels.map(l => ({ ...l, moved: Math.abs(l.y - l.origY) > 1 }));
 
-  const yTicks = [0, 25, 50, 75, 100];
+  // Graduations réparties sur le domaine auto-scalé (plus jamais 0/25/50/75/100
+  // fixes, qui n'auraient plus aucun sens une fois l'axe recalé).
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round((yMin + (yMax - yMin) * f) * 10) / 10);
 
   return (
     <div style={{ marginBottom: 4 }}>
@@ -556,8 +592,8 @@ function CoverageEvolutionChart({ data, anneeActuelle }) {
       <div style={{ overflowX: "auto" }}>
         <div style={{ position: "relative", width: W }}>
           <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Couverture Réserve régionale, évolution par année">
-            {yTicks.map(t => (
-              <g key={t}>
+            {yTicks.map((t, ti) => (
+              <g key={ti}>
                 <line x1={padL} x2={W - padR} y1={yAt(t)} y2={yAt(t)} stroke="var(--border)" strokeWidth="1" />
                 <text x={padL - 6} y={yAt(t) + 3} textAnchor="end" fontSize="9.5" fill="var(--text-muted)">{t}%</text>
               </g>
@@ -656,6 +692,202 @@ function CoverageParAnneeTable({ data, anneeActuelle }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Évolution de l'âge moyen hors Réserve régionale, par année (09/09, portage
+// du mockup validé par Olivier -- "tu peux faire ca, sans rien casser") --
+// "même mécanisme" que CoverageEvolutionChart ci-dessus (ligne + points +
+// étiquette de fin + survol), appliqué à une seule série -- pas de légende
+// nécessaire, le titre du bloc suffit (une série unique n'a rien à
+// distinguer). Couleur --age-equipe (violet, theme.css) -- choisie pour ne
+// jamais chevaucher les teintes amber/bleu/vert déjà utilisées juste
+// au-dessus par la courbe de couverture, sur la même page. Un point sans
+// donnée coupe la ligne plutôt que de tracer un faux âge (même principe que
+// le trou "aucun import CPS" de la courbe de couverture).
+function AgeEvolutionChart({ data, anneeActuelle }) {
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const rows = useMemo(() => [...data].sort((a, b) => a.annee - b.annee), [data]);
+  const n = rows.length;
+  if (n < 2) return null;
+
+  const W = 560, H = 150;
+  const padL = 32, padR = 14, padT = 12, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const xAt = (i) => padL + (plotW * i) / (n - 1);
+  const colW = plotW / (n - 1);
+
+  const vals = rows.filter(r => r.moyenne != null).map(r => r.moyenne);
+  let yMin = 0, yMax = 60;
+  if (vals.length) {
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = Math.max((hi - lo) * 0.35, 1);
+    yMin = Math.max(0, lo - pad);
+    yMax = hi + pad;
+    if (yMax - yMin < 2) { yMax += 1; yMin = Math.max(0, yMin - 1); }
+  }
+  const yAt = (v) => padT + plotH - (plotH * (Math.max(yMin, Math.min(yMax, v)) - yMin)) / (yMax - yMin);
+
+  const points = rows.map((r, i) => (r.moyenne != null ? { i, x: xAt(i), y: yAt(r.moyenne), v: r.moyenne } : null));
+  const segmentsOf = (pts) => {
+    const segs = []; let cur = [];
+    pts.forEach(p => { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = []; } });
+    if (cur.length) segs.push(cur);
+    return segs;
+  };
+  const last = [...points].reverse().find(Boolean);
+  const yTicks = [0, 0.5, 1].map(f => Math.round((yMin + (yMax - yMin) * f) * 10) / 10);
+
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ position: "relative", width: W }}>
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Âge moyen hors Réserve régionale, évolution par année">
+            {yTicks.map((t, ti) => (
+              <g key={ti}>
+                <line x1={padL} x2={W - padR} y1={yAt(t)} y2={yAt(t)} stroke="var(--border)" strokeWidth="1" />
+                <text x={padL - 6} y={yAt(t) + 3} textAnchor="end" fontSize="9.5" fill="var(--text-muted)">{t} ans</text>
+              </g>
+            ))}
+            {hoverIdx != null && (
+              <line x1={xAt(hoverIdx)} x2={xAt(hoverIdx)} y1={padT} y2={padT + plotH} stroke="var(--text-muted)" strokeWidth="1" opacity="0.5" />
+            )}
+            {segmentsOf(points).map((seg, si) => (
+              <polyline key={si} points={seg.map(p => `${p.x},${p.y}`).join(" ")}
+                fill="none" stroke="var(--age-equipe)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            ))}
+            {points.map((p, i) => p && (
+              <circle key={i} cx={p.x} cy={p.y} r={hoverIdx === i ? 5.5 : 4}
+                fill="var(--age-equipe)" stroke="var(--bg-card)" strokeWidth="2" style={{ transition: "r .1s" }} />
+            ))}
+            {last && (
+              <text x={last.x + 10} y={last.y + 3} fontSize="10.5" fontWeight="700" fill="var(--text-primary)">{last.v} ans</text>
+            )}
+            {rows.map((r, i) => (
+              <text key={r.annee} x={xAt(i)} y={H - 8} textAnchor="middle" fontSize="10.5"
+                fontWeight={r.annee === anneeActuelle ? 800 : 600}
+                fill={r.annee === anneeActuelle ? "var(--text-primary)" : "var(--text-secondary)"}>{r.annee}</text>
+            ))}
+            {rows.map((r, i) => (
+              <rect key={`hit-${r.annee}`} x={xAt(i) - colW / 2} y={padT} width={colW} height={plotH}
+                fill="transparent" style={{ cursor: "pointer" }} tabIndex={0} role="button"
+                aria-label={`${r.annee} : âge moyen ${r.moyenne != null ? `${r.moyenne} ans` : "aucune donnée"}`}
+                onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
+                onFocus={() => setHoverIdx(i)} onBlur={() => setHoverIdx(null)} />
+            ))}
+          </svg>
+          {hoverIdx != null && (
+            <div style={{
+              position: "absolute", top: 4,
+              left: `${Math.min(Math.max((xAt(hoverIdx) / W) * 100, 18), 82)}%`,
+              transform: "translateX(-50%)", background: "var(--bg-card)", border: "1px solid var(--border)",
+              borderRadius: 8, padding: "6px 10px", boxShadow: "0 2px 8px var(--shadow-card)",
+              pointerEvents: "none", minWidth: 110, zIndex: 2,
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)", marginBottom: 2 }}>{rows[hoverIdx].annee}</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                {rows[hoverIdx].moyenne != null ? <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{rows[hoverIdx].moyenne} ans</span> : "—"}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AgeEvolutionSection({ data, anneeActuelle }) {
+  const [ouvert, setOuvert] = useState(true);
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
+      <SectionHeader icon="📈" titre="Évolution par année" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail" />
+      {ouvert && (
+        <div style={{ marginTop: 10 }}>
+          <AgeEvolutionChart data={data} anneeActuelle={anneeActuelle} />
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "var(--text-muted)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: .04 }}>
+                  <th style={{ padding: "4px 8px", fontWeight: 700 }}>Année</th>
+                  <th style={{ padding: "4px 8px", fontWeight: 700 }}>Âge moyen</th>
+                  <th style={{ padding: "4px 8px", fontWeight: 700 }}>Agents inclus</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map(row => {
+                  const surlignee = row.annee === anneeActuelle;
+                  return (
+                    <tr key={row.annee} style={{ borderTop: "1px solid var(--border)", background: surlignee ? "#eff6ff" : "transparent" }}>
+                      <td style={{ padding: "6px 6px", fontWeight: surlignee ? 800 : 600, color: surlignee ? "#1e293b" : "var(--text-primary)" }}>{row.annee}</td>
+                      <td style={{ padding: "6px 6px", fontWeight: surlignee ? 800 : 700, color: surlignee ? "#1e293b" : "var(--text-primary)" }}>{row.moyenne != null ? `${row.moyenne} ans` : "—"}</td>
+                      <td style={{ padding: "6px 6px", color: surlignee ? "#64748b" : "var(--text-secondary)" }}>{row.nbAgentsInclus}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Pyramide des âges Équipe / Réserve régionale (09/09, portage du mockup) --
+// barres miroir par tranche, Équipe à gauche / Réserve régionale à droite.
+// Couleurs --age-equipe/--age-reserve (violet/rose, theme.css), validées
+// CVD via scripts/validate_palette.js -- choisies pour ne jamais chevaucher
+// les teintes amber/bleu/vert déjà utilisées par la courbe de couverture
+// plus haut sur la même page (un premier candidat partageait par erreur
+// l'amber du "Global" avec la Réserve régionale ici, source de confusion).
+// overflowX:auto + minWidth, même convention que le reste du fichier pour
+// rester lisible sur mobile sans faire rétrécir le texte sous le lisible.
+function AgePyramide({ data }) {
+  const brackets = data.brackets || [];
+  const maxV = Math.max(1, ...brackets.map(b => Math.max(b.equipe, b.reserve)));
+  const barMax = 74;
+  const rowH = 20;
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 14, marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--age-equipe)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>Équipe ({data.totalEquipe})</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--age-reserve)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>Réserve régionale ({data.totalReserve})</span>
+        </div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ display: "flex", alignItems: "stretch", minWidth: 300 }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+            {brackets.map(b => (
+              <div key={b.label} style={{ height: rowH, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", fontFamily: "ui-monospace,Consolas,monospace", minWidth: 16, textAlign: "right" }}>{b.equipe || ""}</span>
+                <div style={{ height: 13, borderRadius: "3px 0 0 3px", background: "var(--age-equipe)", width: b.equipe > 0 ? Math.max(2, (b.equipe / maxV) * barMax) : 0 }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", padding: "0 10px", flexShrink: 0, gap: 3 }}>
+            {brackets.map(b => (
+              <div key={b.label} style={{ fontSize: 10.5, color: "var(--text-secondary)", fontWeight: 600, height: rowH, display: "flex", alignItems: "center", justifyContent: "center" }}>{b.label}</div>
+            ))}
+          </div>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+            {brackets.map(b => (
+              <div key={b.label} style={{ height: rowH, display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ height: 13, borderRadius: "0 3px 3px 0", background: "var(--age-reserve)", width: b.reserve > 0 ? Math.max(2, (b.reserve / maxV) * barMax) : 0 }} />
+                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-secondary)", fontFamily: "ui-monospace,Consolas,monospace", minWidth: 16 }}>{b.reserve || ""}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+        Répartition par tranche d'âge, estimée comme la moyenne ci-dessus (2 premiers chiffres du CP). Encadrement (DPX/Adj DPX) exclu des deux colonnes, compté à part.
+      </div>
     </div>
   );
 }
