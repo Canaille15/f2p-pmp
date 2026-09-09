@@ -518,16 +518,18 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
           </div>
           {/* 09/09 -- bug réel trouvé et corrigé (Olivier : "dans admin, sur
               le tel je peux plus mettre de nouveau agents") : ce groupe
-              (compteur + 3 boutons) n'avait pas de flexWrap propre -- sur un
-              écran étroit, "➕ Nouvel agent" (poussé tout à droite par
-              marginLeft:"auto") se retrouvait entièrement hors du viewport
-              (rect x:398→533 sur 375px de large mesuré en conditions
-              réelles), invisible ET inatteignable puisque le conteneur
-              parent a overflowX:"hidden" (clip, jamais de scroll possible).
-              flexWrap:"wrap" ajouté pour que ces 4 éléments passent sur
-              plusieurs lignes plutôt que de déborder silencieusement --
-              même principe déjà en place sur les 2 groupes de filtres
-              voisins. */}
+              n'avait pas de flexWrap propre -- sur un écran étroit, son
+              dernier bouton (alors "➕ Nouvel agent", poussé tout à droite
+              par marginLeft:"auto") se retrouvait entièrement hors du
+              viewport (rect x:398→533 sur 375px de large mesuré en
+              conditions réelles), invisible ET inatteignable puisque le
+              conteneur parent a overflowX:"hidden" (clip, jamais de scroll
+              possible). flexWrap:"wrap" ajouté -- même principe déjà en
+              place sur les 2 groupes de filtres voisins. "Nouvel agent"
+              lui-même a depuis été sorti de ce groupe (voir plus bas,
+              même jour, "le haut de admin est fouilli"), le reste (compteur
+              + Utilisation + Annuaire PDF) garde ce flexWrap par
+              précaution. */}
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
               {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
@@ -548,17 +550,27 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               }}>
               {pdfBusy ? "⏳ Génération…" : "📇 Annuaire tél. (PDF)"}
             </button>
-            <button onClick={() => setModal("create")}
-              style={{
-                background: "#1e293b", color: "#fff", border: "none",
-                borderRadius: 8, padding: "8px 16px", cursor: "pointer",
-                fontSize: 13, fontWeight: 700, whiteSpace: "nowrap"
-              }}>
-              ➕ Nouvel agent
-            </button>
           </div>
         </div>
       </div>
+
+      {/* "➕ Nouvel agent" (09/09, Olivier : "met le bouton nouvel agent
+          judte au dessus des fiche agents. le haut de admin est fouilli")
+          -- sorti du bloc de filtres/actions ci-dessus (qui reste déjà
+          chargé : familles, réserve, AFO, admin, DPX, statut, PIN...),
+          replacé juste avant la grille de fiches, sur sa propre ligne --
+          moins de boutons à trier au même endroit, et l'action la plus
+          engagée (créer un agent) reste bien visible sans se perdre dans
+          les filtres. */}
+      <button onClick={() => setModal("create")}
+        style={{
+          background: "#1e293b", color: "#fff", border: "none",
+          borderRadius: 8, padding: "8px 16px", cursor: "pointer",
+          fontSize: 13, fontWeight: 700, whiteSpace: "nowrap",
+          marginBottom: 12
+        }}>
+        ➕ Nouvel agent
+      </button>
 
       {/* Liste agents — cartes responsive */}
       {loading ? (

@@ -267,13 +267,24 @@ export default function StatsEquipeView() {
           {/* Sous-onglets (09/09) -- regroupe les sections ci-dessous en 4
               groupes, affichés un par un. Aucune section n'est modifiée ni
               retirée : chaque bloc ci-dessous est EXACTEMENT le même JSX
-              qu'avant ce chantier, juste déplacé sous le bon onglet. */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
+              qu'avant ce chantier, juste déplacé sous le bon onglet.
+              09/09, suite -- Olivier : "met les onglets sur 2 ligne cest
+              moche la" : le `flex + flexWrap:wrap` d'origine enroulait les 4
+              boutons en un tas irrégulier (2 largeurs différentes par ligne,
+              jamais alignées) une fois qu'ils ne tenaient plus sur une seule
+              ligne (375px). Remplacé par une vraie grille (même motif déjà
+              utilisé ailleurs sur cette page, ex. les tuiles "Vue
+              d'ensemble équipe") : `repeat(auto-fit, minmax(150px, 1fr))`
+              calcule tout seul 2 colonnes égales sur mobile (2×150+gap ≈
+              306px, tient dans 375px moins le padding de page) et les 4 sur
+              une seule ligne dès que la largeur le permet (desktop) --
+              jamais de ligne à moitié remplie ni de largeurs disparates. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 6, borderBottom: "1px solid var(--border)", paddingBottom: 12 }}>
             {TABS.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 style={{
                   padding: "8px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                  fontSize: 12.5, fontWeight: 700,
+                  fontSize: 12.5, fontWeight: 700, textAlign: "center",
                   background: tab === t.key ? NAVY.from : "var(--bg-page)",
                   color: tab === t.key ? "#fff" : "var(--text-secondary)",
                 }}>
