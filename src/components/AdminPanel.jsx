@@ -516,7 +516,19 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               </button>
             )}
           </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+          {/* 09/09 -- bug réel trouvé et corrigé (Olivier : "dans admin, sur
+              le tel je peux plus mettre de nouveau agents") : ce groupe
+              (compteur + 3 boutons) n'avait pas de flexWrap propre -- sur un
+              écran étroit, "➕ Nouvel agent" (poussé tout à droite par
+              marginLeft:"auto") se retrouvait entièrement hors du viewport
+              (rect x:398→533 sur 375px de large mesuré en conditions
+              réelles), invisible ET inatteignable puisque le conteneur
+              parent a overflowX:"hidden" (clip, jamais de scroll possible).
+              flexWrap:"wrap" ajouté pour que ces 4 éléments passent sur
+              plusieurs lignes plutôt que de déborder silencieusement --
+              même principe déjà en place sur les 2 groupes de filtres
+              voisins. */}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
               {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
             </span>
