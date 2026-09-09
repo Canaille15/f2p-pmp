@@ -1635,9 +1635,18 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
   // doublon). La ligne "Disponibles" ci-dessous reste la SEULE source pour ce
   // code, quelle que soit la vraie famille de l'agent concerne.
   const jsCodesDispoSpecial=new Set(["DISPO"]);
+  // fix (09/09, cas reel Antoine LEGOGUELIN, 11/09) : meme bug que DISPO
+  // ci-dessus -- "VM" existe lui aussi DEUX fois dans POSTES_JOURNEE (entree
+  // litterale famille:"PRCI", non-principal, en plus de la construction
+  // dediee "VM" plus bas, famille:null -> badge violet) -- sans cette
+  // exclusion, un agent en VM apparaissait deux fois : une fois via cette
+  // boucle generique (badge bleu PRCI), une fois de plus via la ligne dediee
+  // (badge violet). La ligne dediee ci-dessous reste la SEULE source pour ce
+  // code -- c'est elle qui porte le code couleur violet a conserver.
+  const jsCodesVMSpecial=new Set(["VM"]);
   // Postes journée non principaux PRCI (hors postes-formation)
   if(filterF!=="PAR"){
-    POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&!x.principal&&!jsCodesFormationPostes.has(x.jsCode)&&!jsCodesJourneeSpecialePostes.has(x.jsCode)&&!jsCodesDispoSpecial.has(x.jsCode)).forEach(poste=>{
+    POSTES_JOURNEE.filter(x=>x.famille==="PRCI"&&!x.principal&&!jsCodesFormationPostes.has(x.jsCode)&&!jsCodesJourneeSpecialePostes.has(x.jsCode)&&!jsCodesDispoSpecial.has(x.jsCode)&&!jsCodesVMSpecial.has(x.jsCode)).forEach(poste=>{
       const ags=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.jsCode===poste.jsCode||en.poste===poste.label);});
       if(ags.length>0)diversRows.push({poste,jsCode:poste.jsCode,agents:ags,famille:"PRCI",isJournee:true,maxSlots:poste.maxSlots||99});
     });
