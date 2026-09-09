@@ -29,17 +29,29 @@ async function getLastImport(req, res) {
 }
 
 // POST /api/cps/import  -> import en masse depuis OCR (n'importe quel agent connecte)
-// body: { entries: [{cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation}, ...] }
+// body: { entries: [{cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation}, ...],
+//          clears: [{cp_agent, date_jour}, ...] }
+// `clears` (09/09) : postes redevenus vacants sur le document reimporte -- le
+// frontend a detecte que l'agent precedemment affecte a ce poste n'apparait
+// plus du tout sur la feuille (aucune ligne pour lui ce jour-la), sa case doit
+// donc etre videe explicitement. Sans ca, un simple upsert par (cp_agent,
+// date_jour) ne touche jamais un agent absent des nouvelles entrees -- sa
+// vieille affectation restait figee en base indefiniment malgre un reimport
+// confirme (cas reel : Pastant reste sur PAAC2- le 9 alors que la vraie feuille
+// montre ce poste vide). Chaque suppression est journalisee dans
+// cps_import_detail (avant_* = derniere valeur connue) exactement comme une
+// ligne normale, pour rester annulable via le meme mecanisme "↩️ Annuler".
 // Enregistre aussi un lot d'historique (avant/apres par ligne) pour permettre
 // d'annuler l'import, et purge les lots de plus de 90 jours au passage.
 async function importCps(req, res) {
-  const { entries } = req.body;
-  if (!entries?.length) return res.status(400).json({ error: 'Entrées requises' });
+  const { entries, clears } = req.body;
+  const clearsList = Array.isArray(clears) ? clears : [];
+  if (!entries?.length && !clearsList.length) return res.status(400).json({ error: 'Entrées requises' });
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     const details = [];
-    for (const e of entries) {
+    for (const e of (entries || [])) {
       const [avantRows] = await conn.query(
         'SELECT equipe, js_code, horaires, en_formation FROM planning_cps WHERE cp_agent=? AND date_jour=?',
         [e.cp_agent, e.date_jour]);
@@ -52,24 +64,34 @@ async function importCps(req, res) {
            horaires=VALUES(horaires), famille=VALUES(famille), en_formation=VALUES(en_formation),
            importe_le=NOW(), importe_par=VALUES(importe_par)`,
         [e.cp_agent, e.date_jour, e.equipe, e.js_code||null, e.horaires||null, e.famille, enFormation, req.agent.cp]);
-      details.push({ e, avant, enFormation });
+      details.push({ cp_agent: e.cp_agent, date_jour: e.date_jour, famille: e.famille, avant,
+        apres: { equipe: e.equipe, js_code: e.js_code||null, horaires: e.horaires||null, en_formation: enFormation } });
+    }
+    for (const c of clearsList) {
+      const [avantRows] = await conn.query(
+        'SELECT equipe, js_code, horaires, famille, en_formation FROM planning_cps WHERE cp_agent=? AND date_jour=?',
+        [c.cp_agent, c.date_jour]);
+      const avant = avantRows[0] || null;
+      if (!avant) continue; // deja vide, rien a faire ni a journaliser
+      await conn.query('DELETE FROM planning_cps WHERE cp_agent=? AND date_jour=?', [c.cp_agent, c.date_jour]);
+      details.push({ cp_agent: c.cp_agent, date_jour: c.date_jour, famille: avant.famille, avant, apres: null });
     }
     const [batchResult] = await conn.query(
       'INSERT INTO cps_import_batch (importe_par, nb_entrees) VALUES (?, ?)',
-      [req.agent.cp, entries.length]);
+      [req.agent.cp, details.length]);
     const batchId = batchResult.insertId;
-    for (const { e, avant, enFormation } of details) {
+    for (const { cp_agent, date_jour, famille, avant, apres } of details) {
       await conn.query(
         `INSERT INTO cps_import_detail
            (batch_id, cp_agent, date_jour, famille, avant_equipe, avant_js_code, avant_horaires, avant_en_formation, apres_equipe, apres_js_code, apres_horaires, apres_en_formation)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [batchId, e.cp_agent, e.date_jour, e.famille,
+        [batchId, cp_agent, date_jour, famille,
          avant?.equipe||null, avant?.js_code||null, avant?.horaires||null, avant?avant.en_formation:null,
-         e.equipe, e.js_code||null, e.horaires||null, enFormation]);
+         apres?.equipe||null, apres?.js_code||null, apres?.horaires||null, apres?apres.en_formation:null]);
     }
     await conn.query('DELETE FROM cps_import_batch WHERE importe_le < NOW() - INTERVAL 90 DAY');
     await conn.commit();
-    res.json({ message: 'Import CPS enregistré', nb: entries.length, batch_id: batchId });
+    res.json({ message: 'Import CPS enregistré', nb: entries?.length||0, nb_clears: clearsList.length, batch_id: batchId });
   } catch (err) {
     await conn.rollback();
     console.error(err); res.status(500).json({ error: 'Erreur serveur' });
@@ -108,9 +130,17 @@ async function undoLastImport(req, res) {
       if (d.avant_equipe === null) {
         await conn.query('DELETE FROM planning_cps WHERE cp_agent=? AND date_jour=?', [d.cp_agent, d.date_jour]);
       } else {
+        // 09/09 : INSERT...ON DUPLICATE KEY UPDATE plutot qu'un simple UPDATE --
+        // une ligne "clear" (nouvelle fonctionnalite du 09/09) a pu supprimer la
+        // ligne entre l'import et l'annulation ; un UPDATE seul n'aurait alors
+        // affecte aucune ligne (echec silencieux). Cette forme restaure la
+        // donnee que la ligne existe encore (mise a jour) ou plus (recreation).
         await conn.query(
-          'UPDATE planning_cps SET equipe=?, js_code=?, horaires=?, en_formation=? WHERE cp_agent=? AND date_jour=?',
-          [d.avant_equipe, d.avant_js_code, d.avant_horaires, d.avant_en_formation||0, d.cp_agent, d.date_jour]);
+          `INSERT INTO planning_cps (cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation, importe_par)
+           VALUES (?,?,?,?,?,?,?,?)
+           ON DUPLICATE KEY UPDATE equipe=VALUES(equipe), js_code=VALUES(js_code),
+             horaires=VALUES(horaires), en_formation=VALUES(en_formation)`,
+          [d.cp_agent, d.date_jour, d.avant_equipe, d.avant_js_code, d.avant_horaires, d.famille, d.avant_en_formation||0, req.agent.cp]);
       }
     }
     await conn.query('UPDATE cps_import_batch SET annule_le=NOW(), annule_par=? WHERE id=?', [req.agent.cp, latest.id]);

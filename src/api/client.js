@@ -846,11 +846,12 @@ export const cps = {
   /**
    * Importer en masse des entrées CPS (n'importe quel agent connecté)
    * @param {Array<{cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation}>} entries
+   * @param {Array<{cp_agent, date_jour}>} [clears] postes redevenus vacants à retirer explicitement (09/09)
    */
-  import: (entries) =>
+  import: (entries, clears) =>
     apiFetch('/cps/import', {
       method: 'POST',
-      body: JSON.stringify({ entries }),
+      body: JSON.stringify({ entries, clears }),
     }),
 
   /**

@@ -2214,6 +2214,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         });
         let nb=0,ec=0;
         const updates=[];
+        // 09/09 : postes redevenus vacants -- une ligne avec un code JS et un
+        // horaire complets, mais AUCUN nom d'agent trouve dans le texte (pas
+        // juste ambigu entre plusieurs candidats : zero candidat), signale
+        // qu'un poste anciennement tenu est desormais vraiment vacant sur ce
+        // document (feuille regeneree depuis un import precedent). Sans ca,
+        // l'agent precedemment affecte restait fige en base indefiniment --
+        // un reimport n'ecrit jamais que les lignes ou un agent est trouve,
+        // il ne "vide" jamais une case redevenue blanche.
+        const vacants=[];
         lines.forEach((line,lineIdx)=>{
           const lineDateStr=lineDates[lineIdx]||dateStr;
           // fix extraction (17/08) : sur certaines pages, pdfjs extrait un "." (code 46)
@@ -2349,7 +2358,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
               ag=meilleurCandidat||candidats[0];
             }
           }
-          if(!ag) return;
+          if(!ag){
+            // Code JS + horaire lus normalement, mais litteralement aucun nom
+            // ne matche dans toute la ligne (candidats.length===0, pas un cas
+            // ambigu entre plusieurs agents) -- poste vacant sur ce document.
+            if(jsCode&&candidats.length===0) vacants.push({jsCode,date_jour:lineDateStr});
+            return;
+          }
           const hDebut=parseInt(horaireMatch[1]);
           let equipe="J";
           if(hDebut>=4&&hDebut<11) equipe="M";
@@ -2380,10 +2395,30 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         });
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
 
+        // Postes vacants (voir plus haut) : on cherche dans le planning officiel
+        // ACTUEL (schedule, deja charge) qui tient encore ce jsCode a cette date --
+        // s'il y en a un, il sera explicitement retire (pas juste laisse tel quel).
+        // Jamais un agent deja present dans updates pour ce meme jour (il vient
+        // d'etre reaffecte ailleurs le meme jour, la vraie ecriture prime).
+        const dejaMisAJour=new Set(updates.map(u=>`${u.cp_agent}|${u.date_jour}`));
+        const clearsMap=new Map();
+        Object.entries(schedule).forEach(([key,val])=>{
+          if(!val||!val.jsCode) return;
+          vacants.forEach(v=>{
+            if(val.jsCode!==v.jsCode) return;
+            if(!key.endsWith("-"+v.date_jour)) return;
+            const agentId=key.slice(0,key.length-v.date_jour.length-1);
+            const mapKey=`${agentId}|${v.date_jour}`;
+            if(dejaMisAJour.has(mapKey)) return;
+            if(!clearsMap.has(mapKey)) clearsMap.set(mapKey,{cp_agent:agentId,date_jour:v.date_jour});
+          });
+        });
+        const clears=[...clearsMap.values()];
+
         // On ne sauvegarde pas tout de suite : on affiche un récap et on attend
         // une confirmation explicite avant d'écraser le planning officiel partagé.
         const nbFormation=updates.filter(u=>u.enFormation).length;
-        setPendingImport({date:dateStr,nb,ecarts:ec,nbFormation,updates});
+        setPendingImport({date:dateStr,nb,ecarts:ec,nbFormation,updates,clears});
       }catch(err){
         alert("Erreur import CPS : "+err.message);
       }
@@ -2395,7 +2430,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
 
   const confirmerImport=async()=>{
     if(!pendingImport) return;
-    const {date:dateStr,nb,ecarts:ec,updates}=pendingImport;
+    const {date:dateStr,nb,ecarts:ec,updates,clears}=pendingImport;
     setSavingImport(true);
     try{
       // Sauvegarder en base via API (persistance Railway) — si ça échoue, on ne
@@ -2410,11 +2445,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         horaires: u.horaires,
         famille: u.famille,
         en_formation: u.enFormation?1:0,
-      })));
+      })),(clears||[]).map(c=>({cp_agent:c.cp_agent,date_jour:c.date_jour})));
 
       setSchedule(prev=>{
         const next={...prev};
         updates.forEach(u=>{next[u.key]={equipe:u.equipe,jsCode:u.jsCode,horaires:u.horaires,enFormation:!!u.enFormation,prive:false,impressionAt:new Date().toISOString()};});
+        (clears||[]).forEach(c=>{delete next[`${c.cp_agent}-${c.date_jour}`];});
         return next;
       });
       setCpsResult({date:dateStr,nb,ecarts:ec});
@@ -2451,6 +2487,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         ⚠️ Confirmer l'import : <strong>{pendingImport.nb} agent{pendingImport.nb>1?"s":""}</strong> détecté{pendingImport.nb>1?"s":""} pour le <strong>{new Date(pendingImport.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"})}</strong>
         {pendingImport.ecarts>0&&<> · {pendingImport.ecarts} écart{pendingImport.ecarts>1?"s":""} avec le planning perso déclaré</>}
         {pendingImport.nbFormation>0&&<> · 🎓 {pendingImport.nbFormation} en doublon/formation</>}
+        {pendingImport.clears?.length>0&&<> · 🕳️ {pendingImport.clears.length} poste{pendingImport.clears.length>1?"s":""} redevenu{pendingImport.clears.length>1?"s":""} vacant{pendingImport.clears.length>1?"s":""} (agent précédent retiré)</>}
       </div>
       <div style={{fontSize:11,color:"#92400e",opacity:.85}}>Ça va remplacer le planning officiel partagé pour cette date. Vérifie que c'est le bon document avant de valider.</div>
       <div style={{display:"flex",gap:8}}>
