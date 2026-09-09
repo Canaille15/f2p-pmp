@@ -81,20 +81,24 @@ async function importCps(req, res) {
       [req.agent.cp, details.length]);
     const batchId = batchResult.insertId;
     for (const { cp_agent, date_jour, famille, avant, apres } of details) {
+      // apres_equipe et apres_en_formation sont NOT NULL en base (schema verifie
+      // 09/09) -- une ligne "clear" (apres===null, poste vide) doit donc leur
+      // donner une vraie valeur ('' / 0) plutot que null, contrairement a
+      // avant_* et apres_js_code/apres_horaires qui restent nullable.
       await conn.query(
         `INSERT INTO cps_import_detail
            (batch_id, cp_agent, date_jour, famille, avant_equipe, avant_js_code, avant_horaires, avant_en_formation, apres_equipe, apres_js_code, apres_horaires, apres_en_formation)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [batchId, cp_agent, date_jour, famille,
          avant?.equipe||null, avant?.js_code||null, avant?.horaires||null, avant?avant.en_formation:null,
-         apres?.equipe||null, apres?.js_code||null, apres?.horaires||null, apres?apres.en_formation:null]);
+         apres?apres.equipe:'', apres?.js_code||null, apres?.horaires||null, apres?apres.en_formation:0]);
     }
     await conn.query('DELETE FROM cps_import_batch WHERE importe_le < NOW() - INTERVAL 90 DAY');
     await conn.commit();
     res.json({ message: 'Import CPS enregistré', nb: entries?.length||0, nb_clears: clearsList.length, batch_id: batchId });
   } catch (err) {
     await conn.rollback();
-    console.error(err); res.status(500).json({ error: 'Erreur serveur : ' + err.message });
+    console.error(err); res.status(500).json({ error: 'Erreur serveur' });
   } finally { conn.release(); }
 }
 
