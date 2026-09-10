@@ -7,7 +7,7 @@ async function getAll(req, res) {
   try {
     const [rows] = await pool.query(
       `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel,
-              a.statut, a.date_depart,
+              a.statut, a.date_depart, a.date_embauche,
               pa.familles_hab AS famille,
               pa.is_reserve,
               pa.is_afo,
@@ -57,12 +57,20 @@ async function update(req, res) {
   const { cp } = req.params;
   if (req.agent.cp !== cp && !req.agent.is_admin)
     return res.status(403).json({ error: 'Accès refusé' });
-  const { email, telephone, fonction, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, pdf_annuaire_visible, famille, nouveau_cp, is_admin, is_reserve, is_afo, is_dpx, is_adjoint_dpx } = req.body;
+  const { email, telephone, fonction, grade, nom, prenom, poste, partage_previsionnel, annuaire_visible, pdf_annuaire_visible, famille, nouveau_cp, is_admin, is_reserve, is_afo, is_dpx, is_adjoint_dpx, date_embauche } = req.body;
   const fields = [], values = [];
   if (email !== undefined)     { fields.push('email = ?');     values.push(encrypt(email)); }
   if (telephone !== undefined) { fields.push('telephone = ?'); values.push(encrypt(telephone)); }
   if (fonction !== undefined)  { fields.push('fonction = ?');  values.push(fonction || null); }
   if (partage_previsionnel !== undefined) { fields.push('partage_previsionnel = ?'); values.push(partage_previsionnel ? 1 : 0); }
+  // date_embauche (10/09) : admin-only, symétrique de date_depart -- permet
+  // à Stat'Equip de reconstruire l'effectif réel d'une année passée (voir
+  // computeAgeMoyenAnnee). Chaîne vide envoyée volontairement pour effacer
+  // une date déjà saisie (retour à NULL = "présent depuis toujours").
+  if (req.agent.is_admin && date_embauche !== undefined) {
+    fields.push('date_embauche = ?');
+    values.push(date_embauche || null);
+  }
   if (annuaire_visible !== undefined) { fields.push('annuaire_visible = ?'); values.push(annuaire_visible ? 1 : 0); }
   // pdf_annuaire_visible (29/08) : "Visible sur l'annuaire téléphonique
   // imprimé (PDF)" -- indépendant d'annuaire_visible (self-service, même

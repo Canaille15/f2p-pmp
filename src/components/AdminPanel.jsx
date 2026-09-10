@@ -805,7 +805,7 @@ function ModalCreer({ onConfirm, onClose }) {
 // ─── MODAL SUPPRIMER ─────────────────────────────────────────────────────────
 
 function ModalModifier({ agent, onConfirm, onClose }) {
-  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, is_afo: agent.is_afo || false, is_dpx: agent.is_dpx || false, is_adjoint_dpx: agent.is_adjoint_dpx || false, telephone: "", email: "" });
+  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, is_afo: agent.is_afo || false, is_dpx: agent.is_dpx || false, is_adjoint_dpx: agent.is_adjoint_dpx || false, telephone: "", email: "", date_embauche: agent.date_embauche || "" });
   const [nouveauCp, setNouveauCp] = useState(agent.cp || "");
   const [err, setErr] = useState("");
   const [coordLoading, setCoordLoading] = useState(true);
@@ -848,7 +848,7 @@ function ModalModifier({ agent, onConfirm, onClose }) {
       return setErr(e.message || "Erreur sauvegarde habilitations");
     }
     setHabSaving(false);
-    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, is_afo: form.is_afo, is_dpx: form.is_dpx, is_adjoint_dpx: form.is_adjoint_dpx, telephone: form.telephone.trim(), email: form.email.trim(), ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
+    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, is_afo: form.is_afo, is_dpx: form.is_dpx, is_adjoint_dpx: form.is_adjoint_dpx, telephone: form.telephone.trim(), email: form.email.trim(), date_embauche: form.date_embauche || "", ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
   }
 
   return (
@@ -907,6 +907,13 @@ function ModalModifier({ agent, onConfirm, onClose }) {
                 }}>{f}</button>
             ))}
           </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Date d'arrivée</div>
+          <input type="date" value={form.date_embauche} onChange={e => setForm(p => ({ ...p, date_embauche: e.target.value }))}
+            style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}
+          />
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Optionnel — laisse vide si tu ne connais pas la date exacte (l'agent compte alors comme "présent depuis toujours" dans les statistiques). Sert à Stat'Equip pour refléter les arrivées/départs dans l'évolution de l'âge moyen.</div>
         </div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Réserve régionale</div>

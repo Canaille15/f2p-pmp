@@ -13,6 +13,19 @@ function parseAnneeNaissance(cp) {
   return century + yy;
 }
 
+// Présence réelle d'un agent à une date donnée (10/09, demande d'Olivier :
+// "en fonction des depart et arrivé le courbe s'inflechisse... si l'agent
+// part a une date, il faut que ca recalcule a fonction de sa date de
+// depart") -- date_embauche/date_depart en 'YYYY-MM-DD' (colonnes DATE,
+// dateStrings:['DATE'] dans la config du pool, jamais un objet Date).
+// NULL sur l'une ou l'autre = "présent depuis toujours"/"jamais parti" --
+// comportement inchangé pour tout agent qui n'a pas ces dates renseignées.
+function agentPresentAt(row, refDateStr) {
+  if (row.date_embauche && row.date_embauche > refDateStr) return false;
+  if (row.date_depart && row.date_depart <= refDateStr) return false;
+  return true;
+}
+
 // Fragment identique à celui de formationController.js (getStats) — une session
 // pas encore lancée compte toujours ; une fois lancée, seuls les agents qui
 // n'ont pas retiré le code FOR de leur planning perso comptent encore.
@@ -105,10 +118,22 @@ async function getStats(req, res) {
     // 18/08 avec l'ancienne requête `hc` séparée) — évite deux comptages qui
     // pourraient diverger.
     const [ageRows] = await pool.query(
-      `SELECT a.cp, a.grade, COALESCE(pa.is_reserve,0) AS is_reserve, COALESCE(pa.is_afo,0) AS is_afo,
+      `SELECT a.cp, a.grade, a.date_embauche, a.date_depart,
+              COALESCE(pa.is_reserve,0) AS is_reserve, COALESCE(pa.is_afo,0) AS is_afo,
               COALESCE(pa.is_dpx,0) AS is_dpx, COALESCE(pa.is_adjoint_dpx,0) AS is_adjoint_dpx
        FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
     );
+    // ageRowsActuel (10/09) : n'inclut que les agents réellement présents
+    // AUJOURD'HUI (date_embauche déjà passée, date_depart pas encore
+    // atteinte) -- corrige un bug de fond jamais détecté avant (aucun filtre
+    // par statut n'existait sur ageRows) : un agent marqué "quitté" via le
+    // bouton Départ restait compté indéfiniment dans tous les effectifs.
+    // Sert de base à TOUT ce qui représente "l'équipe actuelle" ci-dessous
+    // (totalAgents, reserveSet, encadrementSet, grades, equipeSet, âge moyen,
+    // pyramide) -- seule computeAgeMoyenAnnee (courbe d'évolution) continue
+    // d'utiliser le `ageRows` brut, avec un filtre de présence PAR ANNÉE.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const ageRowsActuel = ageRows.filter(r => agentPresentAt(r, todayStr));
     // ASFP (29/08) : agent générique (jamais un vrai membre d'équipe), déjà
     // exclu de totalAfo depuis le 25/08 mais pas des autres agrégats -- il
     // se retrouvait donc compté à tort dans "Agents global" et "Agents
@@ -118,8 +143,8 @@ async function getStats(req, res) {
     // INCHANGÉ (totalAfo/totalAsfp plus bas ont encore besoin d'y retrouver
     // ASFP), seuls les 2 agrégats qui représentent un vrai décompte de
     // personnes (totalAgents, equipeSet) l'excluent désormais explicitement.
-    const totalAgents = ageRows.filter(r => r.cp !== 'ASFP').length;
-    const reserveSet = new Set(ageRows.filter(r => r.is_reserve).map(r => r.cp));
+    const totalAgents = ageRowsActuel.filter(r => r.cp !== 'ASFP').length;
+    const reserveSet = new Set(ageRowsActuel.filter(r => r.is_reserve).map(r => r.cp));
     const totalReserve = reserveSet.size;
 
     // ─── Encadrement (DPX/Adj DPX) mis à part (18/08, demande d'Olivier :
@@ -134,7 +159,7 @@ async function getStats(req, res) {
     // net, via une différence d'ensembles pour rester correct même dans le
     // cas rare d'un chevauchement avec Réserve régionale) — jamais retiré du
     // total "Agents global", qui reste un vrai total de tous les agents.
-    const encadrementSet = new Set(ageRows.filter(r => r.is_dpx || r.is_adjoint_dpx).map(r => r.cp));
+    const encadrementSet = new Set(ageRowsActuel.filter(r => r.is_dpx || r.is_adjoint_dpx).map(r => r.cp));
     const totalEncadrement = encadrementSet.size;
     // ASFP (25/08, agent générique "Assistant Formation Professionnel",
     // demande d'Olivier : "il ne faut pas l'ajouter au nombre des AFO. Mais
@@ -143,8 +168,8 @@ async function getStats(req, res) {
     // "nombre des AFO" ci-dessous, compté séparément (totalAsfp). Reste
     // visible avec sa propre ligne dans "📊 Stats → Par AFO" (module AFO,
     // jamais filtré, pas concerné par cette exclusion).
-    const totalAfo = ageRows.filter(r => r.is_afo && r.cp !== 'ASFP').length;
-    const totalAsfp = ageRows.filter(r => r.is_afo && r.cp === 'ASFP').length;
+    const totalAfo = ageRowsActuel.filter(r => r.is_afo && r.cp !== 'ASFP').length;
+    const totalAsfp = ageRowsActuel.filter(r => r.is_afo && r.cp === 'ASFP').length;
 
     // ─── Grades (18/08, demande d'Olivier : "decompté les Cadre Op [...]
     // les Maitrises [...] et Maytises 2", puis en suite immédiate : "affine
@@ -159,7 +184,7 @@ async function getStats(req, res) {
     // équipe/réserve régionale (reserveSet déjà calculé plus haut).
     let totalCadreOp = 0, totalMaitrise = 0, totalMaitrise2 = 0;
     let cadreOpReserve = 0, maitriseReserve = 0, maitrise2Reserve = 0;
-    ageRows.forEach(r => {
+    ageRowsActuel.forEach(r => {
       const g = r.grade || '';
       const estReserve = reserveSet.has(r.cp);
       if (g.startsWith('CP6') || g.startsWith('CO6')) { totalCadreOp++; if (estReserve) cadreOpReserve++; }
@@ -174,13 +199,13 @@ async function getStats(req, res) {
     // "Agents équipe" = tout le monde sauf Réserve régionale ET Encadrement,
     // par différence d'ensembles (jamais une simple soustraction de totaux,
     // qui compterait deux fois un éventuel agent à la fois réserve et DPX).
-    const equipeSet = new Set(ageRows.filter(r => r.cp !== 'ASFP').map(r => r.cp));
+    const equipeSet = new Set(ageRowsActuel.filter(r => r.cp !== 'ASFP').map(r => r.cp));
     reserveSet.forEach(cp => equipeSet.delete(cp));
     encadrementSet.forEach(cp => equipeSet.delete(cp));
     const totalEquipe = equipeSet.size;
 
     let sommeAges = 0, nbAgentsInclus = 0, nbAgentsExclusParseEchec = 0;
-    ageRows.forEach(r => {
+    ageRowsActuel.forEach(r => {
       if (r.is_reserve) return;
       const naissance = parseAnneeNaissance(r.cp);
       if (naissance == null) { nbAgentsExclusParseEchec++; return; }
@@ -215,7 +240,7 @@ async function getStats(req, res) {
     ];
     const pyramideEquipe = new Array(AGE_BRACKETS.length).fill(0);
     const pyramideReserve = new Array(AGE_BRACKETS.length).fill(0);
-    ageRows.forEach(r => {
+    ageRowsActuel.forEach(r => {
       const naissance = parseAnneeNaissance(r.cp);
       if (naissance == null) return;
       const age = year - naissance;
@@ -247,16 +272,31 @@ async function getStats(req, res) {
     }
 
     // ─── Âge moyen hors Réserve régionale, évolution par année (09/09,
-    // portage du mockup) — même fenêtre de 5 ans que coverageReserveParAnnee.
-    // Approximation assumée, comme ailleurs dans ce module (is_reserve n'est
-    // lui non plus jamais historisé, voir computeCoverageReserve) : recalcule
-    // l'âge de l'effectif ACTUEL à chaque année de la fenêtre (year -
-    // naissance), sans reconstituer qui était réellement en poste chaque
-    // année passée — jamais stocké.
+    // portage du mockup ; historisée le 10/09) — même fenêtre de 5 ans que
+    // coverageReserveParAnnee. Olivier, en testant avec un agent de test au
+    // CP "00..." (donc ~26 ans) : "le graphique reste rectiligne. et ca
+    // modifie toute les annees en consequence" — confirmé exact, la version
+    // d'origine recalculait l'âge de l'effectif ACTUEL à chaque année de la
+    // fenêtre, une droite parfaite de pente +1/an quel que soit l'effectif,
+    // sans jamais refléter une vraie arrivée/un vrai départ. Corrigée pour
+    // reconstruire, pour chaque année Y de la fenêtre, le VRAI effectif
+    // présent au 31/12/Y (agentPresentAt, sur `ageRows` brut — jamais
+    // `ageRowsActuel`, qui ne reflète que l'équipe d'AUJOURD'HUI) : un agent
+    // dont `date_embauche` est postérieure au 31/12/Y n'est pas encore
+    // compté ; un agent dont `date_depart` est déjà passée à cette date ne
+    // l'est plus (dès l'année où il quitte, plus jamais dans les années
+    // suivantes) — "vendredi 11 et le 16 novembre il y aura 2 depart",
+    // les deux sortiront donc de la courbe 2026 dès leur date effective, sans
+    // action supplémentaire une fois la fiche "Départ" renseignée. is_reserve
+    // reste la seule valeur non historisée (même limite que
+    // computeCoverageReserve) — approximation assumée et documentée depuis
+    // l'origine de ce calcul, hors périmètre de cette demande.
     function computeAgeMoyenAnnee(y) {
+      const refDateStr = `${y}-12-31`;
       let somme = 0, n = 0;
       ageRows.forEach(r => {
         if (r.is_reserve) return;
+        if (!agentPresentAt(r, refDateStr)) return;
         const naissance = parseAnneeNaissance(r.cp);
         if (naissance == null) return;
         somme += (y - naissance);
