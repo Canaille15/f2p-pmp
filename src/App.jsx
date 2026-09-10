@@ -15,86 +15,6 @@ import FormationView, { AfoView } from "./components/FormationView";
 import StatsEquipeView from "./components/StatsEquipeView";
 
 
-// ─── SYNC SUPABASE ────────────────────────────────────────────────────────────
-
-// Sauvegarder le profil agent dans Supabase
-async function sbSaveProfile(agentId, data) {
-  return sbFetch(`agent_profiles?on_conflict=agent_id`, {
-    method: 'POST',
-    body: JSON.stringify({
-      agent_id: agentId,
-      pin_hash: data.pinHash||null,
-      is_admin: data.isAdmin||false,
-      roulement: data.roulement||null,
-      is_reserve: data.isReserve||false,
-      familles_hab: data.famillesHab||null,
-      habilitations: data.habilitations||{},
-      agent_colors: data.agentColors||{},
-      pause_figee: data.pauseFigee||{},
-      compteur_corrections: data.compteurCorrections||{},
-      depart_date: data.departDate||null,
-      // Nouveaux champs synchronisés multi-appareils
-      fetes_tracking: data.fetesTracking||{},
-      pause_figee_fia_mois: data.pauseFigeeFiaMois||{},
-      pause_figee_fia_done: data.pauseFigeeFiaDone||{},
-      demandes_conges: data.demandesConges||[],
-      notifications_acquittees: data.notificationsAcquittees||[],
-      updated_at: new Date().toISOString(),
-    }),
-  });
-}
-
-// Charger le profil agent depuis Supabase
-async function sbLoadProfile(agentId) {
-  const data = await sbFetch(`agent_profiles?agent_id=eq.${agentId}&select=*`);
-  return data?.[0] || null;
-}
-
-// Sauvegarder une entrée de planning
-async function sbSaveEntry(agentId, dk, entry) {
-  return sbFetch(`schedule_entries?on_conflict=agent_id,date`, {
-    method: 'POST',
-    body: JSON.stringify({
-      agent_id: agentId,
-      date: dk,
-      equipe: entry.equipe||null,
-      equipe2: entry.equipe2||null,
-      js_code: entry.jsCode||null,
-      horaires: entry.horaires||null,
-      prive: entry.prive||false,
-      fin_nuit: entry.finNuit||false,
-      impression_at: entry.impressionAt||null,
-      updated_at: new Date().toISOString(),
-    }),
-  });
-}
-
-// Charger tout le planning d'un agent
-async function sbLoadSchedule(agentId) {
-  const data = await sbFetch(`schedule_entries?agent_id=eq.${agentId}&select=*`);
-  if (!data) return {};
-  const result = {};
-  data.forEach(row => {
-    result[`${row.agent_id}-${row.date}`] = {
-      equipe: row.equipe,
-      equipe2: row.equipe2,
-      jsCode: row.js_code,
-      horaires: row.horaires,
-      prive: row.prive,
-      finNuit: row.fin_nuit,
-      impressionAt: row.impression_at,
-    };
-  });
-  return result;
-}
-
-// Supprimer une entrée de planning
-async function sbDeleteEntry(agentId, dk) {
-  return sbFetch(`schedule_entries?agent_id=eq.${agentId}&date=eq.${dk}`, {
-    method: 'DELETE'
-  });
-}
-
 // ─── PERSISTANCE LOCALE (localStorage) ───────────────────────────────────────
 function useSwipeHandlers(onSwipeLeft, onSwipeRight, threshold=50){
   const startX=useRef(null);
@@ -158,36 +78,6 @@ try {
     localStorage.setItem("f2ppmp_version", DATA_VERSION);
   }
 } catch {}
-
-// ─── SUPABASE ────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://vrhykmrbdakjycfqbzpt.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZyaHlrbXJiZGFranljZnFienB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNTM0MTAsImV4cCI6MjA5NTgyOTQxMH0.LMAwtDR3hSliWV89KO9cRIaC3Wy2QGDh5r8Hl_G_4pY";
-async function sbFetch(path, opts={}) {
-  if (!SUPABASE_URL || SUPABASE_URL==="VOTRE_URL_SUPABASE") return null;
-  const {headers:extraHeaders, ...restOpts} = opts;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...restOpts,
-    headers:{
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json",
-      "Prefer": restOpts.method==="POST"?"resolution=merge-duplicates":"",
-      ...(extraHeaders||{}),
-    },
-  });
-  if (!res.ok) {
-    console.error("Supabase error:", res.status, path);
-    return null;
-  }
-  return res.json().catch(()=>null);
-}
-const sb = {
-  select:(t,q="")=>sbFetch(`${t}?${q}`),
-  insert:(t,b)=>sbFetch(t,{method:"POST",body:JSON.stringify(b)}),
-  update:(t,m,b)=>sbFetch(`${t}?${m}`,{method:"PATCH",body:JSON.stringify(b),headers:{"Prefer":"return=representation"}}),
-  delete:(t,m)=>sbFetch(`${t}?${m}`,{method:"DELETE"}),
-  upsert:(t,b)=>sbFetch(t,{method:"POST",body:JSON.stringify(b),headers:{"Prefer":"resolution=merge-duplicates,return=representation"}}),
-};
 
 // ─── DONNÉES MÉTIER ───────────────────────────────────────────────────────────
 const FAMILLES = {
@@ -9327,7 +9217,7 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
   const swipeMonth=useSwipeHandlers(()=>setMonthOff(m=>m+1),()=>setMonthOff(m=>m-1));
   const [showColorPicker,setShowColorPicker]=useState(false);
   const [showRemplissage,setShowRemplissage]=useState(false);
-  // agentColors : stocké dans agentProfiles pour sync Supabase + réactivité immédiate.
+  // agentColors : stocké dans agentProfiles pour sync backend + réactivité immédiate.
   // Source unique de vérité : agentProfiles[agent.id].agentColors — plus d'état
   // parallèle séparé (l'ancien `agentCouleurs` dupliqué au niveau App a été
   // supprimé le 17/07 : il pouvait se désynchroniser entre appareils et, combiné
@@ -9336,7 +9226,7 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
   const agKeyColors=agent?.immatriculation||agent?.cp||agent?.id;
   const agentColors = agentProfiles[agKeyColors]?.agentColors || {};
 
-  // Setter : met à jour agentProfiles directement (→ Supabase via l'autosave
+  // Setter : met à jour agentProfiles directement (→ backend via l'autosave
   // générique). Lit toujours l'état frais dans l'updater (p[agKeyColors]),
   // jamais une variable capturée au rendu — voir feedback_stale_closure_setters.
   const setAgentColors = (updater) => {
@@ -9428,7 +9318,7 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
           }
         } else { delete next[key]; }
       }
-      // Sync Supabase directe
+      // Sync backend directe
       setTimeout(()=>{
         const agCp = agent.immatriculation || agent.cp || agent.id;
  if(next[key]) api.planning.saveEntry(agCp, dk, next[key]);
@@ -13120,7 +13010,7 @@ export default function App(){
 
   // ── SYNC AU FOCUS (multi-appareils) ──────────────────────────────────────────
   // Quand l'agent revient sur l'appli (depuis un autre onglet ou appareil),
-  // on recharge ses données depuis Supabase pour refléter les dernières modifications
+  // on recharge ses données depuis le backend pour refléter les dernières modifications
   useEffect(()=>{
     const handleFocus = () => {
       if(!currentUser?.agent?.id) return;
@@ -13164,7 +13054,7 @@ export default function App(){
     };
   },[currentUser?.agent?.id]); // eslint-disable-line
 
-  // Charger le planning depuis Supabase au login
+  // Charger le planning depuis le backend au login
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
@@ -13257,7 +13147,7 @@ export default function App(){
   },[currentUser?.agent?.id]); // eslint-disable-line
 
 
-  // Sauvegarder le profil dans Supabase quand il change
+  // Sauvegarder le profil dans le backend quand il change
   useEffect(()=>{
     if(!currentUser?.agent?.id) return;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
@@ -13427,7 +13317,7 @@ export default function App(){
   // Redirection si non connecté
   if(!currentUser) return <LoginPage onLogin={handleLogin}/>;
 
-  // Charger les données Supabase si pas encore fait (au premier rendu après login)
+  // Charger les données du backend si pas encore fait (au premier rendu après login)
   if(currentUser?.agent?.id && !loadedRef.current[currentUser.agent.id]){
     loadedRef.current[currentUser.agent.id] = true;
     const agentId = currentUser.agent.immatriculation || currentUser.agent.cp || currentUser.agent.id;
