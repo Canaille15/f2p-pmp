@@ -1583,8 +1583,20 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
     diversRows.push({poste:{jsCode:"JEQ",label:"Journée équipe",subtitle:""},jsCode:"JEQ",agents:enJourneeEquipe,famille:null,maxSlots:99});
   }
   // Formation — pave unique : badge generique FOR + tous les postes-formation (K-PAR, K-PRCI, F-PRCI...)
+  // fix (11/09, cas reel Alexandre MENDY, lundi 14/09) : un agent en doublon/
+  // formation sur un VRAI poste (jsCode reconnu, ex "PILCLO") apparaissait
+  // deux fois -- une fois dans la ligne du poste lui-meme (elargie a raison
+  // par hasFormationDoublon plus haut, aux cotes du titulaire), une fois de
+  // plus ici via equipe==="FOR" (mis par handleCpsImport des que le mot
+  // "formation" figure sur la ligne, y compris quand jsCode designe deja un
+  // poste reel). en.enFormation (le marqueur "/" SNCF) implique TOUJOURS que
+  // l'agent est deja rendu dans sa ligne de poste dediee -- exclu ici pour ne
+  // jamais le compter deux fois. Les entrees equipe="FOR" sans ce marqueur
+  // (jsCode formation pur type K-PAR/AFOPRCI, ou aucun jsCode reel) restent
+  // inchangees, seule vraie source pour elles.
   const enFormation=agents.filter(a=>{
     const en=schedule[`${a.id}-${dateKey}`];
+    if(en?.enFormation)return false;
     return en&&(en.equipe==="FOR"||jsCodesFormationPostes.has(en.jsCode)||(en.formation&&!en.equipe));
   });
   if(enFormation.length>0){
