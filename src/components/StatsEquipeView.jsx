@@ -588,7 +588,7 @@ function CoverageParAnneeTable({ data, anneeActuelle }) {
 }
 
 function AgeEvolutionSection({ data, anneeActuelle }) {
-  const [ouvert, setOuvert] = useState(true);
+  const [ouvert, setOuvert] = useState(false);
   return (
     <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
       <SectionHeader icon="📈" titre="Évolution par année" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail" />
