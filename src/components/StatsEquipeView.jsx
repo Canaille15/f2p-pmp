@@ -587,107 +587,6 @@ function CoverageParAnneeTable({ data, anneeActuelle }) {
   );
 }
 
-// Évolution de l'âge moyen hors Réserve régionale, par année (09/09, portage
-// du mockup validé par Olivier -- "tu peux faire ca, sans rien casser") --
-// "même mécanisme" que CoverageEvolutionChart ci-dessus (ligne + points +
-// étiquette de fin + survol), appliqué à une seule série -- pas de légende
-// nécessaire, le titre du bloc suffit (une série unique n'a rien à
-// distinguer). Couleur --age-equipe (violet, theme.css) -- choisie pour ne
-// jamais chevaucher les teintes amber/bleu/vert déjà utilisées juste
-// au-dessus par la courbe de couverture, sur la même page. Un point sans
-// donnée coupe la ligne plutôt que de tracer un faux âge (même principe que
-// le trou "aucun import CPS" de la courbe de couverture).
-function AgeEvolutionChart({ data, anneeActuelle }) {
-  const [hoverIdx, setHoverIdx] = useState(null);
-  const rows = useMemo(() => [...data].sort((a, b) => a.annee - b.annee), [data]);
-  const n = rows.length;
-  if (n < 2) return null;
-
-  const W = 560, H = 150;
-  const padL = 32, padR = 14, padT = 12, padB = 26;
-  const plotW = W - padL - padR, plotH = H - padT - padB;
-  const xAt = (i) => padL + (plotW * i) / (n - 1);
-  const colW = plotW / (n - 1);
-
-  const vals = rows.filter(r => r.moyenne != null).map(r => r.moyenne);
-  let yMin = 0, yMax = 60;
-  if (vals.length) {
-    const lo = Math.min(...vals), hi = Math.max(...vals);
-    const pad = Math.max((hi - lo) * 0.35, 1);
-    yMin = Math.max(0, lo - pad);
-    yMax = hi + pad;
-    if (yMax - yMin < 2) { yMax += 1; yMin = Math.max(0, yMin - 1); }
-  }
-  const yAt = (v) => padT + plotH - (plotH * (Math.max(yMin, Math.min(yMax, v)) - yMin)) / (yMax - yMin);
-
-  const points = rows.map((r, i) => (r.moyenne != null ? { i, x: xAt(i), y: yAt(r.moyenne), v: r.moyenne } : null));
-  const segmentsOf = (pts) => {
-    const segs = []; let cur = [];
-    pts.forEach(p => { if (p) cur.push(p); else { if (cur.length) segs.push(cur); cur = []; } });
-    if (cur.length) segs.push(cur);
-    return segs;
-  };
-  const last = [...points].reverse().find(Boolean);
-  const yTicks = [0, 0.5, 1].map(f => Math.round((yMin + (yMax - yMin) * f) * 10) / 10);
-
-  return (
-    <div style={{ marginBottom: 4 }}>
-      <div style={{ overflowX: "auto" }}>
-        <div style={{ position: "relative", width: W }}>
-          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Âge moyen hors Réserve régionale, évolution par année">
-            {yTicks.map((t, ti) => (
-              <g key={ti}>
-                <line x1={padL} x2={W - padR} y1={yAt(t)} y2={yAt(t)} stroke="var(--border)" strokeWidth="1" />
-                <text x={padL - 6} y={yAt(t) + 3} textAnchor="end" fontSize="9.5" fill="var(--text-muted)">{t} ans</text>
-              </g>
-            ))}
-            {hoverIdx != null && (
-              <line x1={xAt(hoverIdx)} x2={xAt(hoverIdx)} y1={padT} y2={padT + plotH} stroke="var(--text-muted)" strokeWidth="1" opacity="0.5" />
-            )}
-            {segmentsOf(points).map((seg, si) => (
-              <polyline key={si} points={seg.map(p => `${p.x},${p.y}`).join(" ")}
-                fill="none" stroke="var(--age-equipe)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            ))}
-            {points.map((p, i) => p && (
-              <circle key={i} cx={p.x} cy={p.y} r={hoverIdx === i ? 5.5 : 4}
-                fill="var(--age-equipe)" stroke="var(--bg-card)" strokeWidth="2" style={{ transition: "r .1s" }} />
-            ))}
-            {last && (
-              <text x={last.x + 10} y={last.y + 3} fontSize="10.5" fontWeight="700" fill="var(--text-primary)">{last.v} ans</text>
-            )}
-            {rows.map((r, i) => (
-              <text key={r.annee} x={xAt(i)} y={H - 8} textAnchor="middle" fontSize="10.5"
-                fontWeight={r.annee === anneeActuelle ? 800 : 600}
-                fill={r.annee === anneeActuelle ? "var(--text-primary)" : "var(--text-secondary)"}>{r.annee}</text>
-            ))}
-            {rows.map((r, i) => (
-              <rect key={`hit-${r.annee}`} x={xAt(i) - colW / 2} y={padT} width={colW} height={plotH}
-                fill="transparent" style={{ cursor: "pointer" }} tabIndex={0} role="button"
-                aria-label={`${r.annee} : âge moyen ${r.moyenne != null ? `${r.moyenne} ans` : "aucune donnée"}`}
-                onMouseEnter={() => setHoverIdx(i)} onMouseLeave={() => setHoverIdx(null)}
-                onFocus={() => setHoverIdx(i)} onBlur={() => setHoverIdx(null)} />
-            ))}
-          </svg>
-          {hoverIdx != null && (
-            <div style={{
-              position: "absolute", top: 4,
-              left: `${Math.min(Math.max((xAt(hoverIdx) / W) * 100, 18), 82)}%`,
-              transform: "translateX(-50%)", background: "var(--bg-card)", border: "1px solid var(--border)",
-              borderRadius: 8, padding: "6px 10px", boxShadow: "0 2px 8px var(--shadow-card)",
-              pointerEvents: "none", minWidth: 110, zIndex: 2,
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: "var(--text-primary)", marginBottom: 2 }}>{rows[hoverIdx].annee}</div>
-              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-                {rows[hoverIdx].moyenne != null ? <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{rows[hoverIdx].moyenne} ans</span> : "—"}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AgeEvolutionSection({ data, anneeActuelle }) {
   const [ouvert, setOuvert] = useState(true);
   return (
@@ -695,7 +594,6 @@ function AgeEvolutionSection({ data, anneeActuelle }) {
       <SectionHeader icon="📈" titre="Évolution par année" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} labelOuvert="Voir le détail" />
       {ouvert && (
         <div style={{ marginTop: 10 }}>
-          <AgeEvolutionChart data={data} anneeActuelle={anneeActuelle} />
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
               <thead>
