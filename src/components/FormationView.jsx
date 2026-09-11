@@ -190,19 +190,50 @@ export default function FormationView({ currentAgent, agentProfiles, setAgentPro
 // ─── ESPACE AFO — vue séparée du lateral (25/08, voir en-tête du fichier) ───
 export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }) {
   const agentId = currentAgent?.immatriculation || currentAgent?.cp || currentAgent?.id;
-  const [afoSubTab, setAfoSubTab] = useState("sessions");
+  const [afoSubTab, setAfoSubTab] = useState("mes");
   // Permet a "Tes sessions" d'ouvrir directement le detail d'une session (via
-  // SessionDetailModal, cote Gestion) sans faire chercher la session dans la
-  // liste globale — demande explicite d'Olivier (10/08) : trop de
+  // SessionDetailModal, onglet "Sessions") sans faire chercher la session
+  // dans la liste globale — demande explicite d'Olivier (10/08) : trop de
   // sous-menus, trop dur de retrouver ses propres journees de formateur.
   const [pendingSessionId, setPendingSessionId] = useState(null);
-  const goToSession = (id) => { setPendingSessionId(id); setAfoSubTab("gestion"); };
+  const goToSession = (id) => { setPendingSessionId(id); setAfoSubTab("planning"); };
 
+  // Catalogue partage entre l'onglet Catalogue et l'onglet Sessions (creation
+  // de session) -- charge une seule fois au niveau de l'espace AFO plutot que
+  // de dupliquer le fetch par onglet (comme avant, quand les deux vivaient
+  // ensemble sous "Gestion").
+  const [catalogue, setCatalogue] = useState([]);
+  const [loadingCat, setLoadingCat] = useState(true);
+  const chargerCatalogue = useCallback(() => {
+    setLoadingCat(true);
+    api.formation.getCatalogue().then(rows => setCatalogue(rows || [])).catch(() => {}).finally(() => setLoadingCat(false));
+  }, []);
+  useEffect(() => { chargerCatalogue(); }, [chargerCatalogue]);
+
+  // 11/09 (Olivier : "regarde toutes la parti afo [...] la rendre plus simple
+  // ergonomique et evidente") -- "Gestion" etait le seul des 3 onglets
+  // principaux a cacher lui-meme 2 sous-onglets (Catalogue/Sessions),
+  // asymetrique avec "Tes sessions"/"Stats" qui eux etaient directs. Aplati
+  // en 4 onglets a plat, tous au meme niveau, plus aucun sous-menu cache.
   const afoSubTabs = [
-    { k: "sessions", label: "👨‍🏫 Tes sessions" },
-    { k: "gestion", label: "📋 Gestion" },
-    { k: "stats", label: "📊 Stats" },
+    { k: "mes",       label: "👨‍🏫 Tes sessions" },
+    { k: "catalogue", label: "📖 Catalogue" },
+    { k: "planning",  label: "📅 Planning" },
+    { k: "stats",     label: "📊 Stats" },
   ];
+  // 11/09 (Olivier, juste après l'aplatissement : "c'est quoi la difference
+  // entre tes sessions et sessions. pas tres clair") -- les libellés courts
+  // ("Tes sessions" vs "Sessions") ne suffisaient pas à distinguer "les
+  // sessions où TU animes" (sous-liste) de "toutes les sessions créées par
+  // n'importe quel AFO" (gestion complète, création/édition/lancement).
+  // Rallonger le libellé du bouton aurait débordé sur mobile (grille à 2
+  // colonnes de ~158px) -- une phrase de contexte sous les onglets, affichée
+  // uniquement pour ces 2 cas ambigus, règle ça sans risque de mise en page.
+  const afoSubTabHints = {
+    mes: "Uniquement les sessions où TU animes comme formateur.",
+    catalogue: "Les TYPES de formation qui existent (durée, format, catégorie) — pas encore de date ni de participants.",
+    planning: "Le planning de TOUTES les sessions réellement programmées (dates, formateur(s), participants) — création, édition, lancement.",
+  };
 
   return (
     <div style={{ padding: "12px", maxWidth: 1000, margin: "0 auto", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif" }}>
@@ -212,21 +243,29 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
       </div>
 
       <div style={{ background: NAVY.bgLight, border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 14, padding: 14 }}>
-        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 6, marginBottom: 14 }}>
           {afoSubTabs.map(t => (
             <button key={t.k} onClick={() => setAfoSubTab(t.k)}
               style={{
-                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                fontSize: 12.5, fontWeight: 700,
+                padding: "8px 14px", borderRadius: 9, border: "none", cursor: "pointer",
+                fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
                 background: afoSubTab === t.k ? NAVY.from : "#fff",
                 color: afoSubTab === t.k ? "#fff" : NAVY.accentDark,
+                boxShadow: afoSubTab === t.k ? "0 2px 6px rgba(15,76,129,.35)" : "0 1px 2px rgba(15,23,42,.06)",
+                transition: "background .15s ease, box-shadow .15s ease",
               }}>
               {t.label}
             </button>
           ))}
         </div>
-        {afoSubTab === "sessions" && <MesSessionsFormateurTab agentId={agentId} onGoToSession={goToSession} />}
-        {afoSubTab === "gestion" && <GestionTab agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
+        {afoSubTabHints[afoSubTab] && (
+          <div style={{ fontSize: 11.5, color: NAVY.accentDark, background: "#fff", border: `1px dashed ${NAVY.borderLight}`, borderRadius: 8, padding: "6px 10px", marginBottom: 12 }}>
+            💡 {afoSubTabHints[afoSubTab]}
+          </div>
+        )}
+        {afoSubTab === "mes" && <MesSessionsFormateurTab agentId={agentId} onGoToSession={goToSession} />}
+        {afoSubTab === "catalogue" && <CatalogueSection catalogue={catalogue} loading={loadingCat} onChange={chargerCatalogue} />}
+        {afoSubTab === "planning" && <SessionsSection catalogue={catalogue} agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
         {afoSubTab === "stats" && <StatsTab />}
       </div>
     </div>
@@ -495,37 +534,10 @@ function DeclarerFormationForm({ onCancel, onSaved }) {
 }
 
 // ─── GESTION (AFO) ──────────────────────────────────────────────────────────
-
-function GestionTab({ agents, refreshProfil, refreshSchedule, pendingSessionId, onConsumePending }) {
-  const [sub, setSub] = useState("catalogue");
-  const [catalogue, setCatalogue] = useState([]);
-  const [loadingCat, setLoadingCat] = useState(true);
-
-  const chargerCatalogue = useCallback(() => {
-    setLoadingCat(true);
-    api.formation.getCatalogue().then(rows => setCatalogue(rows || [])).catch(() => {}).finally(() => setLoadingCat(false));
-  }, []);
-  useEffect(() => { chargerCatalogue(); }, [chargerCatalogue]);
-  // Arrivee depuis "Mes formations" (👨‍🏫 Tes sessions formateur) : bascule
-  // automatiquement sur le sous-onglet Sessions, qui se charge d'ouvrir la
-  // session precise (voir SessionsSection).
-  useEffect(() => { if (pendingSessionId) setSub("sessions"); }, [pendingSessionId]);
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        {[["catalogue", "📖 Catalogue"], ["sessions", "📅 Sessions"]].map(([k, l]) => (
-          <button key={k} onClick={() => setSub(k)}
-            style={{ padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: sub === k ? NAVY.from : "#f1f5f9", color: sub === k ? "#fff" : "#64748b" }}>
-            {l}
-          </button>
-        ))}
-      </div>
-      {sub === "catalogue" && <CatalogueSection catalogue={catalogue} loading={loadingCat} onChange={chargerCatalogue} />}
-      {sub === "sessions" && <SessionsSection catalogue={catalogue} agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={onConsumePending} />}
-    </div>
-  );
-}
+// GestionTab (le sous-menu "Gestion" avec son propre Catalogue/Sessions
+// imbriqué) a été retiré le 11/09 -- Catalogue et Sessions sont désormais
+// deux onglets directs de AfoView (voir plus haut), le state du catalogue
+// vit au niveau de AfoView et est partagé entre eux.
 
 // 26/08 (Olivier : "propose-moi" une presentation en colonne pour le
 // catalogue) : vraie grille de colonnes par categorie (Intitulé / Durée /
