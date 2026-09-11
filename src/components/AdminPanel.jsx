@@ -343,13 +343,23 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   }
   async function handleDepart(agent, dateDepart) {
     try {
-      await api.agents.marquerDepart(agent.cp, dateDepart);
-      afficherMsg("ok", `${agent.prenom} ${agent.nom} marqué comme quitté`);
+      const result = await api.agents.marquerDepart(agent.cp, dateDepart);
+      afficherMsg("ok", result?.message || `${agent.prenom} ${agent.nom} marqué comme quitté`);
       setModal(null);
       charger();
       onAgentsChanged?.();
     } catch (e) {
       afficherMsg("err", e.message || "Erreur départ agent");
+    }
+  }
+  async function handleAnnulerDepartProgramme(agent) {
+    try {
+      await api.agents.annulerDepartProgramme(agent.cp);
+      afficherMsg("ok", `Départ programmé annulé pour ${agent.prenom} ${agent.nom}`);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur annulation départ programmé");
     }
   }
   async function handleReactiver(agent) {
@@ -684,6 +694,21 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                 </button>
               </div>
 
+              {/* Départ programmé (date future, aucun effet avant cette date) */}
+              {a.statut !== "quitte" && a.date_depart && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fefce8", border: "1px solid #fde68a", borderRadius: 8, padding: "6px 10px", fontSize: 12, color: "#92400e", fontWeight: 600, marginBottom: 8 }}>
+                  🕓 Départ prévu le {new Date(a.date_depart).toLocaleDateString("fr-FR")} — aucun effet avant cette date
+                  <button onClick={() => setModal({ type: "delete", agent: a })}
+                    style={{ marginLeft: "auto", background: "none", border: "none", color: "#92400e", textDecoration: "underline", cursor: "pointer", fontSize: 11.5, fontWeight: 600 }}>
+                    Modifier
+                  </button>
+                  <button onClick={() => handleAnnulerDepartProgramme(a)}
+                    style={{ background: "none", border: "none", color: "#92400e", textDecoration: "underline", cursor: "pointer", fontSize: 11.5, fontWeight: 600 }}>
+                    Annuler
+                  </button>
+                </div>
+              )}
+
               {/* Actions */}
               {a.statut === "quitte" ? (
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap", borderTop: "1px solid #f1f5f9", paddingTop: 10, alignItems: "center" }}>
@@ -726,7 +751,7 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
         <ModalModifier agent={modal.agent} onConfirm={(data) => handleUpdate(modal.agent, data)} onClose={() => setModal(null)} />
       )}
       {modal?.type === "delete" && (
-        <ModalDepart agent={modal.agent} onConfirmDepart={(date) => handleDepart(modal.agent, date)} onConfirmSuppression={() => handleDelete(modal.agent)} onClose={() => setModal(null)} />
+        <ModalDepart agent={modal.agent} onConfirmDepart={(date) => handleDepart(modal.agent, date)} onConfirmSuppression={() => handleDelete(modal.agent)} onAnnulerDepartProgramme={handleAnnulerDepartProgramme} onClose={() => setModal(null)} />
       )}
       {modal?.type === "reset" && (
         <ModalResetPin agent={modal.agent} onConfirm={(pin) => handleResetPin(modal.agent, pin)} onClose={() => setModal(null)} />
@@ -1011,9 +1036,10 @@ function ModalModifier({ agent, onConfirm, onClose }) {
 // aurait rempli à l'avance et oublié d'effacer, qui polluerait sinon Planning
 // Prévisionnel), tout ce qui précède est conservé, la connexion est bloquée.
 // La suppression définitive reste possible mais discrète, en dernier recours.
-function ModalDepart({ agent, onConfirmDepart, onConfirmSuppression, onClose }) {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+function ModalDepart({ agent, onConfirmDepart, onConfirmSuppression, onAnnulerDepartProgramme, onClose }) {
+  const [date, setDate] = useState(agent.date_depart || new Date().toISOString().slice(0, 10));
   const [confirmSuppression, setConfirmSuppression] = useState(false);
+  const aDejaDepartProgramme = agent.statut === "actif" && !!agent.date_depart;
 
   return (
     <Modal title="🚪 Départ d'un agent" onClose={onClose}>
@@ -1028,12 +1054,18 @@ function ModalDepart({ agent, onConfirmDepart, onConfirmSuppression, onClose }) 
           />
         </div>
         <div style={{ fontSize: 12, color: "#64748b" }}>
-          Le planning après cette date sera supprimé (prévisionnel non pertinent après le départ). Tout ce qui précède — planning réel, formations, échanges — est conservé. La connexion de l'agent sera bloquée, sa fiche reste consultable via le filtre "Quittés".
+          Si la date choisie est aujourd'hui ou déjà passée, le départ est immédiat : le planning après cette date est supprimé (prévisionnel non pertinent après le départ), tout ce qui précède est conservé, et la connexion de l'agent est bloquée aussitôt. Si la date est dans le futur, rien de tout ça n'a lieu tant que cette date n'est pas atteinte — l'agent reste actif normalement (connexion possible, planning intact) : c'est un simple départ programmé, la date reste modifiable à tout moment en cas de report en rappelant ce même bouton.
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
           <button onClick={() => onConfirmDepart(date)} style={{ flex: 1, padding: "10px", background: "#78716c", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Confirmer le départ</button>
         </div>
+        {aDejaDepartProgramme && (
+          <button onClick={() => { onAnnulerDepartProgramme(agent); onClose(); }}
+            style={{ background: "none", border: "none", color: "#92400e", cursor: "pointer", fontSize: 11.5, fontWeight: 600, textDecoration: "underline", textAlign: "left" }}>
+            Annuler le départ programmé (l'agent redevient actif sans date de départ)
+          </button>
+        )}
 
         <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: 10, marginTop: 4 }}>
           {!confirmSuppression ? (

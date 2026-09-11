@@ -211,6 +211,10 @@ export const agents = {
   /** Réactive un agent marqué quitté (admin) */
   reactiver: (cp) =>
     apiFetch(`/agents/${cp}/reactiver`, { method: 'PATCH' }),
+
+  /** Annule un départ programmé (date future) pas encore effectif (admin) */
+  annulerDepartProgramme: (cp) =>
+    apiFetch(`/agents/${cp}/annuler-depart-programme`, { method: 'PATCH' }),
 };
 
 // ─── MODULE PLANNING ─────────────────────────────────────────────────────────

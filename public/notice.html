@@ -331,7 +331,7 @@
   <div class="logo">🚆</div>
   <h1>Notice d'utilisation — F2P.PMP</h1>
   <p>L'outil de planning partagé de tous les agents PRCI et PAR de Paris Montparnasse. Ce guide explique, module par module, comment s'en servir et les règles qui s'appliquent derrière chaque écran.</p>
-  <div class="meta">Dernière mise à jour : 9 septembre 2026</div>
+  <div class="meta">Dernière mise à jour : 11 septembre 2026</div>
   <button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
 </div>
 
@@ -971,8 +971,10 @@
       <h3>🚪 Départ d'un agent</h3>
       <div class="callout rule">
         <div class="callout-title">📖 Comment ça fonctionne</div>
-        <p>Le bouton « 🚪 Départ » (visible sur chaque fiche active) ouvre une fenêtre avec un seul champ « Date de départ ». « Confirmer le départ » fait deux choses en une action : vide le planning strictement <em>après</em> cette date (garde tout jusqu'à cette date inclus — rien n'est jamais supprimé en cascade) et marque la fiche comme quittée avec la date enregistrée.</p>
-        <p>La connexion de l'agent est bloquée immédiatement, sa fiche disparaît de la liste par défaut et devient accessible via le filtre « 🚪 Voir les quittés » — un bouton « ↺ Réactiver » y reste disponible (ne restaure pas le planning vidé). La vraie suppression définitive reste possible via un lien discret « Suppression définitive (irréversible, déconseillé) », réservée à un cas rare (fiche créée par erreur).</p>
+        <p>Le bouton « 🚪 Départ » (visible sur chaque fiche active) ouvre une fenêtre avec un seul champ « Date de départ » (modifiable à tout moment tant que le départ n'est pas encore effectif — en rappelant simplement ce même bouton). Ce qui se passe dépend de la date choisie :</p>
+        <p><span class="b">Date déjà atteinte (aujourd'hui ou passée)</span> — effet immédiat, comme avant : le planning est vidé strictement <em>après</em> cette date (garde tout jusqu'à cette date inclus — rien n'est jamais supprimé en cascade), la fiche passe « quittée » avec la date enregistrée, et la connexion de l'agent est bloquée aussitôt.</p>
+        <p><span class="b">Date dans le futur — départ programmé</span> — aucun effet tant que cette date n'est pas atteinte : l'agent reste actif normalement (connexion possible, planning intact). Sa fiche affiche un bandeau « 🕓 Départ prévu le JJ/MM/AAAA » avec deux liens : « Modifier » (reporter ou avancer la date) et « Annuler » (efface la date de départ, l'agent redevient une fiche active ordinaire, sans aucune trace). Une fois la date atteinte, la bascule vers le départ effectif (blocage + nettoyage du planning) se fait automatiquement, sans action de l'admin — à la prochaine tentative de connexion de l'agent lui-même, ou dès la prochaine ouverture du panneau Admin si personne ne s'est reconnecté depuis.</p>
+        <p>Une fois le départ effectif, la fiche disparaît de la liste par défaut et devient accessible via le filtre « 🚪 Voir les quittés » — un bouton « ↺ Réactiver » y reste disponible (ne restaure pas le planning vidé). La vraie suppression définitive reste possible via un lien discret « Suppression définitive (irréversible, déconseillé) », réservée à un cas rare (fiche créée par erreur).</p>
       </div>
 
       <h3>📇 Annuaire téléphonique imprimable (PDF)</h3>

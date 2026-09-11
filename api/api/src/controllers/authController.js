@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt    = require('jsonwebtoken');
 const crypto = require('crypto');
 const pool   = require('../config/db');
+const { sweepAgent } = require('../utils/departSweep');
 
 // Emet le token + la session pour un agent deja authentifie (login normal ou
 // creation de compte) — factorise pour eviter la duplication entre les deux.
@@ -24,6 +25,7 @@ async function login(req, res) {
   if (!cp || !pin) return res.status(400).json({ error: 'CP et PIN requis' });
   if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (4 chiffres)' });
   try {
+    await sweepAgent(cp).catch(e => console.error('sweepAgent (login):', e));
     const [rows] = await pool.query(
       `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, a.statut, au.pin_hash, au.is_admin, pa.is_afo, pa.familles_hab AS famille
        FROM agent a JOIN auth au ON au.cp_agent = a.cp LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp WHERE a.cp = ?`, [cp]);
@@ -51,6 +53,7 @@ async function register(req, res) {
   if (!cp || !pin) return res.status(400).json({ error: 'CP et PIN requis' });
   if (!/^\d{4}$/.test(pin)) return res.status(400).json({ error: 'PIN invalide (4 chiffres)' });
   try {
+    await sweepAgent(cp).catch(e => console.error('sweepAgent (register):', e));
     const [rows] = await pool.query(
       `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel, a.statut, au.pin_hash, au.is_admin, pa.is_afo, pa.is_reserve, pa.familles_hab AS famille
        FROM agent a JOIN auth au ON au.cp_agent = a.cp LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp WHERE a.cp = ?`, [cp]);

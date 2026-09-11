@@ -1,10 +1,16 @@
 const pool = require('../config/db');
 const { encrypt, decrypt } = require('../utils/crypto');
 const bcrypt = require('bcrypt');
+const { sweepAllDue } = require('../utils/departSweep');
 
 // ─── GET ALL ──────────────────────────────────────────────────────────────────
 async function getAll(req, res) {
   try {
+    // Applique d'abord tout départ programmé arrivé à échéance (date_depart
+    // <= aujourd'hui) -- sans ça, un agent dont la date est passée resterait
+    // affiché "actif" tant que personne ne s'est reconnecté depuis. Non
+    // bloquant : une erreur ici ne doit jamais empêcher la liste de charger.
+    await sweepAllDue().catch(e => console.error('sweepAllDue (getAll):', e));
     const [rows] = await pool.query(
       `SELECT a.cp, a.nom, a.prenom, a.grade, a.initiales, a.partage_previsionnel,
               a.statut, a.date_depart, a.date_embauche,
@@ -207,6 +213,16 @@ async function remove(req, res) {
 // pourrait sinon polluer le Planning Prévisionnel partagé), garde tout
 // jusqu'à cette date inclus, et bloque la connexion via statut='quitte' —
 // sans jamais cascade-supprimer l'historique (formations, échanges, CPS...).
+//
+// Départ PROGRAMMÉ (11/09, demande d'Olivier) : si la date choisie est dans
+// le futur, rien de ce qui précède ne s'applique tout de suite -- l'agent
+// reste 'actif' normalement (connexion possible, planning intact), seule
+// date_depart est enregistrée. Le blocage + le nettoyage du planning ne
+// s'appliquent automatiquement QU'UNE FOIS la date atteinte, via le sweep
+// (voir utils/departSweep.js, déclenché à la connexion et à l'ouverture du
+// panneau Admin -- aucun cron nécessaire). Rappeler ce même endpoint avec une
+// nouvelle date remplace la date programmée (report/anticipation), tant que
+// l'agent n'est pas encore 'quitte'.
 async function depart(req, res) {
   const { cp } = req.params;
   const { date_depart } = req.body;
@@ -220,6 +236,20 @@ async function depart(req, res) {
   try {
     await conn.beginTransaction();
 
+    const [[{ due }]] = await conn.query('SELECT (? <= CURDATE()) AS due', [date_depart]);
+
+    if (!due) {
+      // Départ programmé pour plus tard : aucun effet immédiat, juste la date.
+      await conn.query('UPDATE agent SET statut = ?, date_depart = ? WHERE cp = ?', ['actif', date_depart, cp]);
+      await conn.commit();
+      return res.json({
+        message: `Départ programmé pour le ${date_depart} — aucun effet avant cette date (planning et connexion inchangés)`,
+        effectif: false,
+      });
+    }
+
+    // Date déjà atteinte (aujourd'hui ou passée) : appliqué immédiatement,
+    // comportement historique inchangé.
     await conn.query(
       `DELETE FROM planning_periode WHERE planning_jour_id IN
         (SELECT id FROM planning_jour WHERE cp_agent = ? AND date_jour > ?)`,
@@ -229,13 +259,35 @@ async function depart(req, res) {
     await conn.query('UPDATE agent SET statut = ?, date_depart = ? WHERE cp = ?', ['quitte', date_depart, cp]);
 
     await conn.commit();
-    res.json({ message: 'Agent marqué comme quitté, planning vidé au-delà du ' + date_depart });
+    res.json({ message: 'Agent marqué comme quitté, planning vidé au-delà du ' + date_depart, effectif: true });
   } catch (e) {
     await conn.rollback();
     console.error(e);
     res.status(500).json({ error: 'Erreur serveur' });
   } finally {
     conn.release();
+  }
+}
+
+// ─── ANNULER UN DÉPART PROGRAMMÉ (admin) ──────────────────────────────────────
+// Distinct de réactiver() : ici l'agent n'est jamais devenu 'quitte' (date
+// encore dans le futur au moment de l'annulation) -- efface juste date_depart,
+// rien d'autre à défaire (aucun planning n'a été touché, aucune connexion
+// n'a jamais été bloquée). Pour un départ déjà EFFECTIF (statut='quitte'),
+// c'est réactiver() qu'il faut utiliser (gère aussi le planning déjà vidé).
+async function annulerDepartProgramme(req, res) {
+  const { cp } = req.params;
+  try {
+    const [result] = await pool.query(
+      `UPDATE agent SET date_depart = NULL WHERE cp = ? AND statut = 'actif'`,
+      [cp]
+    );
+    if (result.affectedRows === 0)
+      return res.status(400).json({ error: 'Aucun départ programmé à annuler pour cet agent (déjà quitté ou introuvable)' });
+    res.json({ message: 'Départ programmé annulé' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 }
 
@@ -275,4 +327,4 @@ async function resetPin(req, res) {
   }
 }
 
-module.exports = { getAll, getOne, update, create, remove, resetPin, depart, reactiver };
+module.exports = { getAll, getOne, update, create, remove, resetPin, depart, reactiver, annulerDepartProgramme };
