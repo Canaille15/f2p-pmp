@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { genererPausesFigeesPourNonTenu } = require('../utils/pauseFigeeAuto');
 
 // GET /api/cps-aleas?from=&to=  -> tous les aleas sur une periode (lecture publique a tous)
 async function getAleas(req, res) {
@@ -32,6 +33,16 @@ async function createAlea(req, res) {
       [js_code, date_jour, famille, type,
        agents_concernes ? JSON.stringify(agents_concernes) : null,
        motif || null, req.agent.cp]);
+    // 12/09 -- signalement manuel "poste non tenu" sur un des 4 postes
+    // Pauseur : genere automatiquement les pauses figees manquantes pour les
+    // agents affectes (jamais bloquant pour la creation de l'alea elle-meme,
+    // meme patron que echangesController.cloturer -- une pause figee non
+    // generee peut toujours l'etre plus tard via un import ou le backfill).
+    if (type === 'non_tenu') {
+      try {
+        await genererPausesFigeesPourNonTenu(pool, { aleaId: result.insertId, js_code, date_jour, famille });
+      } catch (e2) { console.error('genererPausesFigeesPourNonTenu (signalement manuel):', e2); }
+    }
     res.status(201).json({ message: 'Aléa signalé', id: result.insertId });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
@@ -59,9 +70,15 @@ async function updateAlea(req, res) {
 }
 
 // DELETE /api/cps-aleas/:id  -> retirer un alea (annule le signalement, retour a l'officiel)
+// 12/09 : supprime aussi en cascade les pause_figee generees automatiquement
+// par cet alea (cps_alea_id) -- qu'il ait ete signale manuellement ou
+// auto-active a l'import, meme mecanisme, jamais besoin de connaitre le
+// type au prealable (une pause manuelle n'a jamais cps_alea_id renseigne,
+// donc jamais touchee ici).
 async function deleteAlea(req, res) {
   const { id } = req.params;
   try {
+    await pool.query('DELETE FROM pause_figee WHERE cps_alea_id = ?', [id]);
     const [result] = await pool.query('DELETE FROM cps_aleas WHERE id = ?', [id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Aléa introuvable' });
     res.json({ message: 'Aléa supprimé' });

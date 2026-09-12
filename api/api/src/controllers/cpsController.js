@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { detecterEtAutoSignalerNonTenu, PAUSEUR_FAMILLE } = require('../utils/pauseFigeeAuto');
 
 // GET /api/cps?from=&to=  -> tout le planning CPS sur une periode (lecture publique a tous)
 async function getCps(req, res) {
@@ -94,6 +95,20 @@ async function importCps(req, res) {
          apres?apres.equipe:'', apres?.js_code||null, apres?.horaires||null, apres?apres.en_formation:0]);
     }
     await conn.query('DELETE FROM cps_import_batch WHERE importe_le < NOW() - INTERVAL 90 DAY');
+    // 12/09 -- auto-activation "poste non tenu" (Pauseur) si la case reste
+    // vide sur la feuille importee : pour chaque date touchee par ce batch
+    // (entries + clears), verifie les 4 postes Pauseur. Dans la meme
+    // transaction que l'import lui-meme (atomique -- si quelque chose
+    // echoue, tout l'import est annule comme avant, aucun etat partiel).
+    const datesTouchees = new Set([
+      ...(entries || []).map(e => e.date_jour),
+      ...clearsList.map(c => c.date_jour),
+    ]);
+    for (const date_jour of datesTouchees) {
+      for (const js_code of Object.keys(PAUSEUR_FAMILLE)) {
+        await detecterEtAutoSignalerNonTenu(conn, { js_code, date_jour, signalePar: req.agent.cp });
+      }
+    }
     await conn.commit();
     res.json({ message: 'Import CPS enregistré', nb: entries?.length||0, nb_clears: clearsList.length, batch_id: batchId });
   } catch (err) {

@@ -2603,7 +2603,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <span style={{fontSize:16}}>⚠️</span>
                         <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
-                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>
+                        {!isPrevisionnel&&<button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>}
                       </div>
                       {alea.motif&&<div style={{fontSize:10,color:"#9a3412",paddingLeft:22,fontStyle:"italic"}}>{alea.motif}</div>}
                     </div>);
@@ -2619,7 +2619,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         </div>
                         <div style={{fontSize:11,fontWeight:700,color:"#854d0e",paddingLeft:24}}>{nomsRemplacants||"?"}</div>
                         {alea.motif&&<div style={{fontSize:10,color:"#a16207",paddingLeft:24,fontStyle:"italic"}}>{alea.motif}</div>}
-                        <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button></div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div>{!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button></>}</div>
                       </div>);
                     }
                     if(ag&&isPrevisionnel){
@@ -2680,8 +2680,8 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       {alea?.type==="message"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"4px 9px"}}>
                         <span style={{fontSize:12}}>📢</span>
                         <div style={{fontSize:10,color:"#1d4ed8",flex:1,lineHeight:1.4}}>{alea.motif}</div>
-                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
-                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button>
+                        {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
+                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button></>}
                       </div>}
                     </div>);
                     if(row.maxSlots<99){
@@ -2690,7 +2690,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <span style={{fontSize:16}}>⚠️</span>
                           <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
-                          <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>
+                          {!isPrevisionnel&&<button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>}
                         </div>
                         {aleaVacant.motif&&<div style={{fontSize:10,color:"#9a3412",paddingLeft:22,fontStyle:"italic"}}>{aleaVacant.motif}</div>}
                       </div>);
@@ -2703,8 +2703,8 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                           <div style={{fontSize:10,fontWeight:600,color:"#94a3b8",fontStyle:"italic"}}>Vacant (officiel)</div>
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
                             <div style={{fontSize:11,fontWeight:700,color:"#854d0e"}}>{nomsRemplacants||"?"}</div>
-                            <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant",editAlea:aleaVacant})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button>
-                            <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button>
+                            {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant",editAlea:aleaVacant})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button>
+                            <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button></>}
                           </div>
                           {aleaVacant.motif&&<div style={{fontSize:10,color:"#a16207",fontStyle:"italic"}}>{aleaVacant.motif}</div>}
                         </div>);
@@ -2713,8 +2713,8 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <span style={{fontSize:14}}>📢</span>
                           <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>Vacant</div>
-                          <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant",editAlea:aleaVacant})} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#1d4ed8",opacity:.6,marginLeft:"auto"}}>✎</button>
-                          <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#1d4ed8",opacity:.6}}>✕</button>
+                          {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille,nomOfficiel:"Poste vacant",editAlea:aleaVacant})} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#1d4ed8",opacity:.6,marginLeft:"auto"}}>✎</button>
+                          <button onClick={()=>annulerAlea(aleaVacant.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#1d4ed8",opacity:.6}}>✕</button></>}
                         </div>
                         <div style={{fontSize:10,color:"#1d4ed8",paddingLeft:20,lineHeight:1.4}}>{aleaVacant.motif}</div>
                       </div>);
@@ -13661,7 +13661,7 @@ export default function App(){
   {view==="afo"&&<AfoView currentAgent={currentAgent||currentUser?.agent} agents={agents} refreshProfil={refreshMonProfil} refreshSchedule={refreshMonSchedule}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
-      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={[]} setCpsAleas={()=>{}} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
+      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
     </div>
 
