@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const { PAUSEUR_FAMILLE } = require('../utils/pauseFigeeAuto');
 
 // Heuristique de désambiguïsation de siècle sur les 2 premiers chiffres du CP
 // (ex: "68" dans "6810186B" -> 1968). Un agent SNCF actif n'a normalement pas
@@ -308,11 +309,27 @@ async function getStats(req, res) {
 
     // ─── Postes non tenus (#7) ──────────────────────────────────────────────
     const [nonTenusRows] = await pool.query(
-      `SELECT js_code, date_jour, motif FROM cps_aleas
+      `SELECT id, js_code, date_jour, motif FROM cps_aleas
        WHERE type = 'non_tenu' AND date_jour BETWEEN ? AND ?
        ORDER BY js_code, date_jour`,
       [from, to]
     );
+    // Marqueur "ça te concerne" (13/09, Olivier : "l'asterisque ne concerne
+    // que l'agent qui regarde. les autres ont surement des asterisques
+    // ailleurs") -- pour les entrées "Pauseur" (12/09, génération auto de
+    // pause figée), on regarde uniquement si L'AGENT QUI CONSULTE fait
+    // partie des pause_figee liées à cet alea via cps_alea_id -- jamais le
+    // nom ni le nombre des autres agents concernés, Stat'Equip reste sans
+    // aucune donnée nominative pour qui que ce soit d'autre que soi-même.
+    const posteursIds = nonTenusRows.filter(r => PAUSEUR_FAMILLE[r.js_code]).map(r => r.id);
+    const aleaIdsQuiMeConcernent = new Set();
+    if (posteursIds.length) {
+      const [pfRows] = await pool.query(
+        `SELECT cps_alea_id FROM pause_figee WHERE cps_alea_id IN (?) AND cp_agent = ?`,
+        [posteursIds, req.agent.cp]
+      );
+      pfRows.forEach(r => aleaIdsQuiMeConcernent.add(r.cps_alea_id));
+    }
     const parPosteMap = {};
     nonTenusRows.forEach(r => {
       if (!parPosteMap[r.js_code]) parPosteMap[r.js_code] = { js_code: r.js_code, nb: 0, entries: [] };
@@ -320,6 +337,7 @@ async function getStats(req, res) {
       parPosteMap[r.js_code].entries.push({
         date_jour: r.date_jour instanceof Date ? r.date_jour.toISOString().slice(0,10) : r.date_jour,
         motif: r.motif || null,
+        teConcerne: aleaIdsQuiMeConcernent.has(r.id) || undefined,
       });
     });
     const postesNonTenus = {
