@@ -1,5 +1,5 @@
 const pool = require('../config/db');
-const { PAUSEUR_FAMILLE } = require('../utils/pauseFigeeAuto');
+const { PAUSEUR_FAMILLE, POSTES_AFFECTES_PAR_PAUSEUR } = require('../utils/pauseFigeeAuto');
 
 // Heuristique de désambiguïsation de siècle sur les 2 premiers chiffres du CP
 // (ex: "68" dans "6810186B" -> 1968). Un agent SNCF actif n'a normalement pas
@@ -317,18 +317,36 @@ async function getStats(req, res) {
     // Marqueur "ça te concerne" (13/09, Olivier : "l'asterisque ne concerne
     // que l'agent qui regarde. les autres ont surement des asterisques
     // ailleurs") -- pour les entrées "Pauseur" (12/09, génération auto de
-    // pause figée), on regarde uniquement si L'AGENT QUI CONSULTE fait
-    // partie des pause_figee liées à cet alea via cps_alea_id -- jamais le
-    // nom ni le nombre des autres agents concernés, Stat'Equip reste sans
-    // aucune donnée nominative pour qui que ce soit d'autre que soi-même.
-    const posteursIds = nonTenusRows.filter(r => PAUSEUR_FAMILLE[r.js_code]).map(r => r.id);
+    // pause figée), jamais le nom ni le nombre des autres agents concernés,
+    // Stat'Equip reste sans aucune donnée nominative pour qui que ce soit
+    // d'autre que soi-même.
+    // Basé directement sur planning_cps (qui occupait un poste affecté ce
+    // jour-là), PAS sur pause_figee.cps_alea_id -- sinon un agent qui avait
+    // DÉJÀ posé sa pause à la main avant l'auto-détection (cps_alea_id reste
+    // volontairement NULL dans ce cas, jamais écrasé) n'était jamais marqué
+    // "ça te concerne" malgré que le poste Pauseur l'ait bien concerné ce
+    // jour-là (13/09, Olivier : "ca aurait ete bien de mettre celle mise en
+    // manuel aussi"). Couvre donc les deux cas d'un seul coup, sans avoir à
+    // distinguer pause manuelle/auto.
+    const posteursRows = nonTenusRows.filter(r => PAUSEUR_FAMILLE[r.js_code]);
     const aleaIdsQuiMeConcernent = new Set();
-    if (posteursIds.length) {
-      const [pfRows] = await pool.query(
-        `SELECT cps_alea_id FROM pause_figee WHERE cps_alea_id IN (?) AND cp_agent = ?`,
-        [posteursIds, req.agent.cp]
+    if (posteursRows.length) {
+      const postesAConsulter = [...new Set(posteursRows.flatMap(r => POSTES_AFFECTES_PAR_PAUSEUR[r.js_code] || []))];
+      const datesAConsulter = [...new Set(posteursRows.map(r => r.date_jour))];
+      const [mesPostes] = await pool.query(
+        `SELECT DISTINCT date_jour, js_code FROM planning_cps WHERE cp_agent = ? AND date_jour IN (?) AND js_code IN (?)`,
+        [req.agent.cp, datesAConsulter, postesAConsulter]
       );
-      pfRows.forEach(r => aleaIdsQuiMeConcernent.add(r.cps_alea_id));
+      const monPosteParDate = {}; // "YYYY-MM-DD" -> Set(js_code que je tenais ce jour-là)
+      mesPostes.forEach(r => {
+        if (!monPosteParDate[r.date_jour]) monPosteParDate[r.date_jour] = new Set();
+        monPosteParDate[r.date_jour].add(r.js_code);
+      });
+      posteursRows.forEach(r => {
+        const postesAffectes = POSTES_AFFECTES_PAR_PAUSEUR[r.js_code] || [];
+        const jeSuisConcerne = postesAffectes.some(p => monPosteParDate[r.date_jour]?.has(p));
+        if (jeSuisConcerne) aleaIdsQuiMeConcernent.add(r.id);
+      });
     }
     const parPosteMap = {};
     nonTenusRows.forEach(r => {
