@@ -94,6 +94,13 @@
      "hors Réserve régionale" -- cohérent avec le sens de la couleur). */
   --age-equipe: #7c3aed;
   --age-reserve: #db2777;
+  /* Marqueur "ça te concerne" (Postes non tenus Pauseur, StatsEquipeView.jsx,
+     13/09) -- rouge-orangé #c2410c pensé pour une carte blanche, devient
+     terne/peu lisible sur le fond bleu-marine sombre (--bg-card #131b2e) une
+     fois le mode sombre activé (Olivier : "ameliore le rouge en mode sombre
+     pour quil soit plus lisible"). Éclairci uniquement côté sombre, même
+     principe que --accent-active/--brand-text un peu plus haut. */
+  --te-concerne: #c2410c;
 }
 :root[data-theme="dark"] {
   --bg-page: #0a0e1a;
@@ -122,6 +129,7 @@
   --cell-3-text: #ffffff;
   --cell-4-text: #0b1120;
   --cell-5-text: #1e293b;
+  --te-concerne: #fb923c;
 }
 body { background: var(--bg-page); transition: background .15s; }
 

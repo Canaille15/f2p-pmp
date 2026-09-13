@@ -853,8 +853,8 @@ function PostesNonTenusSection({ data, year }) {
             </button>
           </div>
           {hasTeConcerne && (
-            <div style={{ fontSize: 11, color: "#c2410c", marginBottom: 12 }}>
-              <span style={{ fontWeight: 700 }}>*</span> une pause figée automatique générée par ce signalement te concerne toi (jamais les autres agents concernés, qui ne sont jamais affichés).
+            <div style={{ fontSize: 11, color: "var(--te-concerne)", marginBottom: 12 }}>
+              <span style={{ fontWeight: 700 }}>*</span> une pause figée générée par ce signalement te concerne toi (jamais les autres agents concernés, qui ne sont jamais affichés).
             </div>
           )}
 
@@ -938,7 +938,7 @@ function PostesNonTenusSection({ data, year }) {
                       {cellDetail.slice(0, 4).map((e, i) => (
                         <div key={i} style={{ color: "var(--text-secondary)", display: "flex", justifyContent: "space-between", gap: 8 }}>
                           <span>{e.motif || "Motif non précisé"}</span>
-                          <b style={{ color: e.teConcerne ? "#c2410c" : "var(--text-primary)", fontWeight: 700 }}>{fmtDate(e.date_jour)}{e.teConcerne && " *"}</b>
+                          <b style={{ color: e.teConcerne ? "var(--te-concerne)" : "var(--text-primary)", fontWeight: 700 }}>{fmtDate(e.date_jour)}{e.teConcerne && " *"}</b>
                         </div>
                       ))}
                       {cellDetail.length > 4 && <div style={{ color: "var(--text-muted)" }}>… +{cellDetail.length - 4} autre(s)</div>}
@@ -982,7 +982,7 @@ function PostesNonTenusSection({ data, year }) {
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", gap: 2, paddingLeft: 10, marginTop: 2 }}>
                               {s.entries.map((e, i) => (
-                                <div key={i} style={{ fontSize: 11, color: e.teConcerne ? "#c2410c" : "var(--text-secondary)", fontWeight: e.teConcerne ? 700 : 400 }}>
+                                <div key={i} style={{ fontSize: 11, color: e.teConcerne ? "var(--te-concerne)" : "var(--text-secondary)", fontWeight: e.teConcerne ? 700 : 400 }}>
                                   {fmtDate(e.date_jour)}{e.teConcerne && " *"}{e.motif ? ` — ${e.motif}` : ""}
                                 </div>
                               ))}
