@@ -230,6 +230,24 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
   // par nature depuis l'origine du module)
   const cet = computeDashboardCet(agentProfiles, agentId, year);
 
+  // ── Pauses figées : dates du mois choisi (peu importe leur statut) + dates
+  // des mois précédents encore non vérifiées (12/09, Olivier : "pause fige du
+  // mois et celle des mois precedent encore non verifié [...] sans rien
+  // casser") — même règle que le module Pause Figée lui-même (07/09) : une
+  // pause pas encore vérifiée reste visible indéfiniment, sans limite de
+  // recul, tant qu'elle n'est pas marquée validée. Scope déjà garanti par
+  // agent : pausesData vient de api.pauses.getAll(agentId), jamais un autre
+  // agent. Les mois APRÈS le mois choisi sont volontairement exclus des deux
+  // catégories (même principe "figé à la fin du mois choisi" que le reste du
+  // rapport) — un rapport de mars ne doit jamais montrer une pause d'avril.
+  const pausesTriees = (pausesData || []).map(p => ({
+    date: String(p.date_jour).slice(0, 10),
+    valide: !!p.fia_done,
+  })).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const pausesFigeesDuMois = pausesTriees.filter(p => p.date.slice(0, 7) === moisCleAnnee);
+  const pausesFigeesNonVerifieesAvant = pausesTriees.filter(p => p.date.slice(0, 7) < moisCleAnnee && !p.valide);
+  const pausesFigees = { duMois: pausesFigeesDuMois, nonVerifieesAvant: pausesFigeesNonVerifieesAvant };
+
   // ── Planning du mois (jour par jour) — un "segment" par code (equipe +
   // equipe2, ex. RP + Nuit), chacun avec sa PROPRE couleur (21/08, Olivier :
   // "le rp + nuit faut seperer le couleur") plutôt qu'une seule couleur pour
@@ -277,7 +295,7 @@ function computeFimData(agent, agentProfiles, schedule, pausesData, monthIdx, ye
     rq: { acquis: rqData.acquis, avant: rqAvant, duMois: rqFin - rqAvant, fin: rqFin, parAnnee: buildAnneeTable(rqConf, false) },
     rn: rnReport, ty: tyReport, tq: tqReport, tc: tcReport,
     fetesATraiter, maladie: { mois: maladieMois, annee: maladieCumul },
-    cet, joursMois,
+    cet, pausesFigees, joursMois,
   };
 }
 
@@ -478,6 +496,46 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   // le module TY lui-même (badge "Plafond 32h00 · ATTEINT" quand pertinent),
   // et le décompte mensuel des pauses figées vit déjà dans le module Pause
   // Figée (regroupement par mois, 17/07) -- pas besoin de le dupliquer ici.
+
+  // ── Pauses figées (12/09, Olivier : dates du mois + celles des mois
+  // précédents encore non vérifiées) -- même principe que la section Fêtes
+  // juste en dessous (liste à puces, "Aucune..." si vide), aucun risque pour
+  // le reste du document : nouvelle section autonome, aucun calcul existant
+  // touché.
+  {
+    const { duMois, nonVerifieesAvant } = data.pausesFigees;
+    const total = duMois.length + nonVerifieesAvant.length;
+    titreSection("PAUSES FIGÉES");
+    newPageIfNeeded(20 + total * 13);
+    if (total === 0) {
+      txt("Aucune pause figée ce mois-ci, ni en attente de vérification.", marge, y, { size: 8.7, color: rgb(0.42, 0.47, 0.55) });
+      y -= 16;
+    } else {
+      if (duMois.length > 0) {
+        txt(`Pauses de ${moisLabel} :`, marge, y, { size: 8.3, bold: true, color: rgb(0.42, 0.47, 0.55) });
+        y -= 13;
+        duMois.forEach(p => {
+          // Jamais de "✓"/"⏳" ici : StandardFonts.Helvetica (pdf-lib) encode
+          // en WinAnsi, qui ne connaît pas ces glyphes — plantage silencieux
+          // en plein milieu de la génération sinon (confirmé en testant :
+          // "WinAnsi cannot encode "✓" (0x2713)"). Texte simple, comme partout
+          // ailleurs dans ce document.
+          txt(`•  ${fmtDateFr(p.date)}  —  ${p.valide ? "validée" : "en attente de vérification"}`, marge, y, { size: 8.7 });
+          y -= 13;
+        });
+        y -= 2;
+      }
+      if (nonVerifieesAvant.length > 0) {
+        txt("Mois précédents, encore en attente de vérification :", marge, y, { size: 8.3, bold: true, color: rgb(0.42, 0.47, 0.55) });
+        y -= 13;
+        nonVerifieesAvant.forEach(p => {
+          txt(`•  ${fmtDateFr(p.date)}`, marge, y, { size: 8.7 });
+          y -= 13;
+        });
+      }
+      y -= 4;
+    }
+  }
 
   // ── Fêtes à récupérer ──
   titreSection("FÉRIÉS À RÉCUPÉRER (en attente)");
