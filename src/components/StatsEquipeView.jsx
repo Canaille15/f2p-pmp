@@ -853,8 +853,8 @@ function PostesNonTenusSection({ data, year }) {
             </button>
           </div>
           {hasTeConcerne && (
-            <div style={{ fontSize: 11, color: "var(--te-concerne)", marginBottom: 12 }}>
-              <span style={{ fontWeight: 700 }}>*</span> une pause figée générée par ce signalement te concerne toi (jamais les autres agents concernés, qui ne sont jamais affichés).
+            <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 12 }}>
+              <span style={{ fontWeight: 700, color: "var(--te-concerne)" }}>*</span> une pause figée qui te concerne toi.
             </div>
           )}
 
