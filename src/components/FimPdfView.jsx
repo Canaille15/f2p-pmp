@@ -504,48 +504,30 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   // et le décompte mensuel des pauses figées vit déjà dans le module Pause
   // Figée (regroupement par mois, 17/07) -- pas besoin de le dupliquer ici.
 
-  // ── Pauses figées (12/09, Olivier : dates du mois + celles des mois
-  // précédents encore non vérifiées) -- même principe que la section Fêtes
-  // juste en dessous (liste à puces, "Aucune..." si vide), aucun risque pour
-  // le reste du document : nouvelle section autonome, aucun calcul existant
-  // touché.
-  {
-    const { duMois, nonVerifieesAvant } = data.pausesFigees;
-    const total = duMois.length + nonVerifieesAvant.length;
-    titreSection("PAUSES FIGÉES", 16, 20 + total * 13);
-    if (total === 0) {
-      txt("Aucune pause figée ce mois-ci, ni en attente de vérification.", marge, y, { size: 8.7, color: rgb(0.42, 0.47, 0.55) });
-      y -= 16;
-    } else {
-      if (duMois.length > 0) {
-        txt(`Pauses de ${moisLabel} :`, marge, y, { size: 8.3, bold: true, color: rgb(0.42, 0.47, 0.55) });
-        y -= 13;
-        duMois.forEach(p => {
-          // Jamais de "✓"/"⏳" ici : StandardFonts.Helvetica (pdf-lib) encode
-          // en WinAnsi, qui ne connaît pas ces glyphes — plantage silencieux
-          // en plein milieu de la génération sinon (confirmé en testant :
-          // "WinAnsi cannot encode "✓" (0x2713)"). Texte simple, comme partout
-          // ailleurs dans ce document.
-          txt(`•  ${fmtDateFr(p.date)}  —  ${p.valide ? "validée" : "en attente de vérification"}`, marge, y, { size: 8.7 });
-          y -= 13;
-        });
-        y -= 2;
-      }
-      if (nonVerifieesAvant.length > 0) {
-        txt("Mois précédents, encore en attente de vérification :", marge, y, { size: 8.3, bold: true, color: rgb(0.42, 0.47, 0.55) });
-        y -= 13;
-        nonVerifieesAvant.forEach(p => {
-          txt(`•  ${fmtDateFr(p.date)}`, marge, y, { size: 8.7 });
-          y -= 13;
-        });
-      }
-      y -= 4;
-    }
-  }
+  // ── Pauses figées -- déplacée sous le planning du mois (14/09, Olivier :
+  // "c'etait les pauses figees que je voulais sous le planning" -- il a
+  // corrigé le tir après le 1er essai du jour même, qui avait déplacé les
+  // Fêtes par erreur). Voir plus bas, juste après la grille du planning.
 
-  // ── Fêtes à récupérer -- déplacée après le planning du mois (14/09,
-  // Olivier : "le mieux serait de mettre les fetes en bas de la 2eme page,
-  // sous le planning") -- voir plus bas, juste avant le pied de page.
+  // ── Fêtes à récupérer (position d'origine, restaurée le 14/09 -- Olivier :
+  // "remet les fetesou elles etaient") ──
+  titreSection("FÉRIÉS À RÉCUPÉRER (en attente)", 16, 20 + data.fetesATraiter.length * 13);
+  if (data.fetesATraiter.length === 0) {
+    txt("Aucun férié en attente de traitement.", marge, y, { size: 8.7, color: rgb(0.42, 0.47, 0.55) });
+    y -= 16;
+  } else {
+    data.fetesATraiter.forEach(f => {
+      // Filet anti-débordement (14/09, Olivier : "je ne veux pas qu'un pave
+      // soit coupé. s'il est grand, il faut le caler sur la page suivante")
+      // -- cette liste n'a que 11 fêtes max/an, ne déborde donc jamais d'une
+      // page entière en pratique, mais ce garde-fou par ligne coûte rien et
+      // évite tout chevauchement avec le pied de page si jamais elle grossit.
+      newPageIfNeeded(17);
+      txt(`•  ${f.code} — ${f.label}  (${fmtDateFr(f.dateFete)})`, marge, y, { size: 8.7 });
+      y -= 13;
+    });
+    y -= 4;
+  }
 
   // ── Résumé CET (21/08, séparé de Maladie sur demande d'Olivier) ──
   titreSection("RÉSUMÉ — CET", 16, 18 * 3 + 10);
@@ -607,22 +589,52 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   // dessous. rowsParColonne*15 = hauteur réelle de la colonne la plus haute.
   y = yDepart - rowsParColonne * 15 - 16;
 
-  // ── Fêtes à récupérer -- déplacée sous le planning du mois, en fin de
-  // document (14/09, Olivier : "le mieux serait de mettre les fetes en bas
-  // de la 2eme page, sous le planning" -- section courte, mieux à sa place
-  // en "queue" du document après le gros bloc Planning qu'au milieu du flux
-  // où elle contribuait à saturer le bas de la page 1). Même contenu, même
-  // calcul (data.fetesATraiter), seule la position a changé.
-  titreSection("FÉRIÉS À RÉCUPÉRER (en attente)", 16, 20 + data.fetesATraiter.length * 13);
-  if (data.fetesATraiter.length === 0) {
-    txt("Aucun férié en attente de traitement.", marge, y, { size: 8.7, color: rgb(0.42, 0.47, 0.55) });
-    y -= 16;
-  } else {
-    data.fetesATraiter.forEach(f => {
-      txt(`•  ${f.code} — ${f.label}  (${fmtDateFr(f.dateFete)})`, marge, y, { size: 8.7 });
-      y -= 13;
-    });
-    y -= 4;
+  // ── Pauses figées, sous le planning du mois (12/09 : dates du mois + celles
+  // des mois précédents encore non vérifiées ; 14/09, Olivier : "c'etait les
+  // pauses figees que je voulais sous le planning" -- déplacée ici depuis sa
+  // position d'origine juste après TEMPS ACQUIS, corrige un 1er essai qui
+  // avait déplacé les Fêtes par erreur à sa place).
+  {
+    const { duMois, nonVerifieesAvant } = data.pausesFigees;
+    const total = duMois.length + nonVerifieesAvant.length;
+    titreSection("PAUSES FIGÉES", 16, 20 + total * 13);
+    if (total === 0) {
+      txt("Aucune pause figée ce mois-ci, ni en attente de vérification.", marge, y, { size: 8.7, color: rgb(0.42, 0.47, 0.55) });
+      y -= 16;
+    } else {
+      if (duMois.length > 0) {
+        txt(`Pauses de ${moisLabel} :`, marge, y, { size: 8.3, bold: true, color: rgb(0.42, 0.47, 0.55) });
+        y -= 13;
+        duMois.forEach(p => {
+          // Jamais de "✓"/"⏳" ici : StandardFonts.Helvetica (pdf-lib) encode
+          // en WinAnsi, qui ne connaît pas ces glyphes — plantage silencieux
+          // en plein milieu de la génération sinon (confirmé en testant :
+          // "WinAnsi cannot encode "✓" (0x2713)"). Texte simple, comme partout
+          // ailleurs dans ce document.
+          // newPageIfNeeded par ligne (14/09, Olivier : "je ne veux pas qu'un
+          // pave soit coupé. s'il est grand, il faut le caler sur la page
+          // suivante") -- cette liste grossit avec le temps (mois précédents
+          // jamais vérifiés jamais purgés, 07/09), contrairement aux tableaux
+          // fixes du reste du document -- seule liste de ce fichier avec un
+          // vrai risque de dépasser une page entière un jour.
+          newPageIfNeeded(17);
+          txt(`•  ${fmtDateFr(p.date)}  —  ${p.valide ? "validée" : "en attente de vérification"}`, marge, y, { size: 8.7 });
+          y -= 13;
+        });
+        y -= 2;
+      }
+      if (nonVerifieesAvant.length > 0) {
+        newPageIfNeeded(17);
+        txt("Mois précédents, encore en attente de vérification :", marge, y, { size: 8.3, bold: true, color: rgb(0.42, 0.47, 0.55) });
+        y -= 13;
+        nonVerifieesAvant.forEach(p => {
+          newPageIfNeeded(17);
+          txt(`•  ${fmtDateFr(p.date)}`, marge, y, { size: 8.7 });
+          y -= 13;
+        });
+      }
+      y -= 4;
+    }
   }
 
   // ── Note de bas de page, en pied de la toute dernière page (21/08 : placée
