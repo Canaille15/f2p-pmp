@@ -1005,23 +1005,30 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
             {showFetes && (
               <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:7}}>
                 {FETES.map(f => {
-                  // Message présent = déjà prise ailleurs OU déjà payée : dans les deux cas on
-                  // bloque la sélection plutôt que de recréer une incohérence, et on affiche le
-                  // message au TAP (pas seulement au survol — le title seul est invisible au
-                  // doigt sur mobile, où cette appli est surtout utilisée).
+                  // Message présent = déjà prise ailleurs, déjà payée, ou date limite de
+                  // prise dépassée (14/09) : dans tous les cas on bloque la NOUVELLE
+                  // sélection plutôt que de recréer une incohérence, message affiché au
+                  // TAP (pas seulement au survol — le title seul est invisible au doigt sur
+                  // mobile, où cette appli est surtout utilisée). Le blocage ne s'applique
+                  // jamais si le code est déjà actif ce jour-là (dejaActif) -- il faut
+                  // toujours pouvoir RETIRER un code déjà placé, même devenu invalide
+                  // depuis (ex: import, ancienne donnée) -- jamais l'inverse, ça bloquerait
+                  // le seul moyen de nettoyer une saisie devenue incorrecte.
                   const messageBlocage = fetesPrises?.[f.code];
+                  const dejaActif = type1 === f.code;
+                  const bloque = messageBlocage && !dejaActif;
                   return (
                     <button key={f.code} onClick={() => {
-                      if(messageBlocage){ setFeteBloqueeMsg(messageBlocage); return; }
+                      if(bloque){ setFeteBloqueeMsg(messageBlocage); return; }
                       setFeteBloqueeMsg(null);
                       toggleType1(f.code); setShowFetes(false);
                     }}
-                      title={messageBlocage||undefined}
+                      title={bloque?messageBlocage:undefined}
                       style={{
                       padding:"4px 9px", borderRadius:7, border:"none",
-                      cursor: messageBlocage ? "not-allowed" : "pointer",
+                      cursor: bloque ? "not-allowed" : "pointer",
                       fontSize:11, fontWeight:700,
-                      opacity: messageBlocage ? 0.4 : 1,
+                      opacity: bloque ? 0.4 : 1,
                       background: type1 === f.code ? "#ec4899" : "#fdf2f8",
                       color: type1 === f.code ? "#fff" : "#9d174d",
                     }}>

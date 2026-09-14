@@ -232,6 +232,21 @@ const CODES_FETES = {
   "VN":"Samedi veille de Noël (si Noël = dimanche)",
 };
 
+// 14/09 -- pour F8/F9/F0/VN (les seules fêtes dont la fenêtre de récupération
+// déborde sur le T1 de l'année suivante, cf. fetesReportN1 dans
+// computeFetesLignes), un code placé en janvier-mars représente en réalité
+// la fête de NOVEMBRE/DÉCEMBRE de l'année PRÉCÉDENTE -- retourne cette
+// année-là pour l'affichage ("(2026)" à côté du badge "F8" posé en 2027),
+// null sinon (aucune ambiguïté à lever : F1-F7 ne débordent jamais sur
+// l'année suivante, jamais de code de ce type dont la case porterait une
+// année différente de sa propre date).
+function getAnneeAffichageFete(code, dk){
+  if(!dk || !["F8","F9","F0","VN"].includes(code)) return null;
+  const yr = parseInt(dk.slice(0,4), 10);
+  const mois = parseInt(dk.slice(5,7), 10);
+  return mois <= 3 ? yr - 1 : null;
+}
+
 // Équipes avec flag prive et couleur agenda perso
 export const EQUIPES = [
   // ── TRAVAIL — fond intense, texte blanc ──────────────────────────────────
@@ -9196,6 +9211,18 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
         map[l.code] = `${l.code} (${l.label}) est déjà prise le ${new Date(l.priseLe+"T12:00:00").toLocaleDateString("fr-FR")}. Va dans Compteurs → Fêtes pour l'annuler d'abord si tu veux la déplacer.`;
       } else if(!l.priseLe && (l.statut==="payee"||l.statut==="payee_auto")){
         map[l.code] = `${l.code} (${l.label}) a déjà été enregistrée comme payée (${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==yr?` ${l.anneePaye}`:""}). Va dans Compteurs → Fêtes pour la mettre à jour si ce n'est pas correct.`;
+      } else if(dayPopup.dk > l.limiteDate){
+        // 14/09 : empêche de placer le code d'une fête sur un jour déjà
+        // au-delà de sa date limite réglementaire de prise (GRH00143) --
+        // cause du bug signalé par Olivier (F2 placée en juillet alors que
+        // sa fenêtre de récupération se terminait fin juin, invisible pour
+        // le calcul de priseLe car hors de sa fenêtre de recherche). `l` vient
+        // de computeFetesLignes(..., yr) où yr = année du JOUR édité (dk),
+        // donc `l.limiteDate` reflète déjà la bonne occurrence de la fête
+        // pour cette année -- y compris pour F8/F9/F0/VN, dont la fenêtre
+        // déborde sur le T1 de l'année suivante (jamais faussement bloqué
+        // dans ce cas, seule la comparaison dk>limiteDate compte).
+        map[l.code] = `${l.code} (${l.label}) : la date limite de prise (${new Date(l.limiteDate+"T12:00:00").toLocaleDateString("fr-FR")}) est dépassée -- au-delà, elle est réglée automatiquement sur la fiche de paie, elle ne peut plus être prise en RC. (Réf. GRH00143)`;
       }
     });
     return map;
@@ -9839,6 +9866,7 @@ justifyContent: "flex-start",
                 <span lang="fr" style={CODES_FETES[code]||code==="CA"||code==="CP"
                   ? {fontSize:14,fontWeight:800,display:"block",whiteSpace:"nowrap"}
                   : {display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{CODES_FETES[code]?("🩷 "+code):(code==="CA"||code==="CP")?("🏖️ "+code):avecCesure(EQ_COLORS[code]?.label||code)}</span>
+                {CODES_FETES[code]&&getAnneeAffichageFete(code,dk)&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>({getAnneeAffichageFete(code,dk)})</span>}
                 {(code==="CA"||code==="CP")&&congeToutNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{congeToutNumeros[dk].numero}{congeToutNumeros[dk].anneeReport?` (${congeToutNumeros[dk].anneeReport})`:""}</span>}
                 {code==="RU"&&ruNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{ruNumeros[dk].numero}{ruNumeros[dk].anneeReport?` (${ruNumeros[dk].anneeReport})`:""}</span>}
                 {code==="RQ"&&rqNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{rqNumeros[dk]}</span>}
