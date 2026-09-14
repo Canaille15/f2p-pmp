@@ -121,6 +121,7 @@ async function getStats(req, res) {
     const [ageRows] = await pool.query(
       `SELECT a.cp, a.grade, a.date_embauche, a.date_depart,
               COALESCE(pa.is_reserve,0) AS is_reserve, COALESCE(pa.is_afo,0) AS is_afo,
+              COALESCE(pa.is_asfp,0) AS is_asfp,
               COALESCE(pa.is_dpx,0) AS is_dpx, COALESCE(pa.is_adjoint_dpx,0) AS is_adjoint_dpx
        FROM agent a LEFT JOIN profil_agent pa ON pa.cp_agent = a.cp`
     );
@@ -171,6 +172,14 @@ async function getStats(req, res) {
     // jamais filtré, pas concerné par cette exclusion).
     const totalAfo = ageRowsActuel.filter(r => r.is_afo && r.cp !== 'ASFP').length;
     const totalAsfp = ageRowsActuel.filter(r => r.is_afo && r.cp === 'ASFP').length;
+    // totalAsfpReel (15/09) : vrais agents nommés avec is_asfp=1 (nouveau
+    // rôle, mêmes droits qu'AFO mais compté à part -- voir add_is_asfp.js) --
+    // notion DISTINCTE de totalAsfp ci-dessus (qui ne compte que l'ancien
+    // agent virtuel générique cp='ASFP', jamais touché, gardé pour
+    // l'historique des sessions déjà attribuées à cette entité avant qu'un
+    // vrai ASFP existe). Les deux tuiles restent affichées séparément côté
+    // frontend, volontairement non fusionnées.
+    const totalAsfpReel = ageRowsActuel.filter(r => r.is_asfp).length;
 
     // ─── Grades (18/08, demande d'Olivier : "decompté les Cadre Op [...]
     // les Maitrises [...] et Maytises 2", puis en suite immédiate : "affine
@@ -566,7 +575,7 @@ async function getStats(req, res) {
     const pctTempsPartiel = totalAgents > 0 ? Math.round((nbTempsPartiel / totalAgents) * 1000) / 10 : 0;
 
     res.json({
-      headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, totalAsfp, totalCadreOp, totalMaitrise, totalMaitrise2, nbTempsPartiel, pctTempsPartiel },
+      headcounts: { totalAgents, totalEquipe, totalReserve, totalEncadrement, totalAfo, totalAsfp, totalAsfpReel, totalCadreOp, totalMaitrise, totalMaitrise2, nbTempsPartiel, pctTempsPartiel },
       gradesDetail,
       ageMoyenHorsReserve,
       agePyramide,

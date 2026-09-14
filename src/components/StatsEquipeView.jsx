@@ -312,7 +312,13 @@ export default function StatsEquipeView() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 10 }}>
                   <Tuile label="AFO" valeur={data.headcounts.totalAfo} sousLabel="toutes catégories confondues" />
                   <Tuile label="Encadrement" valeur={data.headcounts.totalEncadrement} sousLabel="DPX / Adj DPX — compte à part" />
-                  <Tuile label="ASFP" valeur={data.headcounts.totalAsfp} sousLabel="Assistant Formation Pro — compte à part" />
+                  {/* ASFP (réel, 15/09) : vrais agents nommés is_asfp=1, mêmes
+                      droits qu'AFO -- DISTINCT de la tuile suivante (l'ancien
+                      compte générique cp="ASFP", jamais connectable, gardé pour
+                      l'historique). Les 2 notions ne sont volontairement jamais
+                      fusionnées -- voir statsEquipeController.js. */}
+                  <Tuile label="ASFP" valeur={data.headcounts.totalAsfpReel} sousLabel="agent(s) nommé(s) — compte à part" />
+                  <Tuile label="ASFP (générique)" valeur={data.headcounts.totalAsfp} sousLabel="ancien compte, historique uniquement" />
                 </div>
                 {/* Par grade (18/08, demande d'Olivier : "decompté les Cadre Op
                     [...] Maitrises [...] Maytises 2", puis en suite immédiate :

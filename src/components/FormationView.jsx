@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import api from "../api/client";
-import { computeEtudePosteDetail } from "../App";
+import { computeEtudePosteDetail, getPosteLabelFromCode } from "../App";
 
 // ─── Module Formation ───────────────────────────────────────────────────────
 // Deux espaces bien séparés (refonte 25/08, demandé par Olivier : "j'aimerai
@@ -42,6 +42,37 @@ const NAVY  = { from: "#0f4c81", to: "#1e3a5f", bgLight: "#eff6ff", borderLight:
 const CATEGORIES = ["PRCI", "PAR", "Divers"];
 const FORMAT_OPTIONS = ["Présentiel", "Distanciel", "Autre"];
 const LIEU_OPTIONS = ["PRCI", "PAR", "Autre"];
+
+// Refonte visuelle (15/09, Olivier : "pas assez pro et manque de couleur
+// [...] je me sens perdu") -- couleurs de catégorie reprises TELLES QUELLES
+// de FAMILLES.PRCI.accent/FAMILLES.PAR.accent (App.jsx, déjà la convention
+// PRCI=bleu/PAR=vert dans tout le reste de l'appli, CPS Officiel/Planning
+// Prévisionnel) plutôt qu'une nouvelle palette inventée -- évite un doublon
+// de sens entre modules (un bleu qui voudrait dire PRCI ici mais autre chose
+// ailleurs). Divers en violet, déjà l'accent générique utilisé partout dans
+// ce fichier.
+const CATEGORIE_COLORS = {
+  PRCI:   { fg: "#1e40af", bg: "#dbeafe", border: "#93c5fd" },
+  PAR:    { fg: "#065f46", bg: "#d1fae5", border: "#6ee7b7" },
+  Divers: { fg: "#5b21b6", bg: "#ede9fe", border: "#c4b5fd" },
+};
+function CategorieChip({ cat }) {
+  const c = CATEGORIE_COLORS[cat] || CATEGORIE_COLORS.Divers;
+  return <span style={{ fontSize: 10.5, fontWeight: 700, color: c.fg, background: c.bg, border: `1px solid ${c.border}`, borderRadius: 20, padding: "1px 8px", whiteSpace: "nowrap" }}>{cat}</span>;
+}
+// Les tuiles résumé réutilisent StatTuile (déjà définie plus bas dans ce
+// fichier, hoisting de fonction -- callable ici sans problème) plutôt qu'un
+// nouveau composant : Olivier a explicitement demandé "éviter les doublons"
+// dans la refonte visuelle, StatTuile fait déjà exactement ce qu'il faut ici.
+// Badge de couverture coloré (15/09, "vue globale" -- Olivier : "pas tres
+// clair de voir la situation globale") -- rouge/orange/vert selon le %,
+// lisible d'un coup d'œil sur chaque ligne du catalogue, sans avoir à
+// cliquer pour connaître l'ordre de grandeur.
+function CouvertureBadge({ pct }) {
+  if (pct == null) return <span style={{ fontSize: 11, color: "var(--text-muted)" }}>—</span>;
+  const c = pct < 33 ? { fg: "#b91c1c", bg: "#fee2e2" } : pct < 66 ? { fg: "#b45309", bg: "#fef3c7" } : { fg: "#15803d", bg: "#dcfce7" };
+  return <span style={{ fontSize: 11, fontWeight: 700, color: c.fg, background: c.bg, borderRadius: 20, padding: "2px 8px", whiteSpace: "nowrap" }}>{Math.round(pct)}%</span>;
+}
 
 const STATUT_SESSION = {
   planifiee: { label: "🗓️ Planifiée", bg: "#f1f5f9", color: "#475569" },
@@ -266,7 +297,7 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
         {afoSubTab === "mes" && <MesSessionsFormateurTab agentId={agentId} onGoToSession={goToSession} />}
         {afoSubTab === "catalogue" && <CatalogueSection catalogue={catalogue} loading={loadingCat} onChange={chargerCatalogue} />}
         {afoSubTab === "planning" && <SessionsSection catalogue={catalogue} agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
-        {afoSubTab === "stats" && <StatsTab />}
+        {afoSubTab === "stats" && <StatsTab agents={agents} />}
       </div>
     </div>
   );
@@ -382,9 +413,12 @@ function MesFormationsTab({ agentId, agent, schedule, agentProfiles, setAgentPro
             <div key={it.key} style={{ background: "var(--bg-card)", border: `1.5px solid ${AMBRE.borderLight}`, borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px var(--shadow-card)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 14 }}>{it.intitule}</div>
+                    <CategorieChip cat={it.categorie} />
+                  </div>
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>
-                    📅 {fmtDate(it.date_session)} {it.heure_debut ? `· 🕐 ${fmtHeure(it.heure_debut)}` : ""} {it.lieu ? `· 📍 ${it.lieu}` : ""} · {it.categorie}
+                    📅 {fmtDate(it.date_session)} {it.heure_debut ? `· 🕐 ${fmtHeure(it.heure_debut)}` : ""} {it.lieu ? `· 📍 ${it.lieu}` : ""}
                   </div>
                 </div>
                 <StatutBadge session={it} />
@@ -547,14 +581,35 @@ function DeclarerFormationForm({ onCancel, onSaved }) {
 // nouveau CouvertureModal (qui est deja forme / pas encore, point 4 de la
 // demande du 26/08) -- edition/archivage restent des boutons a part
 // (stopPropagation, sinon un clic sur "✏️" ouvrirait aussi la couverture).
-const CAT_COLS = "1fr 64px 96px 78px 70px";
+const CAT_COLS = "1fr 64px 96px 74px 78px 70px";
 function CatalogueSection({ catalogue, loading, onChange }) {
   const [showForm, setShowForm] = useState(false);
   const [edit, setEdit] = useState(null);
   const [couvertureId, setCouvertureId] = useState(null);
+  // Vue globale de couverture (15/09, Olivier : "pas tres clair de voir la
+  // situation globale") -- un seul fetch au montage (endpoint déjà AFO-only,
+  // déjà existant, aucun endpoint dédié créé) plutôt qu'un appel par ligne de
+  // catalogue. couvertureParFormation : Map(catalogue_id -> pct).
+  const [couvertureStats, setCouvertureStats] = useState(null);
+  useEffect(() => { api.formation.getStats().then(setCouvertureStats).catch(() => {}); }, []);
+  const couvertureParFormation = {};
+  if (couvertureStats?.totalAgentsActifs) {
+    couvertureStats.parFormation.forEach(f => {
+      couvertureParFormation[f.catalogue_id] = (f.agents.length / couvertureStats.totalAgentsActifs) * 100;
+    });
+  }
+
+  const nbActives = catalogue.filter(c => c.statut !== "archive").length;
+  const nbArchivees = catalogue.filter(c => c.statut === "archive").length;
 
   return (
     <div>
+      {/* Tuiles résumé (15/09, refonte visuelle -- repère immédiat avant de
+          scroller le détail, réutilise StatTuile déjà défini plus bas). */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 8, marginBottom: 14, maxWidth: 260 }}>
+        <StatTuile label="Actives" value={nbActives} />
+        <StatTuile label="Archivées" value={nbArchivees} />
+      </div>
       <button onClick={() => { setEdit(null); setShowForm(v => !v); }} style={{ ...btnPrimary(NAVY), marginBottom: 14 }}>
         {showForm ? "✕ Annuler" : "+ Nouvelle formation"}
       </button>
@@ -567,13 +622,13 @@ function CatalogueSection({ catalogue, loading, onChange }) {
         if (!items.length) return null;
         return (
           <div key={cat} style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>{cat}</div>
+            <div style={{ marginBottom: 8 }}><CategorieChip cat={cat} /></div>
 
             {/* Desktop/tablette : vraie grille de colonnes (masquée sous 640px, voir theme.css) */}
             <div className="f2ppmp-cat-desktop" style={{ border: "1.5px solid var(--border)", borderRadius: 10, overflow: "hidden", overflowX: "auto" }}>
-              <div style={{ minWidth: 420 }}>
+              <div style={{ minWidth: 460 }}>
                 <div style={{ display: "grid", gridTemplateColumns: CAT_COLS, gap: 8, padding: "8px 12px", background: "var(--bg-page)", fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: .3, borderBottom: "1.5px solid var(--border)" }}>
-                  <span>Intitulé</span><span>Durée</span><span>Format</span><span>Statut</span><span>Actions</span>
+                  <span>Intitulé</span><span>Durée</span><span>Format</span><span>Couv.</span><span>Statut</span><span>Actions</span>
                 </div>
                 {items.map((f, i) => (
                   <div key={f.id} onClick={() => setCouvertureId(f.id)}
@@ -581,6 +636,7 @@ function CatalogueSection({ catalogue, loading, onChange }) {
                     <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{f.intitule}{f.obligatoire ? " ⭐" : ""}</span>
                     <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{f.duree || "—"}</span>
                     <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{f.format || "—"}</span>
+                    <CouvertureBadge pct={couvertureParFormation[f.id]} />
                     <span style={{ fontSize: 11, fontWeight: 600, color: f.statut === "archive" ? "var(--text-muted)" : "#15803d" }}>{f.statut === "archive" ? "Archivée" : "Active"}</span>
                     <span style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
                       <button onClick={() => { setEdit(f); setShowForm(true); }} title="Modifier" style={{ ...btnSecondary, padding: "4px 8px", fontSize: 12 }}>✏️</button>
@@ -608,7 +664,10 @@ function CatalogueSection({ catalogue, loading, onChange }) {
                     <span style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{f.intitule}{f.obligatoire ? " ⭐" : ""}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: f.statut === "archive" ? "var(--text-muted)" : "#15803d", whiteSpace: "nowrap" }}>{f.statut === "archive" ? "Archivée" : "Active"}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>{[f.duree, f.format].filter(Boolean).join(" · ") || "—"}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                    <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{[f.duree, f.format].filter(Boolean).join(" · ") || "—"}</span>
+                    <CouvertureBadge pct={couvertureParFormation[f.id]} />
+                  </div>
                   <div style={{ display: "flex", gap: 6, marginTop: 8 }} onClick={e => e.stopPropagation()}>
                     <button onClick={() => { setEdit(f); setShowForm(true); }} title="Modifier" style={{ ...btnSecondary, padding: "5px 10px", fontSize: 12 }}>✏️ Modifier</button>
                     <button onClick={() => api.formation.updateCatalogue(f.id, { statut: f.statut === "archive" ? "actif" : "archive" }).then(onChange)}
@@ -680,6 +739,96 @@ function CouvertureModal({ catalogueId, onClose }) {
                   <div key={a.cp} style={{ fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)", color: "var(--text-primary)" }}>{a.prenom} {a.nom}</div>
                 ))}
                 {data.nonFormes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Tout le monde est formé.</div>}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Fiche agent (15/09, Olivier : "il le faudrait en nominatif sur la fiche
+// agent qui sera dans le suivi de la personne par asfp et afo. poste par
+// poste avec les dates") -- vue AFO/ASFP unique par agent, réunit sessions
+// suivies + formations perso déclarées + étude de poste (poste par poste,
+// avec dates) -- jusqu'ici seul l'agent lui-même voyait tout ça réuni (perso,
+// "Mes formations"). Même patron de modale que CouvertureModal juste
+// au-dessus (overlay + carte + en-tête dégradé), pour rester cohérent.
+function FicheAgentModal({ cp, onClose }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    api.formation.getFicheAgent(cp).then(setData).catch(() => setErr("Impossible de charger la fiche")).finally(() => setLoading(false));
+  }, [cp]);
+
+  // Étude de poste : regroupée par poste (comme la vue perso), mais avec la
+  // LISTE COMPLÈTE des dates par poste (pas juste un total) -- c'est
+  // précisément ce qui manquait côté AFO/ASFP ("poste par poste avec les
+  // dates"). Résolution du libellé via getPosteLabelFromCode (App.jsx, déjà
+  // exportée), même principe que le reste de l'appli (FimPdfView.jsx).
+  const etudeParPoste = {};
+  (data?.etudePoste || []).forEach(e => {
+    const label = e.code_poste ? (getPosteLabelFromCode(e.code_poste) || e.code_poste) : "Poste inconnu";
+    if (!etudeParPoste[label]) etudeParPoste[label] = [];
+    etudeParPoste[label].push(e);
+  });
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.6)", zIndex: 760, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(4px)" }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, width: "100%", maxWidth: 560, maxHeight: "88vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.3)" }}>
+        <div style={{ background: `linear-gradient(135deg,${NAVY.from},${NAVY.to})`, padding: "16px 20px", position: "sticky", top: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ color: "#fff" }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{data?.agent ? `${data.agent.prenom} ${data.agent.nom}` : "..."}</div>
+            {data && <div style={{ fontSize: 12, opacity: .85 }}>{data.agent.cp}</div>}
+          </div>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 10, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
+        </div>
+        <div style={{ padding: 20 }}>
+          {loading ? <div style={{ textAlign: "center", color: "var(--text-secondary)" }}>Chargement...</div> : err ? (
+            <div style={{ color: "#b91c1c", fontSize: 12.5 }}>⚠️ {err}</div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY.accentDark, marginBottom: 8 }}>🎓 Formations suivies ({data.sessions.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 18 }}>
+                {data.sessions.map(s => (
+                  <div key={s.session_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 10px", borderRadius: 6, background: "var(--bg-page)" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{s.intitule}</span>
+                      {!s.toujours_present && s.statut === "lancee" && <span style={{ color: "#b91c1c", fontSize: 10.5, marginLeft: 6 }}>(déclinée)</span>}
+                    </div>
+                    <span style={{ color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{fmtDate(s.date_session)}</span>
+                  </div>
+                ))}
+                {data.sessions.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune session suivie.</div>}
+              </div>
+
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY.accentDark, marginBottom: 8 }}>📚 Formations déclarées ({data.formationsPerso.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 18 }}>
+                {data.formationsPerso.map(f => (
+                  <div key={f.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12.5, padding: "6px 10px", borderRadius: 6, background: "var(--bg-page)" }}>
+                    <span style={{ color: "var(--text-primary)" }}>{f.intitule}{f.organisme ? ` (${f.organisme})` : ""}</span>
+                    <span style={{ color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{fmtDate(f.date)}</span>
+                  </div>
+                ))}
+                {data.formationsPerso.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune formation perso déclarée.</div>}
+              </div>
+
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY.accentDark, marginBottom: 8 }}>🧭 Étude de poste ({data.etudePoste.length})</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.entries(etudeParPoste).map(([label, entries]) => (
+                  <div key={label} style={{ background: "var(--bg-page)", borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>{label} — {entries.length} jour{entries.length > 1 ? "s" : ""}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--text-secondary)", marginTop: 3 }}>
+                      {entries.map(e => `${fmtDate(e.date_jour)} (${SHIFT_LABEL_ETUDE[e.code_equipe] || e.code_equipe})`).join(" · ")}
+                    </div>
+                  </div>
+                ))}
+                {Object.keys(etudeParPoste).length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune journée d'étude de poste.</div>}
               </div>
             </>
           )}
@@ -828,7 +977,7 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [chargementNonFormes, setChargementNonFormes] = useState(false);
 
-  const afos = agents.filter(a => a.is_afo);
+  const afos = agents.filter(a => a.is_afo || a.is_asfp);
   const filtered = agents.filter(a => {
     const q = search.toLowerCase();
     return !q || a.nom?.toLowerCase().includes(q) || a.prenom?.toLowerCase().includes(q) || a.id?.toLowerCase().includes(q);
@@ -990,7 +1139,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
     try { await api.formation.deleteSession(sessionId); onChanged(); refreshProfil?.(); refreshSchedule?.(); onClose(); } catch (e) { setErr(e.message || "Erreur"); }
   }
 
-  const afos = agents.filter(a => a.is_afo && !data?.formateurs.some(f => f.cp === a.id));
+  const afos = agents.filter(a => (a.is_afo || a.is_asfp) && !data?.formateurs.some(f => f.cp === a.id));
   const nonInscrits = agents.filter(a => !data?.participants.some(p => p.cp_agent === a.id));
 
   return (
@@ -1096,10 +1245,18 @@ function StatTuile({ label, value }) {
   );
 }
 
-function StatsTab() {
+function StatsTab({ agents }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [couvertureId, setCouvertureId] = useState(null);
+  // Fiche agent (15/09, Olivier : "il le faudrait en nominatif sur la fiche
+  // agent [...] poste par poste avec les dates") -- recherche d'agent, même
+  // principe que la recherche déjà présente ailleurs dans l'appli (Annuaire).
+  const [ficheSearch, setFicheSearch] = useState("");
+  const [ficheAgentCp, setFicheAgentCp] = useState(null);
+  const ficheResultats = ficheSearch.trim().length >= 2
+    ? (agents || []).filter(a => `${a.prenom} ${a.nom} ${a.id}`.toLowerCase().includes(ficheSearch.trim().toLowerCase())).slice(0, 8)
+    : [];
 
   useEffect(() => {
     api.formation.getStats().then(setData).catch(() => {}).finally(() => setLoading(false));
@@ -1110,12 +1267,36 @@ function StatsTab() {
 
   return (
     <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>👤 Fiche agent</div>
+      <div style={{ position: "relative", marginBottom: 20 }}>
+        <input
+          value={ficheSearch}
+          onChange={e => setFicheSearch(e.target.value)}
+          placeholder="🔍 Rechercher un agent (nom, prénom, CP)…"
+          style={{ width: "100%", padding: "9px 12px", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 9, fontSize: 13, outline: "none", background: "var(--bg-card)", color: "var(--text-primary)" }}
+        />
+        {ficheResultats.length > 0 && (
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 9, boxShadow: "0 4px 14px rgba(15,23,42,.12)", zIndex: 20, overflow: "hidden" }}>
+            {ficheResultats.map(a => (
+              <div key={a.id} onClick={() => { setFicheAgentCp(a.id); setFicheSearch(""); }}
+                style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, color: "var(--text-primary)", borderBottom: "1px solid var(--border)" }}>
+                {a.prenom} {a.nom} <span style={{ color: "var(--text-muted)", fontSize: 11 }}>({a.id})</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {ficheAgentCp && <FicheAgentModal cp={ficheAgentCp} onClose={() => setFicheAgentCp(null)} />}
+
       <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>📖 Par formation</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
         {data.parFormation.map(f => (
           <div key={f.catalogue_id} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{f.intitule} <span style={{ fontWeight: 400, color: "var(--text-secondary)" }}>({f.categorie})</span></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{f.intitule}</div>
+                <CategorieChip cat={f.categorie} />
+              </div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) formé(s)</div>
             </div>
             <button onClick={() => setCouvertureId(f.catalogue_id)} style={{ ...btnSecondary, fontSize: 12, padding: "6px 12px" }}>Voir le détail</button>

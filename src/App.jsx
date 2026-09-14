@@ -12505,7 +12505,7 @@ const handleLogin = async (pinOverride) => {
         if(rememberMe) localStorage.setItem(REMEMBER_CP_KEY, mat);
         else localStorage.removeItem(REMEMBER_CP_KEY);
       } catch {}
-      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo });
+      onLogin({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo, isAsfp: agent.is_asfp });
     } catch(e) {
       if(e.message?.includes("429") || e.message?.includes("Trop")) {
         setError("Trop de tentatives. Attendez quelques minutes.");
@@ -12532,7 +12532,7 @@ const handleLogin = async (pinOverride) => {
       // Compte fraîchement créé -> onboarding avant de transmettre le login
       // (le token est déjà valide côté serveur, voir client.js auth.register,
       // donc aucun risque à retarder onLogin le temps des quelques écrans).
-      setPendingOnboarding({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo });
+      setPendingOnboarding({ agent: {...agent, id: agent.cp, immatriculation: agent.cp}, isAdmin: agent.is_admin, isAfo: agent.is_afo, isAsfp: agent.is_asfp });
     } catch(e) {
       // Réserve régionale : l'auto-enregistrement est bloqué côté serveur
       // (18/08, demande d'Olivier — "seul un admin donne accès"). On ramène
@@ -12913,18 +12913,20 @@ export default function App(){
         famille: r.famille||"PRCI",
         is_admin: !!r.is_admin,
         is_afo: !!r.is_afo,
+        is_asfp: !!r.is_asfp,
       }));
       setAgents(mapped);
-      // Synchroniser le statut admin ET afo de l'utilisateur connecte : une
+      // Synchroniser le statut admin/afo/asfp de l'utilisateur connecte : une
       // promotion/retrait fait par un autre admin ne doit pas attendre une
       // reconnexion pour faire apparaitre/disparaitre l'onglet Admin/le
-      // module Gestion Formation.
+      // module Gestion Formation (15/09 : is_asfp donne le meme acces qu'is_afo,
+      // meme resync).
       const myId = currentUser?.agent?.immatriculation||currentUser?.agent?.cp||currentUser?.agent?.id;
       const me = mapped.find(a=>a.id===myId);
       if(me) setCurrentUser(prev=>{
         if(!prev) return prev;
-        if(prev.isAdmin===me.is_admin && prev.isAfo===me.is_afo && prev.agent?.famille===me.famille) return prev;
-        return {...prev,isAdmin:me.is_admin,isAfo:me.is_afo,agent:{...prev.agent,famille:me.famille}};
+        if(prev.isAdmin===me.is_admin && prev.isAfo===me.is_afo && prev.isAsfp===me.is_asfp && prev.agent?.famille===me.famille) return prev;
+        return {...prev,isAdmin:me.is_admin,isAfo:me.is_afo,isAsfp:me.is_asfp,agent:{...prev.agent,famille:me.famille}};
       });
       // famille (21/08, correctif AY) : la réponse de connexion (login/register,
       // authController.issueSession) n'a jamais renvoyé ce champ -- currentAgent
@@ -12991,7 +12993,11 @@ export default function App(){
   },[currentAgent]); // eslint-disable-line
   
   const isAdmin=currentUser?.isAdmin||false;
-  const isAfo=currentUser?.isAfo||false;
+  // isAsfp (15/09) donne exactement le meme acces que isAfo (espace "🎓 AFO",
+  // memes droits, confirme par Olivier) -- fusionnes ici en un seul flag pour
+  // que les 3 points de gating existants (VIEWS, sidebar, GlobalSearch) n'aient
+  // besoin d'aucun changement individuel.
+  const isAfo=currentUser?.isAfo||currentUser?.isAsfp||false;
 
 
   const handleLogin=(user)=>{

@@ -306,6 +306,19 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
       afficherMsg("err", e.message || "Erreur modification statut AFO");
     }
   }
+  // is_asfp (15/09, demandé par Olivier) : un vrai agent nommé, mêmes droits
+  // que "Formateur AFO" (même espace, même accès) mais compté à part dans les
+  // stats -- même patron exact que handleToggleAfo/handleToggleDpx ci-dessus.
+  async function handleToggleAsfp(agent) {
+    try {
+      await api.agents.update(agent.cp, { is_asfp: !agent.is_asfp });
+      afficherMsg("ok", `${agent.prenom} ${agent.nom} ${agent.is_asfp ? "n'est plus" : "est maintenant"} ASFP`);
+      charger();
+      onAgentsChanged?.();
+    } catch (e) {
+      afficherMsg("err", e.message || "Erreur modification statut ASFP");
+    }
+  }
   // 28/08, demandé par Olivier ("mettre une case pour dpx et assistant dpx
   // dans les fiches, pour identifier les gens et leurs poste") — remplace,
   // pour le décompte "Encadrement" de Stat'Equip, l'ancien calcul basé sur
@@ -665,6 +678,15 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                   }}>
                   🎓 Formateur AFO{a.is_afo ? " ✓" : ""}
                 </button>
+                <button onClick={() => handleToggleAsfp(a)}
+                  style={{
+                    background: a.is_asfp ? "#fce7f3" : "#f8fafc",
+                    color: a.is_asfp ? "#be185d" : "#94a3b8",
+                    border: `1px solid ${a.is_asfp ? "#fbcfe8" : "#e2e8f0"}`,
+                    borderRadius: 20, padding: "5px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700,
+                  }}>
+                  🎓 ASFP{a.is_asfp ? " ✓" : ""}
+                </button>
                 <button onClick={() => handleToggleDpx(a)}
                   style={{
                     background: a.is_dpx ? "#ccfbf1" : "#f8fafc",
@@ -830,7 +852,7 @@ function ModalCreer({ onConfirm, onClose }) {
 // ─── MODAL SUPPRIMER ─────────────────────────────────────────────────────────
 
 function ModalModifier({ agent, onConfirm, onClose }) {
-  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, is_afo: agent.is_afo || false, is_dpx: agent.is_dpx || false, is_adjoint_dpx: agent.is_adjoint_dpx || false, telephone: "", email: "", date_embauche: agent.date_embauche || "" });
+  const [form, setForm] = useState({ nom: agent.nom || "", prenom: agent.prenom || "", grade: agent.grade || "CO5", famille: agent.famille || "PRCI", is_reserve: agent.is_reserve || false, is_afo: agent.is_afo || false, is_asfp: agent.is_asfp || false, is_dpx: agent.is_dpx || false, is_adjoint_dpx: agent.is_adjoint_dpx || false, telephone: "", email: "", date_embauche: agent.date_embauche || "" });
   const [nouveauCp, setNouveauCp] = useState(agent.cp || "");
   const [err, setErr] = useState("");
   const [coordLoading, setCoordLoading] = useState(true);
@@ -873,7 +895,7 @@ function ModalModifier({ agent, onConfirm, onClose }) {
       return setErr(e.message || "Erreur sauvegarde habilitations");
     }
     setHabSaving(false);
-    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, is_afo: form.is_afo, is_dpx: form.is_dpx, is_adjoint_dpx: form.is_adjoint_dpx, telephone: form.telephone.trim(), email: form.email.trim(), date_embauche: form.date_embauche || "", ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
+    onConfirm({ nom: form.nom.trim().toUpperCase(), prenom: form.prenom.trim(), grade: form.grade, famille: form.famille, is_reserve: form.is_reserve, is_afo: form.is_afo, is_asfp: form.is_asfp, is_dpx: form.is_dpx, is_adjoint_dpx: form.is_adjoint_dpx, telephone: form.telephone.trim(), email: form.email.trim(), date_embauche: form.date_embauche || "", ...(cpChange ? { nouveau_cp: nouveauCp.trim().toUpperCase() } : {}) });
   }
 
   return (
@@ -963,6 +985,19 @@ function ModalModifier({ agent, onConfirm, onClose }) {
             }}>
             🎓 {form.is_afo ? "Formateur AFO" : "Pas formateur"}
           </button>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>ASFP</div>
+          <button onClick={() => setForm(p => ({ ...p, is_asfp: !p.is_asfp }))}
+            style={{
+              width: "100%", padding: "8px", border: "none", borderRadius: 8, cursor: "pointer",
+              fontWeight: 700, fontSize: 13,
+              background: form.is_asfp ? "#be185d" : "#f1f5f9",
+              color: form.is_asfp ? "#fff" : "#64748b"
+            }}>
+            🎓 {form.is_asfp ? "ASFP" : "Pas ASFP"}
+          </button>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>Mêmes droits que "Formateur AFO" (catalogue, sessions, stats) — compté à part dans les statistiques.</div>
         </div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>DPX</div>

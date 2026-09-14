@@ -256,8 +256,11 @@ async function addFormateur(req, res) {
   const { cp_agent } = req.body;
   if (!cp_agent) return res.status(400).json({ error: 'cp_agent requis' });
   try {
-    const [[isAfoRow]] = await pool.query('SELECT is_afo FROM profil_agent WHERE cp_agent=?', [cp_agent]);
-    if (!isAfoRow?.is_afo) return res.status(400).json({ error: 'Cet agent n\'est pas formateur AFO' });
+    // is_asfp (15/09) : un vrai ASFP a les mêmes droits qu'un AFO, sélectionnable
+    // comme formateur exactement pareil (l'ancien agent virtuel cp='ASFP' passe
+    // aussi par ici sans changement, is_afo=1 dessus depuis sa création).
+    const [[isAfoRow]] = await pool.query('SELECT is_afo, is_asfp FROM profil_agent WHERE cp_agent=?', [cp_agent]);
+    if (!isAfoRow?.is_afo && !isAfoRow?.is_asfp) return res.status(400).json({ error: 'Cet agent n\'est pas formateur AFO/ASFP' });
     const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM formation_session_formateur WHERE session_id=?', [id]);
     if (n >= 3) return res.status(400).json({ error: 'Jusqu\'à 3 formateurs maximum par session' });
     await pool.query('INSERT INTO formation_session_formateur (session_id, cp_agent) VALUES (?,?)', [id, cp_agent]);
@@ -535,6 +538,12 @@ const PRESENCE_REELLE = `(
 
 async function getStats(req, res) {
   try {
+    // totalAgentsActifs (15/09) : dénominateur pour la "vue globale de
+    // couverture" du catalogue côté frontend (CatalogueSection) -- calculé
+    // ici plutôt que côté frontend, car le state `agents` partagé dans
+    // App.jsx (rechargerAgents) ne porte pas le champ `statut` (perdu dans
+    // le mapping) -- une seule requête simple, source de vérité fiable.
+    const [[{ totalAgentsActifs }]] = await pool.query(`SELECT COUNT(*) AS totalAgentsActifs FROM agent WHERE statut='actif'`);
     const [parFormationBase] = await pool.query(
       `SELECT fc.id AS catalogue_id, fc.intitule, fc.categorie,
               COUNT(DISTINCT fs.id) AS nb_sessions
@@ -587,8 +596,10 @@ async function getStats(req, res) {
       .map(r => ({ annee: r.annee, categorie: r.categorie, nbAgents: r.agents.size }))
       .sort((a, b) => b.annee - a.annee || a.categorie.localeCompare(b.categorie));
 
-    // Stats par AFO — visibles par tous les AFO, pas seulement le sien.
-    const [afos] = await pool.query(`SELECT a.cp, a.nom, a.prenom FROM agent a JOIN profil_agent pa ON pa.cp_agent=a.cp WHERE pa.is_afo=1 ORDER BY a.nom, a.prenom`);
+    // Stats par AFO/ASFP — visibles par tous, à égalité, aucune hiérarchie
+    // (15/09 : un vrai agent is_asfp=1 apparaît ici comme n'importe quel AFO,
+    // même traitement, mêmes colonnes — pas de section séparée à construire).
+    const [afos] = await pool.query(`SELECT a.cp, a.nom, a.prenom FROM agent a JOIN profil_agent pa ON pa.cp_agent=a.cp WHERE pa.is_afo=1 OR pa.is_asfp=1 ORDER BY a.nom, a.prenom`);
     // 26/08 : duree_heures rapatriee ici pour le nouveau total "Heures" par
     // AFO (Olivier : "je veux dans les stat que chaque afo voit [...] le
     // nombre d'heure") -- champ optionnel du catalogue (0 si jamais renseigne
@@ -631,7 +642,64 @@ async function getStats(req, res) {
       };
     });
 
-    res.json({ parFormation, parAnneeCategorieSource, parAfo });
+    res.json({ parFormation, parAnneeCategorieSource, parAfo, totalAgentsActifs });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
+// GET /formation/agents/:cp/fiche — 15/09, demande par Olivier ("il le
+// faudrait en nominatif sur la fiche agent [...] poste par poste avec les
+// dates") : vue AFO/ASFP unique par agent, réunissant tout son historique
+// (sessions suivies avec dates, formations perso déclarées, étude de poste
+// poste par poste avec dates) -- jusqu'ici seul l'agent lui-même voyait tout
+// ça (perso, "Mes formations"), jamais un AFO/ASFP sur UN agent précis.
+async function getFicheAgent(req, res) {
+  const { cp } = req.params;
+  try {
+    const [[agent]] = await pool.query('SELECT cp, nom, prenom FROM agent WHERE cp = ?', [cp]);
+    if (!agent) return res.status(404).json({ error: 'Agent introuvable' });
+
+    // Sessions : TOUT l'historique (pas seulement PRESENCE_REELLE) -- une
+    // fiche de suivi doit montrer aussi les sessions déclinées, avec
+    // toujours_present pour le préciser (même EXISTS que getSessionDetail/
+    // getMesSessions, dupliqué à l'identique, jamais factorisé entre
+    // contrôleurs -- convention du projet).
+    const [sessions] = await pool.query(
+      `SELECT fs.id AS session_id, fc.intitule, fc.categorie, fs.date_session, fs.statut,
+              EXISTS(
+                SELECT 1 FROM planning_jour pj JOIN planning_periode pp ON pp.planning_jour_id=pj.id
+                WHERE pj.cp_agent = fe.cp_agent AND pj.date_jour = fs.date_session AND pp.code_equipe='FOR'
+              ) AS toujours_present
+       FROM formation_enrollment fe
+       JOIN formation_session fs ON fs.id = fe.session_id
+       JOIN formation_catalogue fc ON fc.id = fs.catalogue_id
+       WHERE fe.cp_agent = ?
+       ORDER BY fs.date_session DESC`,
+      [cp]
+    );
+
+    // Formations perso déclarées (externe/e-learning) : lues depuis
+    // donnees_json, même source que declarerFormationPerso.
+    const [[profilRow]] = await pool.query('SELECT donnees_json FROM profil_agent WHERE cp_agent=?', [cp]);
+    const extra = profilRow?.donnees_json ? (typeof profilRow.donnees_json === 'string' ? JSON.parse(profilRow.donnees_json) : profilRow.donnees_json) : {};
+    const formationsPerso = Array.isArray(extra.formationsPersoDeclarees) ? extra.formationsPersoDeclarees : [];
+
+    // Étude de poste : brute (date + code_poste + code_equipe/vacation) —
+    // le frontend résout le libellé via getPosteLabelFromCode (App.jsx, déjà
+    // exportée) et SHIFT_LABEL_ETUDE (déjà défini dans FormationView.jsx).
+    const [etudePoste] = await pool.query(
+      `SELECT pj.date_jour, pp.code_poste, pp.code_equipe
+       FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
+       WHERE pj.cp_agent = ? AND pp.etude_poste = 1
+       ORDER BY pj.date_jour DESC`,
+      [cp]
+    );
+
+    res.json({
+      agent,
+      sessions: sessions.map(s => ({ ...s, toujours_present: !!s.toujours_present })),
+      formationsPerso,
+      etudePoste,
+    });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
@@ -675,5 +743,5 @@ module.exports = {
   getSessions, getSessionDetail, createSession, updateSession, deleteSession,
   addFormateur, removeFormateur, addParticipant, removeParticipant, lancerSession,
   getMesSessions, getFormationsProposees, declarerFormationPerso, getStats,
-  getCouvertureFormation,
+  getCouvertureFormation, getFicheAgent,
 };

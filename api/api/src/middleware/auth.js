@@ -17,11 +17,12 @@ async function authMiddleware(req, res, next) {
 
   try {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    // is_admin et is_afo sont relus en base a chaque requete (pas depuis le JWT) :
-    // sinon une promotion/retrait ne prend effet qu'a la prochaine reconnexion
-    // de l'agent concerne, jusqu'a expiration de son token (30j).
+    // is_admin, is_afo et is_asfp sont relus en base a chaque requete (pas
+    // depuis le JWT) : sinon une promotion/retrait ne prend effet qu'a la
+    // prochaine reconnexion de l'agent concerne, jusqu'a expiration de son
+    // token (30j).
     const [rows] = await pool.query(
-      `SELECT s.id, au.is_admin, pa.is_afo
+      `SELECT s.id, au.is_admin, pa.is_afo, pa.is_asfp
        FROM session s
        JOIN auth au ON au.cp_agent = s.cp_agent
        LEFT JOIN profil_agent pa ON pa.cp_agent = s.cp_agent
@@ -29,7 +30,7 @@ async function authMiddleware(req, res, next) {
       [payload.cp, tokenHash]
     );
     if (!rows.length) return res.status(401).json({ error: 'Session expirée' });
-    req.agent = { cp: payload.cp, is_admin: !!rows[0].is_admin, is_afo: !!rows[0].is_afo };
+    req.agent = { cp: payload.cp, is_admin: !!rows[0].is_admin, is_afo: !!rows[0].is_afo, is_asfp: !!rows[0].is_asfp };
     next();
   } catch (e) {
     // Erreur DB (ex: coupure de connexion Railway, ECONNRESET deja vu plusieurs
@@ -48,9 +49,11 @@ function adminMiddleware(req, res, next) {
   next();
 }
 
+// AFO et ASFP ont exactement les mêmes droits sur ce module (15/09, confirmé
+// par Olivier) -- un seul middleware partagé, jamais de duplication de route.
 function afoMiddleware(req, res, next) {
-  if (!req.agent?.is_afo)
-    return res.status(403).json({ error: 'Accès formateur (AFO) requis' });
+  if (!req.agent?.is_afo && !req.agent?.is_asfp)
+    return res.status(403).json({ error: 'Accès formateur (AFO/ASFP) requis' });
   next();
 }
 

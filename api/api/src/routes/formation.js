@@ -4,7 +4,7 @@ const {
   getSessions, getSessionDetail, createSession, updateSession, deleteSession,
   addFormateur, removeFormateur, addParticipant, removeParticipant, lancerSession,
   getMesSessions, getFormationsProposees, declarerFormationPerso, getStats,
-  getCouvertureFormation,
+  getCouvertureFormation, getFicheAgent,
 } = require('../controllers/formationController');
 const { authMiddleware, afoMiddleware } = require('../middleware/auth');
 
@@ -38,5 +38,9 @@ router.get('/stats', authMiddleware, afoMiddleware, getStats);
 // utilisé dans le catalogue (clic sur une ligne) et dans SessionForm ("+
 // Ajouter tous les non-formés")
 router.get('/catalogue/:id/couverture', authMiddleware, afoMiddleware, getCouvertureFormation);
+
+// Fiche agent (15/09) — réservé aux AFO/ASFP, vue nominative complète d'UN
+// agent (sessions + formations perso + étude de poste, toutes avec dates)
+router.get('/agents/:cp/fiche', authMiddleware, afoMiddleware, getFicheAgent);
 
 module.exports = router;
