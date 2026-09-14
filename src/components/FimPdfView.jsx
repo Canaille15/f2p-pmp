@@ -384,9 +384,16 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   ligneH(marge, A4_W - marge, y, GRIS_TXT, 1.2);
   y -= 16;
 
-  // ── Titre de section générique ──
-  const titreSection = (label, hauteur = 16) => {
-    newPageIfNeeded(hauteur + 40);
+  // ── Titre de section générique ── contentHeight (14/09, Olivier : "le bas
+  // de la page 1 est mal fait") : réserve aussi la place du contenu qui suit
+  // immédiatement le titre, pas seulement le titre lui-même. Sans ça, le
+  // titre pouvait tenir en bas d'une page pendant que son contenu (table()
+  // ou une liste à puces) se faisait renvoyer seul sur la page suivante par
+  // son propre newPageIfNeeded — un titre de section isolé, sans rien en
+  // dessous, exactement le symptôme signalé ("PAUSES FIGÉES" orphelin en bas
+  // de la page 1, sa liste commençant directement en haut de la page 2).
+  const titreSection = (label, hauteur = 16, contentHeight = 0) => {
+    newPageIfNeeded(hauteur + 40 + contentHeight);
     rect(marge, y - hauteur + 3, A4_W - marge * 2, hauteur, GRIS_CLAIR);
     txt(label, marge + 6, y - hauteur + 7, { size: 9.5, bold: true, color: NAVY });
     y -= hauteur + 6;
@@ -417,7 +424,7 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   };
 
   // ── Congés ──
-  titreSection("CONGÉS");
+  titreSection("CONGÉS", 16, 18 * 5 + 10);
   table(
     ["", ...data.congesParAnnee.map(c => `${c.annee}${c.statique ? "" : " (mois en cours)"}`)],
     [
@@ -438,7 +445,7 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   // affichage). RU reste en SOLDE (son propre tableau 3 années, solde
   // labels) : sur la vraie fiche, RU n'est pas dans ce tableau "Repos"
   // cumulatif, il apparaît à part en solde M-1/acquis/pris/solde M.
-  titreSection("REPOS");
+  titreSection("REPOS", 16, 18 * 2 + 10);
   table(
     ["", "Cumul M-1", "Pris ce mois", "Cumul M"],
     [
@@ -473,7 +480,7 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   anneeTable(`Repos suppl. RU (${fmtNb(data.ru.acquis)})`, data.ru.parAnnee, ["Cumul M-1", "Cumul M"]);
 
   // ── Temps acquis ──
-  titreSection("TEMPS ACQUIS");
+  titreSection("TEMPS ACQUIS", 16, 18 * 5 + 10);
   anneeTable(`Temps RQ, en jours (${fmtNb(data.rq.acquis)})`, data.rq.parAnnee);
   // Libellés de colonne raccourcis (21/08, Olivier : "regarde le chevauchement")
   // -- "Solde début de mois" (19 car.) ne tenait pas dans une colonne à 14.5%
@@ -505,8 +512,7 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   {
     const { duMois, nonVerifieesAvant } = data.pausesFigees;
     const total = duMois.length + nonVerifieesAvant.length;
-    titreSection("PAUSES FIGÉES");
-    newPageIfNeeded(20 + total * 13);
+    titreSection("PAUSES FIGÉES", 16, 20 + total * 13);
     if (total === 0) {
       txt("Aucune pause figée ce mois-ci, ni en attente de vérification.", marge, y, { size: 8.7, color: rgb(0.42, 0.47, 0.55) });
       y -= 16;
@@ -537,21 +543,12 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
     }
   }
 
-  // ── Fêtes à récupérer ──
-  titreSection("FÉRIÉS À RÉCUPÉRER (en attente)");
-  if (data.fetesATraiter.length === 0) {
-    txt("Aucun férié en attente de traitement.", marge, y, { size: 8.7, color: rgb(0.42, 0.47, 0.55) });
-    y -= 16;
-  } else {
-    data.fetesATraiter.forEach(f => {
-      txt(`•  ${f.code} — ${f.label}  (${fmtDateFr(f.dateFete)})`, marge, y, { size: 8.7 });
-      y -= 13;
-    });
-    y -= 4;
-  }
+  // ── Fêtes à récupérer -- déplacée après le planning du mois (14/09,
+  // Olivier : "le mieux serait de mettre les fetes en bas de la 2eme page,
+  // sous le planning") -- voir plus bas, juste avant le pied de page.
 
   // ── Résumé CET (21/08, séparé de Maladie sur demande d'Olivier) ──
-  titreSection("RÉSUMÉ — CET");
+  titreSection("RÉSUMÉ — CET", 16, 18 * 3 + 10);
   const cetCourant = data.cet.comptes?.find(c => c.key === "courant");
   const cetFinActivite = data.cet.comptes?.find(c => c.key === "finActivite");
   table(
@@ -564,7 +561,7 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
   );
 
   // ── Résumé Maladie ──
-  titreSection("RÉSUMÉ — MALADIE");
+  titreSection("RÉSUMÉ — MALADIE", 16, 18 * 3 + 10);
   table(
     ["", "Jours"],
     [
@@ -603,6 +600,30 @@ async function genererPdfFim(agent, agentProfiles, data, monthIdx, year, famille
       j.segments.forEach(seg => { bx = drawBadge(seg.texte, bx, yy, seg.couleur) + 4; });
     }
   });
+  // Le forEach ci-dessus ne touche jamais la variable partagée `y` (il ne
+  // fait que calculer des `yy` locaux par ligne) -- sans cette mise à jour,
+  // la section suivante (Fêtes, ajoutée ici même le 14/09) se serait
+  // dessinée par-dessus la grille du planning au lieu de continuer en
+  // dessous. rowsParColonne*15 = hauteur réelle de la colonne la plus haute.
+  y = yDepart - rowsParColonne * 15 - 16;
+
+  // ── Fêtes à récupérer -- déplacée sous le planning du mois, en fin de
+  // document (14/09, Olivier : "le mieux serait de mettre les fetes en bas
+  // de la 2eme page, sous le planning" -- section courte, mieux à sa place
+  // en "queue" du document après le gros bloc Planning qu'au milieu du flux
+  // où elle contribuait à saturer le bas de la page 1). Même contenu, même
+  // calcul (data.fetesATraiter), seule la position a changé.
+  titreSection("FÉRIÉS À RÉCUPÉRER (en attente)", 16, 20 + data.fetesATraiter.length * 13);
+  if (data.fetesATraiter.length === 0) {
+    txt("Aucun férié en attente de traitement.", marge, y, { size: 8.7, color: rgb(0.42, 0.47, 0.55) });
+    y -= 16;
+  } else {
+    data.fetesATraiter.forEach(f => {
+      txt(`•  ${f.code} — ${f.label}  (${fmtDateFr(f.dateFete)})`, marge, y, { size: 8.7 });
+      y -= 13;
+    });
+    y -= 4;
+  }
 
   // ── Note de bas de page, en pied de la toute dernière page (21/08 : placée
   // auparavant juste après les tableaux de résumé, ce qui créait parfois une
