@@ -334,16 +334,16 @@ export default function StatsEquipeView() {
                 </div>
               </div>
 
-              {/* Réserve / Roulement — historique mensuel, jamais recalculé rétroactivement */}
-              <ReserveRoulementSection data={data.reserveRoulement} />
-
               {/* Âge moyen (09/09, étendu -- mockup validé par Olivier : "tu peux
                   faire ca, sans rien casser" -- évolution par année (même
                   mécanisme que la courbe de couverture) + pyramide des âges
                   Équipe/Réserve régionale, regroupées dans la même carte
                   (même principe que FormationSection : sous-sections avec
                   GroupeLabel plutôt que des cartes séparées, tout concerne le
-                  même sujet "âge"). */}
+                  même sujet "âge"). 14/09 (Olivier) : remontée en 2e position
+                  du sous-onglet Effectifs, juste après "Vue d'ensemble équipe"
+                  (avant "Réserve / Roulement") -- purement un déplacement,
+                  contenu strictement inchangé. */}
               <div style={card}>
                 <div style={sectionTitle}>🎂 Âge moyen (hors Réserve régionale)</div>
                 <Tuile label="Âge moyen" valeur={data.ageMoyenHorsReserve.moyenne != null ? `${data.ageMoyenHorsReserve.moyenne} ans` : "—"} sousLabel={`sur ${data.ageMoyenHorsReserve.nbAgentsInclus} agent(s)`} large />
@@ -360,6 +360,9 @@ export default function StatsEquipeView() {
                   </div>
                 )}
               </div>
+
+              {/* Réserve / Roulement — historique mensuel, jamais recalculé rétroactivement */}
+              <ReserveRoulementSection data={data.reserveRoulement} />
             </>
           )}
 
