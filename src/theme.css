@@ -101,6 +101,32 @@
      pour quil soit plus lisible"). Éclairci uniquement côté sombre, même
      principe que --accent-active/--brand-text un peu plus haut. */
   --te-concerne: #c2410c;
+  /* Module Formation/AFO -- encarts pastel "info" (FormationView.jsx, objets
+     NAVY/AMBRE) : catalogue/session/déclarer une formation, sous-onglets AFO.
+     Jusqu'au 15/09, ces panneaux restaient volontairement toujours pâles
+     (bgLight #eff6ff/#fffbeb) même en mode sombre -- raisonnement d'origine
+     du 25/08 : "îlot auto-suffisant, jamais impacté par le thème, comme le
+     bandeau Échanges ouverts". Ce raisonnement tient pour un petit bandeau,
+     pas pour un GRAND panneau qui occupe l'essentiel de l'écran AFO -- un
+     rectangle pastel vif posé directement sur le fond quasi-noir de la page
+     "claque les yeux" (Olivier, 15/09), même si le texte dedans reste
+     lisible. Effet de bord découvert en creusant : NAVY.accentDark sert
+     aussi de couleur de TITRE directement sur var(--bg-card) (pas sur le
+     panneau pastel, ex. les en-têtes "Formations suivies"/"Formations
+     déclarées"/"Étude de poste" de FicheAgentModal) -- #1e3a5f (bleu-marine
+     foncé) y était quasiment invisible sur un fond déjà sombre, un vrai bug
+     de lisibilité en plus du problème de contraste visuel. Palette claire =
+     valeurs d'origine à l'identique (aucun changement visuel en mode clair) ;
+     palette sombre = fond légèrement teinté (plus clair qu'un simple
+     var(--bg-card) plat, pour garder l'effet "encart" sans repasser par un
+     bloc pastel plein), bordure et texte éclaircis pour un bon contraste sur
+     ce fond ET sur var(--bg-card) (10:1+ mesuré dans les deux cas). */
+  --panel-navy-bg: #eff6ff;
+  --panel-navy-border: #bfdbfe;
+  --panel-navy-text: #1e3a5f;
+  --panel-amber-bg: #fffbeb;
+  --panel-amber-border: #fde68a;
+  --panel-amber-text: #78350f;
 }
 :root[data-theme="dark"] {
   --bg-page: #0a0e1a;
@@ -130,6 +156,12 @@
   --cell-4-text: #0b1120;
   --cell-5-text: #1e293b;
   --te-concerne: #fb923c;
+  --panel-navy-bg: #16233d;
+  --panel-navy-border: #2c4770;
+  --panel-navy-text: #93c5fd;
+  --panel-amber-bg: #241c0f;
+  --panel-amber-border: #5c431a;
+  --panel-amber-text: #fbbf24;
 }
 body { background: var(--bg-page); transition: background .15s; }
 

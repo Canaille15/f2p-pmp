@@ -36,8 +36,13 @@ import { computeEtudePosteDetail, getPosteLabelFromCode } from "../App";
 // stocké).
 // ─────────────────────────────────────────────────────────────────────────
 
-const AMBRE = { from: "#b45309", to: "#92400e", bgLight: "#fffbeb", borderLight: "#fde68a", accentDark: "#78350f" };
-const NAVY  = { from: "#0f4c81", to: "#1e3a5f", bgLight: "#eff6ff", borderLight: "#bfdbfe", accentDark: "#1e3a5f" };
+// bgLight/borderLight/accentDark référencent des tokens theme.css depuis le
+// 15/09 (mode sombre AFO "ça claque les yeux") -- valeurs identiques en clair
+// (aucun changement visuel), éclaircies/teintées en sombre plutôt que de
+// rester pâles sur un fond quasi-noir. Voir le commentaire de theme.css
+// (--panel-navy-*/--panel-amber-*) pour le détail du raisonnement.
+const AMBRE = { from: "#b45309", to: "#92400e", bgLight: "var(--panel-amber-bg)", borderLight: "var(--panel-amber-border)", accentDark: "var(--panel-amber-text)" };
+const NAVY  = { from: "#0f4c81", to: "#1e3a5f", bgLight: "var(--panel-navy-bg)", borderLight: "var(--panel-navy-border)", accentDark: "var(--panel-navy-text)" };
 
 const CATEGORIES = ["PRCI", "PAR", "Divers"];
 const FORMAT_OPTIONS = ["Présentiel", "Distanciel", "Autre"];
@@ -177,7 +182,7 @@ function ChoixLibre({ options, choix, onChoix, autre, onAutre, famille }) {
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {options.map(o => (
           <button key={o} type="button" onClick={() => onChoix(o)}
-            style={{ padding: "7px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: choix === o ? famille.from : "#fff", color: choix === o ? "#fff" : "#64748b", boxShadow: choix === o ? "none" : "0 0 0 1.5px #e2e8f0 inset" }}>
+            style={{ padding: "7px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: choix === o ? famille.from : "var(--bg-card)", color: choix === o ? "#fff" : "var(--text-secondary)", boxShadow: choix === o ? "none" : "0 0 0 1.5px var(--border) inset" }}>
             {o}
           </button>
         ))}
@@ -217,7 +222,10 @@ function RosterLignes({ session, agentId }) {
   );
 }
 const btnPrimary = (fam) => ({ background: fam.from, color: "#fff", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontSize: 13, fontWeight: 700 });
-const btnSecondary = { background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600 };
+// #f1f5f9 -> var(--bg-page) : même substitution déjà validée ailleurs dans le
+// projet (AdminPanel.jsx, 27/08) -- écart de teinte imperceptible en clair
+// (#f1f5f9 vs #f8fafc), theme-aware en sombre (15/09).
+const btnSecondary = { background: "var(--bg-page)", color: "var(--text-secondary)", border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600 };
 
 // ─── COMPOSANT RACINE ───────────────────────────────────────────────────────
 
@@ -297,7 +305,7 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
               style={{
                 padding: "8px 14px", borderRadius: 9, border: "none", cursor: "pointer",
                 fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
-                background: afoSubTab === t.k ? NAVY.from : "#fff",
+                background: afoSubTab === t.k ? NAVY.from : "var(--bg-card)",
                 color: afoSubTab === t.k ? "#fff" : NAVY.accentDark,
                 boxShadow: afoSubTab === t.k ? "0 2px 6px rgba(15,76,129,.35)" : "0 1px 2px rgba(15,23,42,.06)",
                 transition: "background .15s ease, box-shadow .15s ease",
@@ -307,7 +315,7 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
           ))}
         </div>
         {afoSubTabHints[afoSubTab] && (
-          <div style={{ fontSize: 11.5, color: NAVY.accentDark, background: "#fff", border: `1px dashed ${NAVY.borderLight}`, borderRadius: 8, padding: "6px 10px", marginBottom: 12 }}>
+          <div style={{ fontSize: 11.5, color: NAVY.accentDark, background: "var(--bg-card)", border: `1px dashed ${NAVY.borderLight}`, borderRadius: 8, padding: "6px 10px", marginBottom: 12 }}>
             💡 {afoSubTabHints[afoSubTab]}
           </div>
         )}
@@ -444,7 +452,7 @@ function MesFormationsTab({ agentId, agent, schedule, cpsSchedule, agentProfiles
               </div>
               <RosterLignes session={it} agentId={agentId} />
               {it.message_lancement && (
-                <div style={{ marginTop: 8, fontSize: 12, color: "#78350f", background: AMBRE.bgLight, border: `1px solid ${AMBRE.borderLight}`, borderRadius: 8, padding: "8px 10px" }}>
+                <div style={{ marginTop: 8, fontSize: 12, color: AMBRE.accentDark, background: AMBRE.bgLight, border: `1px solid ${AMBRE.borderLight}`, borderRadius: 8, padding: "8px 10px" }}>
                   💬 {it.message_lancement}
                 </div>
               )}
@@ -453,7 +461,7 @@ function MesFormationsTab({ agentId, agent, schedule, cpsSchedule, agentProfiles
                 if (!notif || notif.acquitte) return null;
                 return (
                   <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 12, color: "#b45309", fontWeight: 700 }}>🔔 Ajoutée à ton planning perso — pense à vérifier</span>
+                    <span style={{ fontSize: 12, color: AMBRE.accentDark, fontWeight: 700 }}>🔔 Ajoutée à ton planning perso — pense à vérifier</span>
                     <button onClick={() => acquitter(it.id)} style={{ ...btnPrimary(AMBRE), padding: "5px 12px", fontSize: 12 }}>✓ Vu</button>
                   </div>
                 );
@@ -570,7 +578,7 @@ function DeclarerFormationForm({ onCancel, onSaved }) {
           <div style={{ display: "flex", gap: 8 }}>
             {[["externe", "📋 Externe"], ["e-learning", "💻 E-learning"]].map(([k, l]) => (
               <button key={k} onClick={() => setForm(p => ({ ...p, format: k }))}
-                style={{ flex: 1, padding: 8, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: form.format === k ? AMBRE.from : "#fff", color: form.format === k ? "#fff" : "#64748b" }}>
+                style={{ flex: 1, padding: 8, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: form.format === k ? AMBRE.from : "var(--bg-card)", color: form.format === k ? "#fff" : "var(--text-secondary)" }}>
                 {l}
               </button>
             ))}
@@ -913,7 +921,7 @@ function CatalogueForm({ initial, onCancel, onSaved }) {
           <div style={{ display: "flex", gap: 8 }}>
             {CATEGORIES.map(c => (
               <button key={c} onClick={() => setForm(p => ({ ...p, categorie: c }))}
-                style={{ flex: 1, padding: 8, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: form.categorie === c ? NAVY.from : "#fff", color: form.categorie === c ? "#fff" : "#64748b" }}>
+                style={{ flex: 1, padding: 8, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: form.categorie === c ? NAVY.from : "var(--bg-card)", color: form.categorie === c ? "#fff" : "var(--text-secondary)" }}>
                 {c}
               </button>
             ))}
@@ -939,7 +947,7 @@ function CatalogueForm({ initial, onCancel, onSaved }) {
         <div><div style={labelStyle}>Public cible</div><input value={form.public_cible || ""} onChange={e => setForm(p => ({ ...p, public_cible: e.target.value }))} style={inputStyle} /></div>
         <div><div style={labelStyle}>Prérequis</div><input value={form.prerequis || ""} onChange={e => setForm(p => ({ ...p, prerequis: e.target.value }))} style={inputStyle} /></div>
         <button onClick={() => setForm(p => ({ ...p, obligatoire: !p.obligatoire }))}
-          style={{ padding: 8, borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: form.obligatoire ? NAVY.from : "#fff", color: form.obligatoire ? "#fff" : "#64748b", border: `1px solid ${NAVY.borderLight}` }}>
+          style={{ padding: 8, borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13, background: form.obligatoire ? NAVY.from : "var(--bg-card)", color: form.obligatoire ? "#fff" : "var(--text-secondary)", border: `1px solid ${NAVY.borderLight}` }}>
           ⭐ {form.obligatoire ? "Formation obligatoire" : "Formation facultative"}
         </button>
         {err && <div style={{ color: "#dc2626", fontSize: 12, fontWeight: 600 }}>⚠️ {err}</div>}
@@ -1084,11 +1092,11 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {afos.map(a => (
               <button key={a.id} onClick={() => toggleFormateur(a.id)}
-                style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (formateurs.includes(a.id) ? NAVY.from : "#e2e8f0"), cursor: "pointer", fontSize: 12, fontWeight: 600, background: formateurs.includes(a.id) ? NAVY.from : "#fff", color: formateurs.includes(a.id) ? "#fff" : "#475569" }}>
+                style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (formateurs.includes(a.id) ? NAVY.from : "var(--border)"), cursor: "pointer", fontSize: 12, fontWeight: 600, background: formateurs.includes(a.id) ? NAVY.from : "var(--bg-card)", color: formateurs.includes(a.id) ? "#fff" : "var(--text-secondary)" }}>
                 {a.prenom} {a.nom}
               </button>
             ))}
-            {afos.length === 0 && <div style={{ fontSize: 12, color: "#94a3b8" }}>Aucun agent AFO pour l'instant.</div>}
+            {afos.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun agent AFO pour l'instant.</div>}
           </div>
         </div>
 
@@ -1099,15 +1107,15 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
             {chargementNonFormes ? "..." : "+ Ajouter tous les non-formés"}
           </button>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Rechercher un agent..." style={{ ...inputStyle, marginBottom: 8 }} />
-          <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, border: "1px solid #e2e8f0", borderRadius: 8, padding: 6, background: "#fff" }}>
+          <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, border: "1px solid var(--border)", borderRadius: 8, padding: 6, background: "var(--bg-card)" }}>
             {filtered.map(a => (
-              <label key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "4px 6px", cursor: "pointer" }}>
+              <label key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "4px 6px", cursor: "pointer", color: "var(--text-primary)" }}>
                 <input type="checkbox" checked={participants.includes(a.id)} onChange={() => toggleParticipant(a.id)} />
-                {a.prenom} {a.nom} <span style={{ color: "#94a3b8", fontFamily: "monospace" }}>{a.id}</span>
+                {a.prenom} {a.nom} <span style={{ color: "var(--text-muted)", fontFamily: "monospace" }}>{a.id}</span>
               </label>
             ))}
           </div>
-          <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>{participants.length} sélectionné(s)</div>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4 }}>{participants.length} sélectionné(s)</div>
         </div>
         {err && <div style={{ color: "#dc2626", fontSize: 12, fontWeight: 600 }}>⚠️ {err}</div>}
         <div style={{ display: "flex", gap: 8 }}>
@@ -1214,7 +1222,7 @@ function SessionDetailModal({ sessionId, agents, onClose, onChanged, refreshProf
                 {data.formateurs.map(f => (
                   <span key={f.cp} style={{ fontSize: 12, background: NAVY.bgLight, color: NAVY.accentDark, borderRadius: 20, padding: "4px 10px", display: "flex", alignItems: "center", gap: 6 }}>
                     {f.prenom} {f.nom}
-                    <button onClick={() => retirerFormateur(f.cp)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 12 }}>✕</button>
+                    <button onClick={() => retirerFormateur(f.cp)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 12 }}>✕</button>
                   </span>
                 ))}
                 {data.formateurs.length < 3 && (
