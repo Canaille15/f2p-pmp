@@ -275,7 +275,7 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
     { k: "mes",       label: "👨‍🏫 Tes sessions" },
     { k: "catalogue", label: "📖 Catalogue" },
     { k: "planning",  label: "📅 Planning" },
-    { k: "stats",     label: "📊 Stats" },
+    { k: "stats",     label: "📊 Suivi formation/agent" },
   ];
   // 11/09 (Olivier, juste après l'aplatissement : "c'est quoi la difference
   // entre tes sessions et sessions. pas tres clair") -- les libellés courts
@@ -304,7 +304,7 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
             <button key={t.k} onClick={() => setAfoSubTab(t.k)}
               style={{
                 padding: "8px 14px", borderRadius: 9, border: "none", cursor: "pointer",
-                fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
+                fontSize: 12.5, fontWeight: 700,
                 background: afoSubTab === t.k ? NAVY.from : "var(--bg-card)",
                 color: afoSubTab === t.k ? "#fff" : NAVY.accentDark,
                 boxShadow: afoSubTab === t.k ? "0 2px 6px rgba(15,76,129,.35)" : "0 1px 2px rgba(15,23,42,.06)",
@@ -1436,6 +1436,84 @@ function StatTuile({ label, value }) {
   );
 }
 
+// 15/09 -- suivi des études de poste, par agent puis par poste, avec le
+// nombre de services et leurs dates (Olivier : "il faudrait une partie du
+// tableau pour suivre les études de poste. Par agent et par poste. Et le
+// nombre de services faits avec les dates. Mais indépendant de ce qu'on a
+// déjà mis dans la fiche formation de l'agent.") -- un composant à part
+// entière, jamais FicheAgentModal : accessible directement dans Stats, sans
+// avoir à rechercher/ouvrir chaque agent un par un. Réutilise volontairement
+// les mêmes fonctions de résolution de libellé que la Fiche agent
+// (resolveJsCode/getPosteLabelFromCode/shiftKeyEtude, déjà importées/
+// définies dans ce fichier) -- ce sont de simples traductions de code,
+// jamais "l'affichage" de la fiche elle-même.
+function EtudePosteSuiviSection({ detail, agents }) {
+  const [ouverts, setOuverts] = useState({});
+  const parAgentMap = {};
+  (detail || []).forEach(e => {
+    if (!parAgentMap[e.cp_agent]) parAgentMap[e.cp_agent] = [];
+    parAgentMap[e.cp_agent].push(e);
+  });
+  const lignes = Object.entries(parAgentMap)
+    .map(([cp, entries]) => {
+      const ag = (agents || []).find(a => a.id === cp);
+      return { cp, nom: ag?.nom || cp, prenom: ag?.prenom || "", entries };
+    })
+    .sort((x, y) => x.nom.localeCompare(y.nom) || x.prenom.localeCompare(y.prenom));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+      {lignes.map(l => {
+        const ouvert = !!ouverts[l.cp];
+        const parPoste = {};
+        l.entries.forEach(e => {
+          const jsCode = e.code_poste ? resolveJsCode(e.code_poste, e.code_equipe) : null;
+          const label = jsCode ? (getPosteLabelFromCode(jsCode) || e.code_poste) : (e.code_poste || "Poste inconnu");
+          if (!parPoste[label]) parPoste[label] = [];
+          parPoste[label].push({ ...e, _jsCode: jsCode });
+        });
+        return (
+          <div key={l.cp} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px" }}>
+            <div onClick={() => setOuverts(p => ({ ...p, [l.cp]: !p[l.cp] }))} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{l.prenom} {l.nom}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "#f3e8ff", borderRadius: 999, padding: "2px 8px" }}>{l.entries.length} service{l.entries.length > 1 ? "s" : ""}</span>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ouvert ? "▲" : "▼"}</span>
+              </div>
+            </div>
+            {ouvert && (
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.entries(parPoste).map(([label, entries]) => {
+                  const parVacation = {};
+                  entries.forEach(e => {
+                    const key = shiftKeyEtude(e.code_equipe, e._jsCode) || "?";
+                    if (!parVacation[key]) parVacation[key] = [];
+                    parVacation[key].push(e);
+                  });
+                  return (
+                    <div key={label} style={{ background: "var(--bg-page)", borderRadius: 8, padding: "8px 10px" }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>{label} — {entries.length} service{entries.length > 1 ? "s" : ""}</div>
+                      <div style={{ marginTop: 5, display: "flex", flexDirection: "column", gap: 4 }}>
+                        {SHIFT_ORDER_ETUDE.filter(s => parVacation[s]?.length).map(s => (
+                          <div key={s} style={{ fontSize: 11.5 }}>
+                            <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{SHIFT_LABEL_ETUDE[s]} ({parVacation[s].length})</span>
+                            <span style={{ color: "var(--text-secondary)" }}> — {parVacation[s].map(e => fmtDate(e.date_jour)).join(" · ")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {lignes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune étude de poste enregistrée cette année.</div>}
+    </div>
+  );
+}
+
 function StatsTab({ agents, catalogue }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1537,6 +1615,9 @@ function StatsTab({ agents, catalogue }) {
         )}
       </div>
 
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>🧭 Suivi des études de poste</div>
+      <EtudePosteSuiviSection detail={data.etudePosteDetail} agents={agents} />
+
       <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>📖 Par formation</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
         {data.parFormation.map(f => (
@@ -1546,7 +1627,11 @@ function StatsTab({ agents, catalogue }) {
                 <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{f.intitule}</div>
                 <CategorieChip cat={f.categorie} />
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) formé(s){f.nbDemandesEia > 0 ? ` · 🙋 ${f.nbDemandesEia} demande(s) EIA` : ""}</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+                {f.nbDemandesEia > 0 && <div>🙋 {f.nbDemandesEia} demande(s) EIA</div>}
+                <div>{f.agents.length} agent(s) formé(s)</div>
+                <div>{f.nb_sessions} session(s) faite(s) dans l'année</div>
+              </div>
             </div>
             <button onClick={() => setCouvertureId(f.catalogue_id)} style={{ ...btnSecondary, fontSize: 12, padding: "6px 12px" }}>Voir le détail</button>
           </div>

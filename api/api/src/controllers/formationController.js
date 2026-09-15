@@ -716,7 +716,48 @@ async function getStats(req, res) {
     });
     const parAgent = Object.values(parAgentMap).sort((x, y) => x.nom.localeCompare(y.nom) || x.prenom.localeCompare(y.prenom));
 
-    res.json({ parFormation, parAnneeCategorieSource, parAfo, totalAgentsActifs, parAgent });
+    // Suivi des études de poste (15/09, Olivier : "il faudrait une partie du
+    // tableau pour suivre les études de poste. Par agent et par poste. Et le
+    // nombre de services faits avec les dates. Mais indépendant de ce qu'on
+    // a déjà mis dans la fiche formation de l'agent.") -- même fusion
+    // perso+CPS Officiel, dédupliquée par (cp_agent, date_jour) avec le
+    // perso prioritaire, que getFicheAgent (voir plus bas) -- mais ici pour
+    // TOUS les agents d'un coup, en détail brut (pas juste le total déjà
+    // dans etudeParAgentMap ci-dessus). Le frontend résout le libellé de
+    // poste/vacation avec les mêmes fonctions déjà exportées que la Fiche
+    // agent (resolveJsCode/getPosteLabelFromCode), mais dans son propre
+    // composant -- jamais en passant par FicheAgentModal.
+    const [etudePersoDetailRows] = await pool.query(
+      `SELECT pj.cp_agent, pj.date_jour, pp.code_poste, pp.code_equipe
+       FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
+       WHERE pp.etude_poste = 1 AND pj.date_jour >= ?
+       ORDER BY pj.cp_agent, pj.date_jour DESC`,
+      [anneeDebutParAgent]
+    );
+    const [etudeCpsDetailRows] = await pool.query(
+      `SELECT cp_agent, date_jour, js_code AS code_poste, equipe AS code_equipe
+       FROM planning_cps
+       WHERE en_formation = 1 AND date_jour >= ?
+       ORDER BY cp_agent, date_jour DESC`,
+      [anneeDebutParAgent]
+    );
+    const fmtDEtude = (d) => d instanceof Date ? d.toISOString().slice(0, 10) : d;
+    const seenEtudeKeys = new Set();
+    const etudePosteDetail = [];
+    etudePersoDetailRows.forEach(r => {
+      const key = `${r.cp_agent}|${fmtDEtude(r.date_jour)}`;
+      if (seenEtudeKeys.has(key)) return;
+      seenEtudeKeys.add(key);
+      etudePosteDetail.push({ cp_agent: r.cp_agent, date_jour: r.date_jour, code_poste: r.code_poste, code_equipe: r.code_equipe, source: 'perso' });
+    });
+    etudeCpsDetailRows.forEach(r => {
+      const key = `${r.cp_agent}|${fmtDEtude(r.date_jour)}`;
+      if (seenEtudeKeys.has(key)) return; // déjà compté côté perso -- jamais en double
+      seenEtudeKeys.add(key);
+      etudePosteDetail.push({ cp_agent: r.cp_agent, date_jour: r.date_jour, code_poste: r.code_poste, code_equipe: r.code_equipe, source: 'cps' });
+    });
+
+    res.json({ parFormation, parAnneeCategorieSource, parAfo, totalAgentsActifs, parAgent, etudePosteDetail });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
