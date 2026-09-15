@@ -801,6 +801,12 @@ export const formation = {
   getCouvertureFormation: (catalogueId) => apiFetch(`/formation/catalogue/${catalogueId}/couverture`),
   // Fiche agent (15/09) — vue nominative complète d'un agent, réservée AFO/ASFP
   getFicheAgent: (cp) => apiFetch(`/formation/agents/${cp}/fiche`),
+
+  // Besoins EIA (15/09) — écriture réservée AFO/ASFP, lecture de sa propre
+  // liste ouverte à tout agent connecté
+  createEia: (data) => apiFetch('/formation/eia', { method: 'POST', body: JSON.stringify(data) }),
+  deleteEia: (id) => apiFetch(`/formation/eia/${id}`, { method: 'DELETE' }),
+  getMesEia: () => apiFetch('/formation/eia/mine'),
 };
 
 // ─── MODULE STAT'EQUIP (statistiques d'équipe agrégées) ───────────────────────

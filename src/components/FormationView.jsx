@@ -322,7 +322,7 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
         {afoSubTab === "mes" && <MesSessionsFormateurTab agentId={agentId} onGoToSession={goToSession} />}
         {afoSubTab === "catalogue" && <CatalogueSection catalogue={catalogue} loading={loadingCat} onChange={chargerCatalogue} />}
         {afoSubTab === "planning" && <SessionsSection catalogue={catalogue} agents={agents} refreshProfil={refreshProfil} refreshSchedule={refreshSchedule} pendingSessionId={pendingSessionId} onConsumePending={() => setPendingSessionId(null)} />}
-        {afoSubTab === "stats" && <StatsTab agents={agents} />}
+        {afoSubTab === "stats" && <StatsTab agents={agents} catalogue={catalogue} />}
       </div>
     </div>
   );
@@ -356,6 +356,13 @@ function MesFormationsTab({ agentId, agent, schedule, cpsSchedule, agentProfiles
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { charger(); }, [charger]);
+
+  // Besoins EIA (15/09) : lecture seule côté agent -- ce que l'AFO/ASFP a
+  // enregistré pour lui lors de son entretien annuel, avec le même statut
+  // "réalisée" recalculé côté serveur (jamais stocké). Pas de bouton
+  // ajouter/retirer ici, la saisie reste réservée à l'AFO/ASFP.
+  const [eia, setEia] = useState([]);
+  useEffect(() => { api.formation.getMesEia().then(rows => setEia(rows || [])).catch(() => {}); }, []);
 
   const perso = agentProfiles[agentId]?.formationsPersoDeclarees || [];
   const notifications = agentProfiles[agentId]?.formationNotifications || [];
@@ -406,6 +413,22 @@ function MesFormationsTab({ agentId, agent, schedule, cpsSchedule, agentProfiles
             setShowDeclare(false);
           }}
         />
+      )}
+
+      {/* Besoins EIA (15/09) : lecture seule, n'apparaît que s'il y a au
+          moins une demande enregistrée pour cet agent. */}
+      {eia.length > 0 && (
+        <div style={{ background: "var(--bg-card)", border: "1.5px solid #d8b4fe", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: 14 }}>📋 Tes besoins de formation (EIA)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            {eia.map(e => (
+              <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5, gap: 8 }}>
+                <span style={{ color: "var(--text-primary)", fontWeight: 600, minWidth: 0 }}>{e.intitule}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", color: e.realisee ? "#15803d" : "#b45309" }}>{e.realisee ? "✅ Réalisée" : "⏳ Demandée"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Étude de poste (27/08, refondu le même jour) : décompte séparé par
@@ -761,12 +784,32 @@ function CouvertureModal({ catalogueId, onClose }) {
               </div>
 
               <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309", marginBottom: 8 }}>🕳️ Pas encore formés ({data.nonFormes.length})</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: (data.demandesEia||[]).length ? 18 : 0 }}>
                 {data.nonFormes.map(a => (
                   <div key={a.cp} style={{ fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)", color: "var(--text-primary)" }}>{a.prenom} {a.nom}</div>
                 ))}
                 {data.nonFormes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Tout le monde est formé.</div>}
               </div>
+
+              {/* 15/09 (EIA) : qui a demandé CETTE formation en EIA cette
+                  année -- sert à l'AFO/ASFP pour regrouper des agents et
+                  déclencher une session (voir aussi le bouton "+ Ajouter
+                  tous les demandeurs EIA" de SessionForm). N'apparaît que
+                  s'il y a au moins une demande, pour ne pas alourdir la
+                  modale sur une formation jamais demandée en EIA. */}
+              {(data.demandesEia||[]).length > 0 && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", marginBottom: 8 }}>🙋 Ont demandé en EIA cette année ({data.demandesEia.length})</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {data.demandesEia.map(a => (
+                      <div key={a.cp} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)" }}>
+                        <span style={{ color: "var(--text-primary)" }}>{a.prenom} {a.nom}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: a.realisee ? "#15803d" : "#b45309" }}>{a.realisee ? "✅ Réalisée" : "⏳ Demandée"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
@@ -782,15 +825,37 @@ function CouvertureModal({ catalogueId, onClose }) {
 // avec dates) -- jusqu'ici seul l'agent lui-même voyait tout ça réuni (perso,
 // "Mes formations"). Même patron de modale que CouvertureModal juste
 // au-dessus (overlay + carte + en-tête dégradé), pour rester cohérent.
-function FicheAgentModal({ cp, onClose }) {
+function FicheAgentModal({ cp, catalogue, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  // Besoins EIA (15/09) : mini-formulaire d'ajout, réservé AFO/ASFP (comme
+  // le reste de cette fiche) -- côté agent, la même donnée est visible en
+  // lecture seule dans "Mes formations" (voir MesFormationsTab).
+  const [eiaCatalogueId, setEiaCatalogueId] = useState("");
+  const [eiaDate, setEiaDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [eiaErr, setEiaErr] = useState("");
+  const [eiaSaving, setEiaSaving] = useState(false);
 
-  useEffect(() => {
+  const charger = useCallback(() => {
     setLoading(true);
     api.formation.getFicheAgent(cp).then(setData).catch(() => setErr("Impossible de charger la fiche")).finally(() => setLoading(false));
   }, [cp]);
+  useEffect(() => { charger(); }, [charger]);
+
+  async function ajouterEia() {
+    if (!eiaCatalogueId) return setEiaErr("Choisis une formation");
+    setEiaErr(""); setEiaSaving(true);
+    try {
+      await api.formation.createEia({ cp_agent: cp, catalogue_id: Number(eiaCatalogueId), date_demande: eiaDate });
+      setEiaCatalogueId("");
+      charger();
+    } catch (e) { setEiaErr(e.message || "Erreur"); }
+    setEiaSaving(false);
+  }
+  async function retirerEia(id) {
+    try { await api.formation.deleteEia(id); charger(); } catch (e) { setEiaErr(e.message || "Erreur"); }
+  }
 
   // Étude de poste : regroupée par poste (comme la vue perso), mais avec la
   // LISTE COMPLÈTE des dates par poste (pas juste un total) -- c'est
@@ -850,6 +915,39 @@ function FicheAgentModal({ cp, onClose }) {
                   </div>
                 ))}
                 {data.formationsPerso.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune formation perso déclarée.</div>}
+              </div>
+
+              {/* Besoins EIA (15/09, Olivier : "la parti eia dans la fiche de
+                  l'agent sert a connaitre enregistrer ses demandes") -- saisi
+                  ici par l'AFO/ASFP au moment de l'entretien, statut recalculé
+                  à chaque lecture (jamais stocké, voir EIA_REALISEE côté
+                  backend) : passe automatiquement au vert dès que l'agent a
+                  réellement suivi une session de cette même formation, sans
+                  action manuelle. */}
+              <div style={{ fontSize: 12, fontWeight: 700, color: NAVY.accentDark, marginBottom: 8 }}>📋 Besoins EIA ({data.eia.length})</div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <select value={eiaCatalogueId} onChange={e => setEiaCatalogueId(e.target.value)} style={{ ...inputStyle, fontSize: 12, flex: 1 }}>
+                  <option value="">+ Formation demandée...</option>
+                  {(catalogue || []).filter(c => c.statut !== "archive").map(c => <option key={c.id} value={c.id}>{c.intitule}</option>)}
+                </select>
+                <input type="date" value={eiaDate} onChange={e => setEiaDate(e.target.value)} style={{ ...inputStyle, fontSize: 12, width: "auto" }} />
+                <button onClick={ajouterEia} disabled={eiaSaving} style={{ ...btnSecondary, fontSize: 12 }}>{eiaSaving ? "..." : "Ajouter"}</button>
+              </div>
+              {eiaErr && <div style={{ color: "#dc2626", fontSize: 11.5, marginBottom: 8 }}>⚠️ {eiaErr}</div>}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 18 }}>
+                {data.eia.map(e => (
+                  <div key={e.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12.5, padding: "6px 10px", borderRadius: 6, background: "var(--bg-page)" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{e.intitule}</span>
+                      <span style={{ color: "var(--text-secondary)" }}> — {fmtDate(e.date_demande)} ({e.annee})</span>
+                    </div>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", color: e.realisee ? "#15803d" : "#b45309" }}>{e.realisee ? "✅ Réalisée" : "⏳ Demandée"}</span>
+                      <button onClick={() => retirerEia(e.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 12 }}>✕</button>
+                    </span>
+                  </div>
+                ))}
+                {data.eia.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun besoin EIA enregistré.</div>}
               </div>
 
               <div style={{ fontSize: 12, fontWeight: 700, color: NAVY.accentDark, marginBottom: 8 }}>🧭 Étude de poste ({data.etudePoste.length})</div>
@@ -1030,6 +1128,7 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const [chargementNonFormes, setChargementNonFormes] = useState(false);
+  const [chargementEia, setChargementEia] = useState(false);
 
   const afos = agents.filter(a => a.is_afo || a.is_asfp);
   const filtered = agents.filter(a => {
@@ -1053,6 +1152,22 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
       setParticipants(p => Array.from(new Set([...p, ...cps])));
     } catch (e) { setErr(e.message || "Erreur"); }
     setChargementNonFormes(false);
+  }
+
+  // 15/09 (EIA, Olivier : "en faisant des tri par formation demandé en eia
+  // [...] il peut regroupe des agent pour declencher un formation") -- même
+  // principe que ajouterNonFormes, mais précoche les agents qui ont demandé
+  // CETTE formation en EIA cette année (déjà réalisées incluses -- l'AFO
+  // garde la main pour les retirer lui-même si redondant).
+  async function ajouterDemandesEia() {
+    if (!form.catalogue_id) return setErr("Choisis d'abord une formation du catalogue");
+    setErr(""); setChargementEia(true);
+    try {
+      const cov = await api.formation.getCouvertureFormation(form.catalogue_id);
+      const cps = (cov.demandesEia || []).map(a => a.cp);
+      setParticipants(p => Array.from(new Set([...p, ...cps])));
+    } catch (e) { setErr(e.message || "Erreur"); }
+    setChargementEia(false);
   }
 
   async function submit() {
@@ -1102,10 +1217,16 @@ function SessionForm({ catalogue, agents, onCancel, onSaved }) {
 
         <FormSectionTitle>👥 Qui participe</FormSectionTitle>
         <div>
-          <button type="button" onClick={ajouterNonFormes} disabled={chargementNonFormes}
-            style={{ ...btnSecondary, fontSize: 12, marginBottom: 8, background: AMBRE.bgLight, color: AMBRE.accentDark, border: `1px solid ${AMBRE.borderLight}` }}>
-            {chargementNonFormes ? "..." : "+ Ajouter tous les non-formés"}
-          </button>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+            <button type="button" onClick={ajouterNonFormes} disabled={chargementNonFormes}
+              style={{ ...btnSecondary, fontSize: 12, background: AMBRE.bgLight, color: AMBRE.accentDark, border: `1px solid ${AMBRE.borderLight}` }}>
+              {chargementNonFormes ? "..." : "+ Ajouter tous les non-formés"}
+            </button>
+            <button type="button" onClick={ajouterDemandesEia} disabled={chargementEia}
+              style={{ ...btnSecondary, fontSize: 12, background: "#f3e8ff", color: "#7c3aed", border: "1px solid #d8b4fe" }}>
+              {chargementEia ? "..." : "+ Ajouter tous les demandeurs EIA"}
+            </button>
+          </div>
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 Rechercher un agent..." style={{ ...inputStyle, marginBottom: 8 }} />
           <div style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, border: "1px solid var(--border)", borderRadius: 8, padding: 6, background: "var(--bg-card)" }}>
             {filtered.map(a => (
@@ -1299,7 +1420,7 @@ function StatTuile({ label, value }) {
   );
 }
 
-function StatsTab({ agents }) {
+function StatsTab({ agents, catalogue }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [couvertureId, setCouvertureId] = useState(null);
@@ -1358,7 +1479,7 @@ function StatsTab({ agents }) {
           </div>
         )}
       </div>
-      {ficheAgentCp && <FicheAgentModal cp={ficheAgentCp} onClose={() => setFicheAgentCp(null)} />}
+      {ficheAgentCp && <FicheAgentModal cp={ficheAgentCp} catalogue={catalogue} onClose={() => setFicheAgentCp(null)} />}
 
       <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>👥 Par agent</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
@@ -1409,7 +1530,7 @@ function StatsTab({ agents }) {
                 <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{f.intitule}</div>
                 <CategorieChip cat={f.categorie} />
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) formé(s)</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2 }}>{f.nb_sessions} session(s) · {f.agents.length} agent(s) formé(s){f.nbDemandesEia > 0 ? ` · 🙋 ${f.nbDemandesEia} demande(s) EIA` : ""}</div>
             </div>
             <button onClick={() => setCouvertureId(f.catalogue_id)} style={{ ...btnSecondary, fontSize: 12, padding: "6px 12px" }}>Voir le détail</button>
           </div>

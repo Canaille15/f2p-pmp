@@ -536,6 +536,24 @@ const PRESENCE_REELLE = `(
   )
 )`;
 
+// 15/09 (EIA) : une demande EIA (formation_eia_demande, colonne
+// `cp_agent`/`catalogue_id`, PAS de lien direct vers une session précise)
+// est "réalisée" si l'agent a suivi RÉELLEMENT (même règle que
+// PRESENCE_REELLE : session lancée + FOR toujours dans son planning) une
+// session quelconque de CE catalogue_id -- jamais stocké, toujours recalculé
+// à la lecture, pour ne jamais diverger si l'agent décline ensuite. Alias
+// `ed` attendu dans la requête appelante (formation_eia_demande).
+const EIA_REALISEE = `EXISTS(
+  SELECT 1 FROM formation_enrollment fe2
+  JOIN formation_session fs2 ON fs2.id = fe2.session_id
+  WHERE fe2.cp_agent = ed.cp_agent AND fs2.catalogue_id = ed.catalogue_id
+    AND fs2.statut = 'lancee'
+    AND EXISTS(
+      SELECT 1 FROM planning_jour pj2 JOIN planning_periode pp2 ON pp2.planning_jour_id = pj2.id
+      WHERE pj2.cp_agent = fe2.cp_agent AND pj2.date_jour = fs2.date_session AND pp2.code_equipe = 'FOR'
+    )
+)`;
+
 async function getStats(req, res) {
   try {
     // totalAgentsActifs (15/09) : dénominateur pour la "vue globale de
@@ -560,9 +578,18 @@ async function getStats(req, res) {
        WHERE ${PRESENCE_REELLE}
        GROUP BY fs.catalogue_id, a.cp, a.nom, a.prenom`
     );
+    // 15/09 (EIA) : nb de demandeurs EIA de l'année en cours, par formation --
+    // alimente "· N demande(s) EIA" dans la liste Stats "📖 Par formation"
+    // (répond à "tri par formation demandée" : la liste est déjà scannable
+    // par formation, pas besoin d'un nouvel écran).
+    const [demandesEiaParFormation] = await pool.query(
+      `SELECT catalogue_id, COUNT(DISTINCT cp_agent) AS nbDemandesEia
+       FROM formation_eia_demande WHERE annee = YEAR(CURDATE()) GROUP BY catalogue_id`
+    );
     const parFormation = parFormationBase.map(f => ({
       ...f,
       agents: agentsParFormation.filter(a => a.catalogue_id === f.catalogue_id).map(a => ({ cp: a.cp, nom: a.nom, prenom: a.prenom })),
+      nbDemandesEia: demandesEiaParFormation.find(d => d.catalogue_id === f.catalogue_id)?.nbDemandesEia || 0,
     }));
 
     // Répartition annuelle par catégorie × source (sessions AFO)
@@ -780,11 +807,24 @@ async function getFicheAgent(req, res) {
     });
     etudePoste.sort((a, b) => (fmtD(b.date_jour) > fmtD(a.date_jour) ? 1 : -1));
 
+    // Besoins EIA (15/09) : tout l'historique de l'agent (toutes années),
+    // avec le statut "réalisée" recalculé à chaque lecture (voir
+    // EIA_REALISEE) -- jamais stocké, ne peut donc jamais diverger d'un
+    // déclin ultérieur.
+    const [eia] = await pool.query(
+      `SELECT ed.id, ed.catalogue_id, fc.intitule, fc.categorie, ed.annee, ed.date_demande, ${EIA_REALISEE} AS realisee
+       FROM formation_eia_demande ed JOIN formation_catalogue fc ON fc.id = ed.catalogue_id
+       WHERE ed.cp_agent = ?
+       ORDER BY ed.annee DESC, ed.date_demande DESC`,
+      [cp]
+    );
+
     res.json({
       agent,
       sessions: sessions.map(s => ({ ...s, toujours_present: !!s.toujours_present })),
       formationsPerso,
       etudePoste,
+      eia: eia.map(e => ({ ...e, realisee: !!e.realisee })),
     });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
@@ -820,7 +860,74 @@ async function getCouvertureFormation(req, res) {
       cpFormes.length ? [cpFormes] : []
     );
 
-    res.json({ catalogue: cat, formes, nonFormes });
+    // 15/09 (EIA) : qui a demandé CETTE formation en EIA cette année --
+    // alimente la section "🙋 Ont demandé en EIA" de CouvertureModal et le
+    // bouton "+ Ajouter tous les demandeurs EIA" de SessionForm. Scopé à
+    // l'année en cours (cohérent avec "combien d'agents sont intéressés [...]
+    // au cours de l'année").
+    const [demandesEia] = await pool.query(
+      `SELECT a.cp, a.nom, a.prenom, ed.annee, ${EIA_REALISEE} AS realisee
+       FROM formation_eia_demande ed JOIN agent a ON a.cp = ed.cp_agent
+       WHERE ed.catalogue_id = ? AND ed.annee = YEAR(CURDATE())
+       ORDER BY a.nom, a.prenom`,
+      [id]
+    );
+
+    res.json({ catalogue: cat, formes, nonFormes, demandesEia: demandesEia.map(d => ({ ...d, realisee: !!d.realisee })) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Besoins EIA (15/09) — voir en-tête de fichier pour le contexte. Réservé
+// AFO/ASFP en écriture (afoMiddleware, mêmes droits pour les deux, comme
+// partout ailleurs dans ce module) ; lecture self (getEiaMines) ouverte à
+// tout agent connecté, pas de restriction AFO.
+// ─────────────────────────────────────────────────────────────────────────
+
+// POST /formation/eia — enregistre une demande exprimée en EIA pour un
+// agent. catalogue_id obligatoire (pas de texte libre, voir
+// add_formation_eia.js) ; annee/date_demande par défaut = aujourd'hui.
+async function creerEiaDemande(req, res) {
+  const { cp_agent, catalogue_id, annee, date_demande } = req.body;
+  if (!cp_agent || !catalogue_id) return res.status(400).json({ error: 'cp_agent et catalogue_id requis' });
+  const today = new Date().toISOString().slice(0, 10);
+  const anneeFinale = annee || Number(today.slice(0, 4));
+  try {
+    const [result] = await pool.query(
+      `INSERT INTO formation_eia_demande (cp_agent, catalogue_id, annee, date_demande, cp_saisie_par)
+       VALUES (?, ?, ?, ?, ?)`,
+      [cp_agent, catalogue_id, anneeFinale, date_demande || today, req.agent.cp]
+    );
+    res.status(201).json({ message: 'Demande EIA enregistrée', id: result.insertId });
+  } catch (e) {
+    if (e.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Cette formation a déjà été demandée pour cet agent cette année-là' });
+    console.error(e); res.status(500).json({ error: 'Erreur serveur' });
+  }
+}
+
+// DELETE /formation/eia/:id — retrait d'une demande (correction de saisie).
+async function supprimerEiaDemande(req, res) {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM formation_eia_demande WHERE id=?', [id]);
+    res.json({ message: 'Demande EIA retirée' });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
+}
+
+// GET /formation/eia/mine — vue agent (self), pas de restriction AFO : ce
+// que CET agent a demandé en EIA, et si c'est déjà réalisé. Alimente le bloc
+// "📋 Tes besoins de formation (EIA)" de MesFormationsTab, lecture seule
+// côté agent (la saisie reste réservée à l'AFO/ASFP).
+async function getEiaMines(req, res) {
+  try {
+    const [eia] = await pool.query(
+      `SELECT ed.id, ed.catalogue_id, fc.intitule, fc.categorie, ed.annee, ed.date_demande, ${EIA_REALISEE} AS realisee
+       FROM formation_eia_demande ed JOIN formation_catalogue fc ON fc.id = ed.catalogue_id
+       WHERE ed.cp_agent = ?
+       ORDER BY ed.annee DESC, ed.date_demande DESC`,
+      [req.agent.cp]
+    );
+    res.json(eia.map(e => ({ ...e, realisee: !!e.realisee })));
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
@@ -830,4 +937,5 @@ module.exports = {
   addFormateur, removeFormateur, addParticipant, removeParticipant, lancerSession,
   getMesSessions, getFormationsProposees, declarerFormationPerso, getStats,
   getCouvertureFormation, getFicheAgent,
+  creerEiaDemande, supprimerEiaDemande, getEiaMines,
 };

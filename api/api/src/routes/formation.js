@@ -5,6 +5,7 @@ const {
   addFormateur, removeFormateur, addParticipant, removeParticipant, lancerSession,
   getMesSessions, getFormationsProposees, declarerFormationPerso, getStats,
   getCouvertureFormation, getFicheAgent,
+  creerEiaDemande, supprimerEiaDemande, getEiaMines,
 } = require('../controllers/formationController');
 const { authMiddleware, afoMiddleware } = require('../middleware/auth');
 
@@ -42,5 +43,11 @@ router.get('/catalogue/:id/couverture', authMiddleware, afoMiddleware, getCouver
 // Fiche agent (15/09) — réservé aux AFO/ASFP, vue nominative complète d'UN
 // agent (sessions + formations perso + étude de poste, toutes avec dates)
 router.get('/agents/:cp/fiche', authMiddleware, afoMiddleware, getFicheAgent);
+
+// Besoins EIA (15/09) — écriture réservée AFO/ASFP, lecture de sa propre
+// liste ouverte à tout agent connecté (self uniquement, cp pris du token).
+router.post('/eia',        authMiddleware, afoMiddleware, creerEiaDemande);
+router.delete('/eia/:id',  authMiddleware, afoMiddleware, supprimerEiaDemande);
+router.get('/eia/mine',    authMiddleware, getEiaMines);
 
 module.exports = router;
