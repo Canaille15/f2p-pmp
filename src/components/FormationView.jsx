@@ -763,7 +763,11 @@ function CouvertureModal({ catalogueId, onClose }) {
         <div style={{ background: `linear-gradient(135deg,${NAVY.from},${NAVY.to})`, padding: "16px 20px", position: "sticky", top: 0, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ color: "#fff" }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>{data?.catalogue?.intitule || "..."}</div>
-            {data && <div style={{ fontSize: 12, opacity: .85 }}>{data.formes.length}/{total} agent(s) formé(s)</div>}
+            {data && (
+              <div style={{ fontSize: 12, opacity: .85 }}>
+                {data.formes.length}/{total} formé(s){(data.demandesEia||[]).length > 0 ? ` · 🙋 ${data.demandesEia.length} demande(s) EIA` : ""}
+              </div>
+            )}
           </div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,.15)", border: "none", color: "#fff", borderRadius: 10, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
@@ -772,34 +776,23 @@ function CouvertureModal({ catalogueId, onClose }) {
             <div style={{ color: "#b91c1c", fontSize: 12.5 }}>⚠️ {err}</div>
           ) : (
             <>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#15803d", marginBottom: 8 }}>✅ Déjà formés ({data.formes.length})</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 18 }}>
-                {data.formes.map(a => (
-                  <div key={a.cp} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)" }}>
-                    <span style={{ color: "var(--text-primary)" }}>{a.prenom} {a.nom}</span>
-                    <span style={{ color: "var(--text-secondary)" }}>{fmtDate(a.derniere_date)}</span>
-                  </div>
-                ))}
-                {data.formes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Personne pour l'instant.</div>}
-              </div>
-
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#b45309", marginBottom: 8 }}>🕳️ Pas encore formés ({data.nonFormes.length})</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: (data.demandesEia||[]).length ? 18 : 0 }}>
-                {data.nonFormes.map(a => (
-                  <div key={a.cp} style={{ fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)", color: "var(--text-primary)" }}>{a.prenom} {a.nom}</div>
-                ))}
-                {data.nonFormes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Tout le monde est formé.</div>}
-              </div>
-
               {/* 15/09 (EIA) : qui a demandé CETTE formation en EIA cette
                   année -- sert à l'AFO/ASFP pour regrouper des agents et
                   déclencher une session (voir aussi le bouton "+ Ajouter
                   tous les demandeurs EIA" de SessionForm). N'apparaît que
                   s'il y a au moins une demande, pour ne pas alourdir la
-                  modale sur une formation jamais demandée en EIA. */}
+                  modale sur une formation jamais demandée en EIA.
+                  16/09 (Olivier : "il faut mettre les demande en 1er [...]
+                  je trouve le panneau pas tres lisible") -- remontée en
+                  PREMIER (avant "déjà formés"/"pas encore formés", ordre
+                  d'origine) : c'est l'info la plus actionnable pour l'AFO/
+                  ASFP qui ouvre ce panneau (décider de déclencher une
+                  session) -- et chaque section a désormais un vrai filet de
+                  séparation (borderTop), pour ne plus lire les 3 listes
+                  comme un seul bloc continu. */}
               {(data.demandesEia||[]).length > 0 && (
-                <>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", marginBottom: 8 }}>🙋 Ont demandé en EIA cette année ({data.demandesEia.length})</div>
+                <div style={{ marginBottom: 20, paddingBottom: 18, borderBottom: "1.5px solid var(--border)" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#7c3aed", marginBottom: 8 }}>🙋 Ont demandé en EIA cette année ({data.demandesEia.length})</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {data.demandesEia.map(a => (
                       <div key={a.cp} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)" }}>
@@ -808,8 +801,31 @@ function CouvertureModal({ catalogueId, onClose }) {
                       </div>
                     ))}
                   </div>
-                </>
+                </div>
               )}
+
+              <div style={{ marginBottom: 20, paddingBottom: 18, borderBottom: "1.5px solid var(--border)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#15803d", marginBottom: 8 }}>✅ Déjà formés ({data.formes.length})</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {data.formes.map(a => (
+                    <div key={a.cp} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)" }}>
+                      <span style={{ color: "var(--text-primary)" }}>{a.prenom} {a.nom}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>{fmtDate(a.derniere_date)}</span>
+                    </div>
+                  ))}
+                  {data.formes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Personne pour l'instant.</div>}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#b45309", marginBottom: 8 }}>🕳️ Pas encore formés ({data.nonFormes.length})</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {data.nonFormes.map(a => (
+                    <div key={a.cp} style={{ fontSize: 12.5, padding: "5px 10px", borderRadius: 6, background: "var(--bg-page)", color: "var(--text-primary)" }}>{a.prenom} {a.nom}</div>
+                  ))}
+                  {data.nonFormes.length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Tout le monde est formé.</div>}
+                </div>
+              </div>
             </>
           )}
         </div>
