@@ -1050,12 +1050,12 @@ function FormationSection({ formationInterne, etudePoste }) {
       </div>
 
       <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-        <GroupeLabel>Étude de poste (planning perso)</GroupeLabel>
+        <GroupeLabel>Étude de poste (perso + CPS Officiel)</GroupeLabel>
         <div style={{ display: "flex", gap: 20 }}>
           <Tuile label="Jours d'étude" valeur={etudePoste.total.nbJours} large />
           <Tuile label="Agents formés" valeur={etudePoste.total.nbAgents} large />
         </div>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Formation physique en double avec un titulaire — chiffres anonymisés, aucun nom.</div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>Formation physique en double avec un titulaire — planning perso et CPS Officiel fusionnés (sans doublon), chiffres anonymisés, aucun nom.</div>
         {ouvert && (
           <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
             {etudePoste.parPoste.length === 0 ? (

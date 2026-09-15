@@ -3282,20 +3282,43 @@ function computeDashboardTravail(agent, schedule, year){
 // y comptent désormais comme de simples jours de Formation, sans
 // distinction) : le module Formation (FormationView.jsx) l'appelle
 // directement pour construire sa propre section "🎓 Étude de poste".
-export function computeEtudePosteDetail(agent, schedule, year){
+// 4e paramètre cpsSchedule (15/09, optionnel -- absent = comportement
+// strictement inchangé pour tout appelant qui ne le fournit pas) : Olivier,
+// "il faut aller aussi chercher les etudes de postes depuis cps officiel en
+// plus du perso. sans faire de doublons." Fusionne le perso
+// (planning_periode.etude_poste, self-déclaré) avec CPS Officiel
+// (cpsSchedule[...].enFormation, le marqueur "/" SNCF détecté à l'import sur
+// un vrai poste -- voir buildSections/handleCpsImport, jamais écrit dans le
+// planning perso de l'agent, un mécanisme totalement indépendant). Le perso
+// est traité EN PREMIER et prioritaire : un jour déjà compté côté perso
+// n'est jamais recompté via CPS (dédup par date, "sans faire de doublons").
+// Reste 100% nominatif ici (c'est déjà la propre donnée de l'agent) --
+// seul Stat'Equip anonymise ce même croisement (voir statsEquipeController.js).
+export function computeEtudePosteDetail(agent, schedule, year, cpsSchedule){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const postes = {};
   let total = 0;
-  Object.entries(schedule).forEach(([key,val])=>{
-    if(!agent || !key.startsWith(agent.id+"-")) return;
-    if(!val?.etudePoste) return;
-    const dk = key.slice(agent.id.length+1);
+  const datesComptees = new Set(); // clé de date "YYYY-MM-DD", dédup perso/CPS
+  function traiter(val, dk){
     if(dk < start || dk > end) return;
+    if(datesComptees.has(dk)) return;
     // Même règle que computeDashboardTravail : le poste porté par l'étude
     // vit toujours en p1 (jour normal OU nuit seule) -- jamais equipe2 (nuit
     // accolée, non couverte par Étude Poste, voir client.js).
     const isNuitSeule = val?.equipe==="N" && val?.equipe2==="N";
-    const shift = isNuitSeule ? "N" : val?.equipe;
+    let shift = isNuitSeule ? "N" : val?.equipe;
+    // Repli sur le suffixe du jsCode canonique (M="-"/AM="O"/N="X", pas de
+    // suffixe -> "J") quand `equipe` n'est pas un vrai M/AM/N/J -- cas réel
+    // trouvé en vérifiant le merge CPS (15/09) : un doublon/formation détecté
+    // à l'import (planning_cps.en_formation) peut avoir equipe="FOR" (pur
+    // artefact de classification d'import, indépendant de la vraie vacation
+    // du poste réel porté par jsCode -- voir CLAUDE.md 04/09, cas MENDY).
+    // Sans ce repli, ce jour aurait été silencieusement exclu du total alors
+    // qu'il s'agit bien d'une vraie journée d'étude sur un poste réel.
+    if(!shift || !["M","AM","N","J"].includes(shift)){
+      const last = val?.jsCode ? val.jsCode.slice(-1) : null;
+      shift = last==="-" ? "M" : last==="O" ? "AM" : last==="X" ? "N" : (val?.jsCode ? "J" : null);
+    }
     if(!shift || !["M","AM","N","J"].includes(shift)) return;
     let info = val?.jsCode ? POSTE_REGISTRY[val.jsCode] : null;
     // Même recalcul de famille à la volée que computeDashboardTravail pour
@@ -3306,11 +3329,24 @@ export function computeEtudePosteDetail(agent, schedule, year){
       info = {...info, famille: agent?.famille || "PRCI"};
     }
     if(!info) return;
+    datesComptees.add(dk);
     if(!postes[info.code]) postes[info.code] = { code:info.code, label:info.label, famille:info.famille, total:0, parShift:{} };
     const p = postes[info.code];
     p.total++; total++;
     p.parShift[shift] = (p.parShift[shift]||0) + 1;
+  }
+  Object.entries(schedule).forEach(([key,val])=>{
+    if(!agent || !key.startsWith(agent.id+"-")) return;
+    if(!val?.etudePoste) return;
+    traiter(val, key.slice(agent.id.length+1));
   });
+  if(cpsSchedule){
+    Object.entries(cpsSchedule).forEach(([key,val])=>{
+      if(!agent || !key.startsWith(agent.id+"-")) return;
+      if(!val?.enFormation) return;
+      traiter(val, key.slice(agent.id.length+1));
+    });
+  }
   return { total, postes: Object.values(postes).sort((a,b)=> b.total-a.total) };
 }
 
@@ -13691,7 +13727,7 @@ export default function App(){
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="d2i"&&<D2iView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="fim"&&<FimPdfView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} schedule={schedule}/>}
-  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} schedule={schedule}/>}
+  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} schedule={schedule} cpsSchedule={cpsSchedule}/>}
   {view==="afo"&&<AfoView currentAgent={currentAgent||currentUser?.agent} agents={agents} refreshProfil={refreshMonProfil} refreshSchedule={refreshMonSchedule}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}

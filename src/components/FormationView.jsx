@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import api from "../api/client";
+import api, { resolveJsCode } from "../api/client";
 import { computeEtudePosteDetail, getPosteLabelFromCode } from "../App";
 
 // ─── Module Formation ───────────────────────────────────────────────────────
@@ -122,6 +122,23 @@ const SHIFT_LABEL_ETUDE = { M: "matinée", AM: "soirée", N: "nuit", J: "journé
 function resumeParVacation(parShift) {
   return SHIFT_ORDER_ETUDE.filter(s => parShift[s]).map(s => `${parShift[s]} ${SHIFT_LABEL_ETUDE[s]}${parShift[s] > 1 ? "s" : ""}`).join(", ");
 }
+// Clé de vacation (M/AM/N/J) pour une entrée d'étude de poste -- avec repli
+// sur le suffixe du jsCode (M="-"/AM="O"/N="X", pas de suffixe -> "J") quand
+// code_equipe n'est pas un vrai M/AM/N/J (15/09, cas réel CPS Officiel :
+// equipe="FOR", un artefact de classification d'import indépendant de la
+// vraie vacation du poste réel porté par jsCode -- voir CLAUDE.md 04/09, cas
+// MENDY -- sans ce repli, la Fiche agent affichait "FOR" au lieu de "soirée").
+function shiftKeyEtude(codeEquipe, jsCode) {
+  if (SHIFT_LABEL_ETUDE[codeEquipe]) return codeEquipe;
+  if (jsCode) {
+    const last = jsCode.slice(-1);
+    if (last === "-") return "M";
+    if (last === "O") return "AM";
+    if (last === "X") return "N";
+    return "J";
+  }
+  return null;
+}
 
 // 10/08 : une session "Lancée" dont la date est deja passee reste "Lancée"
 // indefiniment en base (aucune transition automatique stockee) -- pour ne
@@ -204,7 +221,7 @@ const btnSecondary = { background: "#f1f5f9", color: "#64748b", border: "none", 
 
 // ─── COMPOSANT RACINE ───────────────────────────────────────────────────────
 
-export default function FormationView({ currentAgent, agentProfiles, setAgentProfiles, refreshSchedule, schedule }) {
+export default function FormationView({ currentAgent, agentProfiles, setAgentProfiles, refreshSchedule, schedule, cpsSchedule }) {
   const agentId = currentAgent?.immatriculation || currentAgent?.cp || currentAgent?.id;
 
   return (
@@ -213,7 +230,7 @@ export default function FormationView({ currentAgent, agentProfiles, setAgentPro
         <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>🎓 Formation</div>
         <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>Tes formations suivies</div>
       </div>
-      <MesFormationsTab agentId={agentId} agent={currentAgent} schedule={schedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
+      <MesFormationsTab agentId={agentId} agent={currentAgent} schedule={schedule} cpsSchedule={cpsSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
     </div>
   );
 }
@@ -305,7 +322,7 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
 
 // ─── MES FORMATIONS (tous les agents, uniquement le côté participant) ──────
 
-function MesFormationsTab({ agentId, agent, schedule, agentProfiles, setAgentProfiles, refreshSchedule }) {
+function MesFormationsTab({ agentId, agent, schedule, cpsSchedule, agentProfiles, setAgentProfiles, refreshSchedule }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -318,10 +335,12 @@ function MesFormationsTab({ agentId, agent, schedule, agentProfiles, setAgentPro
   // stocké), année en cours seulement -- computeEtudePosteDetail exportée
   // par App.jsx (même principe que les fonctions déjà réutilisées par
   // FimPdfView.jsx, import circulaire sans risque tant qu'il n'est jamais
-  // lu au niveau module, seulement dans ce useMemo).
+  // lu au niveau module, seulement dans ce useMemo). Depuis le 15/09,
+  // cpsSchedule (déjà chargé au niveau App, rafraîchi toutes les 45s) est
+  // fusionné en plus du perso -- voir le commentaire de la fonction elle-même.
   const etudeYear = new Date().getFullYear();
   const agentForCalc = useMemo(() => ({ ...(agent || {}), id: agentId }), [agent, agentId]);
-  const etudeDetail = useMemo(() => computeEtudePosteDetail(agentForCalc, schedule || {}, etudeYear), [agentForCalc, schedule, etudeYear]);
+  const etudeDetail = useMemo(() => computeEtudePosteDetail(agentForCalc, schedule || {}, etudeYear, cpsSchedule || {}), [agentForCalc, schedule, etudeYear, cpsSchedule]);
 
   const charger = useCallback(() => {
     setLoading(true);
@@ -768,13 +787,20 @@ function FicheAgentModal({ cp, onClose }) {
   // Étude de poste : regroupée par poste (comme la vue perso), mais avec la
   // LISTE COMPLÈTE des dates par poste (pas juste un total) -- c'est
   // précisément ce qui manquait côté AFO/ASFP ("poste par poste avec les
-  // dates"). Résolution du libellé via getPosteLabelFromCode (App.jsx, déjà
-  // exportée), même principe que le reste de l'appli (FimPdfView.jsx).
+  // dates"). Depuis le 15/09, e.code_poste peut venir de 2 sources au format
+  // différent : le perso (code COURT local, ex "CCL") ou CPS Officiel (déjà
+  // canonique avec suffixe de vacation, ex "PICCLO") -- resolveJsCode
+  // (client.js, déjà exportée) traduit les deux vers le même format attendu
+  // par getPosteLabelFromCode (App.jsx) : traduction normale pour un code
+  // court, passthrough pour un code déjà canonique.
   const etudeParPoste = {};
   (data?.etudePoste || []).forEach(e => {
-    const label = e.code_poste ? (getPosteLabelFromCode(e.code_poste) || e.code_poste) : "Poste inconnu";
+    const jsCode = e.code_poste ? resolveJsCode(e.code_poste, e.code_equipe) : null;
+    const label = jsCode ? (getPosteLabelFromCode(jsCode) || e.code_poste) : (e.code_poste || "Poste inconnu");
     if (!etudeParPoste[label]) etudeParPoste[label] = [];
-    etudeParPoste[label].push(e);
+    // jsCode résolu gardé sur l'entrée (utilisé ci-dessous pour le repli de
+    // libellé de vacation, voir shiftLabelEtude).
+    etudeParPoste[label].push({ ...e, _jsCode: jsCode });
   });
 
   return (
@@ -820,14 +846,34 @@ function FicheAgentModal({ cp, onClose }) {
 
               <div style={{ fontSize: 12, fontWeight: 700, color: NAVY.accentDark, marginBottom: 8 }}>🧭 Étude de poste ({data.etudePoste.length})</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {Object.entries(etudeParPoste).map(([label, entries]) => (
-                  <div key={label} style={{ background: "var(--bg-page)", borderRadius: 8, padding: "8px 10px" }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>{label} — {entries.length} jour{entries.length > 1 ? "s" : ""}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--text-secondary)", marginTop: 3 }}>
-                      {entries.map(e => `${fmtDate(e.date_jour)} (${SHIFT_LABEL_ETUDE[e.code_equipe] || e.code_equipe})`).join(" · ")}
+                {Object.entries(etudeParPoste).map(([label, entries]) => {
+                  // Sous-groupé par vacation (matinée/soirée/nuit/journée),
+                  // demandé par Olivier le 15/09 pour rester lisible sur un
+                  // poste avec beaucoup de dates ("la c'est fouilli [...] par
+                  // type de poste [...] matinee nuit soiree et les dates") --
+                  // chaque vacation garde sa propre liste de dates, déjà
+                  // triée du plus récent au plus ancien (ordre d'origine de
+                  // data.etudePoste conservé au sein de chaque sous-groupe).
+                  const parVacation = {};
+                  entries.forEach(e => {
+                    const key = shiftKeyEtude(e.code_equipe, e._jsCode) || "?";
+                    if (!parVacation[key]) parVacation[key] = [];
+                    parVacation[key].push(e);
+                  });
+                  return (
+                    <div key={label} style={{ background: "var(--bg-page)", borderRadius: 8, padding: "8px 10px" }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text-primary)" }}>{label} — {entries.length} jour{entries.length > 1 ? "s" : ""}</div>
+                      <div style={{ marginTop: 5, display: "flex", flexDirection: "column", gap: 4 }}>
+                        {SHIFT_ORDER_ETUDE.filter(s => parVacation[s]?.length).map(s => (
+                          <div key={s} style={{ fontSize: 11.5 }}>
+                            <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{SHIFT_LABEL_ETUDE[s]} ({parVacation[s].length})</span>
+                            <span style={{ color: "var(--text-secondary)" }}> — {parVacation[s].map(e => `${fmtDate(e.date_jour)}${e.source === "cps" ? " (CPS)" : ""}`).join(" · ")}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {Object.keys(etudeParPoste).length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucune journée d'étude de poste.</div>}
               </div>
             </>

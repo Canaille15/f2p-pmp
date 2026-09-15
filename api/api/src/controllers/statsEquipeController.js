@@ -27,6 +27,38 @@ function agentPresentAt(row, refDateStr) {
   return true;
 }
 
+// Formatte une date MySQL (objet Date ou déjà une chaîne selon la config du
+// pool) en 'YYYY-MM-DD' — helper partagé (Dispo, étude de poste), remonté au
+// niveau module pour être utilisable avant sa 1ère apparition dans le corps
+// de la fonction (une const locale déclarée plus bas aurait été inutilisable
+// en TDZ pour un bloc de code placé avant elle dans le même scope).
+function fmtD(d) { return d instanceof Date ? d.toISOString().slice(0,10) : d; }
+
+// Reverse de MAPPING_3X8/MAPPING_JOURNEE (client.js, non importable ici —
+// fichier frontend ESM) — traduit un js_code canonique (avec suffixe de
+// vacation pour un poste 3x8, ex. "PICCLO") vers le code COURT local utilisé
+// par planning_periode.code_poste (ex. "CCL"), pour pouvoir fusionner les
+// lignes CPS Officiel (planning_cps.en_formation) avec les lignes perso
+// (planning_periode.etude_poste) sous une seule clé de regroupement
+// cohérente. Un js_code absent de cette table reste utilisé tel quel plutôt
+// que de disparaître silencieusement (15/09, chantier étude de poste CPS).
+const JSCODE_TO_SHORT_POSTE = {
+  'PICCL-': 'CCL', 'PICCLO': 'CCL', 'PICCLX': 'CCL',
+  'PIADJ-': 'ADJ', 'PIADJO': 'ADJ', 'PIADJX': 'ADJ',
+  'PILNE-': 'LNE', 'PILNEO': 'LNE', 'PILNEX': 'LNE',
+  'PILNO-': 'LNO', 'PILNOO': 'LNO', 'PILNOX': 'LNO',
+  'PIVGD-': 'VGD', 'PIVGDO': 'VGD',
+  'PILCL-': 'LC', 'PILCLO': 'LC', 'PILCLX': 'LC',
+  'PAAC1-': 'AC1', 'PAAC1O': 'AC1', 'PAAC1X': 'AC1',
+  'PAAC2-': 'AC2', 'PAAC2O': 'AC2', 'PAAC2X': 'AC2',
+  'PAACXX': 'ACXX',
+  'PIPA1J': 'PA1J', 'PIPA2J': 'PA2J', 'PIPA3J': 'PA3J',
+  'PIDPXJ': 'DPXJ', 'PIASSJ': 'ASSJ', 'AFOPRCI': 'AFOPR',
+  'PAPAUJ': 'PARJ', 'PADPXJ': 'DPXP', 'PAASMJ': 'ASMP',
+  PPRCI: 'PPRCI', PPAR: 'PPAR',
+  VM: 'VM', CAF: 'CAF', AY: 'AY', JEQ: 'JEQ', EIA: 'EIA', DISPO: 'DISPO',
+};
+
 // Fragment identique à celui de formationController.js (getStats) — une session
 // pas encore lancée compte toujours ; une fois lancée, seuls les agents qui
 // n'ont pas retiré le code FOR de leur planning perso comptent encore.
@@ -394,33 +426,65 @@ async function getStats(req, res) {
     const pctAgentsFormes = totalAgents > 0 ? Math.round((nbAgentsFormesInt / totalAgents) * 1000) / 10 : 0;
     const formationInterne = { nbJours: joursFormation.n || 0, nbAgentsFormes: nbAgentsFormesInt, pctAgentsFormes };
 
-    // ─── Étude de poste (27/08, refondu le même jour) ───────────────────────
+    // ─── Étude de poste (27/08, refondu le même jour ; étendu le 15/09) ─────
     // "1 agent forme sur 1 poste et 11 jours d'etudes de pote [...] un global
     // sur tous les poste agent et journee" -- décompte anonyme PAR POSTE
     // (jours + agents distincts, sans jamais exposer un CP/nom au frontend,
-    // seul le COUNT(DISTINCT) en sort) + un total tous postes confondus.
-    // planning_periode.code_poste stocke le code COURT local (ex: "LNE"),
-    // déjà indépendant de la vacation (code_equipe porte M/AM/N séparément,
-    // voir client.js/MAPPING_3X8) -- un simple GROUP BY code_poste regroupe
-    // donc déjà nativement les 3 vacations d'un même poste 3x8, aucune
-    // normalisation de suffixe nécessaire (vérifié en base : Matin/Nuit/
-    // Soirée du même poste partagent bien le même code_poste="LNE").
-    const [etudeParPosteRows] = await pool.query(
-      `SELECT pp.code_poste AS code_poste, COUNT(*) AS nbJours, COUNT(DISTINCT pj.cp_agent) AS nbAgents
+    // seul un COUNT(DISTINCT) en sort) + un total tous postes confondus.
+    // Reste STRICTEMENT anonyme ici, contrairement à la Fiche agent et au
+    // module Formation agent (confirmé par Olivier le 15/09, "ca reste
+    // anonyme juste dans sat equipe. le reste detaille et nominiatif").
+    //
+    // Fusionne désormais 2 sources structurellement indépendantes (Olivier,
+    // 15/09 : "il faut aller aussi chercher les etudes de postes depuis cps
+    // officiel en plus du perso. sans faire de doublons") :
+    //  (a) le perso (planning_periode.etude_poste=1, self-déclaré) ;
+    //  (b) CPS Officiel (planning_cps.en_formation=1, doublon/formation
+    //      détecté à l'import via le "/" suffixe SNCF sur un poste réel —
+    //      voir CLAUDE.md 04/09) — jamais écrit dans le perso de l'agent,
+    //      un mécanisme totalement séparé jusqu'ici.
+    // Dédupliquées au niveau (cp_agent, date_jour) — même principe que la
+    // fusion Dispo perso/CPS juste au-dessus (dispoIdentifieSet) — avant tout
+    // comptage, pour qu'un même jour jamais compté deux fois si les 2
+    // sources se recoupent par coïncidence. planning_periode.code_poste est
+    // déjà le code COURT local (indépendant de la vacation) ; planning_cps.
+    // js_code est le code CANONIQUE avec suffixe de vacation — traduit via
+    // JSCODE_TO_SHORT_POSTE (reverse de MAPPING_3X8/MAPPING_JOURNEE) pour
+    // regrouper les 2 sources sous une seule et même clé de poste.
+    const [etudePersoRows] = await pool.query(
+      `SELECT pj.cp_agent AS cp_agent, pj.date_jour AS date_jour, pp.code_poste AS code_poste
        FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
-       WHERE pp.etude_poste = 1 AND YEAR(pj.date_jour) = ? AND pp.code_poste IS NOT NULL
-       GROUP BY pp.code_poste ORDER BY nbJours DESC`,
+       WHERE pp.etude_poste = 1 AND YEAR(pj.date_jour) = ? AND pp.code_poste IS NOT NULL`,
       [year]
     );
-    const [[etudeGlobalRow]] = await pool.query(
-      `SELECT COUNT(*) AS nbJours, COUNT(DISTINCT pj.cp_agent) AS nbAgents
-       FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
-       WHERE pp.etude_poste = 1 AND YEAR(pj.date_jour) = ?`,
+    const [etudeCpsRows] = await pool.query(
+      `SELECT cp_agent, date_jour, js_code
+       FROM planning_cps
+       WHERE en_formation = 1 AND YEAR(date_jour) = ?`,
       [year]
     );
+    const etudeMap = new Map(); // clé "cp|date" -> code_poste (court), dédupliqué perso/CPS
+    etudePersoRows.forEach(r => {
+      etudeMap.set(`${r.cp_agent}|${fmtD(r.date_jour)}`, r.code_poste);
+    });
+    etudeCpsRows.forEach(r => {
+      const key = `${r.cp_agent}|${fmtD(r.date_jour)}`;
+      if (etudeMap.has(key)) return; // déjà compté côté perso, jamais en double
+      etudeMap.set(key, JSCODE_TO_SHORT_POSTE[r.js_code] || r.js_code);
+    });
+    const etudeParPosteAgg = {}; // code_poste -> { nbJours, agents:Set }
+    etudeMap.forEach((codePoste, key) => {
+      if (!etudeParPosteAgg[codePoste]) etudeParPosteAgg[codePoste] = { nbJours: 0, agents: new Set() };
+      etudeParPosteAgg[codePoste].nbJours++;
+      etudeParPosteAgg[codePoste].agents.add(key.split('|')[0]);
+    });
+    const etudeParPosteRows = Object.entries(etudeParPosteAgg)
+      .map(([code_poste, v]) => ({ code_poste, nbJours: v.nbJours, nbAgents: v.agents.size }))
+      .sort((a, b) => b.nbJours - a.nbJours);
+    const etudeGlobalAgents = new Set([...etudeMap.keys()].map(k => k.split('|')[0]));
     const etudePoste = {
-      total: { nbJours: etudeGlobalRow.nbJours || 0, nbAgents: etudeGlobalRow.nbAgents || 0 },
-      parPoste: etudeParPosteRows.map(r => ({ code_poste: r.code_poste, nbJours: r.nbJours, nbAgents: r.nbAgents })),
+      total: { nbJours: etudeMap.size, nbAgents: etudeGlobalAgents.size },
+      parPoste: etudeParPosteRows,
     };
 
     // ─── Habilitations par poste (#11) ──────────────────────────────────────
@@ -471,7 +535,6 @@ async function getStats(req, res) {
        WHERE equipe = 'DISPO' AND date_jour BETWEEN ? AND ?`,
       [from, to]
     );
-    const fmtD = (d) => d instanceof Date ? d.toISOString().slice(0,10) : d;
     const dispoIdentifieSet = new Set(); // clé "cp|date", dédupliquée entre perso et CPS Officiel
     [...dispoPersoRows, ...dispoCpsRows].forEach(r => {
       dispoIdentifieSet.add(`${r.cp_agent}|${fmtD(r.date_jour)}`);

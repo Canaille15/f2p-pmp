@@ -686,13 +686,52 @@ async function getFicheAgent(req, res) {
     // Étude de poste : brute (date + code_poste + code_equipe/vacation) —
     // le frontend résout le libellé via getPosteLabelFromCode (App.jsx, déjà
     // exportée) et SHIFT_LABEL_ETUDE (déjà défini dans FormationView.jsx).
-    const [etudePoste] = await pool.query(
+    // Fusionne désormais 2 sources (15/09, Olivier : "il faut aller aussi
+    // chercher les etudes de postes depuis cps officiel en plus du perso.
+    // sans faire de doublons [...] ca reste anonyme juste dans sat equipe.
+    // le reste detaille et nominiatif") :
+    //  (a) le perso (planning_periode.etude_poste=1, self-déclaré) ;
+    //  (b) CPS Officiel (planning_cps.en_formation=1, doublon/formation
+    //      détecté à l'import via le "/" suffixe SNCF sur un poste réel —
+    //      voir CLAUDE.md 04/09 — jamais écrit dans le planning perso de
+    //      l'agent, un mécanisme totalement séparé).
+    // Dédupliquées par date (perso prioritaire, jamais de doublon si les 2
+    // sources se recoupent) — reste 100% nominatif ici (fiche d'UN agent
+    // précis), contrairement à Stat'Equip qui, lui, anonymise ce même
+    // croisement. Scopé depuis le début de l'année en cours ("mettre a jours
+    // depuis le debut de l'annee [...] stat afo").
+    // source: 'perso'|'cps' remonté au frontend pour transparence — la fiche
+    // est nominative, pas de raison de masquer la provenance.
+    const anneeDebut = `${new Date().getFullYear()}-01-01`;
+    const [etudePersoRows] = await pool.query(
       `SELECT pj.date_jour, pp.code_poste, pp.code_equipe
        FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
-       WHERE pj.cp_agent = ? AND pp.etude_poste = 1
+       WHERE pj.cp_agent = ? AND pp.etude_poste = 1 AND pj.date_jour >= ?
        ORDER BY pj.date_jour DESC`,
-      [cp]
+      [cp, anneeDebut]
     );
+    const [etudeCpsRows] = await pool.query(
+      `SELECT date_jour, js_code, equipe FROM planning_cps
+       WHERE cp_agent = ? AND en_formation = 1 AND date_jour >= ?
+       ORDER BY date_jour DESC`,
+      [cp, anneeDebut]
+    );
+    const fmtD = (d) => d instanceof Date ? d.toISOString().slice(0, 10) : d;
+    const datesVues = new Set();
+    const etudePoste = [];
+    etudePersoRows.forEach(r => {
+      const key = fmtD(r.date_jour);
+      if (datesVues.has(key)) return;
+      datesVues.add(key);
+      etudePoste.push({ date_jour: r.date_jour, code_poste: r.code_poste, code_equipe: r.code_equipe, source: 'perso' });
+    });
+    etudeCpsRows.forEach(r => {
+      const key = fmtD(r.date_jour);
+      if (datesVues.has(key)) return; // déjà compté côté perso -- jamais en double
+      datesVues.add(key);
+      etudePoste.push({ date_jour: r.date_jour, code_poste: r.js_code, code_equipe: r.equipe, source: 'cps' });
+    });
+    etudePoste.sort((a, b) => (fmtD(b.date_jour) > fmtD(a.date_jour) ? 1 : -1));
 
     res.json({
       agent,
