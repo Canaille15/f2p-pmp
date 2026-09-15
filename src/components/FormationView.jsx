@@ -1295,6 +1295,14 @@ function StatsTab({ agents }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [couvertureId, setCouvertureId] = useState(null);
+  // 15/09 -- roster "Par agent" (Olivier : "tu peut faire une parti stat par
+  // agent ? avec la liste des agents ayant eu une formation ? et la
+  // possiblite de faire un tri pat formation ou les agents ayant eu des
+  // etudes de postes ?") -- filtre par formation + tri, purement client
+  // (data.parAgent deja calcule cote serveur, aucun nouvel appel reseau).
+  const [filtreFormation, setFiltreFormation] = useState("");
+  const [filtreEtude, setFiltreEtude] = useState(false);
+  const [triAgent, setTriAgent] = useState("nom");
   // Fiche agent (15/09, Olivier : "il le faudrait en nominatif sur la fiche
   // agent [...] poste par poste avec les dates") -- recherche d'agent, même
   // principe que la recherche déjà présente ailleurs dans l'appli (Annuaire).
@@ -1310,6 +1318,16 @@ function StatsTab({ agents }) {
 
   if (loading) return <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: 30 }}>Chargement...</div>;
   if (!data) return <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 30, fontSize: 13 }}>Impossible de charger les statistiques.</div>;
+
+  const parAgentAffiche = (data.parAgent || [])
+    .filter(a => !filtreFormation || a.formations.some(f => String(f.catalogue_id) === filtreFormation))
+    .filter(a => !filtreEtude || a.etudePosteJours > 0)
+    .slice()
+    .sort((x, y) => {
+      if (triAgent === "nbFormations") return y.formations.length - x.formations.length || x.nom.localeCompare(y.nom);
+      if (triAgent === "etude") return (y.etudePosteJours || 0) - (x.etudePosteJours || 0) || x.nom.localeCompare(y.nom);
+      return x.nom.localeCompare(y.nom) || x.prenom.localeCompare(y.prenom);
+    });
 
   return (
     <div>
@@ -1333,6 +1351,46 @@ function StatsTab({ agents }) {
         )}
       </div>
       {ficheAgentCp && <FicheAgentModal cp={ficheAgentCp} onClose={() => setFicheAgentCp(null)} />}
+
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>👥 Par agent</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+        <select value={filtreFormation} onChange={e => setFiltreFormation(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12 }}>
+          <option value="">Toutes les formations</option>
+          {data.parFormation.filter(f => f.agents.length > 0).map(f => (
+            <option key={f.catalogue_id} value={f.catalogue_id}>{f.intitule}</option>
+          ))}
+        </select>
+        <select value={triAgent} onChange={e => setTriAgent(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "6px 10px", fontSize: 12 }}>
+          <option value="nom">Trier : Nom (A→Z)</option>
+          <option value="nbFormations">Trier : Nb de formations</option>
+          <option value="etude">Trier : Jours d'étude de poste</option>
+        </select>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-secondary)", fontWeight: 500, cursor: "pointer" }}>
+          <input type="checkbox" checked={filtreEtude} onChange={e => setFiltreEtude(e.target.checked)} />
+          Uniquement avec étude de poste
+        </label>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+        {parAgentAffiche.map(a => (
+          <div key={a.cp} onClick={() => setFicheAgentCp(a.cp)} style={{ background: "var(--bg-card)", border: `1.5px solid ${NAVY.borderLight}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--text-primary)" }}>{a.prenom} {a.nom}</div>
+              {a.etudePosteJours > 0 && (
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "#f3e8ff", borderRadius: 999, padding: "2px 8px" }}>🎓 {a.etudePosteJours}j étude de poste</span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+              {a.formations.map(f => (
+                <span key={f.catalogue_id} style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", background: "var(--bg-page)", border: "1px solid var(--border)", borderRadius: 999, padding: "2px 8px" }}>{f.intitule}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+        {(data.parAgent || []).length === 0 && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun agent formé ni en étude de poste pour l'instant.</div>}
+        {(data.parAgent || []).length > 0 && parAgentAffiche.length === 0 && (
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Aucun agent ne correspond à ce filtre.</div>
+        )}
+      </div>
 
       <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-active)", marginBottom: 8 }}>📖 Par formation</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>

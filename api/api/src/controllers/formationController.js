@@ -642,7 +642,54 @@ async function getStats(req, res) {
       };
     });
 
-    res.json({ parFormation, parAnneeCategorieSource, parAfo, totalAgentsActifs });
+    // parAgent (15/09) : vue inverse de parFormation, demandée par Olivier
+    // ("tu peut faire une parti stat par agent ? avec la liste des agents
+    // ayant eu une formation ? et la possiblite de faire un tri pat formation
+    // ou les agents ayant eu des etudes de postes ?") -- un agent par ligne,
+    // ses formations suivies (même agentsParFormation/PRESENCE_REELLE que
+    // parFormation, juste regroupé dans l'autre sens) + son nombre de jours
+    // d'étude de poste cette année. Fusion perso+CPS Officiel comme la Fiche
+    // agent/Stat'Equip (15/09) -- UNION (pas UNION ALL) dédup nativement les
+    // (cp_agent, date_jour) communs aux deux sources, donc un même jour ne
+    // compte jamais deux fois, sans logique de priorité à écrire à la main.
+    const anneeDebutParAgent = `${new Date().getFullYear()}-01-01`;
+    // nom/prenom rapatriés directement ici (JOIN agent) : un agent en étude
+    // de poste mais sans AUCUNE formation (cas réel vérifié -- ex. import
+    // CPS Officiel avec doublon "/" sur un poste, jamais rattaché à une
+    // session AFO) doit quand même apparaître dans le roster, sinon le
+    // filtre "Uniquement avec étude de poste" retomberait à vide malgré de
+    // vraies données -- ne pas se limiter à agentsParFormation.
+    const [etudeParAgentRows] = await pool.query(
+      `SELECT t.cp_agent, a.nom, a.prenom, COUNT(*) AS nbJours FROM (
+         SELECT pj.cp_agent AS cp_agent, pj.date_jour AS date_jour
+         FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
+         WHERE pp.etude_poste = 1 AND pj.date_jour >= ?
+         UNION
+         SELECT cp_agent, date_jour FROM planning_cps
+         WHERE en_formation = 1 AND date_jour >= ?
+       ) t JOIN agent a ON a.cp = t.cp_agent
+       GROUP BY t.cp_agent, a.nom, a.prenom`,
+      [anneeDebutParAgent, anneeDebutParAgent]
+    );
+    const etudeParAgentMap = {};
+    etudeParAgentRows.forEach(r => { etudeParAgentMap[r.cp_agent] = r.nbJours; });
+
+    const parAgentMap = {};
+    agentsParFormation.forEach(a => {
+      if (!parAgentMap[a.cp]) {
+        parAgentMap[a.cp] = { cp: a.cp, nom: a.nom, prenom: a.prenom, formations: [], etudePosteJours: etudeParAgentMap[a.cp] || 0 };
+      }
+      const cat = parFormationBase.find(f => f.catalogue_id === a.catalogue_id);
+      parAgentMap[a.cp].formations.push({ catalogue_id: a.catalogue_id, intitule: cat?.intitule || '', categorie: cat?.categorie || '' });
+    });
+    etudeParAgentRows.forEach(r => {
+      if (!parAgentMap[r.cp_agent]) {
+        parAgentMap[r.cp_agent] = { cp: r.cp_agent, nom: r.nom, prenom: r.prenom, formations: [], etudePosteJours: r.nbJours };
+      }
+    });
+    const parAgent = Object.values(parAgentMap).sort((x, y) => x.nom.localeCompare(y.nom) || x.prenom.localeCompare(y.prenom));
+
+    res.json({ parFormation, parAnneeCategorieSource, parAfo, totalAgentsActifs, parAgent });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
