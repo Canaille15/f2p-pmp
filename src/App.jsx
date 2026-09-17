@@ -2316,7 +2316,21 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           const horaires=`${horaireMatch[1]}h${horaireMatch[2]}–${horaireMatch[3]}h${horaireMatch[4]}`;
           if(existing&&(existing.equipe!==equipe||existing.jsCode!==jsCode)) ec++;
           const finalJsCode=jsCode||existing?.jsCode||null;
-          updates.push({key,equipe,jsCode:finalJsCode,horaires,cp_agent:ag.id,date_jour:lineDateStr,famille:ag.fam||"PAR",enFormation:!!enFormation});
+          // fix (17/09) : famille stockee en base tiree du POSTE (registre
+          // POSTE_REGISTRY, deja utilise ailleurs pour la meme raison ligne
+          // ~10951), plus jamais de la famille PERSO de l'agent (ag.fam) --
+          // un agent PRCI qui fait un renfort ponctuel sur un poste PAR (ou
+          // l'inverse) faisait alors enregistrer le mauvais "famille" pour
+          // CE poste-la (ex: Pauseur VGD/AC LNO, postes PRCI, tagges "PAR"
+          // des qu'un agent normalement PAR les occupe un jour donne) --
+          // sans consequence sur l'affichage de CPS Officiel lui-meme
+          // (buildSections matche par jsCode, jamais par ce champ), mais
+          // fausse silencieusement tout ce qui LIT ensuite cette colonne
+          // (verif de presence par famille dans detecterEtAutoSignalerNonTenu,
+          // agregations Stat'Equip...). Repli sur ag.fam inchange pour les
+          // rares codes hors registre (formations K-PAR/AFOPRCI, etc.).
+          const familleReelle=(finalJsCode&&POSTE_REGISTRY[finalJsCode]?.famille)||ag.fam||"PAR";
+          updates.push({key,equipe,jsCode:finalJsCode,horaires,cp_agent:ag.id,date_jour:lineDateStr,famille:familleReelle,enFormation:!!enFormation});
           nb++;
         });
         if(updates.length===0) throw new Error("Aucun agent reconnu dans le document. Verifiez le format.");
