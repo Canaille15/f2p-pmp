@@ -509,25 +509,6 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               }}>
               🧭 Assistant DPX ({nbAdjointDpx})
             </button>
-            <button onClick={() => setStatutFilter(s => s === "actif" ? "quitte" : "actif")}
-              style={{
-                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-                background: statutFilter === "quitte" ? "#78716c" : "var(--bg-page)",
-                color: statutFilter === "quitte" ? "#fff" : "var(--text-secondary)"
-              }}>
-              {statutFilter === "quitte" ? `🚪 Quittés (${nbQuittes})` : `🚪 Voir les quittés (${nbQuittes})`}
-            </button>
-            <button onClick={() => setPinFilter(f => f === "TOUS" ? "SANS" : f === "SANS" ? "AVEC" : "TOUS")}
-              title="Cliquer pour trier par statut de PIN"
-              style={{
-                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
-                background: pinFilter === "SANS" ? "#b91c1c" : pinFilter === "AVEC" ? "#15803d" : "var(--bg-page)",
-                color: pinFilter === "TOUS" ? "var(--text-secondary)" : "#fff"
-              }}>
-              {pinFilter === "SANS" ? `⚠️ Sans PIN (${nbSansPin})` : pinFilter === "AVEC" ? `✅ Avec PIN (${nbAvecPin})` : "🔑 Tri PIN"}
-            </button>
             {agentsReserveAvecPin.length > 0 && (
               <button onClick={() => setModal("bulkClearPin")}
                 style={{
@@ -538,6 +519,36 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                 🧹 Réserve régionale avec PIN — à réinitialiser ({agentsReserveAvecPin.length})
               </button>
             )}
+          </div>
+          {/* 17/09 : "🚪 Voir les quittés" et "🔑 Tri PIN" sortis du groupe de
+              filtres ci-dessus, regroupés ici avec le compteur "X agent(s)"
+              -- avant-dernière ligne, juste au-dessus d'Utilisation/Annuaire
+              PDF (meme zone marginLeft:"auto"+flexWrap, meme comportement
+              deja verifie : sur sa propre ligne, un groupe demarre a gauche
+              du conteneur, pas plaque a droite). */}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
+              {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
+            </span>
+            <button onClick={() => setPinFilter(f => f === "TOUS" ? "SANS" : f === "SANS" ? "AVEC" : "TOUS")}
+              title="Cliquer pour trier par statut de PIN"
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: pinFilter === "SANS" ? "#b91c1c" : pinFilter === "AVEC" ? "#15803d" : "var(--bg-page)",
+                color: pinFilter === "TOUS" ? "var(--text-secondary)" : "#fff"
+              }}>
+              {pinFilter === "SANS" ? `⚠️ Sans PIN (${nbSansPin})` : pinFilter === "AVEC" ? `✅ Avec PIN (${nbAvecPin})` : "🔑 Tri PIN"}
+            </button>
+            <button onClick={() => setStatutFilter(s => s === "actif" ? "quitte" : "actif")}
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: statutFilter === "quitte" ? "#78716c" : "var(--bg-page)",
+                color: statutFilter === "quitte" ? "#fff" : "var(--text-secondary)"
+              }}>
+              {statutFilter === "quitte" ? `🚪 Quittés (${nbQuittes})` : `🚪 Voir les quittés (${nbQuittes})`}
+            </button>
           </div>
           {/* 09/09 -- bug réel trouvé et corrigé (Olivier : "dans admin, sur
               le tel je peux plus mettre de nouveau agents") : ce groupe
@@ -550,21 +561,10 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               possible). flexWrap:"wrap" ajouté -- même principe déjà en
               place sur les 2 groupes de filtres voisins. "Nouvel agent"
               lui-même a depuis été sorti de ce groupe (voir plus bas,
-              même jour, "le haut de admin est fouilli"), le reste (compteur
-              + Utilisation + Annuaire PDF) garde ce flexWrap par
-              précaution. */}
+              même jour, "le haut de admin est fouilli"), et Tri PIN/Voir les
+              quittés/compteur agent regroupés au-dessus (voir juste au-dessus,
+              17/09) -- il ne reste plus qu'Utilisation + Annuaire PDF ici. */}
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            {/* 17/09 : "compteur X agent(s)" retire de la 1ere position -- il
-                precedait Utilisation sur la meme ligne (flexWrap), la
-                poussant a droite (x≈97 sur 375px), pendant qu'Annuaire PDF,
-                renvoye seul sur la ligne suivante faute de place, demarrait
-                lui tout a gauche (x≈34) -- donnait l'impression visuelle
-                qu'Annuaire passait "avant" Utilisation sur mobile, alors que
-                l'ordre reel (Utilisation avant Annuaire) n'avait jamais
-                bouge. Deplace en dernier : Utilisation redevient le tout
-                premier element, aligne a gauche, Annuaire le suit juste a
-                sa droite sur la meme ligne (117+10+170px tient largement
-                dans les ~335px disponibles a 375px de large). */}
             <button onClick={() => setUsageOpen(true)}
               style={{
                 background: "var(--bg-page)", color: "var(--text-secondary)", border: "1.5px solid var(--border)",
@@ -581,9 +581,6 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               }}>
               {pdfBusy ? "⏳ Génération…" : "📇 Annuaire tél. (PDF)"}
             </button>
-            <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
-              {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
-            </span>
           </div>
         </div>
       </div>
