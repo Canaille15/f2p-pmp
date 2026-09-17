@@ -554,9 +554,17 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               + Utilisation + Annuaire PDF) garde ce flexWrap par
               précaution. */}
           <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
-              {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
-            </span>
+            {/* 17/09 : "compteur X agent(s)" retire de la 1ere position -- il
+                precedait Utilisation sur la meme ligne (flexWrap), la
+                poussant a droite (x≈97 sur 375px), pendant qu'Annuaire PDF,
+                renvoye seul sur la ligne suivante faute de place, demarrait
+                lui tout a gauche (x≈34) -- donnait l'impression visuelle
+                qu'Annuaire passait "avant" Utilisation sur mobile, alors que
+                l'ordre reel (Utilisation avant Annuaire) n'avait jamais
+                bouge. Deplace en dernier : Utilisation redevient le tout
+                premier element, aligne a gauche, Annuaire le suit juste a
+                sa droite sur la meme ligne (117+10+170px tient largement
+                dans les ~335px disponibles a 375px de large). */}
             <button onClick={() => setUsageOpen(true)}
               style={{
                 background: "var(--bg-page)", color: "var(--text-secondary)", border: "1.5px solid var(--border)",
@@ -573,6 +581,9 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               }}>
               {pdfBusy ? "⏳ Génération…" : "📇 Annuaire tél. (PDF)"}
             </button>
+            <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
+              {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
+            </span>
           </div>
         </div>
       </div>
