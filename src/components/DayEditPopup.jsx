@@ -81,6 +81,20 @@ const GREVE = [
   { code:"DC", label:"journée grève" },
 ];
 
+// "JF — Fête SNCF" retiré (18/09, Olivier : "j'ai JF fetes sncf. ca
+// correspondant a rien ca ?") -- les 11 vraies fêtes légales françaises ont
+// déjà chacune leur propre code ci-dessous (F1-F9/FV/F0 + VN pour le cas
+// Noël-tombe-un-dimanche) -- JF était un code générique séparé, sans aucun
+// suivi RC/date-limite (computeFetesLignes ne le connaît pas), qui ne
+// pouvait donc que semer la confusion à côté des vrais codes. Confirmé par
+// la base réelle : une seule occurrence dans toute l'appli, datée du 14/07 —
+// pile la date du 14 Juillet, qui a pourtant déjà son propre code F6 juste
+// au-dessus (Olivier a confirmé qu'il ne s'agissait PAS d'une erreur de
+// saisie à corriger -- "la f6 c'est le 14 juillet, donc non" -- cette ligne
+// existante n'est donc pas touchée, juste retirée du sélecteur pour toute
+// NOUVELLE saisie). Le calcul qui reconnaît encore "JF" comme une fête
+// travaillée (App.jsx, CODES_FETES[eq]||eq==="JF") n'est pas modifié --
+// l'unique ligne déjà en base continue de fonctionner exactement comme avant.
 const FETES = [
   {code:"F1",label:"1er Jan."},{code:"F2",label:"Lundi Pâques"},
   {code:"F3",label:"1er Mai"},{code:"F4",label:"Ascension"},
@@ -88,7 +102,6 @@ const FETES = [
   {code:"F6",label:"14 Juil."},{code:"F7",label:"15 Août"},
   {code:"F8",label:"1er Nov."},{code:"F9",label:"11 Nov."},
   {code:"F0",label:"Noël"},{code:"VN",label:"Veille Noël"},
-  {code:"JF",label:"Fête SNCF"},
 ];
 
 export const POSTES_PRCI = [

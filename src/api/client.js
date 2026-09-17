@@ -849,6 +849,14 @@ export const cps = {
         // en fin de code JS, ex: "PILCL-/") -- purement informatif, jamais lié
         // au planning perso ni aux compteurs Formation/Étude de poste de l'agent.
         enFormation: !!row.en_formation,
+        // importeLe (18/09, point 4 Olivier : "un message libre bloque la
+        // maj d'une case") -- date/heure ou cette ligne precise a ete
+        // ecrite/reecrite par un import CPS (planning_cps.importe_le,
+        // deja utilisee par getLastImport, jamais exposee ici avant).
+        // Compare a cps_aleas.signale_le cote App.jsx pour detecter un
+        // message libre pose AVANT que l'agent affiche ait change --
+        // purement un avertissement visuel, ne touche jamais au message.
+        importeLe: row.importe_le || null,
         prive: false,
       };
     });

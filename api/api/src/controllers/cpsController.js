@@ -6,7 +6,7 @@ async function getCps(req, res) {
   const { from, to } = req.query;
   try {
     const [rows] = await pool.query(
-      `SELECT cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation
+      `SELECT cp_agent, date_jour, equipe, js_code, horaires, famille, en_formation, importe_le
        FROM planning_cps
        WHERE (? IS NULL OR date_jour >= ?)
          AND (? IS NULL OR date_jour <= ?)

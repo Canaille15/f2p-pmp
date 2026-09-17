@@ -1654,12 +1654,37 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
 // erreur CPS) — quand fourni, saute l'écran de choix de type et pré-remplit
 // motif + agents déjà sélectionnés ; la validation appelle update() au lieu
 // de create().
-function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClose,onSaved,editAlea}){
+// 18/09 (Olivier, point 3 -- "lorsquon met veut supprimee un seul agent en
+// formation, car absent, c'est impossible. la seul solution est non tenue
+// mais ca met toute la ligne en non tenue. idem si on veut mettre un
+// message ca le met sous tous les noms") : cause exacte confirmee en lisant
+// le code -- findAlea() ne matchait jamais que par (jsCode,date,famille),
+// jamais par agent, et agents_concernes etait force a [] a la creation pour
+// non_tenu/message -- deux types qui ne pouvaient donc QUE concerner tout
+// le poste, jamais un agent precis parmi plusieurs affiches sur la meme
+// case (doublon formation). Ajoute ici un ciblage optionnel : quand la case
+// affiche plusieurs agents (rowAgents.length>1), l'agent qui clique 🔄 peut
+// choisir "Tout le poste" (comportement historique, inchange) ou un agent
+// precis -- dans ce cas agents_concernes=[cpAgent] est envoye, et findAlea
+// (voir plus bas) ne fait matcher cet alea QUE sur la case de cet agent-la,
+// les autres restant affiches normalement. Jamais applique a echange/
+// erreur_cps (agents_concernes y sert deja a tout autre chose : les
+// REMPLACANTS du poste, pas "qui ca concerne").
+const ALEA_TYPES_CIBLABLES=["non_tenu","message"];
+function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAgents,onClose,onSaved,editAlea}){
   const [type,setType]=useState(editAlea?editAlea.type:null); // "echange" | "erreur_cps" | "non_tenu" | "message"
   const [agentsChoisis,setAgentsChoisis]=useState(()=>editAlea?.agents_concernes ? agents.filter(a=>editAlea.agents_concernes.includes(a.id)) : []);
   const [motif,setMotif]=useState(editAlea?.motif||"");
   const [busy,setBusy]=useState(false);
   const [search,setSearch]=useState("");
+  const rowAgentsListe=rowAgents||[];
+  const plusieursAgentsSurCetteCase=rowAgentsListe.length>1;
+  // "tout" = concerne le poste entier (comportement historique). Pre-rempli
+  // depuis editAlea si l'alea deja en base visait deja un agent precis.
+  const [cible,setCible]=useState(()=>{
+    if(editAlea && ALEA_TYPES_CIBLABLES.includes(editAlea.type) && editAlea.agents_concernes?.length===1) return editAlea.agents_concernes[0];
+    return "tout";
+  });
 
   const toggleAgent=(ag)=>{
     setAgentsChoisis(prev=>prev.find(a=>a.id===ag.id)?prev.filter(a=>a.id!==ag.id):[...prev,ag]);
@@ -1671,6 +1696,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
       if(editAlea){
         const data={motif:motif||null};
         if(editAlea.type==="echange"||editAlea.type==="erreur_cps") data.agents_concernes=agentsChoisis.map(a=>a.id);
+        else if(ALEA_TYPES_CIBLABLES.includes(editAlea.type)) data.agents_concernes=cible==="tout"?[]:[cible];
         await api.cpsAleas.update(editAlea.id,data);
       }else{
         await api.cpsAleas.create({
@@ -1678,7 +1704,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
           date_jour:dateKey,
           famille,
           type,
-          agents_concernes: (type==="non_tenu"||type==="message") ? [] : agentsChoisis.map(a=>a.id),
+          agents_concernes: ALEA_TYPES_CIBLABLES.includes(type) ? (cible==="tout"?[]:[cible]) : agentsChoisis.map(a=>a.id),
           motif: motif||null,
         });
       }
@@ -1692,9 +1718,32 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
 
   const agentsFiltres=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(search.toLowerCase()));
 
+  // Selecteur "Concerne : Tout le poste / {agent} / {agent}" -- affiche
+  // uniquement pour non_tenu/message ET seulement quand la case a reellement
+  // plusieurs agents (sinon aucune ambiguite, le comportement historique
+  // suffit et reste inchange par defaut).
+  const SelecteurCible = plusieursAgentsSurCetteCase && (
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>Concerne</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+        <button type="button" onClick={()=>setCible("tout")}
+          style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${cible==="tout"?"#0C447C":"#e2e8f0"}`,background:cible==="tout"?"#0C447C":"#fff",color:cible==="tout"?"#fff":"#475569",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+          Tout le poste
+        </button>
+        {rowAgentsListe.map(a=>(
+          <button key={a.id} type="button" onClick={()=>setCible(a.id)}
+            style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${cible===a.id?"#0C447C":"#e2e8f0"}`,background:cible===a.id?"#0C447C":"#fff",color:cible===a.id?"#fff":"#475569",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            {a.prenom} {a.nom}
+          </button>
+        ))}
+      </div>
+      {cible!=="tout"&&<div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>Seule la case de cet agent sera modifiée — les autres agents affichés sur ce poste restent inchangés.</div>}
+    </div>
+  );
+
   return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:20,maxWidth:420,width:"100%",maxHeight:"85vh",overflowY:"auto"}}>
-      <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{editAlea?(editAlea.type==="echange"?"Modifier l'échange":editAlea.type==="erreur_cps"?"Modifier l'erreur CPS":"Modifier le message"):"Ajustement du poste"}</div>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{editAlea?(editAlea.type==="echange"?"Modifier l'échange":editAlea.type==="erreur_cps"?"Modifier l'erreur CPS":editAlea.type==="non_tenu"?"Modifier le poste non tenu":"Modifier le message"):"Ajustement du poste"}</div>
       <div style={{fontSize:12,color:"#64748b",marginBottom:14}}>{nomOfficiel} — {jsCode}</div>
 
       {!editAlea&&!type&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -1745,19 +1794,21 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,onClo
       </div>)}
 
       {type==="non_tenu"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {SelecteurCible}
         <textarea placeholder="Motif (optionnel)" value={motif} onChange={e=>setMotif(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
-          <button onClick={()=>setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>Retour</button>
+          <button onClick={()=>editAlea?onClose():setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>{editAlea?"Annuler":"Retour"}</button>
           <button onClick={valider} disabled={busy}
             style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,background:"#ea580c",color:"#fff"}}>
-            {busy?"…":"Confirmer poste non tenu"}
+            {busy?"…":(editAlea?"Enregistrer":"Confirmer poste non tenu")}
           </button>
         </div>
       </div>)}
 
       {type==="message"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{fontSize:12,fontWeight:700,color:"#1d4ed8"}}>📢 Message libre</div>
+        {SelecteurCible}
         <textarea placeholder="Ton message, visible par tous les agents…" value={motif} onChange={e=>setMotif(e.target.value)} autoFocus
           style={{padding:"8px 10px",border:"1.5px solid #93c5fd",borderRadius:8,fontSize:13,minHeight:80,resize:"vertical"}}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
@@ -1780,9 +1831,23 @@ function annulerAlea(aleaId, setCpsAleas){
     setCpsAleas(prev=>prev.filter(a=>a.id!==aleaId));
   }).catch(err=>alert("Erreur : "+(err.message||"impossible de supprimer")));
 }
-function findAlea(cpsAleas, jsCode, dateKey, famille){
+// agentId (18/09, point 3) : optionnel, 5e parametre -- permet de retrouver
+// un alea non_tenu/message cible sur UN agent precis (agents_concernes non
+// vide, voir AleaPopup/SelecteurCible) plutot que celui qui concerne tout
+// le poste (agents_concernes vide, comportement historique inchange quand
+// agentId est omis ou qu'aucun alea cible n'existe pour cet agent). Jamais
+// applique a echange/erreur_cps (agents_concernes y designe deja les
+// REMPLACANTS du poste, pas "qui ca concerne" -- comportement inchange
+// pour ces 2 types, toujours le premier trouve, comme avant).
+function findAlea(cpsAleas, jsCode, dateKey, famille, agentId){
   if(!cpsAleas||!cpsAleas.length) return null;
-  return cpsAleas.find(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===famille) || null;
+  const matches=cpsAleas.filter(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===famille);
+  if(!matches.length) return null;
+  if(agentId){
+    const cible=matches.find(a=>(a.type==="non_tenu"||a.type==="message") && Array.isArray(a.agents_concernes) && a.agents_concernes.length>0 && a.agents_concernes.includes(agentId));
+    if(cible) return cible;
+  }
+  return matches.find(a=>!(a.type==="non_tenu"||a.type==="message") || !a.agents_concernes || a.agents_concernes.length===0) || null;
 }
 function PrevisionnelSignalementPopup({agents,agentTitulaireId,dateKey,nomTitulaire,currentAgent,onClose,onSaved}){
   const [agentsChoisis,setAgentsChoisis]=useState([]);
@@ -2627,12 +2692,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     // meme classe de bug deja corrigee pour "FOR" (18/08) et "Disponibles"
                     // (23/08, branche isDispo) -- ici, corrige a la source pour toutes les
                     // lignes qui passent par ce rendu par defaut (couvre aussi RFT SAM).
-                    const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille||ag?.famille);
+                    const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille||ag?.famille,ag?.id);
                     if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <span style={{fontSize:16}}>⚠️</span>
                         <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
-                        {!isPrevisionnel&&<button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✕</button>}
+                        {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,rowAgents:rowAgentsTries,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✎</button>
+                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6}}>✕</button></>}
                       </div>
                       {alea.motif&&<div style={{fontSize:10,color:"#9a3412",paddingLeft:22,fontStyle:"italic"}}>{alea.motif}</div>}
                     </div>);
@@ -2704,14 +2770,35 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         {row.isJourneeSpeciale?
                         <button onClick={()=>setJourneeSpecialeNoteTarget({agentId:ag.id,agentNom:`${ag.prenom} ${ag.nom}`,currentMessage:findJourneeSpecialeNote(journeeSpecialeNotes,ag.id,dateKey)?.message||""})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto",flexShrink:0}}>📝</button>
                         :
-                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto",flexShrink:0}}>🔄</button>}
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,rowAgents:rowAgentsTries})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto",flexShrink:0}}>🔄</button>}
                       </div>
-                      {alea?.type==="message"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"4px 9px"}}>
-                        <span style={{fontSize:12}}>📢</span>
-                        <div style={{fontSize:10,color:"#1d4ed8",flex:1,lineHeight:1.4}}>{alea.motif}</div>
-                        {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
-                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button></>}
-                      </div>}
+                      {alea?.type==="message"&&(()=>{
+                        // messageObsolete (18/09, point 4) : un message "Tout
+                        // le poste" (pas d'agent cible, cible="tout") reste
+                        // attache au poste quel que soit l'agent qui l'occupe
+                        // -- si l'agent affiche a ete (re)importe APRES la
+                        // pose du message, le message decrit peut-etre encore
+                        // l'ancien occupant. Purement un avertissement visuel
+                        // (jamais bloquant, jamais touche au message
+                        // lui-meme) -- non applicable a un message deja cible
+                        // sur un agent precis (celui-ci ne reste attache qu'a
+                        // lui, via findAlea/agentId, jamais un souci de
+                        // desynchronisation d'occupant).
+                        const cible=Array.isArray(alea.agents_concernes)&&alea.agents_concernes.length>0;
+                        const messageObsolete=!cible&&en?.importeLe&&alea.signale_le&&new Date(en.importeLe)>new Date(alea.signale_le);
+                        return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
+                        <div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:messageObsolete?0:"0 0 9px 9px",padding:"4px 9px"}}>
+                          <span style={{fontSize:12}}>📢</span>
+                          <div style={{fontSize:10,color:"#1d4ed8",flex:1,lineHeight:1.4}}>{alea.motif}</div>
+                          {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,rowAgents:rowAgentsTries,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
+                          <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button></>}
+                        </div>
+                        {messageObsolete&&<div style={{display:"flex",alignItems:"center",gap:5,background:"#fffbeb",border:"1.5px solid #fde68a",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"3px 9px"}}>
+                          <span style={{fontSize:11}}>⚠️</span>
+                          <div style={{fontSize:9,color:"#92400e",fontStyle:"italic",lineHeight:1.3}}>Posé avant un changement d'agent sur ce poste — à vérifier</div>
+                        </div>}
+                        </div>);
+                      })()}
                     </div>);
                     if(row.maxSlots<99){
                       const aleaVacant=findAlea(cpsAleas,row.jsCode,dateKey,row.famille);
@@ -2795,7 +2882,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     {isPrevisionnel&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#475569",lineHeight:1.6,maxWidth:620}}>
       Ici, chaque agent partage volontairement son planning personnel (à activer dans Mon Profil) pour aider à s’organiser collectivement.<br/>Seules les journées de travail sont partagées — le reste (congés, absences...) ne l’est pas.<br/>Ces informations restent indicatives et ne remplacent jamais la feuille de présence officielle — en cas d’écart, rapproche-toi de l’encadrement.
     </div>}
-    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} editAlea={aleaTarget.editAlea} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
+    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} rowAgents={aleaTarget.rowAgents} editAlea={aleaTarget.editAlea} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
     {previsionnelTarget&&<PrevisionnelSignalementPopup agents={agents} agentTitulaireId={previsionnelTarget.agentId} dateKey={dateKey} nomTitulaire={previsionnelTarget.nomTitulaire} currentAgent={currentAgent} onClose={()=>setPrevisionnelTarget(null)} onSaved={()=>{api.previsionnelSignalements.getAll().then(rows=>setPrevisionnelSignalements(rows||[]));}}/>}
     {journeeSpecialeNoteTarget&&<JourneeSpecialeNotePopup agentId={journeeSpecialeNoteTarget.agentId} agentNom={journeeSpecialeNoteTarget.agentNom} dateKey={dateKey} currentMessage={journeeSpecialeNoteTarget.currentMessage} onClose={()=>setJourneeSpecialeNoteTarget(null)} onSaved={()=>{api.journeeSpecialeNotes.getAll().then(rows=>setJourneeSpecialeNotes(rows||[]));}}/>}
   </div>);
@@ -3401,11 +3488,20 @@ function TravailDashboardContent({ data }) {
         ))}
       </div>
 
-      {/* Comptage global M/AM/N/J/FOR — tous postes confondus, distinct du détail par poste ci-dessous */}
+      {/* Comptage global M/AM/N/J — tous postes confondus, distinct du détail par poste ci-dessous.
+          "FOR" retiré de cette liste (18/09, Olivier : "j'ai une ligne formation
+          et une ligne journee de formation, ca fait doublons non ?") -- le meme
+          total Formation etait deja affiche juste au-dessus (bloc repartition
+          PRCI/PAR/Formation/Non affecte) ET dans le detail par poste plus bas
+          ("📚 Formation") -- l'afficher une 3e fois ici, dans un bloc qui n'a de
+          sens que pour de vraies vacations horaires (Formation n'en est pas
+          une), faisait un vrai doublon visuel du meme chiffre. parShiftGlobal.FOR
+          reste calcule normalement (aucun changement de calcul), juste plus
+          rendu dans ce bloc precis. */}
       <div>
         <div style={{fontSize:11,fontWeight:700,color:"#334155",marginBottom:6}}>Total par vacation (tous postes confondus)</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          {["M","AM","N","J","FOR"].map(shift=>(
+          {["M","AM","N","J"].map(shift=>(
             <div key={shift} style={{flex:1,background:"#f8fafc",borderRadius:10,padding:"10px 8px",textAlign:"center",border:"1px solid #e2e8f0"}}>
               <div style={{fontSize:11,fontWeight:700,color:"#475569"}}>{SHIFT_LABELS[shift]}</div>
               <div style={{fontSize:20,fontWeight:900,color:"#1e293b"}}>{data.parShiftGlobal[shift]}</div>
@@ -9261,6 +9357,18 @@ function PersonalView({agent,schedule,setSchedule,onImportDP,agentProfiles,setAg
         map[l.code] = `${l.code} (${l.label}) est déjà prise le ${new Date(l.priseLe+"T12:00:00").toLocaleDateString("fr-FR")}. Va dans Compteurs → Fêtes pour l'annuler d'abord si tu veux la déplacer.`;
       } else if(!l.priseLe && (l.statut==="payee"||l.statut==="payee_auto")){
         map[l.code] = `${l.code} (${l.label}) a déjà été enregistrée comme payée (${MOIS_NOMS[l.moisPaye-1]}${l.anneePaye!==yr?` ${l.anneePaye}`:""}). Va dans Compteurs → Fêtes pour la mettre à jour si ce n'est pas correct.`;
+      } else if(l.statut==="perdue"){
+        // 18/09 : une fête deja determinee PERDUE (ex. tombee un dimanche, ou
+        // marquee perdue pour maladie) restait selectionnable dans ce popup
+        // jusqu'a sa date limite reglementaire -- souvent plusieurs mois plus
+        // tard (le seul garde-fou existant etait "date limite depassee",
+        // jamais "deja perdue" -- deux choses differentes : une fete peut
+        // etre perdue bien avant sa date limite). Olivier : "le F8 est
+        // accessible alors qu'elle est perdu cette annee. on ne devrait pas
+        // y avoir acces." Reutilise motifReglementaire (deja calcule par
+        // computeFetesLignes, meme texte que celui affiche dans Compteurs →
+        // Fêtes) plutot que de reformuler une explication a part.
+        map[l.code] = `${l.code} (${l.label}) est déjà PERDUE. ${l.motifReglementaire||""}`;
       } else if(dayPopup.dk > l.limiteDate){
         // 14/09 : empêche de placer le code d'une fête sur un jour déjà
         // au-delà de sa date limite réglementaire de prise (GRH00143) --
