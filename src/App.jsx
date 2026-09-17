@@ -1679,10 +1679,16 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
   const [search,setSearch]=useState("");
   const rowAgentsListe=rowAgents||[];
   const plusieursAgentsSurCetteCase=rowAgentsListe.length>1;
-  // "tout" = concerne le poste entier (comportement historique). Pre-rempli
-  // depuis editAlea si l'alea deja en base visait deja un agent precis.
+  // 18/09 (soir, Olivier : "pas besoin de cible tout le poste, il suffit de
+  // choisir l'agent") : simplification du ciblage introduit le meme jour --
+  // "tout" ne reste utile QUE pour une case a un seul agent (le selecteur
+  // n'est alors meme pas affiche, voir SelecteurCible plus bas). Des qu'il y
+  // a plusieurs agents sur la case, aucune valeur par defaut : l'agent doit
+  // explicitement choisir qui est concerne (jamais "tout le poste"), meme
+  // pour reprendre l'edition d'un ancien alea qui visait tout le poste.
   const [cible,setCible]=useState(()=>{
     if(editAlea && ALEA_TYPES_CIBLABLES.includes(editAlea.type) && editAlea.agents_concernes?.length===1) return editAlea.agents_concernes[0];
+    if(plusieursAgentsSurCetteCase) return null;
     return "tout";
   });
 
@@ -1718,18 +1724,16 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
 
   const agentsFiltres=agents.filter(a=>`${a.prenom} ${a.nom}`.toLowerCase().includes(search.toLowerCase()));
 
-  // Selecteur "Concerne : Tout le poste / {agent} / {agent}" -- affiche
-  // uniquement pour non_tenu/message ET seulement quand la case a reellement
-  // plusieurs agents (sinon aucune ambiguite, le comportement historique
-  // suffit et reste inchange par defaut).
+  // Selecteur "Pour quel agent ? {agent} / {agent}" -- affiche uniquement
+  // pour non_tenu/message ET seulement quand la case a reellement plusieurs
+  // agents (sinon aucune ambiguite, le comportement historique suffit et
+  // reste inchange par defaut). Plus d'option "Tout le poste" depuis le
+  // 18/09 (soir) -- choisir l'agent precis suffit toujours des qu'il y en a
+  // plusieurs, jamais de cible ambigue "tout le poste" dans ce cas.
   const SelecteurCible = plusieursAgentsSurCetteCase && (
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
-      <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>Concerne</div>
+      <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>Pour quel agent ?</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-        <button type="button" onClick={()=>setCible("tout")}
-          style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${cible==="tout"?"#0C447C":"#e2e8f0"}`,background:cible==="tout"?"#0C447C":"#fff",color:cible==="tout"?"#fff":"#475569",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-          Tout le poste
-        </button>
         {rowAgentsListe.map(a=>(
           <button key={a.id} type="button" onClick={()=>setCible(a.id)}
             style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${cible===a.id?"#0C447C":"#e2e8f0"}`,background:cible===a.id?"#0C447C":"#fff",color:cible===a.id?"#fff":"#475569",fontSize:12,fontWeight:600,cursor:"pointer"}}>
@@ -1737,7 +1741,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           </button>
         ))}
       </div>
-      {cible!=="tout"&&<div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>Seule la case de cet agent sera modifiée — les autres agents affichés sur ce poste restent inchangés.</div>}
+      <div style={{fontSize:10,color:"#94a3b8",fontStyle:"italic"}}>Seule la case de cet agent sera modifiée — les autres agents affichés sur ce poste restent inchangés.</div>
     </div>
   );
 
@@ -1799,8 +1803,9 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <button onClick={()=>editAlea?onClose():setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>{editAlea?"Annuler":"Retour"}</button>
-          <button onClick={valider} disabled={busy}
-            style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,background:"#ea580c",color:"#fff"}}>
+          <button onClick={valider} disabled={busy||(plusieursAgentsSurCetteCase&&!cible)}
+            style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
+            background:(plusieursAgentsSurCetteCase&&!cible)?"#e2e8f0":"#ea580c",color:(plusieursAgentsSurCetteCase&&!cible)?"#94a3b8":"#fff"}}>
             {busy?"…":(editAlea?"Enregistrer":"Confirmer poste non tenu")}
           </button>
         </div>
@@ -1813,9 +1818,9 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           style={{padding:"8px 10px",border:"1.5px solid #93c5fd",borderRadius:8,fontSize:13,minHeight:80,resize:"vertical"}}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <button onClick={()=>editAlea?onClose():setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>{editAlea?"Annuler":"Retour"}</button>
-          <button onClick={valider} disabled={busy||!motif.trim()}
+          <button onClick={valider} disabled={busy||!motif.trim()||(plusieursAgentsSurCetteCase&&!cible)}
             style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
-            background:!motif.trim()?"#e2e8f0":"#1d4ed8",color:!motif.trim()?"#94a3b8":"#fff"}}>
+            background:(!motif.trim()||(plusieursAgentsSurCetteCase&&!cible))?"#e2e8f0":"#1d4ed8",color:(!motif.trim()||(plusieursAgentsSurCetteCase&&!cible))?"#94a3b8":"#fff"}}>
             {busy?"…":(editAlea?"Enregistrer":"Publier le message")}
           </button>
         </div>
@@ -3363,7 +3368,17 @@ function computeDashboardTravail(agent, schedule, year){
 
   return {
     totalTravail,
-    postes: Object.values(postes).sort((a,b)=> b.total-a.total),
+    // FOR exclu du "Détail par poste" (18/09, Olivier : "pour 1 jai formation
+    // et journee formation. avec la meme date. ca sert a quoi ?") -- avant,
+    // Formation apparaissait dans postes[] au même titre qu'un vrai poste
+    // (CCL/VM/...), en plus de la tuile de répartition ci-dessus ET de la
+    // liste "📚 Journées de formation" plus bas -- 3 affichages du même
+    // total/date pour un seul et même jour. Exposée séparément
+    // (formationPoste, même principe que sansPosteVrai déjà exclu de
+    // postes[]) -- la tuile de répartition et la liste de dates lisent
+    // désormais cette clé, plus jamais data.postes.find(code==="FOR").
+    postes: Object.values(postes).filter(p=>p.code!=="FOR").sort((a,b)=> b.total-a.total),
+    formationPoste: postes.FOR || null,
     sansPosteVrai,
     repartition: {
       PRCI: { jours: totalPRCI, pct: pct(totalPRCI) },
@@ -3483,7 +3498,7 @@ function TravailDashboardContent({ data }) {
                 puis 21/08, Olivier) -- "Non affecté" ne représente plus QUE
                 les jours réellement sans poste précisé (sansPosteVrai). */}
             {k==="sansPoste"&&data.repartition.sansPoste.jours>0&&<div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginTop:2}}>dernier : {fmtDate(data.sansPosteVrai.lastDate)}</div>}
-            {k==="Formation"&&data.repartition.Formation.jours>0&&<div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginTop:2}}>dernier : {fmtDate(data.postes.find(p=>p.code==="FOR")?.lastDate)}</div>}
+            {k==="Formation"&&data.repartition.Formation.jours>0&&<div style={{fontSize:9,fontWeight:600,color:"#94a3b8",marginTop:2}}>dernier : {fmtDate(data.formationPoste?.lastDate)}</div>}
           </div>
         ))}
       </div>
@@ -3543,12 +3558,15 @@ function TravailDashboardContent({ data }) {
       {/* Liste complète des dates de Formation (21/08, même demande que pour
           "Non affecté" — le 21/08 plus tôt, Formation partageait encore cette
           liste avec les jours vraiment non affectés ; depuis qu'elle a sa
-          propre catégorie ci-dessus, elle a aussi sa propre liste ici). */}
-      {(data.postes.find(p=>p.code==="FOR")?.dates?.length>0) && (
+          propre catégorie ci-dessus, elle a aussi sa propre liste ici).
+          Source = data.formationPoste (18/09) -- Formation n'apparaît plus
+          du tout dans data.postes (Détail par poste), cette liste reste
+          l'unique endroit qui énumère chaque date individuellement. */}
+      {(data.formationPoste?.dates?.length>0) && (
         <div style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px"}}>
-          <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>📚 Journées de formation ({data.postes.find(p=>p.code==="FOR").dates.length})</div>
+          <div style={{fontSize:12,fontWeight:800,color:"#1e293b",marginBottom:6}}>📚 Journées de formation ({data.formationPoste.dates.length})</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-            {data.postes.find(p=>p.code==="FOR").dates.map((d,i)=>(
+            {data.formationPoste.dates.map((d,i)=>(
               <div key={i} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10.5,fontWeight:600,color:"#334155"}}>{fmtDate(d)}</div>
             ))}
           </div>
