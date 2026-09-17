@@ -23,6 +23,13 @@ const POSTES_AFFECTES_PAR_PAUSEUR = {
 
 const PAUSEUR_FAMILLE = { PIPA1J: 'PRCI', PIPA2J: 'PRCI', PIPA3J: 'PRCI', PAPAUJ: 'PAR' };
 
+// Motif exact pose sur un alea auto-cree par detecterEtAutoSignalerNonTenu --
+// partage avec le nettoyage ci-dessous (memes caracteres des deux cotes),
+// jamais matche sur un signalement manuel (motif toujours different, meme
+// vide) -- on ne veut JAMAIS effacer silencieusement une note posee par un
+// agent via le bouton 🔄, seulement les aleas que ce mecanisme a lui-meme crees.
+const MOTIF_AUTO = 'Poste non tenu (détecté automatiquement à l\'import — case vide sur la feuille)';
+
 // Genere les pauses figees manquantes pour les agents affectes par un alea
 // non_tenu deja cree (aleaId) sur un poste Pauseur. Jamais bloquant, jamais
 // d'ecrasement d'une pause deja presente (manuelle ou auto-taguee).
@@ -71,7 +78,27 @@ async function detecterEtAutoSignalerNonTenu(conn, { js_code, date_jour, signale
     'SELECT 1 FROM planning_cps WHERE date_jour=? AND js_code=? LIMIT 1',
     [date_jour, js_code]
   );
-  if (posteRows.length) return; // poste tenu
+  if (posteRows.length) {
+    // 17/09 : poste desormais tenu -- avant, la fonction se contentait de
+    // `return` ici, sans jamais nettoyer un eventuel alea AUTO-cree devenu
+    // perime (ex: poste vide au moment d'un 1er import partiel, rempli par
+    // un import suivant/une correction plus tard) -- l'agent devait alors
+    // retirer le badge "⚠️ Poste non tenu" a la main via le ✕ (cas reel
+    // confirme par Olivier, 3 Pauseur restes signales non-tenu malgre des
+    // imports qui les couvraient bien). Ne touche JAMAIS un signalement
+    // manuel (motif different de MOTIF_AUTO) -- seulement celui que ce
+    // mecanisme a lui-meme pose, meme cascade pause_figee que la suppression
+    // manuelle (aleasController.deleteAlea).
+    const [staleAuto] = await conn.query(
+      `SELECT id FROM cps_aleas WHERE js_code=? AND date_jour=? AND famille=? AND type='non_tenu' AND motif=? LIMIT 1`,
+      [js_code, date_jour, famille, MOTIF_AUTO]
+    );
+    if (staleAuto.length) {
+      await conn.query('DELETE FROM pause_figee WHERE cps_alea_id=?', [staleAuto[0].id]);
+      await conn.query('DELETE FROM cps_aleas WHERE id=?', [staleAuto[0].id]);
+    }
+    return;
+  }
 
   const [existant] = await conn.query(
     `SELECT id FROM cps_aleas WHERE js_code=? AND date_jour=? AND famille=? AND type='non_tenu' LIMIT 1`,
@@ -88,7 +115,7 @@ async function detecterEtAutoSignalerNonTenu(conn, { js_code, date_jour, signale
   const [result] = await conn.query(
     `INSERT INTO cps_aleas (js_code, date_jour, famille, type, agents_concernes, motif, signale_par)
      VALUES (?,?,?,'non_tenu','[]',?,?)`,
-    [js_code, date_jour, famille, 'Poste non tenu (détecté automatiquement à l\'import — case vide sur la feuille)', signalePar]
+    [js_code, date_jour, famille, MOTIF_AUTO, signalePar]
   );
   await genererPausesFigeesPourNonTenu(conn, { aleaId: result.insertId, js_code, date_jour, famille });
 }
