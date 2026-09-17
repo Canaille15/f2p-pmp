@@ -331,7 +331,7 @@
   <div class="logo">🚆</div>
   <h1>Notice d'utilisation — F2P.PMP</h1>
   <p>L'outil de planning partagé de tous les agents PRCI et PAR de Paris Montparnasse. Ce guide explique, module par module, comment s'en servir et les règles qui s'appliquent derrière chaque écran.</p>
-  <div class="meta">Dernière mise à jour : 14 septembre 2026</div>
+  <div class="meta">Dernière mise à jour : 17 septembre 2026</div>
   <button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
 </div>
 
@@ -556,7 +556,7 @@
       <h3>Ta carte agent — à côté de ton nom</h3>
       <p>En haut de « Mon planning », ta propre carte affiche deux boutons juste à côté de ton nom : <span class="b">🎨</span> et <span class="b">▼</span>. C'est là que tout se règle.</p>
       <div class="grid2">
-        <div class="card-mini"><div class="t">🎨 Palette de couleurs</div><div class="d">Choisis la couleur de chaque famille de code dans TON calendrier (Travail M/AM/N/J/JF, Repos RP/RPP/RU/RQ/TC/TY/RN, NU, DISPO, Congés, Absences/Santé, Grève, Formation, Fêtes, Note perso). Purement visuel et personnel — un bouton « Réinitialiser » remet les couleurs par défaut.</div></div>
+        <div class="card-mini"><div class="t">🎨 Palette de couleurs</div><div class="d">Choisis la couleur de chaque famille de code dans TON calendrier (Travail M/AM/N/J/JF, Repos RP/RPP/RU/RQ/TC/TY/RN, NU, DISPO, Congés, Absences/Santé, Grève, Formation, Fêtes, Note perso). Purement visuel et personnel — un bouton « Réinitialiser » remet les couleurs par défaut. Aussi accessible depuis <a href="#mon-profil">Mon profil</a>, section « 🎨 Apparence ».</div></div>
         <div class="card-mini"><div class="t">▼ Postes habilités</div><div class="d">Déplie un accordéon qui liste tes habilitations actuelles (badges), avec un bouton « ⚙️ Modifier » pour cocher/décocher chaque poste.</div></div>
       </div>
 
@@ -876,6 +876,10 @@
 
       <h3>🔄 Ajuster un poste</h3>
       <p>Sur chaque case de poste, un bouton permet de signaler un échange, une erreur de saisie CPS, un poste non tenu, ou de laisser un message libre visible par tous. Chaque signalement reste annulable par n'importe qui.</p>
+      <div class="callout rule">
+        <div class="callout-title">📖 Poste Pauseur signalé « non tenu » automatiquement</div>
+        <p>Pour les 4 postes Pauseur (CCL / Adjoint / VGD / PAR), l'appli signale elle-même « ⚠️ Poste non tenu » dès qu'un import montre la case encore vide un jour de semaine — inutile de le faire à la main dans ce cas. Cette alerte auto-créée <strong>disparaît toute seule</strong> dès qu'un import suivant (ou une correction) montre finalement le poste bien tenu — plus besoin de la retirer manuellement. Un signalement que <strong>toi</strong> tu as posé à la main, lui, ne disparaît jamais tout seul : il reste toujours sous ton contrôle, à retirer via le ✕ quand tu le juges réglé.</p>
+      </div>
       <div class="callout tip">
         <div class="callout-title">📖 Clôturer un échange</div>
         <p>Depuis le module <a href="#echanges">Échanges</a>, clôturer une demande regarde si l'agent avec qui tu as échangé avait lui-même un poste ce jour-là. S'il n'avait rien, un seul signalement est créé (ton poste passe à son nom). S'il avait un vrai poste (troc réciproque, ex. tu faisais la Matinée et lui la Soirée), <strong>deux</strong> signalements sont créés automatiquement — ton ancien poste passe à son nom, et le sien passe au tien — pour qu'aucun poste ne reste faussement « couvert » par quelqu'un qui n'y est plus.</p>
@@ -1055,6 +1059,9 @@
       <h3>✍️ Ma signature</h3>
       <p>À dessiner directement à l'écran (doigt, souris ou stylet), ou à importer depuis une photo d'une signature papier (le fond est retiré automatiquement). Une fois enregistrée, elle s'insère automatiquement dans les générateurs PDF (Congés, CET) qui prévoient une case signature.</p>
 
+      <h3>🎨 Apparence</h3>
+      <p>Le <a href="#mode-sombre">mode sombre</a> et la <span class="b">palette de couleurs</span> de ton calendrier sont réglables ici aussi, en plus de leur emplacement d'origine (bouton ☀️/🌙 en haut de chaque écran, et 🎨 sur ta carte agent en haut de <a href="#mon-planning">Mon planning</a>) — deux accès différents pour le même réglage, jamais deux réglages séparés : change-le d'un côté, il change partout, sur tous tes écrans.</p>
+
       <h3>Planning Prévisionnel — partager mon planning</h3>
       <p>Interrupteur qui contrôle si ton planning personnel (codes M/AM/N/J/JF/FOR/DISPO uniquement) est visible par tes collègues dans la vue <a href="#previsionnel">Planning Prévisionnel</a>. Désactivé, ton planning reste strictement privé — il n'apparaît dans aucune vue partagée.</p>
 
@@ -1067,8 +1074,8 @@
 
     <section class="module" id="mode-sombre">
       <h2><span class="icon-chip">🌙</span>Mode sombre</h2>
-      <p class="kicker">Bouton ☀️ / 🌙 en haut à droite de chaque écran.</p>
-      <p>Bascule tout le planning, les compteurs et la plupart des modules vers un fond sombre — réglage propre à chaque appareil, pas lié à ton profil agent.</p>
+      <p class="kicker">Bouton ☀️ / 🌙 en haut à droite de chaque écran — ou dans <a href="#mon-profil">Mon profil</a>, section « 🎨 Apparence ».</p>
+      <p>Bascule tout le planning, les compteurs et la plupart des modules vers un fond sombre — réglage propre à chaque appareil, pas lié à ton profil agent. Les deux boutons pilotent exactement le même réglage.</p>
     </section>
 
     <section class="module" id="installer-app">

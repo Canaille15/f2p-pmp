@@ -523,10 +523,13 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
           {/* 17/09 : "🚪 Voir les quittés" et "🔑 Tri PIN" sortis du groupe de
               filtres ci-dessus, regroupés ici avec le compteur "X agent(s)"
               -- avant-dernière ligne, juste au-dessus d'Utilisation/Annuaire
-              PDF (meme zone marginLeft:"auto"+flexWrap, meme comportement
-              deja verifie : sur sa propre ligne, un groupe demarre a gauche
-              du conteneur, pas plaque a droite). */}
-          <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              PDF. marginLeft:"auto" retiré (17/09, suite immédiate -- Olivier :
+              "fait fouilli") : sur un écran assez large pour que les filtres
+              ne remplissent pas toute la largeur, il plaquait cette ligne et
+              la suivante tout à droite, en décalage avec les filtres restés
+              alignés à gauche -- ces 2 lignes démarrent désormais à gauche
+              comme le reste de la barre d'outils. */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap" }}>
               {agentsFiltres.length} agent{agentsFiltres.length > 1 ? "s" : ""}
             </span>
@@ -563,8 +566,10 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
               lui-même a depuis été sorti de ce groupe (voir plus bas,
               même jour, "le haut de admin est fouilli"), et Tri PIN/Voir les
               quittés/compteur agent regroupés au-dessus (voir juste au-dessus,
-              17/09) -- il ne reste plus qu'Utilisation + Annuaire PDF ici. */}
-          <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              17/09) -- il ne reste plus qu'Utilisation + Annuaire PDF ici.
+              marginLeft:"auto" retiré le même jour (même raison que le
+              groupe juste au-dessus) -- aligné à gauche désormais. */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <button onClick={() => setUsageOpen(true)}
               style={{
                 background: "var(--bg-page)", color: "var(--text-secondary)", border: "1.5px solid var(--border)",

@@ -11093,7 +11093,7 @@ function EchangesView({agents,currentAgent}){
   </div>);
 }
 
-function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentProfiles}){
+function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentProfiles,themeMode,setThemeMode}){
   const [pinActuel,setPinActuel]=useState("");
   const [pinNouveau,setPinNouveau]=useState("");
   const [pinConfirme,setPinConfirme]=useState("");
@@ -11102,6 +11102,25 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
   const [partageActif,setPartageActif]=useState(!!currentAgent?.partage_previsionnel);
   const [partageBusy,setPartageBusy]=useState(false);
   const [partageMsg,setPartageMsg]=useState(null);
+  // 17/09 (Olivier, avis donné avant codage) : mode sombre + palette de
+  // couleurs "en double" ici -- ni l'un ni l'autre n'est une vraie donnée
+  // dupliquée, juste un 2e point d'entrée UI vers le même état déjà en
+  // place ailleurs (themeMode global, agentColors dans agentProfiles) --
+  // zéro risque de désync entre les deux endroits. Habilitations laissées
+  // volontairement où elles sont (accordéon AgentHeader), sur décision
+  // explicite d'Olivier.
+  const [showColorPickerProfil,setShowColorPickerProfil]=useState(false);
+  const agKeyColorsProfil=currentAgent?.immatriculation||currentAgent?.cp||currentAgent?.id;
+  const agentColorsProfil=agentProfiles[agKeyColorsProfil]?.agentColors||{};
+  // Même pattern que PersonalView (lecture de l'état frais dans l'updater,
+  // jamais une variable capturée au rendu -- feedback_stale_closure_setters).
+  const setAgentColorsProfil=(updater)=>{
+    setAgentProfiles(p=>{
+      const current=p[agKeyColorsProfil]?.agentColors||{};
+      const next=typeof updater==="function"?updater(current):updater;
+      return {...p,[agKeyColorsProfil]:{...(p[agKeyColorsProfil]||{}),agentColors:next}};
+    });
+  };
   // Module VT (09/08, demandé par Olivier) : masquable pour les agents à
   // temps plein qui ne l'utilisent pas. Actif par défaut (absent/undefined
   // = actif) — purement visuel, voir DashboardCompteurs.
@@ -11214,6 +11233,36 @@ function ProfilPersoView({currentAgent,onPartageChange,agentProfiles,setAgentPro
         </div>
       </div>
     </div>
+    <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
+      <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>🎨 Apparence</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#334155"}}>{themeMode==="dark"?"🌙 Mode sombre":"☀️ Mode clair"}</div>
+        <button onClick={()=>setThemeMode(m=>m==="dark"?"light":"dark")}
+          style={{width:48,height:28,borderRadius:14,border:"none",cursor:"pointer",flexShrink:0,
+          background:themeMode==="dark"?"#0C447C":"#e2e8f0",position:"relative",transition:"background .15s"}}>
+          <div style={{width:22,height:22,borderRadius:"50%",background:"#fff",position:"absolute",top:3,
+            left:themeMode==="dark"?23:3,transition:"left .15s",boxShadow:"0 1px 3px rgba(0,0,0,.3)"}}/>
+        </button>
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:14,paddingTop:14,borderTop:"1px solid #f1f5f9"}}>
+        <div style={{fontSize:13,fontWeight:600,color:"#334155"}}>Palette de couleurs du planning</div>
+        <button onClick={()=>setShowColorPickerProfil(true)}
+          style={{padding:"6px 14px",borderRadius:8,border:"1.5px solid #e2e8f0",background:"#f8fafc",
+          color:"#334155",fontSize:12,fontWeight:700,cursor:"pointer",flexShrink:0}}>
+          🎨 Modifier
+        </button>
+      </div>
+    </div>
+    {showColorPickerProfil&&<ColorCustomizer
+      agentColors={agentColorsProfil}
+      setAgentColors={setAgentColorsProfil}
+      onClose={()=>{
+        setShowColorPickerProfil(false);
+        // Même sauvegarde explicite et inconditionnelle qu'à la fermeture
+        // depuis Mon planning (17/07) -- garantit une sauvegarde immédiate,
+        // sans dépendre du timing de l'autosave générique.
+        api.profil.save(agKeyColorsProfil,{agentColors:agentColorsProfil});
+      }}/>}
     <div style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:14,padding:18}}>
       <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>📇 Mes coordonnées (Annuaire)</div>
       <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>Visibles par tes collègues dans l'Annuaire, sauf si tu désactives ta visibilité ci-dessous.</div>
@@ -13744,7 +13793,7 @@ export default function App(){
   {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} schedule={schedule} cpsSchedule={cpsSchedule}/>}
   {view==="afo"&&<AfoView currentAgent={currentAgent||currentUser?.agent} agents={agents} refreshProfil={refreshMonProfil} refreshSchedule={refreshMonSchedule}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
-      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
+      {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} themeMode={themeMode} setThemeMode={setThemeMode} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
       {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
     </div>
