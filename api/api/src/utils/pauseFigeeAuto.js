@@ -38,8 +38,14 @@ async function genererPausesFigeesPourNonTenu(conn, { aleaId, js_code, date_jour
   if (!postesAffectes) return; // pas un poste Pauseur, rien a faire
   if (estWeekEnd(date_jour) || estJourFerie(date_jour)) return; // deja couvert par le mecanisme calendaire
   for (const poste of postesAffectes) {
+    // 18/09 -- exclut l'agent en doublon formation (en_formation=1, marqueur
+    // "/" SNCF) : un poste affecte par le Pauseur peut avoir 2 lignes le meme
+    // jour (titulaire + stagiaire) depuis le 04/09 -- seul le vrai titulaire
+    // est prive de sa pause quand le Pauseur n'est pas tenu, jamais le
+    // stagiaire en double (signale par Olivier : le titulaire est la, la
+    // formation ne rend pas le poste non tenu).
     const [rows] = await conn.query(
-      'SELECT cp_agent FROM planning_cps WHERE date_jour=? AND js_code=?',
+      'SELECT cp_agent FROM planning_cps WHERE date_jour=? AND js_code=? AND (en_formation=0 OR en_formation IS NULL)',
       [date_jour, poste]
     );
     for (const { cp_agent } of rows) {

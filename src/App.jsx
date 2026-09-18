@@ -11538,16 +11538,27 @@ function resoudreTitulaireCps(uoRow,agents,cpsSchedule,cpsAleas){
     if(!jsCode) return null;
   }
   const dateKey=`${dateRef.getFullYear()}-${String(dateRef.getMonth()+1).padStart(2,"0")}-${String(dateRef.getDate()).padStart(2,"0")}`;
-  const alea=(cpsAleas||[]).find(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===uoRow.cps_famille);
-  if(alea){
-    if(alea.type==="non_tenu") return {statut:"non_tenu",noms:[]};
+  // 18/09 -- findAlea (jamais un .find() local sans filtre) : un non_tenu
+  // CIBLE sur un seul agent (doublon formation, voir Point 3/SelecteurCible)
+  // ne doit jamais faire croire que TOUT le poste est non tenu -- le
+  // titulaire peut tres bien etre present ce jour-la (formation != poste non
+  // tenu, signale par Olivier le 18/09 : sans agentId, findAlea ne retombe
+  // que sur un alea "tout le poste", jamais un alea cible sur un agent precis).
+  const alea=findAlea(cpsAleas, jsCode, dateKey, uoRow.cps_famille);
+  if(alea&&alea.type==="non_tenu") return {statut:"non_tenu",noms:[]};
+  if(alea&&alea.type!=="message"){
     const trouves=(alea.agents_concernes||[]).map(id=>(agents||[]).find(a=>a.id===id)).filter(Boolean);
-    return {statut:"trouve",noms:trouves.map(a=>`${a.prenom} ${a.nom}`)};
+    if(trouves.length) return {statut:"trouve",noms:trouves.map(a=>`${a.prenom} ${a.nom}`)};
   }
-  const trouve=(agents||[]).find(a=>{
+  // Doublon formation (04/09, marqueur "/" SNCF) : jamais l'agent en
+  // formation comme titulaire si le vrai titulaire occupe aussi ce
+  // poste/date -- sinon la fiche pouvait afficher le stagiaire a la place
+  // du titulaire reel.
+  const candidats=(agents||[]).filter(a=>{
     const en=(cpsSchedule||{})[`${a.id}-${dateKey}`];
     return en&&(en.jsCode===jsCode||(posteLabel&&en.poste===posteLabel))&&!EQ[en.equipe]?.prive;
   });
+  const trouve=candidats.find(a=>!(cpsSchedule||{})[`${a.id}-${dateKey}`]?.enFormation)||candidats[0];
   if(trouve) return {statut:"trouve",noms:[`${trouve.prenom} ${trouve.nom}`]};
   return {statut:"aucun",noms:[]};
 }
