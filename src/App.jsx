@@ -2788,7 +2788,21 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                       </div>}
                     </div>);
                   })
-                : Array.from({length:row.maxSlots<99?row.maxSlots:Math.max(row.agents.length,1)},(_,si)=>{
+                // slotsAffiches (19/09, Olivier : "tu mets les cases que si tu as
+                // des noms a mettre, sinon on ne doit pas les voir. et ca reste
+                // jusqu'a 4 oui") -- un poste multi-agents a capacite fixe (ex:
+                // A-PRCI/K-PRCI/F-PAR/AFOPRCI/K-PAR/AFO PAR, maxSlots 2 a 6 dans
+                // POSTES_JOURNEE) ne doit plus jamais afficher de case "Vacant" en
+                // trop pour combler l'ecart entre le nombre reel d'agents et la
+                // capacite max -- seuls les agents reellement presents sont montres,
+                // la capacite reste juste un plafond (jamais un plancher). Le poste
+                // normal a un seul agent (maxSlots===1, vacant ou occupe) garde son
+                // unique case habituelle, inchangee -- c'est le seul cas ou une case
+                // "Vacant" doit encore apparaitre. Le cas doublon/previsionnel
+                // (maxSlots deja egal a Math.max(ags.length,1) plus haut) n'est de
+                // toute facon jamais concerne, min(agents.length,maxSlots) y vaut
+                // deja exactement agents.length.
+                : Array.from({length:row.maxSlots<99?(row.maxSlots===1?1:Math.min(row.agents.length,row.maxSlots)):Math.max(row.agents.length,1)},(_,si)=>{
                     const ag=rowAgentsTries[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
                     if(search&&ag&&!`${ag.prenom} ${ag.nom}`.toLowerCase().includes(search.toLowerCase()))return null;
                     const isForm=en?.equipe==="JF";const isMe=ag&&currentAgent?.id===ag.id;
@@ -2806,21 +2820,18 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     // (23/08, branche isDispo) -- ici, corrige a la source pour toutes les
                     // lignes qui passent par ce rendu par defaut (couvre aussi RFT SAM).
                     const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille||ag?.famille,ag?.id);
-                    // Absent (19/09, corrige le meme jour -- Olivier : "c'est pas une
-                    // question de doublons, c'est une question qu'il peut avoir ete
-                    // change ce jour la"). Des qu'un agent NOMME est marque non_tenu
-                    // -- qu'il soit un titulaire seul sur un poste normal ou un
-                    // stagiaire en formation-doublon, meme mecanisme, aucune
-                    // distinction -- l'affichage devient "nom raye + 🚫 Absent"
-                    // plutot que l'ancien badge d'alerte "Poste non tenu". Ce badge
-                    // d'alerte reste reserve au SEUL cas d'un poste reellement vide
-                    // (aucun agent affiche du tout, cf. branche aleaVacant plus bas,
-                    // ag est alors undefined) -- c'est la ou vit le vrai suivi pause
-                    // figee/stats "Postes non tenus", jamais touche ici, seul le
-                    // rendu change. "ca ne change rien pour le titulaire" (Olivier) :
-                    // dans le cas doublon, le titulaire garde son rendu normal
-                    // (branche plus bas, jamais concernee par ce non_tenu-la).
-                    if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#f8fafc",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
+                    // Absent (19/09, restreint le meme jour -- Olivier : "je t'avais
+                    // dit de laisser le poste non tenu comme avant. absent c'est
+                    // juste pour les poste en formation !") -- UNIQUEMENT pour un
+                    // stagiaire en formation-doublon (isEnFormationDoublon) marque
+                    // non_tenu : nom raye + 🚫 Absent, plutot que l'alerte "Poste non
+                    // tenu". Tout le reste (titulaire seul sur un poste normal marque
+                    // non_tenu) garde l'ancien badge d'alerte orange, exactement comme
+                    // avant le 19/09 -- voir la branche juste en dessous. Le vrai
+                    // suivi (pause figee auto, stats "Postes non tenus") reste de
+                    // toute facon strictement inchange dans les deux cas, seul le
+                    // rendu differe.
+                    if(ag&&alea&&alea.type==="non_tenu"&&isEnFormationDoublon)return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#f8fafc",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <Av initials={ag.initials} size={20} famille={ag.famille}/>
                         <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
@@ -2829,6 +2840,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#64748b",opacity:.6}}>✕</button></>}
                       </div>
                       {alea.motif&&<div style={{fontSize:10,color:"#64748b",paddingLeft:26,fontStyle:"italic"}}>{alea.motif}</div>}
+                    </div>);
+                    if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:16}}>⚠️</span>
+                        <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
+                        {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,rowAgents:rowAgentsTries,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✎</button>
+                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6}}>✕</button></>}
+                      </div>
+                      {alea.motif&&<div style={{fontSize:10,color:"#9a3412",paddingLeft:22,fontStyle:"italic"}}>{alea.motif}</div>}
                     </div>);
                     if(ag&&alea&&(alea.type==="echange"||alea.type==="erreur_cps")){
                       const nomsRemplacants=(alea.agents_concernes||[]).map(cpId=>{
