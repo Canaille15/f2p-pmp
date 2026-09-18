@@ -2485,10 +2485,22 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <div style={{display:"flex",flexDirection:"column",gap:2,flex:1,minWidth:200}}>
         <span style={{fontSize:15,fontWeight:800,color:"#fff"}}>FEUILLE DE PRESENCE JOURNALIERE</span>
         <span style={{fontSize:11,color:"#BFDBFE"}}>
-          {dernierImport
+          {dernierImport?.importe_le
             ? `Dernier import : ${new Date(dernierImport.importe_le).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}${dernierImport.prenom?` par ${dernierImport.prenom} ${dernierImport.nom}`:""}`
             : "Aucun import pour l'instant"}
         </span>
+        {(()=>{
+          const pf=dernierImport?.parFamille;
+          if(!pf||(!pf.PRCI&&!pf.PAR)) return null;
+          const fmt=r=>`${new Date(r.importe_le).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}${r.prenom?` par ${r.prenom} ${r.nom}`:""}`;
+          if(dernierImport.isGlobal){
+            return(<span style={{fontSize:10.5,color:"#93C5FD"}}>PRCI + PAR (import global) : {fmt(pf.PRCI)}</span>);
+          }
+          return(<>
+            {pf.PRCI&&<span style={{fontSize:10.5,color:"#93C5FD"}}>PRCI : {fmt(pf.PRCI)}</span>}
+            {pf.PAR&&<span style={{fontSize:10.5,color:"#93C5FD"}}>PAR : {fmt(pf.PAR)}</span>}
+          </>);
+        })()}
       </div>
     </div>}
 

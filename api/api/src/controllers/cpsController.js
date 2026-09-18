@@ -17,6 +17,13 @@ async function getCps(req, res) {
 }
 
 // GET /api/cps/last-import -> date/heure + auteur du dernier import (public a tous les agents connectes)
+// 18/09 -- ajoute parFamille (PRCI/PAR separement, Olivier : "les info pour
+// par et prci") a partir de cps_import_detail/cps_import_batch (jamais un
+// lot deja annule) -- pour chaque famille, le batch dont la date d'import
+// est la plus recente. Si le MEME batch_id ressort pour les deux familles
+// (un seul PDF qui couvrait les deux en une fois, ex. import mixte agent
+// par agent plutot que par famille), isGlobal=true -- le frontend affiche
+// alors une seule ligne combinee plutot que deux lignes redondantes.
 async function getLastImport(req, res) {
   try {
     const [rows] = await pool.query(
@@ -25,7 +32,25 @@ async function getLastImport(req, res) {
        LEFT JOIN agent a ON a.cp = c.importe_par
        ORDER BY c.importe_le DESC LIMIT 1`
     );
-    res.json(rows[0] || null);
+    // 2 requetes simples (une par famille connue) plutot qu'un GROUP BY --
+    // only_full_group_by (actif sur la base Railway) rejette un GROUP BY sur
+    // d.famille des lors que la selection contient b.id/importe_le/importe_par
+    // (non fonctionnellement dependants de d.famille aux yeux du moteur, meme
+    // si en pratique un seul batch matche toujours le MAX par famille).
+    const parFamille = {};
+    for (const fam of ['PRCI', 'PAR']) {
+      const [rows2] = await pool.query(
+        `SELECT b.id AS batch_id, b.importe_le, b.importe_par, a.nom, a.prenom
+         FROM cps_import_detail d
+         JOIN cps_import_batch b ON b.id = d.batch_id AND b.annule_le IS NULL
+         LEFT JOIN agent a ON a.cp = b.importe_par
+         WHERE d.famille = ?
+         ORDER BY b.importe_le DESC LIMIT 1`,
+        [fam]);
+      if (rows2[0]) parFamille[fam] = rows2[0];
+    }
+    const isGlobal = !!(parFamille.PRCI && parFamille.PAR && parFamille.PRCI.batch_id === parFamille.PAR.batch_id);
+    res.json({ ...(rows[0] || null), parFamille, isGlobal });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
 }
 
