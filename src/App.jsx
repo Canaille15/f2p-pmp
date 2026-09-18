@@ -2141,13 +2141,22 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
 
         // Reference reelle du PDF (18/09, Olivier : "je veux la ref reel du
         // pdf avec sa date et son heure de creation. elle est sur le pdf
-        // [...] ca permet d'eviter des import inutile") -- meme regex
-        // "Edition le JJ/MM/AAAA, HH:MM" deja connue et verifiee sur les
-        // bulletins de commande SNCF (parseBulletinCommande plus haut dans
-        // ce fichier), jamais reliee a l'import CPS Officiel jusqu'ici.
-        // Purement optionnel : absente si le document ne porte pas cette
-        // mention (feuille scannee/degradee) -- aucune erreur, aucun blocage.
-        const editionMatch=text.match(/Edition le\s*(\d{2})[\/1](\d{2})\/(\d{4})\s*,?\s*(\d{2}):(\d{2})/i);
+        // [...] ca permet d'eviter des import inutile") -- la regex
+        // "Edition le JJ/MM/AAAA, HH:MM" (verifiee sur les bulletins de
+        // commande SNCF, parseBulletinCommande plus haut dans ce fichier)
+        // avait ete reutilisee ici par analogie, jamais verifiee contre une
+        // vraie "feuille de presence journaliere" -- confirme le 19/09 sur 2
+        // vrais PDF d'Olivier (PRCI 94 + PAR 93) que ce document ne contient
+        // JAMAIS ce texte : son en-tete imprime la date/heure d'edition sous
+        // la forme "JJ/MM/AAAA - HHhMM FEUILLE DE PRESENCE JOURNALIERE",
+        // identique sur chaque page (une par jour couvert), sans jamais le
+        // mot "Edition". pdfEditeLe restait donc toujours null pour ce type
+        // d'import, silencieusement (le fallback "absent si mention
+        // manquante" masquait le vrai bug). Essaye d'abord l'ancien format
+        // (au cas ou une variante future du document l'utiliserait), puis ce
+        // nouveau format specifique a la feuille de presence.
+        const editionMatch=text.match(/Edition le\s*(\d{2})[\/1](\d{2})\/(\d{4})\s*,?\s*(\d{2}):(\d{2})/i)
+          || text.match(/(\d{2})[\/1](\d{2})\/(\d{4})\s*-\s*(\d{2})h(\d{2})\s*FEUILLE DE PRESENCE JOURNALIERE/i);
         const pdfEditeLe=editionMatch
           ? `${editionMatch[3]}-${editionMatch[2]}-${editionMatch[1]} ${editionMatch[4]}:${editionMatch[5]}:00`
           : null;
@@ -2435,6 +2444,42 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
             if(dejaMisAJour.has(mapKey)) return;
             if(!clearsMap.has(mapKey)) clearsMap.set(mapKey,{cp_agent:agentId,date_jour:v.date_jour});
           });
+        });
+        // Poste dont l'occupant a change (pas "vacant" -- un AUTRE agent le
+        // tient desormais sur CE document reimporte) : le mecanisme "vacants"
+        // ci-dessus ne couvre que le cas ou le poste apparait litteralement
+        // vide sur le nouveau document -- si un nouveau nom (different de
+        // celui deja en base) est confirme pour le meme (jsCode, date),
+        // l'ancien occupant restait fige en base indefiniment (jamais dans
+        // `vacants`, donc jamais efface) -- les deux se retrouvant a
+        // "occuper" le meme poste a la fois, ce qui peut rendre le vrai
+        // nouvel occupant invisible dans l'affichage (un poste normal a
+        // maxSlots=1, seul le premier agent trouve est montre). Cas reel
+        // confirme le 19/09 (Olivier, "usson n'est pas detecte [...] tu as
+        // mis imart") : PAAC2- Matinee 21/09/2026, IMART (import de la veille
+        // a 09h52) restait fige alors que USSON (import du jour a 12h49, le
+        // vrai occupant confirme sur le document reimporte) avait bien ete
+        // ecrit -- IMART masquait USSON. Ne touche jamais un (jsCode,date)
+        // que CET import ne mentionne pas du tout (confirmesParJsCodeDate
+        // n'a alors aucune entree pour cette cle) -- uniquement les postes
+        // que le document couvre reellement, avec un nom different de celui
+        // deja en base.
+        const confirmesParJsCodeDate=new Map(); // "jsCode|date" -> Set(cp_agent) confirmes par CET import
+        updates.forEach(u=>{
+          const k=`${u.jsCode}|${u.date_jour}`;
+          if(!confirmesParJsCodeDate.has(k)) confirmesParJsCodeDate.set(k,new Set());
+          confirmesParJsCodeDate.get(k).add(u.cp_agent);
+        });
+        Object.entries(schedule).forEach(([key,val])=>{
+          if(!val||!val.jsCode) return;
+          const m=key.match(/^(.+)-(\d{4}-\d{2}-\d{2})$/);
+          if(!m) return;
+          const [,agentId,dateJour]=m;
+          const confirmes=confirmesParJsCodeDate.get(`${val.jsCode}|${dateJour}`);
+          if(!confirmes||confirmes.has(agentId)) return;
+          const mapKey=`${agentId}|${dateJour}`;
+          if(dejaMisAJour.has(mapKey)) return;
+          if(!clearsMap.has(mapKey)) clearsMap.set(mapKey,{cp_agent:agentId,date_jour:dateJour});
         });
         const clears=[...clearsMap.values()];
 
@@ -2761,15 +2806,21 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     // (23/08, branche isDispo) -- ici, corrige a la source pour toutes les
                     // lignes qui passent par ce rendu par defaut (couvre aussi RFT SAM).
                     const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille||ag?.famille,ag?.id);
-                    // stagiaire absent (19/09, demande d'Olivier) : un agent en
-                    // formation-doublon marque "non_tenu" n'est plus affiche comme
-                    // "Poste non tenu" -- ce libelle reste reserve au vrai suivi
-                    // (pause figee auto, stat "Postes non tenus"), qui continue de
-                    // se baser sur ce meme alea non_tenu, strictement inchange cote
-                    // donnees/calcul. Seul l'affichage change ici : nom raye +
-                    // "Absent" ; le titulaire (jamais en doublon) garde le rendu
-                    // "Poste non tenu" normal juste en dessous.
-                    if(ag&&alea&&alea.type==="non_tenu"&&isEnFormationDoublon)return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#f8fafc",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
+                    // Absent (19/09, corrige le meme jour -- Olivier : "c'est pas une
+                    // question de doublons, c'est une question qu'il peut avoir ete
+                    // change ce jour la"). Des qu'un agent NOMME est marque non_tenu
+                    // -- qu'il soit un titulaire seul sur un poste normal ou un
+                    // stagiaire en formation-doublon, meme mecanisme, aucune
+                    // distinction -- l'affichage devient "nom raye + 🚫 Absent"
+                    // plutot que l'ancien badge d'alerte "Poste non tenu". Ce badge
+                    // d'alerte reste reserve au SEUL cas d'un poste reellement vide
+                    // (aucun agent affiche du tout, cf. branche aleaVacant plus bas,
+                    // ag est alors undefined) -- c'est la ou vit le vrai suivi pause
+                    // figee/stats "Postes non tenus", jamais touche ici, seul le
+                    // rendu change. "ca ne change rien pour le titulaire" (Olivier) :
+                    // dans le cas doublon, le titulaire garde son rendu normal
+                    // (branche plus bas, jamais concernee par ce non_tenu-la).
+                    if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#f8fafc",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <Av initials={ag.initials} size={20} famille={ag.famille}/>
                         <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
@@ -2778,15 +2829,6 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#64748b",opacity:.6}}>✕</button></>}
                       </div>
                       {alea.motif&&<div style={{fontSize:10,color:"#64748b",paddingLeft:26,fontStyle:"italic"}}>{alea.motif}</div>}
-                    </div>);
-                    if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontSize:16}}>⚠️</span>
-                        <div style={{fontSize:11,fontWeight:700,color:"#c2410c"}}>Poste non tenu</div>
-                        {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,rowAgents:rowAgentsTries,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#c2410c",opacity:.6,marginLeft:"auto"}}>✎</button>
-                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#c2410c",opacity:.6}}>✕</button></>}
-                      </div>
-                      {alea.motif&&<div style={{fontSize:10,color:"#9a3412",paddingLeft:22,fontStyle:"italic"}}>{alea.motif}</div>}
                     </div>);
                     if(ag&&alea&&(alea.type==="echange"||alea.type==="erreur_cps")){
                       const nomsRemplacants=(alea.agents_concernes||[]).map(cpId=>{
