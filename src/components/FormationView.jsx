@@ -229,7 +229,7 @@ const btnSecondary = { background: "var(--bg-page)", color: "var(--text-secondar
 
 // ─── COMPOSANT RACINE ───────────────────────────────────────────────────────
 
-export default function FormationView({ currentAgent, agentProfiles, setAgentProfiles, refreshSchedule, schedule, cpsSchedule }) {
+export default function FormationView({ currentAgent, agentProfiles, setAgentProfiles, refreshSchedule, schedule, cpsSchedule, cpsAleas }) {
   const agentId = currentAgent?.immatriculation || currentAgent?.cp || currentAgent?.id;
 
   return (
@@ -238,7 +238,7 @@ export default function FormationView({ currentAgent, agentProfiles, setAgentPro
         <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>🎓 Formation</div>
         <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>Tes formations suivies</div>
       </div>
-      <MesFormationsTab agentId={agentId} agent={currentAgent} schedule={schedule} cpsSchedule={cpsSchedule} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
+      <MesFormationsTab agentId={agentId} agent={currentAgent} schedule={schedule} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshSchedule} />
     </div>
   );
 }
@@ -330,7 +330,7 @@ export function AfoView({ currentAgent, agents, refreshProfil, refreshSchedule }
 
 // ─── MES FORMATIONS (tous les agents, uniquement le côté participant) ──────
 
-function MesFormationsTab({ agentId, agent, schedule, cpsSchedule, agentProfiles, setAgentProfiles, refreshSchedule }) {
+function MesFormationsTab({ agentId, agent, schedule, cpsSchedule, cpsAleas, agentProfiles, setAgentProfiles, refreshSchedule }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -348,7 +348,7 @@ function MesFormationsTab({ agentId, agent, schedule, cpsSchedule, agentProfiles
   // fusionné en plus du perso -- voir le commentaire de la fonction elle-même.
   const etudeYear = new Date().getFullYear();
   const agentForCalc = useMemo(() => ({ ...(agent || {}), id: agentId }), [agent, agentId]);
-  const etudeDetail = useMemo(() => computeEtudePosteDetail(agentForCalc, schedule || {}, etudeYear, cpsSchedule || {}), [agentForCalc, schedule, etudeYear, cpsSchedule]);
+  const etudeDetail = useMemo(() => computeEtudePosteDetail(agentForCalc, schedule || {}, etudeYear, cpsSchedule || {}, cpsAleas || []), [agentForCalc, schedule, etudeYear, cpsSchedule, cpsAleas]);
 
   const charger = useCallback(() => {
     setLoading(true);

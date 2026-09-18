@@ -3422,7 +3422,17 @@ function computeDashboardTravail(agent, schedule, year){
 // n'est jamais recompté via CPS (dédup par date, "sans faire de doublons").
 // Reste 100% nominatif ici (c'est déjà la propre donnée de l'agent) --
 // seul Stat'Equip anonymise ce même croisement (voir statsEquipeController.js).
-export function computeEtudePosteDetail(agent, schedule, year, cpsSchedule){
+// 5e paramètre cpsAleas (18/09, optionnel -- absent = comportement inchangé
+// pour tout appelant qui ne le fournit pas) : Olivier, "pour un agent en
+// formation soit absent, il faut pourvoir le rayer et que sa journee ne soit
+// pas decompte en journee de formation" -- un jour où le stagiaire (ou tout
+// le poste) est marqué "🚫 Poste non tenu" via CPS Officiel ne doit jamais
+// compter comme une vraie journée d'étude, même si en_formation=1 est
+// toujours vrai côté planning_cps (l'alea non_tenu et le marqueur "/" sont
+// 2 mécanismes indépendants, voir CLAUDE.md 04/09 et 18/09). Réutilise
+// findAlea (même logique déjà en place pour resoudreTitulaireCps/CPS
+// Officiel : un alea ciblé sur cet agent, ou à défaut "tout le poste").
+export function computeEtudePosteDetail(agent, schedule, year, cpsSchedule, cpsAleas){
   const start = `${year}-01-01`, end = `${year}-12-31`;
   const postes = {};
   let total = 0;
@@ -3472,7 +3482,9 @@ export function computeEtudePosteDetail(agent, schedule, year, cpsSchedule){
     Object.entries(cpsSchedule).forEach(([key,val])=>{
       if(!agent || !key.startsWith(agent.id+"-")) return;
       if(!val?.enFormation) return;
-      traiter(val, key.slice(agent.id.length+1));
+      const dk=key.slice(agent.id.length+1);
+      if(findAlea(cpsAleas, val.jsCode, dk, val.famille, agent.id)?.type==="non_tenu") return;
+      traiter(val, dk);
     });
   }
   return { total, postes: Object.values(postes).sort((a,b)=> b.total-a.total) };
@@ -13939,7 +13951,7 @@ export default function App(){
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="d2i"&&<D2iView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="fim"&&<FimPdfView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} schedule={schedule}/>}
-  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} schedule={schedule} cpsSchedule={cpsSchedule}/>}
+  {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} schedule={schedule} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
   {view==="afo"&&<AfoView currentAgent={currentAgent||currentUser?.agent} agents={agents} refreshProfil={refreshMonProfil} refreshSchedule={refreshMonSchedule}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} themeMode={themeMode} setThemeMode={setThemeMode} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}

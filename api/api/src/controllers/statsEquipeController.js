@@ -457,10 +457,22 @@ async function getStats(req, res) {
        WHERE pp.etude_poste = 1 AND YEAR(pj.date_jour) = ? AND pp.code_poste IS NOT NULL`,
       [year]
     );
+    // 18/09 -- exclut un jour dont le stagiaire (ou tout le poste) est
+    // marque "🚫 Poste non tenu" dans CPS Officiel ce jour-la (Olivier :
+    // "pour un agent en formation soit absent [...] sa journee ne soit pas
+    // decompte en journee de formation") -- meme exclusion que
+    // formationController.js (ETUDE_NON_TENU_EXCLUSION), dupliquee ici,
+    // jamais factorisee entre controleurs (convention du projet).
     const [etudeCpsRows] = await pool.query(
-      `SELECT cp_agent, date_jour, js_code
-       FROM planning_cps
-       WHERE en_formation = 1 AND YEAR(date_jour) = ?`,
+      `SELECT pc.cp_agent, pc.date_jour, pc.js_code
+       FROM planning_cps pc
+       WHERE pc.en_formation = 1 AND YEAR(pc.date_jour) = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM cps_aleas ca
+           WHERE ca.type='non_tenu' AND ca.js_code COLLATE utf8mb4_unicode_ci = pc.js_code
+             AND ca.date_jour=pc.date_jour AND ca.famille COLLATE utf8mb4_unicode_ci = pc.famille
+             AND (ca.agents_concernes IS NULL OR JSON_LENGTH(ca.agents_concernes)=0 OR JSON_CONTAINS(ca.agents_concernes, JSON_QUOTE(pc.cp_agent)))
+         )`,
       [year]
     );
     const etudeMap = new Map(); // clé "cp|date" -> code_poste (court), dédupliqué perso/CPS

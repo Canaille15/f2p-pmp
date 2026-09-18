@@ -536,6 +536,27 @@ const PRESENCE_REELLE = `(
   )
 )`;
 
+// 18/09 -- exclut un jour planning_cps.en_formation=1 des decomptes "etude
+// de poste" quand le stagiaire (ou tout le poste) est marque "🚫 Poste non
+// tenu" ce jour-la dans CPS Officiel (Olivier : "pour un agent en formation
+// soit absent, il faut pourvoir le rayer et que sa journee ne soit pas
+// decompte en journee de formation") -- en_formation reste vrai en base
+// (marqueur "/" SNCF a l'import) mais l'alea non_tenu signale qu'il n'etait
+// en realite pas la ce jour-la, 2 mecanismes independants. Couvre les 2 cas
+// deja geres cote frontend par findAlea : un alea cible precisement sur cet
+// agent (agents_concernes le contient), OU un alea "tout le poste"
+// (agents_concernes vide/absent). Attend un alias `pc` sur planning_cps.
+// COLLATE utf8mb4_unicode_ci sur ca.js_code/ca.famille -- cps_aleas a été
+// créée en utf8mb4_0900_ai_ci (héritage, hors convention du projet) alors
+// que planning_cps suit bien utf8mb4_unicode_ci ; sans ça, MariaDB refuse
+// la comparaison (ER_CANT_AGGREGATE_2COLLATIONS, trouvé en testant).
+const ETUDE_NON_TENU_EXCLUSION = `NOT EXISTS (
+  SELECT 1 FROM cps_aleas ca
+  WHERE ca.type='non_tenu' AND ca.js_code COLLATE utf8mb4_unicode_ci = pc.js_code
+    AND ca.date_jour=pc.date_jour AND ca.famille COLLATE utf8mb4_unicode_ci = pc.famille
+    AND (ca.agents_concernes IS NULL OR JSON_LENGTH(ca.agents_concernes)=0 OR JSON_CONTAINS(ca.agents_concernes, JSON_QUOTE(pc.cp_agent)))
+)`;
+
 // 15/09 (EIA) : une demande EIA (formation_eia_demande, colonne
 // `cp_agent`/`catalogue_id`, PAS de lien direct vers une session précise)
 // est "réalisée" si l'agent a suivi RÉELLEMENT (même règle que
@@ -692,8 +713,8 @@ async function getStats(req, res) {
          FROM planning_periode pp JOIN planning_jour pj ON pj.id = pp.planning_jour_id
          WHERE pp.etude_poste = 1 AND pj.date_jour >= ?
          UNION
-         SELECT cp_agent, date_jour FROM planning_cps
-         WHERE en_formation = 1 AND date_jour >= ?
+         SELECT pc.cp_agent, pc.date_jour FROM planning_cps pc
+         WHERE pc.en_formation = 1 AND pc.date_jour >= ? AND ${ETUDE_NON_TENU_EXCLUSION}
        ) t JOIN agent a ON a.cp = t.cp_agent
        GROUP BY t.cp_agent, a.nom, a.prenom`,
       [anneeDebutParAgent, anneeDebutParAgent]
@@ -735,10 +756,10 @@ async function getStats(req, res) {
       [anneeDebutParAgent]
     );
     const [etudeCpsDetailRows] = await pool.query(
-      `SELECT cp_agent, date_jour, js_code AS code_poste, equipe AS code_equipe
-       FROM planning_cps
-       WHERE en_formation = 1 AND date_jour >= ?
-       ORDER BY cp_agent, date_jour DESC`,
+      `SELECT pc.cp_agent, pc.date_jour, pc.js_code AS code_poste, pc.equipe AS code_equipe
+       FROM planning_cps pc
+       WHERE pc.en_formation = 1 AND pc.date_jour >= ? AND ${ETUDE_NON_TENU_EXCLUSION}
+       ORDER BY pc.cp_agent, pc.date_jour DESC`,
       [anneeDebutParAgent]
     );
     const fmtDEtude = (d) => d instanceof Date ? d.toISOString().slice(0, 10) : d;
@@ -826,9 +847,9 @@ async function getFicheAgent(req, res) {
       [cp, anneeDebut]
     );
     const [etudeCpsRows] = await pool.query(
-      `SELECT date_jour, js_code, equipe FROM planning_cps
-       WHERE cp_agent = ? AND en_formation = 1 AND date_jour >= ?
-       ORDER BY date_jour DESC`,
+      `SELECT pc.date_jour, pc.js_code, pc.equipe FROM planning_cps pc
+       WHERE pc.cp_agent = ? AND pc.en_formation = 1 AND pc.date_jour >= ? AND ${ETUDE_NON_TENU_EXCLUSION}
+       ORDER BY pc.date_jour DESC`,
       [cp, anneeDebut]
     );
     const fmtD = (d) => d instanceof Date ? d.toISOString().slice(0, 10) : d;
