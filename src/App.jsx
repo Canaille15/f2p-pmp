@@ -2761,6 +2761,24 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     // (23/08, branche isDispo) -- ici, corrige a la source pour toutes les
                     // lignes qui passent par ce rendu par defaut (couvre aussi RFT SAM).
                     const alea=findAlea(cpsAleas,row.jsCode,dateKey,row.famille||ag?.famille,ag?.id);
+                    // stagiaire absent (19/09, demande d'Olivier) : un agent en
+                    // formation-doublon marque "non_tenu" n'est plus affiche comme
+                    // "Poste non tenu" -- ce libelle reste reserve au vrai suivi
+                    // (pause figee auto, stat "Postes non tenus"), qui continue de
+                    // se baser sur ce meme alea non_tenu, strictement inchange cote
+                    // donnees/calcul. Seul l'affichage change ici : nom raye +
+                    // "Absent" ; le titulaire (jamais en doublon) garde le rendu
+                    // "Poste non tenu" normal juste en dessous.
+                    if(ag&&alea&&alea.type==="non_tenu"&&isEnFormationDoublon)return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#f8fafc",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <Av initials={ag.initials} size={20} famille={ag.famille}/>
+                        <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
+                        <span style={{fontSize:10,fontWeight:700,color:"#64748b",whiteSpace:"nowrap"}}>🚫 Absent</span>
+                        {!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,rowAgents:rowAgentsTries,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#64748b",opacity:.6,marginLeft:"auto"}}>✎</button>
+                        <button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#64748b",opacity:.6}}>✕</button></>}
+                      </div>
+                      {alea.motif&&<div style={{fontSize:10,color:"#64748b",paddingLeft:26,fontStyle:"italic"}}>{alea.motif}</div>}
+                    </div>);
                     if(ag&&alea&&alea.type==="non_tenu")return(<div key={si} style={{display:"flex",flexDirection:"column",gap:2,background:"#fff7ed",border:"1.5px solid #fb923c",borderRadius:9,padding:"4px 9px"}}>
                       <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <span style={{fontSize:16}}>⚠️</span>
