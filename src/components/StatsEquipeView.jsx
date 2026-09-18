@@ -701,6 +701,7 @@ function DispoSection({ data }) {
   const [ouvert, setOuvert] = useState(false);
   const identifie = data.identifie || { total: 0, parDate: [] };
   const anonyme = data.anonyme || { total: 0, entries: [] };
+  const nonTenu = data.nonTenu || { total: 0, entries: [] };
   return (
     <div style={card}>
       <SectionHeader icon="📢" titre="Dispo" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} />
@@ -712,6 +713,14 @@ function DispoSection({ data }) {
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
         Journées où un agent est disponible sans poste à tenir — soit détecté directement (DISPO réel importé en CPS Officiel, ou sélectionné dans le planning perso), soit signalé par message libre dans CPS Officiel. Chiffre toujours anonymisé, aucun nom.
       </div>
+      {nonTenu.total > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--border)" }}>
+          <Tuile label="Signalé « Poste non tenu » par erreur" valeur={nonTenu.total} />
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+            DISPO n'est pas un vrai poste — ces signalements ne comptent jamais dans « Postes non tenus » ci-dessous, compté ici à part.
+          </div>
+        </div>
+      )}
       {ouvert && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           {identifie.parDate.length > 0 && (
@@ -731,6 +740,18 @@ function DispoSection({ data }) {
               <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 4 }}>Message libre</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {anonyme.entries.map((e, i) => (
+                  <div key={i} style={{ fontSize: 11.5, color: "var(--text-secondary)", borderTop: "1px solid var(--border)", paddingTop: 4 }}>
+                    {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {nonTenu.entries.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 4 }}>Signalé « Poste non tenu » par erreur</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {nonTenu.entries.map((e, i) => (
                   <div key={i} style={{ fontSize: 11.5, color: "var(--text-secondary)", borderTop: "1px solid var(--border)", paddingTop: 4 }}>
                     {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
                   </div>

@@ -349,12 +349,27 @@ async function getStats(req, res) {
     const ageMoyenParAnnee = anneesCoverage.map(y => computeAgeMoyenAnnee(y));
 
     // ─── Postes non tenus (#7) ──────────────────────────────────────────────
-    const [nonTenusRows] = await pool.query(
+    // js_code != 'DISPO' (19/09, Olivier : "tu as mis les dispo comme des
+    // postes non tenu. c'est pas le cas. tu sors les dispos de ce decompte
+    // et fais un compteur distinct des dispos.") -- DISPO n'est pas un vrai
+    // poste (juste un statut "agent present, aucune affectation precise"),
+    // "non tenu" n'a structurellement aucun sens pour ce cas -- pourtant
+    // rien n'empeche de le signaler via le meme bouton 🔄 generique que
+    // n'importe quelle carte de poste (AleaPopup ne distingue jamais le
+    // type de ligne). 4 entrees reelles confirmees en base (17/09, creees
+    // via ce bouton sur la ligne "🟩 Disponibles"). Exclues ici du decompte
+    // "Postes non tenus" (jamais supprimees en base, juste ecartees de cette
+    // agregation) -- comptees a part plus bas, dans le bloc Dispo
+    // (dispo.nonTenu), pour ne rien perdre tout en ne les melangeant plus
+    // aux vrais postes.
+    const [nonTenusRowsRaw] = await pool.query(
       `SELECT id, js_code, date_jour, motif FROM cps_aleas
        WHERE type = 'non_tenu' AND date_jour BETWEEN ? AND ?
        ORDER BY js_code, date_jour`,
       [from, to]
     );
+    const nonTenusRows = nonTenusRowsRaw.filter(r => r.js_code !== 'DISPO');
+    const dispoNonTenuRows = nonTenusRowsRaw.filter(r => r.js_code === 'DISPO');
     // Marqueur "ça te concerne" (13/09, Olivier : "l'asterisque ne concerne
     // que l'agent qui regarde. les autres ont surement des asterisques
     // ailleurs") -- pour les entrées "Pauseur" (12/09, génération auto de
@@ -567,6 +582,20 @@ async function getStats(req, res) {
       anonyme: {
         total: dispoAnonymeRows.length,
         entries: dispoAnonymeRows.map(r => ({
+          date_jour: fmtD(r.date_jour),
+          motif: r.motif || null,
+        })),
+      },
+      // Compteur distinct (19/09) : signalements "Poste non tenu" faits par
+      // erreur sur la ligne "🟩 Disponibles" (via le bouton 🔄 generique,
+      // qui ne distingue jamais le type de ligne) -- jamais un vrai poste,
+      // donc jamais compte dans "Postes non tenus" (voir plus haut) ni dans
+      // dispo.total (qui reste identifie+anonyme, inchange) -- juste garde
+      // ici, a part, anonyme comme le reste de ce bloc (agents_concernes
+      // toujours vide pour ce type).
+      nonTenu: {
+        total: dispoNonTenuRows.length,
+        entries: dispoNonTenuRows.map(r => ({
           date_jour: fmtD(r.date_jour),
           motif: r.motif || null,
         })),
