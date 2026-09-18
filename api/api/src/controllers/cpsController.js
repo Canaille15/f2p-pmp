@@ -37,10 +37,16 @@ async function getLastImport(req, res) {
     // d.famille des lors que la selection contient b.id/importe_le/importe_par
     // (non fonctionnellement dependants de d.famille aux yeux du moteur, meme
     // si en pratique un seul batch matche toujours le MAX par famille).
+    // pdf_edite_le (18/09, Olivier : "je veux la ref reel du pdf avec sa
+    // date et son heure de creation. elle est sur le pdf [...] ca permet
+    // d'eviter des import inutile") -- capturee par le frontend depuis le
+    // texte du document ("Edition le JJ/MM/AAAA, HH:MM") au moment de
+    // l'import, stockee sur le batch. Absente (NULL) si le document ne
+    // porte pas cette mention -- jamais bloquant.
     const parFamille = {};
     for (const fam of ['PRCI', 'PAR']) {
       const [rows2] = await pool.query(
-        `SELECT b.id AS batch_id, b.importe_le, b.importe_par, a.nom, a.prenom
+        `SELECT b.id AS batch_id, b.importe_le, b.importe_par, b.pdf_edite_le, a.nom, a.prenom
          FROM cps_import_detail d
          JOIN cps_import_batch b ON b.id = d.batch_id AND b.annule_le IS NULL
          LEFT JOIN agent a ON a.cp = b.importe_par
@@ -70,7 +76,7 @@ async function getLastImport(req, res) {
 // Enregistre aussi un lot d'historique (avant/apres par ligne) pour permettre
 // d'annuler l'import, et purge les lots de plus de 90 jours au passage.
 async function importCps(req, res) {
-  const { entries, clears } = req.body;
+  const { entries, clears, pdf_edite_le } = req.body;
   const clearsList = Array.isArray(clears) ? clears : [];
   if (!entries?.length && !clearsList.length) return res.status(400).json({ error: 'Entrées requises' });
   const conn = await pool.getConnection();
@@ -103,8 +109,8 @@ async function importCps(req, res) {
       details.push({ cp_agent: c.cp_agent, date_jour: c.date_jour, famille: avant.famille, avant, apres: null });
     }
     const [batchResult] = await conn.query(
-      'INSERT INTO cps_import_batch (importe_par, nb_entrees) VALUES (?, ?)',
-      [req.agent.cp, details.length]);
+      'INSERT INTO cps_import_batch (importe_par, nb_entrees, pdf_edite_le) VALUES (?, ?, ?)',
+      [req.agent.cp, details.length, pdf_edite_le || null]);
     const batchId = batchResult.insertId;
     for (const { cp_agent, date_jour, famille, avant, apres } of details) {
       // apres_equipe et apres_en_formation sont NOT NULL en base (schema verifie

@@ -2139,6 +2139,19 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         text=text.replace(/\b(PI|PA)([A-Z]{2,4}) ([A-Z0-9]{1,3}[-OXJ%]?)\b/g,"$1$2$3");
         if(!text) throw new Error("Aucun texte extrait du document");
 
+        // Reference reelle du PDF (18/09, Olivier : "je veux la ref reel du
+        // pdf avec sa date et son heure de creation. elle est sur le pdf
+        // [...] ca permet d'eviter des import inutile") -- meme regex
+        // "Edition le JJ/MM/AAAA, HH:MM" deja connue et verifiee sur les
+        // bulletins de commande SNCF (parseBulletinCommande plus haut dans
+        // ce fichier), jamais reliee a l'import CPS Officiel jusqu'ici.
+        // Purement optionnel : absente si le document ne porte pas cette
+        // mention (feuille scannee/degradee) -- aucune erreur, aucun blocage.
+        const editionMatch=text.match(/Edition le\s*(\d{2})[\/1](\d{2})\/(\d{4})\s*,?\s*(\d{2}):(\d{2})/i);
+        const pdfEditeLe=editionMatch
+          ? `${editionMatch[3]}-${editionMatch[2]}-${editionMatch[1]} ${editionMatch[4]}:${editionMatch[5]}:00`
+          : null;
+
         // Regex date tolerante (14/08) : certaines pages de ces feuilles de
         // presence natives perdent le ":" ("DU   14/0812026" au lieu de
         // "DU:   14/08/2026") et/ou un "/" se lit comme un "1" — meme defaut
@@ -2428,7 +2441,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         // On ne sauvegarde pas tout de suite : on affiche un récap et on attend
         // une confirmation explicite avant d'écraser le planning officiel partagé.
         const nbFormation=updates.filter(u=>u.enFormation).length;
-        setPendingImport({date:dateStr,nb,ecarts:ec,nbFormation,updates,clears});
+        setPendingImport({date:dateStr,nb,ecarts:ec,nbFormation,updates,clears,pdfEditeLe});
       }catch(err){
         alert("Erreur import CPS : "+err.message);
       }
@@ -2440,7 +2453,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
 
   const confirmerImport=async()=>{
     if(!pendingImport) return;
-    const {date:dateStr,nb,ecarts:ec,updates,clears}=pendingImport;
+    const {date:dateStr,nb,ecarts:ec,updates,clears,pdfEditeLe}=pendingImport;
     setSavingImport(true);
     try{
       // Sauvegarder en base via API (persistance Railway) — si ça échoue, on ne
@@ -2455,7 +2468,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         horaires: u.horaires,
         famille: u.famille,
         en_formation: u.enFormation?1:0,
-      })),(clears||[]).map(c=>({cp_agent:c.cp_agent,date_jour:c.date_jour})));
+      })),(clears||[]).map(c=>({cp_agent:c.cp_agent,date_jour:c.date_jour})),pdfEditeLe);
 
       setSchedule(prev=>{
         const next={...prev};
@@ -2501,6 +2514,28 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
             {pf.PAR&&<span style={{fontSize:10.5,color:"#93C5FD"}}>PAR : {fmt(pf.PAR)}</span>}
           </>);
         })()}
+        {(()=>{
+          // Réf. réelle du PDF (18/09, suite -- Olivier : "tu laisse dernier
+          // import comme c'est tu rajoute les ref des pdf ou 1 pdf si c'est
+          // un pdf global") : la date/heure "Edition le..." imprimée SUR le
+          // document lui-même (pdf_edite_le), pas la date de l'action
+          // d'import — permet de repérer un PDF déjà importé sans avoir à
+          // relire toutes les lignes. Purement additif, sous les lignes
+          // existantes, jamais affiché si le document ne porte pas cette
+          // mention (feuille scannée/dégradée).
+          const pf=dernierImport?.parFamille;
+          if(!pf) return null;
+          const fmtRef=d=>new Date(d).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+          if(dernierImport.isGlobal){
+            if(!pf.PRCI?.pdf_edite_le) return null;
+            return(<span style={{fontSize:10.5,color:"#dbeafe",fontStyle:"italic"}}>📄 PDF : édité le {fmtRef(pf.PRCI.pdf_edite_le)}</span>);
+          }
+          if(!pf.PRCI?.pdf_edite_le && !pf.PAR?.pdf_edite_le) return null;
+          return(<>
+            {pf.PRCI?.pdf_edite_le&&<span style={{fontSize:10.5,color:"#dbeafe",fontStyle:"italic"}}>📄 PDF PRCI : édité le {fmtRef(pf.PRCI.pdf_edite_le)}</span>}
+            {pf.PAR?.pdf_edite_le&&<span style={{fontSize:10.5,color:"#dbeafe",fontStyle:"italic"}}>📄 PDF PAR : édité le {fmtRef(pf.PAR.pdf_edite_le)}</span>}
+          </>);
+        })()}
       </div>
     </div>}
 
@@ -2511,6 +2546,22 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         {pendingImport.nbFormation>0&&<> · 🎓 {pendingImport.nbFormation} en doublon/formation</>}
         {pendingImport.clears?.length>0&&<> · 🕳️ {pendingImport.clears.length} poste{pendingImport.clears.length>1?"s":""} redevenu{pendingImport.clears.length>1?"s":""} vacant{pendingImport.clears.length>1?"s":""} (agent précédent retiré)</>}
       </div>
+      {pendingImport.pdfEditeLe&&<div style={{fontSize:11,color:"#92400e",fontStyle:"italic"}}>📄 Ce PDF a été édité le {new Date(pendingImport.pdfEditeLe).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>}
+      {(()=>{
+        // Avertissement "import inutile" (18/09, Olivier : "ca permet
+        // d'eviter des import inutile") : si la ref reelle de CE pdf
+        // (pdfEditeLe) correspond deja a celle du dernier import connu pour
+        // au moins une des familles concernees par ce lot, c'est tres
+        // probablement le meme document deja importe -- purement informatif,
+        // ne bloque jamais la confirmation (le doc a pu etre corrige/reedite
+        // avec la meme minute d'edition, cas rare mais possible).
+        if(!pendingImport.pdfEditeLe) return null;
+        const familles=new Set((pendingImport.updates||[]).map(u=>u.famille).filter(Boolean));
+        const pf=dernierImport?.parFamille;
+        const dejaVu=[...familles].filter(f=>pf?.[f]?.pdf_edite_le && new Date(pf[f].pdf_edite_le).getTime()===new Date(pendingImport.pdfEditeLe).getTime());
+        if(!dejaVu.length) return null;
+        return(<div style={{fontSize:11,color:"#b91c1c",fontWeight:700}}>⚠️ Même édition déjà importée pour {dejaVu.join(" et ")} — ce document a peut-être déjà été traité.</div>);
+      })()}
       <div style={{fontSize:11,color:"#92400e",opacity:.85}}>Ça va remplacer le planning officiel partagé pour cette date. Vérifie que c'est le bon document avant de valider.</div>
       <div style={{display:"flex",gap:8}}>
         <button onClick={()=>setPendingImport(null)} disabled={savingImport} style={{padding:"8px 16px",background:"#fff",color:"#92400e",border:"1.5px solid #fbbf24",borderRadius:8,cursor:savingImport?"default":"pointer",fontSize:12,fontWeight:700}}>Annuler</button>
