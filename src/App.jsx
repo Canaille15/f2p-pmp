@@ -1511,6 +1511,27 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
         const hasFormationDoublon=!isPrevisionnel&&ags.some(a=>schedule[`${a.id}-${dateKey}`]?.enFormation);
         rows.push({poste:{...poste,label:`${jsCode} · ${poste.label}`},jsCode,agents:ags,famille:"PAR",isJournee:false,maxSlots:(isPrevisionnel||hasFormationDoublon)?Math.max(ags.length,1):1});
       });
+      // Renfort samedi (RFT SAM) — remonte ici (20/09, Olivier : "remonter le
+      // renfort SAM et le mettre en dessous du PAAC2O · Aide AC PAR", en test
+      // ("on le fait pour voir")) : deplace depuis la section DIVERS (tout en
+      // bas de page) -- structurellement toujours un poste de Soiree
+      // (types:["AM"] dans DayEditPopup, shift:"AM" dans le registre des
+      // postes, ligne ~3380), jamais saisi sur une autre vacation, donc
+      // toujours a sa place ici. AC2 (Aide AC PAR) est deja le DERNIER poste
+      // PAR 3x8 a avoir un code Soiree (CT AC Travaux n'en a pas, AM:null) --
+      // cette ligne atterrit donc naturellement juste apres PAAC2O, sans tri
+      // supplementaire. Volontairement DANS le bloc filterF!=="PRCI" (visible
+      // sous "PAR"/"Tous", masque sous "PRCI" -- Olivier a confirme ce
+      // changement de comportement, RFT SAM etant structurellement PAR).
+      // Partagee avec Planning Previsionnel (meme fonction, buildSections),
+      // confirme voulu par Olivier ("previsionnel aussi") -- aucun guard
+      // isPrevisionnel ici, comme avant ce deplacement.
+      if(p.id==="AM"){
+        const renfortsSamedi=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.jsCode==="RFT SAM";});
+        if(renfortsSamedi.length>0){
+          rows.push({poste:{jsCode:"RFT SAM",label:"Renfort samedi",subtitle:""},jsCode:"RFT SAM",agents:renfortsSamedi,famille:null,maxSlots:99});
+        }
+      }
     }
 
     // Journée PAR principaux (PAPAUJ, PAASMJ)
@@ -1582,11 +1603,9 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
     // cacher un si jamais plus de 5 sont presents un jour donne.
     diversRows.push({poste:{jsCode:"DISPO",label:"Disponibles",subtitle:""},jsCode:"DISPO",agents:dispos,famille:null,isDispo:true,maxSlots:5});
   }
-  // Renfort samedi (RFT SAM) - poste occasionnel, affiche uniquement si detecte
-  const renfortsSamedi=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.jsCode==="RFT SAM";});
-  if(renfortsSamedi.length>0){
-    diversRows.push({poste:{jsCode:"RFT SAM",label:"Renfort samedi",subtitle:""},jsCode:"RFT SAM",agents:renfortsSamedi,famille:null,maxSlots:99});
-  }
+  // Renfort samedi (RFT SAM) : deplace le 20/09 dans la section Soiree
+  // (juste apres PAAC2O · Aide AC PAR), voir commentaire plus haut dans le
+  // bloc PAR 3x8 -- plus construit ici.
   // Journee equipe (JEQ, 23/08, demande par Olivier : "et pour journee
   // d'equipe aussi") -- meme raisonnement que DISPO ci-dessus : un JEQ saisi
   // dans le perso (equipe:"J", jsCode:"JEQ") n'apparaissait nulle part,
