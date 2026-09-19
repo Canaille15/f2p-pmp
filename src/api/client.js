@@ -824,6 +824,34 @@ export const usage = {
   getStats: () => apiFetch('/usage/stats'),
 };
 
+// ─── MODULE ASTREINTE (20/09, saisie 100% manuelle, jamais alimenté par un
+// import PDF — petit annuaire dédié sans CP, voir add_astreinte.js) ────────────
+
+export const astreinte = {
+  getAgents: () => apiFetch('/astreinte/agents'),
+  createAgent: (nom, prenom) => apiFetch('/astreinte/agents', { method: 'POST', body: JSON.stringify({ nom, prenom }) }),
+  updateAgent: (id, nom, prenom) => apiFetch(`/astreinte/agents/${id}`, { method: 'PUT', body: JSON.stringify({ nom, prenom }) }),
+  deleteAgent: (id) => apiFetch(`/astreinte/agents/${id}`, { method: 'DELETE' }),
+  /** Retourne un objet { "YYYY-MM-DD": {astreinteAgentId, nom, prenom} | undefined } */
+  async getSchedule(from, to) {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    const rows = await apiFetch(`/astreinte?${params.toString()}`);
+    if (!rows) return {};
+    const result = {};
+    rows.forEach((row) => {
+      const date = row.date_jour ? row.date_jour.split('T')[0] : row.date_jour;
+      if (row.astreinte_agent_id) {
+        result[date] = { astreinteAgentId: row.astreinte_agent_id, nom: row.nom, prenom: row.prenom };
+      }
+    });
+    return result;
+  },
+  setJour: (date, astreinteAgentId) => apiFetch(`/astreinte/${date}`, { method: 'PUT', body: JSON.stringify({ astreinte_agent_id: astreinteAgentId }) }),
+  setSemaine: (date, astreinteAgentId) => apiFetch('/astreinte/semaine', { method: 'POST', body: JSON.stringify({ date, astreinte_agent_id: astreinteAgentId }) }),
+};
+
 // ─── MODULE CPS (planning officiel SNCF importé) ──────────────────────────────
 
 export const cps = {
@@ -1189,6 +1217,7 @@ const api = {
   formation,
   statsEquipe,
   usage,
+  astreinte,
 };
 
 export default api;
