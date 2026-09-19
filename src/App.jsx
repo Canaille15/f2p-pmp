@@ -1575,7 +1575,12 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
   // agent au sein du meme .filter(), jamais une deuxieme ligne.
   const dispos=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&(en.equipe==="DISPO"||en.jsCode==="DISPO");});
   if(dispos.length>0){
-    diversRows.push({poste:{jsCode:"DISPO",label:"Disponibles",subtitle:""},jsCode:"DISPO",agents:dispos,famille:null,isDispo:true,maxSlots:99});
+    // maxSlots:5 (20/09, Olivier -- "jusqu'a 5 agents dispo") : purement le
+    // badge "x5" visuel (meme convention que les autres postes multi-agents,
+    // ligne 2748) -- le rendu isDispo (ligne ~2756) mappe toujours TOUS les
+    // vrais agents dispo sans jamais les tronquer, donc aucun risque d'en
+    // cacher un si jamais plus de 5 sont presents un jour donne.
+    diversRows.push({poste:{jsCode:"DISPO",label:"Disponibles",subtitle:""},jsCode:"DISPO",agents:dispos,famille:null,isDispo:true,maxSlots:5});
   }
   // Renfort samedi (RFT SAM) - poste occasionnel, affiche uniquement si detecte
   const renfortsSamedi=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.jsCode==="RFT SAM";});
@@ -2746,7 +2751,13 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                 {fam&&<span style={{fontSize:9,background:fam.accent,color:"#fff",borderRadius:10,padding:"1px 7px",fontWeight:800}}>{row.famille}</span>}
                 {row.allowFormation&&<span style={{fontSize:9,background:"#bbf7d0",color:"#14532d",borderRadius:10,padding:"1px 6px",fontWeight:700}}>/F</span>}
                 {(row.maxSlots||1)>1&&row.maxSlots<99&&<span style={{fontSize:9,background:"#dbeafe",color:"#1e40af",borderRadius:10,padding:"1px 5px",fontWeight:700}}>×{row.maxSlots}</span>}
-                {isPrevisionnel&&nbTitulaires>1&&<span style={{fontSize:12,background:"#fee2e2",color:"#dc2626",borderRadius:10,padding:"2px 8px",fontWeight:800}}>⚠ Conflit</span>}
+                {/* !row.isDispo (20/09, Olivier) : sur la ligne "Disponibles",
+                    plusieurs agents en meme temps est normal (ils n'occupent
+                    aucun poste, juste "presents sans affectation") -- jamais
+                    un vrai conflit comme 2 titulaires contradictoires sur un
+                    vrai poste. Le reste (nbTitulaires>1 sur un vrai poste)
+                    reste strictement inchange. */}
+                {isPrevisionnel&&!row.isDispo&&nbTitulaires>1&&<span style={{fontSize:12,background:"#fee2e2",color:"#dc2626",borderRadius:10,padding:"2px 8px",fontWeight:800}}>⚠ Conflit</span>}
               </div>
               <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginTop:3}}>{pJ?`${pJ.jsCode} · ${pJ.label}`:row.poste.label}</div>
               {pJ?.subtitle&&<div style={{fontSize:10,color:"#1e293b",fontWeight:600,fontStyle:"italic"}}>{pJ.subtitle}</div>}
