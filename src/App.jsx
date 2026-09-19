@@ -3027,6 +3027,12 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
 
     </div>
 
+    {/* Astreinte (20/09, remonté avant "Non renseignés" le même jour) : tout
+        en bas de CPS Officiel uniquement, jamais dans Planning Prévisionnel
+        -- voir AstreinteView.jsx pour le contexte complet (module 100%
+        indépendant, saisie manuelle uniquement). */}
+    {!isPrevisionnel&&<AstreinteRow dateKey={dateKey}/>}
+
     {/* Non renseignés */}
     <details style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:12}}>
       <summary style={{padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:700,color:"#64748b",display:"flex",alignItems:"center",gap:8,listStyle:"none"}}>
@@ -3049,10 +3055,6 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     {!isPrevisionnel&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#475569",lineHeight:1.6,maxWidth:620}}>
       La feuille de présence officielle ne peut pas être modifiée ici.<br/>Seuls les signalements 🔄 (échange de poste, erreur CPS) viennent s’ajouter par-dessus, à titre indicatif.
     </div>}
-    {/* Astreinte (20/09) : tout en bas de CPS Officiel uniquement, jamais
-        dans Planning Prévisionnel -- voir AstreinteView.jsx pour le contexte
-        complet (module 100% indépendant, saisie manuelle uniquement). */}
-    {!isPrevisionnel&&<AstreinteRow dateKey={dateKey}/>}
     {isPrevisionnel&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#475569",lineHeight:1.6,maxWidth:620}}>
       Ici, chaque agent partage volontairement son planning personnel (à activer dans Mon Profil) pour aider à s’organiser collectivement.<br/>Seules les journées de travail sont partagées — le reste (congés, absences...) ne l’est pas.<br/>Ces informations restent indicatives et ne remplacent jamais la feuille de présence officielle — en cas d’écart, rapproche-toi de l’encadrement.
     </div>}
