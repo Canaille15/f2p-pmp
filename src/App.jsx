@@ -2542,44 +2542,35 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <span style={{fontSize:20}}>📋</span>
       <div style={{display:"flex",flexDirection:"column",gap:2,flex:1,minWidth:200}}>
         <span style={{fontSize:15,fontWeight:800,color:"#fff"}}>FEUILLE DE PRESENCE JOURNALIERE</span>
-        <span style={{fontSize:11,color:"#BFDBFE"}}>
-          {dernierImport?.importe_le
-            ? `Dernier import : ${new Date(dernierImport.importe_le).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}${dernierImport.prenom?` par ${dernierImport.prenom} ${dernierImport.nom}`:""}`
-            : "Aucun import pour l'instant"}
-        </span>
         {(()=>{
+          // Bandeau simplifie le 19/09 (Olivier : "trop charge [...] le
+          // bandeau s'agrandit trop") -- fusionne en UNE ligne par famille ce
+          // qui prenait avant 3 lignes separees (import generique + import
+          // par famille + edition du pdf par famille). fmt() reste un simple
+          // new Date().toLocaleString(): pdf_edite_le est desormais renvoye
+          // par le backend en chaine SANS "Z" (voir cpsController.js), donc
+          // interprete comme une heure locale, sans decalage -- importe_le
+          // reste un vrai NOW(), inchange.
+          const fmt=d=>new Date(d).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
           const pf=dernierImport?.parFamille;
-          if(!pf||(!pf.PRCI&&!pf.PAR)) return null;
-          const fmt=r=>`${new Date(r.importe_le).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}${r.prenom?` par ${r.prenom} ${r.nom}`:""}`;
-          if(dernierImport.isGlobal){
-            return(<span style={{fontSize:10.5,color:"#93C5FD"}}>PRCI + PAR (import global) : {fmt(pf.PRCI)}</span>);
+          const ligne=(r,label)=>{
+            const pdfPart=r.pdf_edite_le?`PDF ${label} du ${fmt(r.pdf_edite_le)}`:label;
+            const par=r.prenom?` ${r.prenom} ${r.nom}`:"";
+            return `${pdfPart} — importé par${par||" ?"} le ${fmt(r.importe_le)}`;
+          };
+          if(pf?.PRCI||pf?.PAR){
+            if(dernierImport.isGlobal){
+              return(<span style={{fontSize:11,color:"#BFDBFE"}}>{ligne(pf.PRCI,"PRCI + PAR")}</span>);
+            }
+            return(<>
+              {pf.PRCI&&<span style={{fontSize:11,color:"#BFDBFE"}}>{ligne(pf.PRCI,"PRCI")}</span>}
+              {pf.PAR&&<span style={{fontSize:11,color:"#BFDBFE"}}>{ligne(pf.PAR,"PAR")}</span>}
+            </>);
           }
-          return(<>
-            {pf.PRCI&&<span style={{fontSize:10.5,color:"#93C5FD"}}>PRCI : {fmt(pf.PRCI)}</span>}
-            {pf.PAR&&<span style={{fontSize:10.5,color:"#93C5FD"}}>PAR : {fmt(pf.PAR)}</span>}
-          </>);
-        })()}
-        {(()=>{
-          // Réf. réelle du PDF (18/09, suite -- Olivier : "tu laisse dernier
-          // import comme c'est tu rajoute les ref des pdf ou 1 pdf si c'est
-          // un pdf global") : la date/heure "Edition le..." imprimée SUR le
-          // document lui-même (pdf_edite_le), pas la date de l'action
-          // d'import — permet de repérer un PDF déjà importé sans avoir à
-          // relire toutes les lignes. Purement additif, sous les lignes
-          // existantes, jamais affiché si le document ne porte pas cette
-          // mention (feuille scannée/dégradée).
-          const pf=dernierImport?.parFamille;
-          if(!pf) return null;
-          const fmtRef=d=>new Date(d).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-          if(dernierImport.isGlobal){
-            if(!pf.PRCI?.pdf_edite_le) return null;
-            return(<span style={{fontSize:10.5,color:"#dbeafe",fontStyle:"italic"}}>📄 PDF : édité le {fmtRef(pf.PRCI.pdf_edite_le)}</span>);
+          if(dernierImport?.importe_le){
+            return(<span style={{fontSize:11,color:"#BFDBFE"}}>Dernier import : {fmt(dernierImport.importe_le)}{dernierImport.prenom?` par ${dernierImport.prenom} ${dernierImport.nom}`:""}</span>);
           }
-          if(!pf.PRCI?.pdf_edite_le && !pf.PAR?.pdf_edite_le) return null;
-          return(<>
-            {pf.PRCI?.pdf_edite_le&&<span style={{fontSize:10.5,color:"#dbeafe",fontStyle:"italic"}}>📄 PDF PRCI : édité le {fmtRef(pf.PRCI.pdf_edite_le)}</span>}
-            {pf.PAR?.pdf_edite_le&&<span style={{fontSize:10.5,color:"#dbeafe",fontStyle:"italic"}}>📄 PDF PAR : édité le {fmtRef(pf.PAR.pdf_edite_le)}</span>}
-          </>);
+          return(<span style={{fontSize:11,color:"#BFDBFE"}}>Aucun import pour l'instant</span>);
         })()}
       </div>
     </div>}

@@ -46,7 +46,18 @@ async function getLastImport(req, res) {
     const parFamille = {};
     for (const fam of ['PRCI', 'PAR']) {
       const [rows2] = await pool.query(
-        `SELECT b.id AS batch_id, b.importe_le, b.importe_par, b.pdf_edite_le, a.nom, a.prenom
+        // pdf_edite_le est une heure "murale" extraite du texte du PDF (ex:
+        // 16h45 imprime sur le document), sans aucun sens de fuseau reel --
+        // jamais un vrai NOW(). La renvoyer comme un objet Date (via mysql2)
+        // la fait passer par un aller-retour UTC (JSON.stringify -> "...Z")
+        // puis re-localiser cote navigateur -- decalage de 2h en ete (CEST)
+        // constate par Olivier le 19/09 (16h45 reel affiche 18h45). Formatee
+        // ici en simple chaine ISO SANS "Z" : le navigateur la reinterprete
+        // comme une heure locale (pas UTC), donc reaffichee telle quelle,
+        // sans aucun decalage. importe_le reste un vrai NOW(), non touche.
+        `SELECT b.id AS batch_id, b.importe_le, b.importe_par,
+                DATE_FORMAT(b.pdf_edite_le,'%Y-%m-%dT%H:%i:%s') AS pdf_edite_le,
+                a.nom, a.prenom
          FROM cps_import_detail d
          JOIN cps_import_batch b ON b.id = d.batch_id AND b.annule_le IS NULL
          LEFT JOIN agent a ON a.cp = b.importe_par
