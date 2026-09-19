@@ -331,7 +331,7 @@
   <div class="logo">🚆</div>
   <h1>Notice d'utilisation — F2P.PMP</h1>
   <p>L'outil de planning partagé de tous les agents PRCI et PAR de Paris Montparnasse. Ce guide explique, module par module, comment s'en servir et les règles qui s'appliquent derrière chaque écran.</p>
-  <div class="meta">Dernière mise à jour : 18 septembre 2026</div>
+  <div class="meta">Dernière mise à jour : 19 septembre 2026</div>
   <button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
 </div>
 
@@ -597,6 +597,7 @@
         <p>Pour noter une journée d'étude de poste, saisis ta journée normalement (Matinée/Soirée/Nuit/Journée, puis le poste parmi ceux où tu es habilité — exactement comme pour une vraie tenue de poste) — la seule différence est de cocher en plus <span class="b">🎓 En étude de poste</span>.</p>
         <p>Une fois enregistrée, la journée s'ajoute automatiquement en second sur ce poste dans le <a href="#previsionnel">Planning Prévisionnel</a>, à côté du titulaire déjà prévu — jamais à la place. Elle est signalée par un badge <span class="b">🎓 Étude</span> plutôt que par le badge rouge « ⚠ Conflit » habituel, qui continue de s'afficher normalement si deux vrais titulaires se retrouvent sur le même poste. Sur ordinateur, l'agent en étude apparaît à droite du titulaire ; sur téléphone, en dessous.</p>
         <p>Dans « Jours travaillés » (panneau compteurs), ces journées comptent comme des journées de <strong>Formation</strong> — jamais comme un poste tenu, pour ne jamais fausser ton décompte réel de postes. Le détail par poste et par vacation (« AC LNE — 11 jours : 4 matinées, 4 nuits, 3 soirées ») se retrouve dans le module <a href="#formation-compteur">Formation</a>. Dans <a href="#stat-equip">Stat'Equip</a>, seul un total anonyme (nombre de jours, nombre d'agents formés) est visible par poste, aucun nom.</p>
+        <p>Le décompte fusionne, depuis le début de l'année en cours, ta saisie perso <strong>et</strong> ce que la feuille de présence <a href="#cps-officiel">CPS Officiel</a> détecte automatiquement (le marqueur « / » de doublon formation, imprimé par le système SNCF) — sans jamais compter deux fois le même jour. Un jour où tu es en formation-doublon sur CPS Officiel et signalé <span class="b">🚫 Absent</span> ce jour précis (voir <a href="#cps-officiel">CPS Officiel</a>) est en revanche <strong>exclu</strong> du décompte : une absence ne compte pas comme une journée d'étude réellement suivie.</p>
       </div>
     </section>
 
@@ -745,7 +746,7 @@
       <p>Les 3 dernières fêtes de l'année (novembre-décembre) débordent sur le premier trimestre de l'année suivante — une section dédiée « Report N-1 » les affiche dans le tableau de bord de l'année qui suit, avec un délai limite fixé au 31 mars. Sur la case du planning, un code placé en report affiche l'année de la fête entre parenthèses — ex. <span class="b">🩷 F8 (2026)</span> si le 1<sup>er</sup> novembre 2026 est pris en janvier 2027 — pour lever toute ambiguïté ; la vraie date de la fête, elle, n'affiche jamais d'année.</p>
 
       <h3>⛔ Date limite de prise</h3>
-      <p>Une fois la date limite dépassée (fin du trimestre civil suivant — ou le 31 mars pour un report N-1, voir ci-dessus), le code de la fête ne peut plus être sélectionné dans le planning perso : le bouton se grise avec un message expliquant la date limite dépassée. Un code déjà placé avant ce blocage reste toujours retirable, pour pouvoir corriger une saisie faite par erreur.</p>
+      <p>Une fois la date limite dépassée (fin du trimestre civil suivant — ou le 31 mars pour un report N-1, voir ci-dessus), le code de la fête ne peut plus être sélectionné dans le planning perso : le bouton se grise avec un message expliquant la date limite dépassée. Une fête déjà déterminée <strong>PERDUE</strong> (ex. tombée un dimanche, voir la règle ci-dessus) est bloquée de la même façon, avec le motif réglementaire affiché — inutile d'attendre la date limite pour qu'un code déjà perdu se grise. Un code déjà placé avant ce blocage reste toujours retirable, pour pouvoir corriger une saisie faite par erreur.</p>
 
       <h3>Les 5 actions possibles sur chaque fête</h3>
       <div class="grid2">
@@ -791,8 +792,8 @@
       <h2><span class="icon-chip">💼</span>Jours travaillés</h2>
       <p class="kicker">Un tableau de bord détaillé par poste et par vacation.</p>
 
-      <p>Clique la carte <span class="b">Jours travaillés</span> pour voir la répartition de ton année : total par famille (PRCI / PAR / Formation / Non affecté), total par vacation (Matin/Soirée/Nuit/Journée/Formation, tous postes confondus), puis le détail poste par poste (nombre de jours, dernière date, répartition par vacation).</p>
-      <p>Les journées de <a href="#mon-planning">Formation</a> (y compris les journées <a href="#mon-planning">« en étude de poste »</a>) comptent dans le total mais apparaissent dans leur propre catégorie, jamais mélangées avec le décompte réel d'un poste.</p>
+      <p>Clique la carte <span class="b">Jours travaillés</span> pour voir la répartition de ton année : total par famille (PRCI / PAR / Formation / Non affecté), total par vacation (Matin/Soirée/Nuit/Journée, tous postes confondus), puis le détail poste par poste (nombre de jours, dernière date, répartition par vacation).</p>
+      <p>Les journées de <a href="#mon-planning">Formation</a> (y compris les journées <a href="#mon-planning">« en étude de poste »</a>) comptent dans le total mais s'affichent <strong>uniquement</strong> dans leur propre liste dédiée « 📚 Journées de formation » — jamais dans le « total par vacation » ni mélangées avec le détail poste par poste, pour ne jamais les voir comptées deux fois.</p>
     </section>
 
     <section class="module" id="cet">
@@ -895,6 +896,13 @@
 
       <h3>🎓 Agent en formation sur un poste</h3>
       <p>Quand la feuille de présence officielle indique un agent en doublon sur un poste déjà tenu par un titulaire (un agent qui apprend le poste, pas une erreur de saisie), l'appli le détecte automatiquement à l'import et affiche les deux agents côte à côte sur la même case — le titulaire normalement, l'agent en formation avec un petit badge <strong>« 🎓 En formation »</strong> sous son nom. Aucun des deux n'est jamais traité comme une erreur de saisie. Ce marqueur reste purement informatif : il n'écrit rien dans le planning perso de l'agent en formation ni dans ses compteurs personnels.</p>
+      <div class="callout rule">
+        <div class="callout-title">📖 Si l'agent en formation est absent ce jour-là</div>
+        <p>Cible-le précisément avec le bouton 🔄 (« Poste non tenu », voir plus haut) : sa carte affiche alors son nom <strong>rayé</strong> avec un badge sobre <span class="b">🚫 Absent</span> (gris, pas une alerte) plutôt que l'habituel « ⚠️ Poste non tenu » — le titulaire à côté reste affiché normalement, sans aucun changement. « ⚠️ Poste non tenu » reste réservé au vrai suivi opérationnel (génération automatique de pause figée, statistique « Postes non tenus ») et ne s'affiche plus jamais sur un agent nommé — seul un poste réellement <strong>vacant</strong> (personne du tout affiché) garde ce badge d'alerte.</p>
+      </div>
+
+      <h3>📄 Le bandeau « Dernier import »</h3>
+      <p>En tête de l'écran, un bandeau rappelle qui a importé quoi et quand, une ligne par famille (PRCI, PAR) : « PDF PRCI du {date d'édition imprimée sur le document} — importé par {agent} le {date/heure réelle de l'import} ». Si le même document couvre les deux familles à la fois, une seule ligne combinée s'affiche. Comparer la date d'édition du PDF entre deux imports permet de repérer d'un coup d'œil si un document a déjà été traité, avant même de le réimporter.</p>
     </section>
 
     <div class="part-header" id="partie-3">
@@ -945,34 +953,41 @@
 
       <div class="callout rule">
         <div class="callout-title">📖 La différence en une phrase</div>
-        <p>« 🎓 Formation » montre toujours <strong>TON</strong> propre suivi en tant qu'agent qui suit des formations — quels que soient tes autres rôles. « 🎓 AFO » montre <strong>TON</strong> rôle de formateur — il n'apparaît dans le menu que si tu es toi-même AFO. Un agent qui est à la fois simple agent et AFO a donc les deux entrées dans son menu, et elles ne montrent jamais la même chose : jamais tes propres sessions suivies dans « AFO », jamais tes sessions animées dans « Formation ».</p>
+        <p>« 🎓 Formation » montre toujours <strong>TON</strong> propre suivi en tant qu'agent qui suit des formations — quels que soient tes autres rôles. « 🎓 AFO » montre <strong>TON</strong> rôle de formateur — il n'apparaît dans le menu que si tu es toi-même AFO <strong>ou ASFP</strong>. Un agent qui est à la fois simple agent et AFO/ASFP a donc les deux entrées dans son menu, et elles ne montrent jamais la même chose : jamais tes propres sessions suivies dans « AFO », jamais tes sessions animées dans « Formation ».</p>
+        <p><strong>ASFP</strong> est un rôle distinct d'AFO, réservé à une vraie personne nommée — avec exactement les mêmes droits qu'un AFO sur tout ce module, sans aucune différence de fonctionnement. Ne pas confondre avec l'ancien agent générique « ASFP », une fiche virtuelle historique conservée à part, sans lien avec ce rôle.</p>
       </div>
 
       <h3>🎓 Formation (tous les agents)</h3>
       <p>Ton archive personnelle, uniquement ce que TU as suivi ou vas suivre en tant que participant :</p>
       <ul>
-        <li>Les sessions organisées par un AFO auxquelles tu es inscrit (intitulé, date, lieu, catégorie, statut, qui anime, qui d'autre y participe, le message de l'AFO au lancement s'il y en a un).</li>
+        <li>Les sessions organisées par un AFO/ASFP auxquelles tu es inscrit (intitulé, date, lieu, catégorie, statut, qui anime, qui d'autre y participe, le message de l'AFO au lancement s'il y en a un).</li>
         <li>Tes formations suivies en dehors de l'appli (externe ou e-learning), déclarées toi-même via « + Déclarer une formation suivie ».</li>
         <li>Le détail de tes journées <a href="#mon-planning">« en étude de poste »</a>, par poste et par vacation.</li>
+        <li><strong>📋 Tes besoins de formation (EIA)</strong> — un bloc en lecture seule qui rappelle les besoins exprimés en ton nom lors de ton Entretien Individuel Annuel (saisis par un AFO/ASFP sur ta fiche, voir plus bas), avec un badge <span class="b">⏳ demandée</span> ou <span class="b">✅ réalisée</span> selon que tu as déjà suivi ou non une session de cette formation.</li>
       </ul>
       <p>Dès qu'une session à laquelle tu participes est lancée, elle écrit automatiquement « 🎓 Formation » dans ton planning perso ce jour-là — en plus de ce qu'il y avait déjà, jamais d'écrasement. Tu valides ta présence en libérant toi-même ta journée. Si tu retires cette formation de ton planning, la session disparaît aussitôt de cette liste — tu peux la reprendre à tout moment en rouvrant ce jour, un rappel « Formation(s) proposée(s) ce jour » te la repropose.</p>
 
-      <h3>🎓 AFO (formateurs uniquement)</h3>
+      <h3>🎓 AFO (formateurs et ASFP)</h3>
       <p>Tout ce qui concerne ton rôle de formateur, jamais ton propre suivi personnel :</p>
       <ul>
         <li><strong>👨‍🏫 Tes sessions</strong> — les sessions où tu animes (jusqu'à 3 formateurs par session).</li>
-        <li><strong>📖 Catalogue</strong> — les types de formation proposés (durée, format, catégorie) — pas encore de date ni de participants, un peu comme un menu de cours disponibles.</li>
-        <li><strong>📅 Planning</strong> — le calendrier des vraies dates programmées, créées par n'importe quel AFO (aucune hiérarchie entre AFO) : créer une session à partir du catalogue, ajouter/retirer un formateur ou un participant, écrire un message de lancement, puis « 🚀 Lancer la session » — qui écrit « Formation » dans le planning de chaque participant. Si un participant retire ensuite la formation de son planning, son nom apparaît barré avec un avertissement.</li>
-        <li><strong>📊 Stats</strong> — combien de sessions et quels agents ont suivi chaque formation, la répartition par année/catégorie, et pour chaque AFO le nombre de jours animés et d'agents formés — visible par tous les AFO à égalité.</li>
+        <li><strong>📖 Catalogue</strong> — les types de formation proposés (durée, format, catégorie), chacun avec un <strong>badge de couverture</strong> (rouge / orange / vert selon le % d'agents actifs déjà formés) pour voir d'un coup d'œil où porter l'effort, sans avoir à ouvrir le détail.</li>
+        <li><strong>📅 Planning</strong> — le calendrier des vraies dates programmées, créées par n'importe quel AFO/ASFP (aucune hiérarchie entre eux) : créer une session à partir du catalogue, ajouter/retirer un formateur ou un participant (le bouton « + Ajouter tous les demandeurs EIA » regroupe d'un coup tous les agents ayant exprimé ce besoin en EIA), écrire un message de lancement, puis « 🚀 Lancer la session » — qui écrit « Formation » dans le planning de chaque participant. Si un participant retire ensuite la formation de son planning, son nom apparaît barré avec un avertissement.</li>
+        <li><strong>📊 Suivi formation/agent</strong> — pour chaque formation, dans l'ordre : le nombre de demandes EIA (s'il y en a), le nombre d'agents formés, le nombre de sessions faites dans l'année ; une section <strong>« 👥 Par agent »</strong> (liste des agents formés, filtrable par formation précise ou par « uniquement avec étude de poste », triable) ; une section <strong>« 🧭 Suivi des études de poste »</strong> (par agent, dépliable, regroupée par poste puis par vacation avec les dates) ; et pour chaque AFO/ASFP le nombre de jours animés et d'agents formés — visible par tous à égalité, aucune hiérarchie.</li>
       </ul>
-      <p><strong>Si un AFO quitte son poste</strong>, les formations qu'il a menées restent dans le système sans limite de durée, pour que les participants ne les perdent jamais.</p>
+
+      <h3>📋 Fiche agent & besoins EIA</h3>
+      <p>Depuis « Suivi formation/agent », une recherche par nom ouvre la <strong>fiche agent</strong> : ses sessions suivies, ses formations déclarées, son détail d'étude de poste (par poste puis vacation, avec les dates) — et, en bas, le formulaire pour enregistrer un <strong>besoin exprimé en EIA</strong> (choix d'une formation du catalogue + date). Le badge <span class="b">⏳ demandée</span> passe automatiquement en <span class="b">✅ réalisée</span> dès que l'agent suit réellement une session de cette formation — et repasse en attente s'il décline ensuite, sans aucune action manuelle de ta part. Dans le catalogue et la fenêtre de couverture d'une formation, l'ordre est toujours le même : d'abord ceux qui l'ont demandée en EIA, puis les déjà formés, puis les pas encore formés.</p>
+
+      <p><strong>Si un AFO/ASFP quitte son poste</strong>, les formations qu'il a menées restent dans le système sans limite de durée, pour que les participants ne les perdent jamais.</p>
     </section>
 
     <section class="module" id="stat-equip">
       <h2><span class="icon-chip">📊</span>Stat'Equip</h2>
       <p class="kicker">Statistiques d'équipe agrégées, ouvert à tous, aucune donnée nominative.</p>
 
-      <p>Vue d'ensemble des effectifs (global / équipe / Réserve régionale / temps partiel / encadrement / AFO), couverture des postes par la Réserve régionale, congés et VT refusés (totaux anonymes), postes non tenus signalés, âge moyen, formation (sessions AFO + études de poste, regroupées sous un même bloc « Formation » clairement légendé pour chaque source), et agents habilités par poste.</p>
+      <p>Vue d'ensemble des effectifs (global / équipe / Réserve régionale / temps partiel / encadrement / AFO), avec une tuile <strong>ASFP</strong> distincte (les vrais agents ASFP, comptés à part — jamais fusionnée avec l'ancienne fiche générique historique), couverture des postes par la Réserve régionale, congés et VT refusés (totaux anonymes), postes non tenus signalés, âge moyen, formation (sessions AFO + études de poste, regroupées sous un même bloc « Formation » clairement légendé pour chaque source), et agents habilités par poste.</p>
+      <p>Un signalement « Poste non tenu » posé par erreur sur la ligne générique « 🟩 Disponibles » (qui n'est structurellement pas un poste) n'entre jamais dans le total « Postes non tenus » — il est compté à part, dans une petite tuile dédiée de la section Dispo, uniquement affichée s'il y en a.</p>
       <p>Aucun nom ni CP n'y transite jamais — tout est calculé côté serveur en totaux ou en comptes agrégés.</p>
     </section>
 
