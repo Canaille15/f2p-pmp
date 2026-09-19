@@ -427,6 +427,23 @@ export default function RemplissageMasseModal({ agent, agentProfiles, setAgentPr
         });
         return next;
       });
+      // Congés Accordé (20/09, Olivier) : écrase aussi un éventuel suivi
+      // congesDemandes ("Demandé"/"Refusé") déjà posé sur ces mêmes jours --
+      // même règle que le popup de saisie normal (onCongeStatutChange(date,
+      // null,...) déclenché quand accorderConge() fait passer congeStatut à
+      // null, App.jsx). Sans ce nettoyage, le badge "⏳ Demandé"/"✕ Refusé"
+      // restait affiché à tort à côté d'un congé désormais bien accordé dans
+      // le planning. Uniquement pour ce cas précis (entree.type==="conges",
+      // le seul appelant de cette branche générique qui écrit CA) -- RP/RU/
+      // postes de travail n'ont jamais de suivi congesDemandes à nettoyer.
+      if (entree.type==="conges" && codeEquipe==="CA" && (res.appliques||[]).length>0) {
+        setAgentProfiles(prev => {
+          const currMap = prev[agent.id]?.congesDemandes || {};
+          const nextMap = {...currMap};
+          res.appliques.forEach(d => { nextMap[d] = null; });
+          return {...prev, [agent.id]:{...(prev[agent.id]||{}), congesDemandes: nextMap}};
+        });
+      }
       return { ok:true, appliques:res.nb_appliques, ignores:res.ignores?.length||0 };
     } catch(e) {
       return { ok:false, error: e.message || "Erreur réseau" };
