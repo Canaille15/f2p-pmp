@@ -52,6 +52,11 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
   // reste — un DPX garde sa famille/son statut Réserve régionale de base.
   const [dpxOnly, setDpxOnly] = useState(false);
   const [adjointDpxOnly, setAdjointDpxOnly] = useState(false);
+  // Filtre "ASFP" (20/09, demandé par Olivier) : même principe, un vrai agent
+  // nommé is_asfp=1 (distinct de l'ancien agent virtuel générique cp='ASFP',
+  // jamais concerné par ce filtre puisqu'il n'a pas is_asfp posé) — orthogonal
+  // au reste, un ASFP garde sa famille/son statut Réserve régionale de base.
+  const [asfpOnly, setAsfpOnly] = useState(false);
   // Statut actif/quitté (16/08) — par défaut on ne montre que les actifs,
   // un agent quitté reste consultable via ce filtre (historique jamais supprimé).
   const [statutFilter, setStatutFilter] = useState("actif");
@@ -223,15 +228,17 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
     const matchAdmin = !adminOnly || a.is_admin;
     const matchDpx = !dpxOnly || a.is_dpx;
     const matchAdjointDpx = !adjointDpxOnly || a.is_adjoint_dpx;
+    const matchAsfp = !asfpOnly || a.is_asfp;
     const matchStatut = (a.statut || "actif") === statutFilter;
     const matchPin = pinFilter === "TOUS" || (pinFilter === "SANS" ? !a.has_pin : a.has_pin);
-    return matchSearch && matchFamille && matchReserve && matchAfo && matchAdmin && matchDpx && matchAdjointDpx && matchStatut && matchPin;
+    return matchSearch && matchFamille && matchReserve && matchAfo && matchAdmin && matchDpx && matchAdjointDpx && matchAsfp && matchStatut && matchPin;
   });
   const nbReserve = agents.filter(a => a.is_reserve && (a.statut || "actif") === "actif").length;
   const nbAfo = agents.filter(a => a.is_afo && (a.statut || "actif") === "actif").length;
   const nbAdmin = agents.filter(a => a.is_admin && (a.statut || "actif") === "actif").length;
   const nbDpx = agents.filter(a => a.is_dpx && (a.statut || "actif") === "actif").length;
   const nbAdjointDpx = agents.filter(a => a.is_adjoint_dpx && (a.statut || "actif") === "actif").length;
+  const nbAsfp = agents.filter(a => a.is_asfp && (a.statut || "actif") === "actif").length;
   const nbQuittes = agents.filter(a => a.statut === "quitte").length;
   const nbSansPin = agents.filter(a => !a.has_pin && (a.statut || "actif") === "actif").length;
   const nbAvecPin = agents.filter(a => a.has_pin && (a.statut || "actif") === "actif").length;
@@ -514,6 +521,15 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                 color: adjointDpxOnly ? "#fff" : "var(--text-secondary)"
               }}>
               🧭 Assistant DPX ({nbAdjointDpx})
+            </button>
+            <button onClick={() => setAsfpOnly(v => !v)}
+              style={{
+                padding: "7px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700, whiteSpace: "nowrap",
+                background: asfpOnly ? "#be185d" : "var(--bg-page)",
+                color: asfpOnly ? "#fff" : "var(--text-secondary)"
+              }}>
+              🎓 ASFP ({nbAsfp})
             </button>
             {agentsReserveAvecPin.length > 0 && (
               <button onClick={() => setModal("bulkClearPin")}
