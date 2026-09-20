@@ -433,30 +433,46 @@ async function genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, s
 // imprimé juste avant, détecté uniquement grâce à cette vérification par
 // coordonnées (jamais visible sur un simple survol du texte).
 // Périmètre volontairement limité aux champs demandés par Olivier : Nom /
-// Prénom / Etablissement / Signature (cadre Identification Agent), Date de
-// demande / Nombre de jours (Courant + Fin d'activité) / Date d'envoi au
-// Gestionnaire CET / Signature (cadre Monétisation - Demande de l'agent) —
-// Immatriculation (CP) et les cadres Saisie/Récépissé (remplis par le
-// gestionnaire CET/l'Agence Paie et Famille, jamais par l'agent) restent
-// vierges, à compléter à la main.
+// Prénom / Etablissement / Immatriculation (CP) / Signature (cadre
+// Identification Agent), Date de demande / Nombre de jours (Courant + Fin
+// d'activité) / Date d'envoi au Gestionnaire CET / Signature (cadre
+// Monétisation - Demande de l'agent) — les cadres Saisie/Récépissé (remplis
+// par le gestionnaire CET/l'Agence Paie et Famille, jamais par l'agent)
+// restent vierges, à compléter à la main.
 const RH0930_RECT = {
   nom: [70, 698], prenom: [225, 698], etablissement: [390, 698],
+  // "Immatriculation:" (label à x=40.3, largeur mesurée ~70.7pt à 10pt
+  // Helvetica) puis "Signature" (label à x=306.7) partagent la même ligne
+  // (y≈674.6-675.1) — valeur placée juste après le label, largement avant
+  // la colonne Signature.
+  immatriculation: [118, 674.6],
   dateDemande: [140, 621.4],
   joursCourant: [195, 554.9], joursFinActivite: [460, 555.1],
   dateEnvoiGestionnaire: [220, 525.6],
 };
 // Zones "Signature" (image, si enregistrée dans Mon profil) — cadre
 // Identification Agent (bande vide entre le libellé "Signature" à y=675 et
-// l'en-tête de section suivante à y≈637.5) puis cadre Demande de l'agent
+// l'en-tête de la section suivante à y≈637) puis cadre Demande de l'agent
 // (bande vide entre le libellé "Signature" à y≈526 et le début du cadre
-// Saisie à y=474) — validées de la même façon (aucun texte imprimé dans ces
-// plages), jamais un vrai champ AcroForm ici contrairement aux 6 autres
-// imprimés (donc pas trouverZonesSignature/finaliser, dessin direct).
+// Saisie à y=474). Coordonnées resserrées le 21/09 (signalé "mal placées et
+// trop petites" par Olivier) en croisant la position ET la taille de police
+// réelles de chaque libellé voisin (pdfjs renvoie aussi transform[3] =
+// taille de police) : le "O" de case à cocher du cadre suivant est en
+// fontSize 20 (glyphe nettement plus haut qu'un simple libellé), il
+// remontait jusqu'à y≈651 sur le 1er cadre — la 1ère zone dépassait
+// dessous (y=642) et légèrement à gauche (x=310, sous la fin du mot
+// "l'agent" du cadre suivant, x≈283-319) dans cette même zone, d'où le
+// chevauchement signalé. Décalée à x=320/y=649 (sous ce mot, au-dessus de
+// tout texte) pour rester strictement dans la bande vide réelle. Jamais un
+// vrai champ AcroForm ici contrairement aux 6 autres imprimés (donc pas
+// trouverZonesSignature/finaliser, dessin direct) — pad réduit à 2 (au lieu
+// de 4) pour exploiter au maximum la hauteur disponible, déjà contrainte
+// par l'imprimé lui-même.
 const RH0930_SIGNATURES = [
-  { x: 310, y: 642, width: 225, height: 28 },
-  { x: 310, y: 485, width: 220, height: 34 },
+  { x: 320, y: 649, width: 205, height: 22 },
+  { x: 305, y: 486, width: 225, height: 36 },
 ];
-async function genererMonetisationCet({ nom, prenom, joursCourant, joursFinActivite, signatureDataUrl }) {
+async function genererMonetisationCet({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl }) {
   const bytes = await fetch("/CET_monetisation.pdf").then(r => r.arrayBuffer());
   const doc = await PDFDocument.load(bytes);
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -468,6 +484,7 @@ async function genererMonetisationCet({ nom, prenom, joursCourant, joursFinActiv
   ecrire(RH0930_RECT.nom, (nom || "").toUpperCase());
   ecrire(RH0930_RECT.prenom, prenom);
   ecrire(RH0930_RECT.etablissement, "EIC PSO");
+  ecrire(RH0930_RECT.immatriculation, (cp || "").toUpperCase());
   ecrire(RH0930_RECT.dateDemande, dateAuj());
   if (joursCourant) ecrire(RH0930_RECT.joursCourant, String(joursCourant), 11);
   if (joursFinActivite) ecrire(RH0930_RECT.joursFinActivite, String(joursFinActivite), 11);
@@ -476,7 +493,7 @@ async function genererMonetisationCet({ nom, prenom, joursCourant, joursFinActiv
     try {
       const sig = await doc.embedPng(signatureDataUrl);
       RH0930_SIGNATURES.forEach(rect => {
-        const pad = 4;
+        const pad = 2;
         const availW = rect.width - pad * 2, availH = rect.height - pad * 2;
         const scale = Math.min(availW / sig.width, availH / sig.height, 1);
         const w = sig.width * scale, h = sig.height * scale;
@@ -705,7 +722,7 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
       } else if (type === "monetisation") {
         bytes = await genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, signatureDataUrl });
       } else if (type === "monetisationCet") {
-        bytes = await genererMonetisationCet({ nom, prenom, joursCourant, joursFinActivite, signatureDataUrl });
+        bytes = await genererMonetisationCet({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl });
       } else if (type === "utilisationCourant") {
         bytes = await genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, dateDebut: dateDebutUtil, dateFin: dateFinUtil, signatureDataUrl });
       } else {
