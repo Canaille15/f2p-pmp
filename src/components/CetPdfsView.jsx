@@ -439,38 +439,44 @@ async function genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, s
 // Monétisation - Demande de l'agent) — les cadres Saisie/Récépissé (remplis
 // par le gestionnaire CET/l'Agence Paie et Famille, jamais par l'agent)
 // restent vierges, à compléter à la main.
+// Coordonnées revalidées le 21/09 suite au signalement d'Olivier sur un
+// vrai PDF généré ("nom/prénom collés aux deux points, immatriculation mal
+// positionnée, signatures hors cadre et trop petites") — la cause de fond
+// des 3 premiers points : les libellés imprimés sont en réalité en
+// Helvetica 12pt (confirmé via pdfjs, transform[3]), pas 10pt comme estimé
+// le 20/09 — chaque largeur de libellé était donc sous-évaluée d'environ
+// 20%, au point que la valeur "Immatriculation" retombait carrément SUR la
+// fin du mot "Immatriculation:" lui-même. Pour les signatures, la vraie
+// cause était différente : le texte de ce PDF ne se rend pas du tout dans
+// pdfjs côté Node (police standard non embarquée, glyphes jamais résolus —
+// seules les images/formes vectorielles s'y affichent), donc la vérification
+// du 20/09 (texte only) ne pouvait tout simplement pas détecter un mauvais
+// alignement avec les vrais bords de cadre (des traits fins de l'image de
+// fond, invisibles à l'extraction de texte). Corrigé cette fois en rendant
+// réellement la page en image bitmap (pdfjs + @napi-rs/canvas, un vrai rendu
+// pixel, jamais tenté avec succès avant sur ce projet) puis en dessinant des
+// rectangles de test aux coordonnées candidates pour les comparer visuellement
+// aux bords imprimés réels — bien plus fiable que l'extraction de texte seule.
 const RH0930_RECT = {
-  nom: [70, 698], prenom: [225, 698], etablissement: [390, 698],
-  // "Immatriculation:" (label à x=40.3, largeur mesurée ~70.7pt à 10pt
-  // Helvetica) puis "Signature" (label à x=306.7) partagent la même ligne
-  // (y≈674.6-675.1) — valeur placée juste après le label, largement avant
-  // la colonne Signature.
-  immatriculation: [118, 674.6],
-  dateDemande: [140, 621.4],
+  nom: [76, 698], prenom: [236, 698], etablissement: [393, 698],
+  immatriculation: [133, 674.6],
+  dateDemande: [144, 621.4],
   joursCourant: [195, 554.9], joursFinActivite: [460, 555.1],
   dateEnvoiGestionnaire: [220, 525.6],
 };
 // Zones "Signature" (image, si enregistrée dans Mon profil) — cadre
-// Identification Agent (bande vide entre le libellé "Signature" à y=675 et
-// l'en-tête de la section suivante à y≈637) puis cadre Demande de l'agent
-// (bande vide entre le libellé "Signature" à y≈526 et le début du cadre
-// Saisie à y=474). Coordonnées resserrées le 21/09 (signalé "mal placées et
-// trop petites" par Olivier) en croisant la position ET la taille de police
-// réelles de chaque libellé voisin (pdfjs renvoie aussi transform[3] =
-// taille de police) : le "O" de case à cocher du cadre suivant est en
-// fontSize 20 (glyphe nettement plus haut qu'un simple libellé), il
-// remontait jusqu'à y≈651 sur le 1er cadre — la 1ère zone dépassait
-// dessous (y=642) et légèrement à gauche (x=310, sous la fin du mot
-// "l'agent" du cadre suivant, x≈283-319) dans cette même zone, d'où le
-// chevauchement signalé. Décalée à x=320/y=649 (sous ce mot, au-dessus de
-// tout texte) pour rester strictement dans la bande vide réelle. Jamais un
-// vrai champ AcroForm ici contrairement aux 6 autres imprimés (donc pas
+// Identification Agent puis cadre Demande de l'agent. Les 2 cadres n'ont en
+// réalité PAS de ligne séparant le texte "Signature"/"Immatriculation" du
+// bas du cadre (vérifié sur le rendu bitmap réel, aucune ligne détectée à
+// cet endroit) : toute la hauteur entre le bas du texte "Signature" et le
+// vrai bord inférieur du cadre est utilisable, bien plus que ce qui avait
+// été estimé le 20/09 par simple triangulation de texte. Jamais un vrai
+// champ AcroForm ici contrairement aux 6 autres imprimés (donc pas
 // trouverZonesSignature/finaliser, dessin direct) — pad réduit à 2 (au lieu
-// de 4) pour exploiter au maximum la hauteur disponible, déjà contrainte
-// par l'imprimé lui-même.
+// de 4) pour exploiter au maximum la hauteur disponible.
 const RH0930_SIGNATURES = [
-  { x: 320, y: 649, width: 205, height: 22 },
-  { x: 305, y: 486, width: 225, height: 36 },
+  { x: 305, y: 637, width: 248, height: 33 },
+  { x: 305, y: 481, width: 248, height: 40 },
 ];
 async function genererMonetisationCet({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl }) {
   const bytes = await fetch("/CET_monetisation.pdf").then(r => r.arrayBuffer());
