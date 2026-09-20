@@ -697,22 +697,41 @@ function AgePyramide({ data }) {
 //   perso, dédupliqués entre eux par agent+date côté backend.
 // - "anonyme" : mécanisme d'origine, message libre CPS contenant "Dispo",
 //   structurellement jamais rattachable à un agent (agents_concernes vide).
+// data.total (20/09, Olivier : "du coup faut juste avoir dans stat le
+// nombre de dispo. sans doublon peu importe la source") -- simplifié en un
+// seul chiffre fiable : identifie.total (dédupliqué cp+date entre perso/CPS,
+// et agents marqués "🚫 Absent" déjà exclus -- voir statsEquipeController.js).
+// "Message libre" n'y est plus mélangé (jamais dédupliqué de façon fiable,
+// pas de cp_agent rattaché) -- gardé à part, clairement hors du total.
 function DispoSection({ data }) {
   const [ouvert, setOuvert] = useState(false);
   const identifie = data.identifie || { total: 0, parDate: [] };
   const anonyme = data.anonyme || { total: 0, entries: [] };
   const nonTenu = data.nonTenu || { total: 0, entries: [] };
+  const absent = data.absent || { total: 0, entries: [] };
   return (
     <div style={card}>
       <SectionHeader icon="📢" titre="Dispo" ouvert={ouvert} onToggle={() => setOuvert(v => !v)} />
-      <Tuile label="Jours signalés (total)" valeur={data.total} large />
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <Tuile label="Planning (CPS/perso)" valeur={identifie.total} />
-        <Tuile label="Message libre" valeur={anonyme.total} />
-      </div>
+      <Tuile label="Nombre de dispo (sans doublon)" valeur={data.total} large />
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-        Journées où un agent est disponible sans poste à tenir — soit détecté directement (DISPO réel importé en CPS Officiel, ou sélectionné dans le planning perso), soit signalé par message libre dans CPS Officiel. Chiffre toujours anonymisé, aucun nom.
+        Journées où un agent est disponible sans poste à tenir — détecté directement (DISPO réel importé en CPS Officiel/Planning Prévisionnel, ou sélectionné dans le planning perso), dédupliqué par agent+date quelle que soit la source. Un agent marqué « 🚫 Absent » sur cette journée n'est jamais compté. Chiffre toujours anonymisé, aucun nom.
       </div>
+      {anonyme.total > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--border)" }}>
+          <Tuile label="Message libre (hors total ci-dessus)" valeur={anonyme.total} />
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+            Signalé par un simple message plutôt qu'une vraie affectation — jamais rattaché à un agent précis, donc impossible à dédupliquer avec le nombre ci-dessus (pourrait déjà y être compté). Gardé ici à part plutôt que de fausser le total.
+          </div>
+        </div>
+      )}
+      {absent.total > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--border)" }}>
+          <Tuile label="Marqué « 🚫 Absent »" valeur={absent.total} />
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6 }}>
+            Déjà exclu du nombre de dispo ci-dessus — comptabilisé ici juste pour information.
+          </div>
+        </div>
+      )}
       {nonTenu.total > 0 && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--border)" }}>
           <Tuile label="Signalé « Poste non tenu » par erreur" valeur={nonTenu.total} />
@@ -740,6 +759,18 @@ function DispoSection({ data }) {
               <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 4 }}>Message libre</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 {anonyme.entries.map((e, i) => (
+                  <div key={i} style={{ fontSize: 11.5, color: "var(--text-secondary)", borderTop: "1px solid var(--border)", paddingTop: 4 }}>
+                    {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {absent.entries.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 4 }}>Marqué « 🚫 Absent »</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                {absent.entries.map((e, i) => (
                   <div key={i} style={{ fontSize: 11.5, color: "var(--text-secondary)", borderTop: "1px solid var(--border)", paddingTop: 4 }}>
                     {fmtDate(e.date_jour)}{e.motif ? ` — ${e.motif}` : ""}
                   </div>

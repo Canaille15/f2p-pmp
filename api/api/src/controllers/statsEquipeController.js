@@ -615,8 +615,18 @@ async function getStats(req, res) {
       const d = k.split('|')[1];
       dispoIdentifieParDate[d] = (dispoIdentifieParDate[d] || 0) + 1;
     });
+    // total = identifie.total SEUL (20/09, Olivier : "du coup faut juste
+    // avoir dans stat le nombre de dispo. sans doublon peu importe la
+    // source") -- avant, total mélangeait identifie (déduplicable, un vrai
+    // "cp+date") ET anonyme (un simple message libre contenant "dispo", sans
+    // aucun lien vers un agent/date précis) -- un même jour réel pouvait
+    // donc être compté 2 fois (une fois via identifie, une fois via un
+    // message libre qui en parle), sans aucun moyen de le détecter. Seul
+    // identifie peut être dédupliqué de façon fiable (clé cp|date) --
+    // anonyme reste exposé à part (bloc `anonyme` ci-dessous), jamais dans
+    // ce total.
     const dispo = {
-      total: dispoIdentifieSet.size + dispoAnonymeRows.length,
+      total: dispoIdentifieSet.size,
       identifie: {
         total: dispoIdentifieSet.size,
         parDate: Object.entries(dispoIdentifieParDate)
@@ -634,8 +644,8 @@ async function getStats(req, res) {
       // erreur sur la ligne "🟩 Disponibles" (via le bouton 🔄 generique,
       // qui ne distingue jamais le type de ligne) -- jamais un vrai poste,
       // donc jamais compte dans "Postes non tenus" (voir plus haut) ni dans
-      // dispo.total (qui reste identifie+anonyme, inchange) -- juste garde
-      // ici, a part, anonyme comme le reste de ce bloc (agents_concernes
+      // dispo.total (qui ne compte que identifie, voir plus haut) -- juste
+      // garde ici, a part, anonyme comme le reste de ce bloc (agents_concernes
       // toujours vide pour ce type).
       nonTenu: {
         total: dispoNonTenuRows.length,

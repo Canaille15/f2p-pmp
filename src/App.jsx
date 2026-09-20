@@ -2794,7 +2794,15 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                 {!row.isJourneeSpeciale&&<span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,color:"#fff",background:fam?.color||"#7c3aed",borderRadius:5,padding:"2px 7px"}}>{row.jsCode}</span>}
                 {fam&&<span style={{fontSize:9,background:fam.accent,color:"#fff",borderRadius:10,padding:"1px 7px",fontWeight:800}}>{row.famille}</span>}
                 {row.allowFormation&&<span style={{fontSize:9,background:"#bbf7d0",color:"#14532d",borderRadius:10,padding:"1px 6px",fontWeight:700}}>/F</span>}
-                {(row.maxSlots||1)>1&&row.maxSlots<99&&<span style={{fontSize:9,background:"#dbeafe",color:"#1e40af",borderRadius:10,padding:"1px 5px",fontWeight:700}}>×{row.maxSlots}</span>}
+                {/* !row.isDispo (20/09, Olivier : "le 17 tu as un +5 a cote de
+                    dispo. pourquoi ?") -- maxSlots:5 sur cette ligne est un
+                    plafond purement cosmetique (jamais une vraie capacite
+                    organisationnelle, contrairement a un poste comme A-PRCI
+                    dont maxSlots:4 reflete un vrai nombre de titulaires
+                    possibles) -- afficher "×5" a cote d'1 seul agent dispo
+                    induisait a tort en erreur. Retire uniquement pour DISPO,
+                    le reste (postes multi-agents reels) garde son badge. */}
+                {!row.isDispo&&(row.maxSlots||1)>1&&row.maxSlots<99&&<span style={{fontSize:9,background:"#dbeafe",color:"#1e40af",borderRadius:10,padding:"1px 5px",fontWeight:700}}>×{row.maxSlots}</span>}
                 {/* !row.isDispo (20/09, Olivier) : sur la ligne "Disponibles",
                     plusieurs agents en meme temps est normal (ils n'occupent
                     aucun poste, juste "presents sans affectation") -- jamais
