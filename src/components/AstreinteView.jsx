@@ -227,7 +227,7 @@ function AstreinteBadge({ agent, videLabel, initialsColor }) {
   );
 }
 
-export default function AstreinteRow({ dateKey }) {
+export default function AstreinteRow({ dateKey, swipeHandlers }) {
   const [roster, setRoster] = useState([]);
   const [schedule, setSchedule] = useState({});
   const [editing, setEditing] = useState(false);
@@ -259,7 +259,15 @@ export default function AstreinteRow({ dateKey }) {
 
   return (
     <>
-      <div style={{border:"1.5px solid #c7d2fe",borderRadius:14,overflow:"hidden",background:"#fff"}}>
+      {/* onTouchStart/onTouchEnd (20/09, Olivier -- "il faut qu'on puisse
+          swipe vers droite et gauche depuis la case astreinte") : reprend
+          tel quel le même swipeDay (useSwipeHandlers, App.jsx) déjà utilisé
+          pour changer de jour depuis le reste de CPS Officiel -- attaché ici
+          directement à la carte, jamais au popup d'édition (rendu comme un
+          frère du DOM, jamais un enfant de cette div, donc un swipe pendant
+          que le popup est ouvert ne peut structurellement jamais faire
+          changer le jour affiché en arrière-plan pendant qu'on l'édite). */}
+      <div onTouchStart={swipeHandlers?.onTouchStart} onTouchEnd={swipeHandlers?.onTouchEnd} style={{border:"1.5px solid #c7d2fe",borderRadius:14,overflow:"hidden",background:"#fff"}}>
         <div style={{background:"linear-gradient(135deg,#3730a3,#4338ca)",padding:"9px 18px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
           <span style={{color:"#fff",fontSize:14,fontWeight:800}}>📟 Astreinte</span>
           <span style={{fontSize:10,color:"#e0e7ff",fontStyle:"italic"}}>Saisie manuelle uniquement — jamais alimentée par l'import PDF</span>

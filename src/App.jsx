@@ -3031,7 +3031,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         en bas de CPS Officiel uniquement, jamais dans Planning Prévisionnel
         -- voir AstreinteView.jsx pour le contexte complet (module 100%
         indépendant, saisie manuelle uniquement). */}
-    {!isPrevisionnel&&<AstreinteRow dateKey={dateKey}/>}
+    {!isPrevisionnel&&<AstreinteRow dateKey={dateKey} swipeHandlers={swipeDay}/>}
 
     {/* Non renseignés */}
     <details style={{background:"#fff",border:"1.5px solid #e2e8f0",borderRadius:12}}>
