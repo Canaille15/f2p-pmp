@@ -910,6 +910,10 @@
       <h3>📟 Astreinte</h3>
       <p>Ligne tout en bas de cet écran (avant le pavé « ⚠️ Non renseignés »), <strong>complètement indépendante</strong> du reste de CPS Officiel : elle n'est jamais alimentée par un import PDF, uniquement par saisie manuelle. Elle sert à noter qui tient l'astreinte de la semaine, sans lien avec la feuille de présence officielle.</p>
       <p>La case <span class="b">ASTREINTE T</span> affiche le nom de la personne d'astreinte ce jour-là, ou <span class="b">Non renseigné</span> si rien n'est saisi. Le bouton <span class="b">✎</span> ouvre un petit popup :</p>
+      <div class="callout tip">
+        <div class="callout-title">📅 Le vendredi affiche 2 personnes</div>
+        <p>La bascule d'astreinte a lieu chaque vendredi à 12h00. Ce jour précis affiche donc deux cases côte à côte : <span class="b">Jusqu'à 12h00</span> (celle qui termine son astreinte — automatiquement reprise de ce qui est posé la veille, jeudi, rien à ressaisir) et <span class="b">À partir de 12h00</span> (le successeur — c'est la case que tu remplis via ✎, exactement comme un jour normal). Tant que le successeur n'est pas encore connu, la case affiche <span class="b">Non communiqué</span> plutôt que « Non renseigné ». Les autres jours de la semaine gardent la case simple habituelle.</p>
+      </div>
       <ul>
         <li>Un champ de recherche filtre en direct la liste des agents d'astreinte dès les premières lettres tapées (prénom ou nom).</li>
         <li><span class="btn-label">✓ Appliquer à ce jour uniquement</span> — ne change que le jour actuellement affiché.</li>
@@ -1008,6 +1012,10 @@
 
       <p>Vue d'ensemble des effectifs (global / équipe / Réserve régionale / temps partiel / encadrement / AFO), avec une tuile <strong>ASFP</strong> distincte (les vrais agents ASFP, comptés à part — jamais fusionnée avec l'ancienne fiche générique historique), couverture des postes par la Réserve régionale, congés et VT refusés (totaux anonymes), postes non tenus signalés, âge moyen, formation (sessions AFO + études de poste, regroupées sous un même bloc « Formation » clairement légendé pour chaque source), et agents habilités par poste.</p>
       <p>Un signalement « Poste non tenu » posé par erreur sur la ligne générique « 🟩 Disponibles » (qui n'est structurellement pas un poste) n'entre jamais dans le total « Postes non tenus » — il est compté à part, dans une petite tuile dédiée de la section Dispo, uniquement affichée s'il y en a.</p>
+      <div class="callout tip">
+        <div class="callout-title">⭐ Une astérisque qui te concerne, toi</div>
+        <p>Dans le détail « Postes non tenus » d'un des 4 postes Pauseur (CCL / Adjoint / VGD / PAR), une date marquée <span class="b">*</span> signale que ce jour-là concerne <strong>toi précisément</strong> (le poste affecté par ce Pauseur que tu occupais ce jour-là) — visible uniquement par toi, jamais par les autres agents qui consultent le même écran ; eux voient leurs propres astérisques ailleurs, s'ils en ont.</p>
+      </div>
       <p>Aucun nom ni CP n'y transite jamais — tout est calculé côté serveur en totaux ou en comptes agrégés.</p>
     </section>
 
