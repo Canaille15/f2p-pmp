@@ -606,44 +606,82 @@ async function getStats(req, res) {
     // Distinct de "Réserve régionale" (is_reserve) — et surtout, un axe qui ne
     // s'applique QU'aux agents "équipe" (hors Réserve régionale, qui a déjà son
     // propre compte à part) : Olivier — "les agents reserve regionale en compte
-    // a part". Le dénominateur est donc totalEquipe, jamais totalAgents,
+    // a part". Le dénominateur est donc l'effectif équipe, jamais totalAgents,
     // et les lignes roulement_historique d'un agent Réserve régionale sont
     // ignorées ici. Depuis le 18/08, l'Encadrement (DPX/Adj DPX) est lui aussi
-    // exclu de cet axe pour rester cohérent avec le nouveau totalEquipe (net
-    // de Réserve régionale ET d'Encadrement) — sinon la somme "dont X réserve
+    // exclu de cet axe pour rester cohérent — sinon la somme "dont X réserve
     // · Y roulement" ne correspondrait plus au total affiché sur la tuile
     // "Agents équipe". Réutilise roulement_historique (déjà daté, existait mais
     // jamais branché à un bouton) pour garantir qu'un changement de statut en
     // décembre ne modifie jamais les mois déjà passés. Seules 2 valeurs
     // comptent : 'Réserve' vs tout le reste ("Roulement" à l'affichage, que la
     // ligne source soit '3x8' ou 'Journée').
-    const agentsEquipeCps = equipeSet;
+    //
+    // Bug corrigé le 20/09 (Olivier, départ d'un agent : "aout 39, septembre
+    // encore là 39 et octobre roulement 39 lors qu'il n'est plus la") : le
+    // dénominateur de CHAQUE mois utilisait `totalEquipe`, une seule valeur
+    // figée sur l'effectif ACTUEL (aujourd'hui) — un départ faisait donc
+    // baisser TOUS les mois du tableau d'un coup (y compris ceux d'avant son
+    // départ, où il était pourtant bien là), jamais seulement les mois
+    // suivants son vrai départ. presentDuringMonth (ci-dessous) recalcule
+    // désormais un effectif équipe PROPRE À CHAQUE MOIS, sur le même principe
+    // que computeAgeMoyenAnnee (présence historique via date_embauche/
+    // date_depart) — un agent compte pour le mois entier où il part (encore
+    // là "le mois de son départ"), exclu seulement à partir du mois suivant.
+    // is_reserve/is_dpx/is_adjoint_dpx restent des flags jamais historisés
+    // (limite déjà documentée ailleurs, ex. computeAgeMoyenAnnee) — appliqués
+    // tels quels (valeur d'aujourd'hui) à chaque mois, seule la présence
+    // (date_embauche/date_depart) est recalculée mois par mois.
+    function presentDuringMonth(row, moisDebutStr, moisFinStr) {
+      if (row.date_embauche && row.date_embauche > moisFinStr) return false; // pas encore arrivé ce mois-là
+      if (row.date_depart && row.date_depart < moisDebutStr) return false; // déjà parti avant le début du mois
+      return true;
+    }
+    function equipeAuMois(moisDebutStr, moisFinStr) {
+      return new Set(
+        ageRows
+          .filter(r => r.cp !== 'ASFP')
+          .filter(r => !r.is_reserve && !(r.is_dpx || r.is_adjoint_dpx))
+          .filter(r => presentDuringMonth(r, moisDebutStr, moisFinStr))
+          .map(r => r.cp)
+      );
+    }
     const [roulementRows] = await pool.query(
       `SELECT cp_agent, type_roulement, date_debut, date_fin FROM roulement_historique ORDER BY cp_agent, date_debut`
     );
     const dstr = v => v instanceof Date ? v.toISOString().slice(0,10) : v;
     const roulementParAgent = {};
     roulementRows.forEach(r => {
-      if (!agentsEquipeCps.has(r.cp_agent)) return; // Réserve régionale : compte à part, exclu de cet axe
       if (!roulementParAgent[r.cp_agent]) roulementParAgent[r.cp_agent] = [];
       roulementParAgent[r.cp_agent].push({ type_roulement: r.type_roulement, date_debut: dstr(r.date_debut), date_fin: dstr(r.date_fin) });
     });
-    function nbReserveAuMois(finMoisStr) {
+    // nbReserveDansEnsemble : compte, PARMI un ensemble d'agents équipe donné
+    // (propre à une date de référence), ceux dont la ligne roulement_historique
+    // active à cette même date de référence est 'Réserve' — jamais un agent
+    // hors de cet ensemble (Réserve régionale/Encadrement/pas encore là/déjà
+    // parti à cette date), quelle que soit sa ligne roulement_historique.
+    function nbReserveDansEnsemble(equipeCpSet, dateRefStr) {
       let n = 0;
-      Object.values(roulementParAgent).forEach(rows => {
-        const actif = rows.filter(r => r.date_debut <= finMoisStr && (!r.date_fin || r.date_fin > finMoisStr)).pop();
+      equipeCpSet.forEach(cp => {
+        const rows = roulementParAgent[cp];
+        if (!rows) return;
+        const actif = rows.filter(r => r.date_debut <= dateRefStr && (!r.date_fin || r.date_fin > dateRefStr)).pop();
         if (actif && actif.type_roulement === 'Réserve') n++;
       });
       return n;
     }
     const parMois = [];
     for (let m = 1; m <= 12; m++) {
+      const debutMois = new Date(year, m - 1, 1);
+      const debutMoisStr = `${debutMois.getFullYear()}-${String(debutMois.getMonth()+1).padStart(2,'0')}-01`;
       const finMois = new Date(year, m, 0);
       const finMoisStr = `${finMois.getFullYear()}-${String(finMois.getMonth()+1).padStart(2,'0')}-${String(finMois.getDate()).padStart(2,'0')}`;
-      const nbReserve = nbReserveAuMois(finMoisStr);
-      parMois.push({ mois: m, nbReserve, nbRoulement: totalEquipe - nbReserve });
+      const equipeMois = equipeAuMois(debutMoisStr, finMoisStr);
+      const nbReserve = nbReserveDansEnsemble(equipeMois, finMoisStr);
+      parMois.push({ mois: m, nbReserve, nbRoulement: equipeMois.size - nbReserve });
     }
-    const nbReserveActuel = nbReserveAuMois(dstr(new Date()));
+    const agentsEquipeCps = equipeSet; // effectif équipe ACTUEL (aujourd'hui), déjà calculé plus haut
+    const nbReserveActuel = nbReserveDansEnsemble(agentsEquipeCps, dstr(new Date()));
     const reserveRoulement = { actuel: { nbReserve: nbReserveActuel, nbRoulement: totalEquipe - nbReserveActuel }, parMois };
 
     // ─── Scans donnees_json (#5, #6, #12) — congés/VT refusés (anonymisés),
