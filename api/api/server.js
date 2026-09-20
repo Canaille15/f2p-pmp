@@ -42,7 +42,6 @@ app.use('/api/echanges',      require('./src/routes/echanges'));
 app.use('/api/previsionnel-signalements', require('./src/routes/previsionnelSignalements'));
 app.use('/api/journee-speciale-notes', require('./src/routes/journeeSpecialeNotes'));
 app.use('/api/annuaire',      require('./src/routes/annuaire'));
-app.use('/api/annuaire',      require('./src/routes/annuaire'));
 app.use('/api/formation',     require('./src/routes/formation'));
 app.use('/api/stats-equipe',  require('./src/routes/statsEquipe'));
 app.use('/api/usage',         require('./src/routes/usage'));
