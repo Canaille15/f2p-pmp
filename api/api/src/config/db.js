@@ -14,7 +14,7 @@ const pool = mysql.createPool({
 });
 
 pool.getConnection()
-  .then(conn => { console.log('MariaDB connecté'); conn.release(); })
+  .then(conn => { console.log('MySQL connecté'); conn.release(); })
   .catch(err => { console.error('Erreur DB:', err.message); process.exit(1); });
 
 module.exports = pool;
