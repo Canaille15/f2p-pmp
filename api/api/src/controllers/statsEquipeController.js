@@ -380,13 +380,28 @@ async function getStats(req, res) {
     // (dispo.nonTenu), pour ne rien perdre tout en ne les melangeant plus
     // aux vrais postes.
     const [nonTenusRowsRaw] = await pool.query(
-      `SELECT id, js_code, date_jour, motif FROM cps_aleas
+      `SELECT id, js_code, date_jour, motif, agents_concernes FROM cps_aleas
        WHERE type = 'non_tenu' AND date_jour BETWEEN ? AND ?
        ORDER BY js_code, date_jour`,
       [from, to]
     );
     const nonTenusRows = nonTenusRowsRaw.filter(r => r.js_code !== 'DISPO');
-    const dispoNonTenuRows = nonTenusRowsRaw.filter(r => r.js_code === 'DISPO');
+    // dispoNonTenusRaw scindé en 2 (20/09, Olivier : "sur dispo il faudrait
+    // pouvoir mettre absent comme pur les formation. et compter en fonction
+    // de ca") -- jusqu'ici, TOUT non_tenu sur DISPO était traité comme un
+    // signalement "par erreur" (agents_concernes toujours vide, le bouton 🔄
+    // ne ciblait jamais un agent précis sur cette ligne). Le nouveau ciblage
+    // par agent côté App.jsx (findAlea/forceAgentId) permet désormais un
+    // usage DISTINCT et intentionnel — "Absent" pour UN agent précis, jamais
+    // "tout le poste" — donc scindé ici sur agents_concernes vide/non vide :
+    // vide = toujours "signalé par erreur" (comportement historique inchangé,
+    // les 4 entrées du 17/09 notamment) ; non vide = "Absent", nouveau bucket.
+    function parseAgentsConcernes(raw) {
+      try { return typeof raw === 'string' ? JSON.parse(raw) : (raw || []); } catch (e) { return []; }
+    }
+    const dispoNonTenusRaw = nonTenusRowsRaw.filter(r => r.js_code === 'DISPO');
+    const dispoNonTenuRows = dispoNonTenusRaw.filter(r => parseAgentsConcernes(r.agents_concernes).length === 0);
+    const dispoAbsentRows = dispoNonTenusRaw.filter(r => parseAgentsConcernes(r.agents_concernes).length > 0);
     // Marqueur "ça te concerne" (13/09, Olivier : "l'asterisque ne concerne
     // que l'agent qui regarde. les autres ont surement des asterisques
     // ailleurs") -- pour les entrées "Pauseur" (12/09, génération auto de
@@ -579,9 +594,21 @@ async function getStats(req, res) {
        WHERE equipe = 'DISPO' AND date_jour BETWEEN ? AND ?`,
       [from, to]
     );
+    // dispoAbsentSet (20/09) : agents marqués "Absent" (alea non_tenu ciblé
+    // sur eux précisément, agents_concernes non vide, cf. dispoAbsentRows
+    // ci-dessus) -- exclus de dispoIdentifieSet, jamais comptés comme
+    // "disponible" ce jour-là. Un signalement non ciblé (agents_concernes
+    // vide, "par erreur") n'exclut personne, comme avant.
+    const dispoAbsentSet = new Set(); // clé "cp|date"
+    dispoAbsentRows.forEach(r => {
+      const d = fmtD(r.date_jour);
+      parseAgentsConcernes(r.agents_concernes).forEach(cp => dispoAbsentSet.add(`${cp}|${d}`));
+    });
     const dispoIdentifieSet = new Set(); // clé "cp|date", dédupliquée entre perso et CPS Officiel
     [...dispoPersoRows, ...dispoCpsRows].forEach(r => {
-      dispoIdentifieSet.add(`${r.cp_agent}|${fmtD(r.date_jour)}`);
+      const key = `${r.cp_agent}|${fmtD(r.date_jour)}`;
+      if (dispoAbsentSet.has(key)) return; // marqué Absent -- jamais compté comme disponible
+      dispoIdentifieSet.add(key);
     });
     const dispoIdentifieParDate = {};
     dispoIdentifieSet.forEach(k => {
@@ -613,6 +640,17 @@ async function getStats(req, res) {
       nonTenu: {
         total: dispoNonTenuRows.length,
         entries: dispoNonTenuRows.map(r => ({
+          date_jour: fmtD(r.date_jour),
+          motif: r.motif || null,
+        })),
+      },
+      // absent (20/09) : agent précis marqué Absent sur DISPO (jamais "tout
+      // le poste") -- distinct de nonTenu ci-dessus (qui reste réservé aux
+      // signalements NON ciblés, "par erreur"). Reste anonyme comme le reste
+      // de ce bloc -- date+motif seulement, jamais le cp_agent.
+      absent: {
+        total: dispoAbsentRows.length,
+        entries: dispoAbsentRows.map(r => ({
           date_jour: fmtD(r.date_jour),
           motif: r.motif || null,
         })),

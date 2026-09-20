@@ -1693,7 +1693,7 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
 // erreur_cps (agents_concernes y sert deja a tout autre chose : les
 // REMPLACANTS du poste, pas "qui ca concerne").
 const ALEA_TYPES_CIBLABLES=["non_tenu","message"];
-function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAgents,onClose,onSaved,editAlea}){
+function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAgents,forceAgentId,onClose,onSaved,editAlea}){
   const [type,setType]=useState(editAlea?editAlea.type:null); // "echange" | "erreur_cps" | "non_tenu" | "message"
   const [agentsChoisis,setAgentsChoisis]=useState(()=>editAlea?.agents_concernes ? agents.filter(a=>editAlea.agents_concernes.includes(a.id)) : []);
   const [motif,setMotif]=useState(editAlea?.motif||"");
@@ -1701,6 +1701,12 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
   const [search,setSearch]=useState("");
   const rowAgentsListe=rowAgents||[];
   const plusieursAgentsSurCetteCase=rowAgentsListe.length>1;
+  // isDispoCtx (20/09) : sur la ligne "Disponibles", le type "non_tenu"
+  // (meme mecanisme technique, jamais un nouveau type en base) sert desormais
+  // a marquer un agent precis "Absent" -- purement un habillage de libelle,
+  // "Poste non tenu"/"Personne n'assure ce poste" n'a aucun sens pour DISPO
+  // (qui n'est structurellement pas un poste).
+  const isDispoCtx=jsCode==="DISPO";
   // 18/09 (soir, Olivier : "pas besoin de cible tout le poste, il suffit de
   // choisir l'agent") : simplification du ciblage introduit le meme jour --
   // "tout" ne reste utile QUE pour une case a un seul agent (le selecteur
@@ -1708,8 +1714,17 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
   // a plusieurs agents sur la case, aucune valeur par defaut : l'agent doit
   // explicitement choisir qui est concerne (jamais "tout le poste"), meme
   // pour reprendre l'edition d'un ancien alea qui visait tout le poste.
+  // forceAgentId (20/09, "Absent" sur DISPO) : la ligne "Disponibles" propose
+  // deja un bouton 🔄 PAR agent (pas un seul bouton pour toute la ligne comme
+  // un poste normal) -- aucune ambiguite sur qui est concerne, donc jamais
+  // besoin du SelecteurCible ni de retomber sur "tout" (qui designerait a
+  // tort TOUTE la ligne DISPO, potentiellement plusieurs agents de familles
+  // differentes le meme jour). Verifie apres editAlea pour ne jamais casser
+  // la reouverture d'un alea deja cree (qui doit continuer a lire son propre
+  // agents_concernes, pas forceAgentId).
   const [cible,setCible]=useState(()=>{
     if(editAlea && ALEA_TYPES_CIBLABLES.includes(editAlea.type) && editAlea.agents_concernes?.length===1) return editAlea.agents_concernes[0];
+    if(forceAgentId) return forceAgentId;
     if(plusieursAgentsSurCetteCase) return null;
     return "tout";
   });
@@ -1769,7 +1784,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
 
   return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:20,maxWidth:420,width:"100%",maxHeight:"85vh",overflowY:"auto"}}>
-      <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{editAlea?(editAlea.type==="echange"?"Modifier l'échange":editAlea.type==="erreur_cps"?"Modifier l'erreur CPS":editAlea.type==="non_tenu"?"Modifier le poste non tenu":"Modifier le message"):"Ajustement du poste"}</div>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>{editAlea?(editAlea.type==="echange"?"Modifier l'échange":editAlea.type==="erreur_cps"?"Modifier l'erreur CPS":editAlea.type==="non_tenu"?(isDispoCtx?"Modifier l'absence":"Modifier le poste non tenu"):"Modifier le message"):"Ajustement du poste"}</div>
       <div style={{fontSize:12,color:"#64748b",marginBottom:14}}>{nomOfficiel} — {jsCode}</div>
 
       {!editAlea&&!type&&(<div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -1780,7 +1795,8 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           ⚠️ Erreur CPS<div style={{fontSize:11,color:"#94a3b8",fontWeight:400,marginTop:2}}>Le document officiel comporte une erreur</div>
         </button>
         <button onClick={()=>{setType("non_tenu");}} style={{padding:"12px 14px",border:"1.5px solid #fdba74",borderRadius:10,textAlign:"left",background:"#fff7ed",cursor:"pointer",fontSize:13,fontWeight:600,color:"#c2410c"}}>
-          🚫 Poste non tenu<div style={{fontSize:11,color:"#c2410c",fontWeight:400,marginTop:2,opacity:.8}}>Personne n'assure ce poste</div>
+          {isDispoCtx?<>🚫 Absent<div style={{fontSize:11,color:"#c2410c",fontWeight:400,marginTop:2,opacity:.8}}>Cet agent n'est en réalité pas disponible</div></>
+          :<>🚫 Poste non tenu<div style={{fontSize:11,color:"#c2410c",fontWeight:400,marginTop:2,opacity:.8}}>Personne n'assure ce poste</div></>}
         </button>
         <button onClick={()=>{setType("message");}} style={{padding:"12px 14px",border:"1.5px solid #93c5fd",borderRadius:10,textAlign:"left",background:"#eff6ff",cursor:"pointer",fontSize:13,fontWeight:600,color:"#1d4ed8"}}>
           📢 Message libre<div style={{fontSize:11,color:"#1d4ed8",fontWeight:400,marginTop:2,opacity:.8}}>Laisser une info visible par tous sur ce poste</div>
@@ -1828,7 +1844,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           <button onClick={valider} disabled={busy||(plusieursAgentsSurCetteCase&&!cible)}
             style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
             background:(plusieursAgentsSurCetteCase&&!cible)?"#e2e8f0":"#ea580c",color:(plusieursAgentsSurCetteCase&&!cible)?"#94a3b8":"#fff"}}>
-            {busy?"…":(editAlea?"Enregistrer":"Confirmer poste non tenu")}
+            {busy?"…":(editAlea?"Enregistrer":(isDispoCtx?"Confirmer l'absence":"Confirmer poste non tenu"))}
           </button>
         </div>
       </div>)}
@@ -2808,17 +2824,47 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     // deja rencontree et corrigee le 18/08 sur les lignes "FOR" (famille
                     // null rejetee par la validation backend, "famille et type sont
                     // requis").
-                    const aleaDispo=findAlea(cpsAleas,row.jsCode,dateKey,ag.famille);
+                    // ag.id passe a findAlea (20/09, "Absent" sur DISPO, Olivier : "sur
+                    // dispo il faudrait pouvoir mettre absent comme pur les formation")
+                    // -- retrouve un alea CIBLE sur cet agent precis (non_tenu ou message),
+                    // jamais celui d'un autre agent dispo le meme jour/famille. forceAgentId
+                    // (nouveau prop AleaPopup) fait qu'un signalement cree depuis le bouton
+                    // 🔄 de CET agent cible toujours lui, jamais "tout le poste" (ambigu ici
+                    // -- la ligne peut regrouper plusieurs agents de familles differentes).
+                    const aleaDispo=findAlea(cpsAleas,row.jsCode,dateKey,ag.famille,ag.id);
+                    // isAbsentTargeted (20/09) : distingue un signalement CIBLE sur cet
+                    // agent precis (agents_concernes le contient -- le seul vrai cas
+                    // "Absent") d'un ancien signalement non cible ("tout le poste",
+                    // agents_concernes vide -- les entrees "par erreur" du 17/09,
+                    // toujours retrouvees en repli par findAlea meme avec agentId fourni).
+                    // Sans cette distinction, un non_tenu non cible s'afficherait a tort
+                    // "Absent" pour N'IMPORTE quel agent de la ligne DISPO ce jour-la.
+                    const isAbsentTargeted=aleaDispo?.type==="non_tenu"&&Array.isArray(aleaDispo.agents_concernes)&&aleaDispo.agents_concernes.includes(ag.id);
+                    // Absent : meme rendu que le badge formation-doublon (isEnFormationDoublon
+                    // plus bas) -- nom raye + 🚫 Absent, au lieu de la carte verte
+                    // "disponible". Exclut aussi cet agent du decompte "disponible" de
+                    // Stat'Equip (statsEquipeController.js, dispoAbsentSet) -- jamais les 2
+                    // a la fois.
+                    if(isAbsentTargeted)return(<div key={ag.id} style={{display:"flex",flexDirection:"column",gap:2,background:"#f8fafc",border:"1.5px solid #cbd5e1",borderRadius:9,padding:"4px 9px"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <Av initials={ag.initials} size={20} famille={ag.famille}/>
+                        <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
+                        <span style={{fontSize:10,fontWeight:700,color:"#64748b",whiteSpace:"nowrap"}}>🚫 Absent</span>
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,forceAgentId:ag.id,editAlea:aleaDispo})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#64748b",opacity:.6,marginLeft:"auto"}}>✎</button>
+                        <button onClick={()=>annulerAlea(aleaDispo.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#64748b",opacity:.6}}>✕</button>
+                      </div>
+                      {aleaDispo.motif&&<div style={{fontSize:10,color:"#64748b",paddingLeft:26,fontStyle:"italic"}}>{aleaDispo.motif}</div>}
+                    </div>);
                     return(<div key={ag.id} style={{display:"flex",flexDirection:"column",gap:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:6,background:"#ecfdf5",border:"1.5px solid #6ee7b7",borderRadius:aleaDispo?.type==="message"?"9px 9px 0 0":9,padding:"4px 9px"}}>
                         <Av initials={ag.initials} size={22} famille={ag.famille}/>
                         <div style={{fontSize:11,fontWeight:700,color:"#065f46"}}>{ag.prenom} {ag.nom}</div>
-                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,forceAgentId:ag.id})} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1,marginLeft:"auto"}}>🔄</button>
                       </div>
                       {aleaDispo?.type==="message"&&<div style={{display:"flex",alignItems:"flex-start",gap:6,background:"#eff6ff",border:"1.5px solid #93c5fd",borderTop:"none",borderRadius:"0 0 9px 9px",padding:"4px 9px"}}>
                         <span style={{fontSize:12}}>📢</span>
                         <div style={{fontSize:10,color:"#1d4ed8",flex:1,lineHeight:1.4}}>{aleaDispo.motif}</div>
-                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:aleaDispo})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
+                        <button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,forceAgentId:ag.id,editAlea:aleaDispo})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✎</button>
                         <button onClick={()=>annulerAlea(aleaDispo.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#1d4ed8",opacity:.6,flexShrink:0}}>✕</button>
                       </div>}
                     </div>);
@@ -3071,7 +3117,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
     {isPrevisionnel&&<div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 16px",fontSize:13,color:"#475569",lineHeight:1.6,maxWidth:620}}>
       Ici, chaque agent partage volontairement son planning personnel (à activer dans Mon Profil) pour aider à s’organiser collectivement.<br/>Seules les journées de travail sont partagées — le reste (congés, absences...) ne l’est pas.<br/>Ces informations restent indicatives et ne remplacent jamais la feuille de présence officielle — en cas d’écart, rapproche-toi de l’encadrement.
     </div>}
-    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} rowAgents={aleaTarget.rowAgents} editAlea={aleaTarget.editAlea} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
+    {aleaTarget&&<AleaPopup agents={agents} jsCode={aleaTarget.jsCode} dateKey={dateKey} famille={aleaTarget.famille} nomOfficiel={aleaTarget.nomOfficiel} rowAgents={aleaTarget.rowAgents} forceAgentId={aleaTarget.forceAgentId} editAlea={aleaTarget.editAlea} currentAgent={currentAgent} onClose={()=>setAleaTarget(null)} onSaved={()=>{api.cpsAleas.getAll().then(rows=>setCpsAleas(rows||[]));}}/>}
     {previsionnelTarget&&<PrevisionnelSignalementPopup agents={agents} agentTitulaireId={previsionnelTarget.agentId} dateKey={dateKey} nomTitulaire={previsionnelTarget.nomTitulaire} currentAgent={currentAgent} onClose={()=>setPrevisionnelTarget(null)} onSaved={()=>{api.previsionnelSignalements.getAll().then(rows=>setPrevisionnelSignalements(rows||[]));}}/>}
     {journeeSpecialeNoteTarget&&<JourneeSpecialeNotePopup agentId={journeeSpecialeNoteTarget.agentId} agentNom={journeeSpecialeNoteTarget.agentNom} dateKey={dateKey} currentMessage={journeeSpecialeNoteTarget.currentMessage} onClose={()=>setJourneeSpecialeNoteTarget(null)} onSaved={()=>{api.journeeSpecialeNotes.getAll().then(rows=>setJourneeSpecialeNotes(rows||[]));}}/>}
   </div>);
