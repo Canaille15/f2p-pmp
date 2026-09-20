@@ -258,7 +258,14 @@ async function getStats(req, res) {
 
     let sommeAges = 0, nbAgentsInclus = 0, nbAgentsExclusParseEchec = 0;
     ageRowsActuel.forEach(r => {
-      if (r.is_reserve) return;
+      // cp!=='ASFP' (20/09, Olivier : "tu as mi dans effectf et age moyen un
+      // agent non reconnu cp. c'est ASFP ?") -- l'agent générique ASFP
+      // (cp="ASFP", pas un vrai matricule) n'a jamais été exclu de CETTE
+      // boucle précise (contrairement à totalAgents/equipeSet un peu plus
+      // haut) -- son "CP" échouait donc toujours le parsing et se
+      // retrouvait compté dans "X agent(s) exclu(s), CP non reconnu",
+      // un message pensé pour un vrai matricule mal formé, jamais pour lui.
+      if (r.is_reserve || r.cp === 'ASFP') return;
       const naissance = parseAnneeNaissance(r.cp);
       if (naissance == null) { nbAgentsExclusParseEchec++; return; }
       sommeAges += (year - naissance);
@@ -347,7 +354,7 @@ async function getStats(req, res) {
       const refDateStr = `${y}-12-31`;
       let somme = 0, n = 0;
       ageRows.forEach(r => {
-        if (r.is_reserve) return;
+        if (r.is_reserve || r.cp === 'ASFP') return; // même exclusion que ci-dessus
         if (!agentPresentAt(r, refDateStr)) return;
         const naissance = parseAnneeNaissance(r.cp);
         if (naissance == null) return;
