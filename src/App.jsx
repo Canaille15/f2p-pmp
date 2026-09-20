@@ -2714,11 +2714,22 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           (dayIdx inchangé), plutôt que de rejouer goToDay 7 fois.
           Masqués sur téléphone (19/08, suite immédiate -- "les boutons pour
           changer se semaines sont genant sur le tel") : le swipe tactile
-          (goToDay via swipeDay, déjà en place) reste le moyen de navigation
-          sur mobile, ces flèches redeviennent superflues et gênent — classe
-          dédiée + display:none sous le même breakpoint mobile déjà utilisé
-          ailleurs (theme.css), desktop inchangé. */}
-      <div style={{display:"flex",alignItems:"center",gap:6}}>
+          (goToDay via swipeDay) reste le moyen de navigation sur mobile, ces
+          flèches redeviennent superflues et gênent — classe dédiée +
+          display:none sous le même breakpoint mobile déjà utilisé ailleurs
+          (theme.css), desktop inchangé.
+          onTouchStart/onTouchEnd (20/09, Olivier -- "un swipe peut être mis
+          en place à partir de la ligne des jours du calendrier au-dessus
+          des matinées ?") : swipeDay n'était en réalité attaché QUE plus
+          bas (sections Matinée/Journée/.../Divers, voir plus loin), jamais
+          sur cette ligne elle-même malgré ce que le commentaire ci-dessus
+          laissait entendre à tort -- corrigé ici, sur le conteneur EXTÉRIEUR
+          (‹ + ligne des jours + ›), jamais sur la ligne interne
+          `overflowX:"auto"` elle-même (celle qui scrolle nativement les 7
+          jours sur un écran très étroit) pour ne jamais interférer avec ce
+          scroll natif. Partagé par CPS Officiel ET Planning Prévisionnel,
+          les deux utilisant ce même composant GlobalView. */}
+      <div onTouchStart={swipeDay.onTouchStart} onTouchEnd={swipeDay.onTouchEnd} style={{display:"flex",alignItems:"center",gap:6}}>
         <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w-1)} aria-label="Semaine précédente" style={NAV_ARROW_STYLE}>‹</button>
         <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
           {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
