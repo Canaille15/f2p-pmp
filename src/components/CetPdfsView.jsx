@@ -465,18 +465,24 @@ const RH0930_RECT = {
   dateEnvoiGestionnaire: [220, 525.6],
 };
 // Zones "Signature" (image, si enregistrée dans Mon profil) — cadre
-// Identification Agent puis cadre Demande de l'agent. Les 2 cadres n'ont en
-// réalité PAS de ligne séparant le texte "Signature"/"Immatriculation" du
-// bas du cadre (vérifié sur le rendu bitmap réel, aucune ligne détectée à
-// cet endroit) : toute la hauteur entre le bas du texte "Signature" et le
-// vrai bord inférieur du cadre est utilisable, bien plus que ce qui avait
-// été estimé le 20/09 par simple triangulation de texte. Jamais un vrai
-// champ AcroForm ici contrairement aux 6 autres imprimés (donc pas
-// trouverZonesSignature/finaliser, dessin direct) — pad réduit à 2 (au lieu
-// de 4) pour exploiter au maximum la hauteur disponible.
+// Identification Agent puis cadre Demande de l'agent. 2ᵉ correctif le 21/09 :
+// mon 1er essai (juste en dessous du mot "Signature", vers le bas du cadre)
+// avait été validé visuellement sur un rendu bitmap avec une signature de
+// TEST synthétique petite — sur la vraie signature d'Olivier (plus grande),
+// le résultat tombait dans une bande grise entre deux lignes internes du
+// cadre, hors de vue du mot "Signature" lui-même ("elle doivent être dans
+// le même cadre que le mot signature", signalé avec le vrai PDF généré).
+// Repositionné pour de bon EN LIGNE avec le mot "Signature", juste à sa
+// droite (rien d'autre sur cette même ligne jusqu'au bord droit du cadre,
+// confirmé par extraction de texte) — visuellement rattaché au mot, sans
+// ambiguïté possible sur le cadre concerné, quelle que soit la vraie
+// structure interne du tableau (jamais totalement fiable à déduire d'un
+// simple scan). Revérifié par rectangles de test sur un rendu bitmap réel.
+// Jamais un vrai champ AcroForm ici contrairement aux 6 autres imprimés
+// (donc pas trouverZonesSignature/finaliser, dessin direct).
 const RH0930_SIGNATURES = [
-  { x: 305, y: 637, width: 248, height: 33 },
-  { x: 305, y: 481, width: 248, height: 40 },
+  { x: 355, y: 664, width: 195, height: 22 },
+  { x: 355, y: 516, width: 195, height: 22 },
 ];
 async function genererMonetisationCet({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl }) {
   const bytes = await fetch("/CET_monetisation.pdf").then(r => r.arrayBuffer());
