@@ -331,7 +331,7 @@
   <div class="logo">🚆</div>
   <h1>Notice d'utilisation — F2P.PMP</h1>
   <p>L'outil de planning partagé de tous les agents PRCI et PAR de Paris Montparnasse. Ce guide explique, module par module, comment s'en servir et les règles qui s'appliquent derrière chaque écran.</p>
-  <div class="meta">Dernière mise à jour : 19 septembre 2026</div>
+  <div class="meta">Dernière mise à jour : 20 septembre 2026</div>
   <button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
 </div>
 
@@ -631,7 +631,7 @@
       </ul>
       <div class="callout rule">
         <div class="callout-title">📖 Ce que chaque statut Congés écrit réellement</div>
-        <p><span class="b">✓ Accordé</span> écrit vraiment le congé dans le planning de chaque jour coché, et <strong>écrase</strong> ce qu'il y avait déjà à cet endroit — même règle que partout ailleurs dans l'appli pour un congé accordé. Un bandeau d'avertissement te le rappelle avant de valider.</p>
+        <p><span class="b">✓ Accordé</span> écrit vraiment le congé dans le planning de chaque jour coché, et <strong>écrase</strong> ce qu'il y avait déjà à cet endroit — même règle que partout ailleurs dans l'appli pour un congé accordé. Un bandeau d'avertissement te le rappelle avant de valider. Si un de ces jours portait déjà un suivi <span class="b">⏳ Demandé</span> ou <span class="b">✕ Refusé</span>, ce suivi est effacé en même temps — plus de badge orphelin à côté d'un congé désormais bien accordé.</p>
         <p><span class="b">⏳ Demandé</span> et <span class="b">✕ Refusé</span> n'écrivent <strong>jamais</strong> rien dans le planning perso — ils alimentent uniquement le suivi du module <a href="#conges">Congés</a> (le sablier sur la case, le solde théorique, la liste des refus). La journée déjà prévue ce jour-là reste affichée et comptée normalement tant que rien n'est accordé.</p>
       </div>
 
@@ -903,6 +903,26 @@
 
       <h3>📄 Le bandeau « Dernier import »</h3>
       <p>En tête de l'écran, un bandeau rappelle qui a importé quoi et quand, une ligne par famille (PRCI, PAR) : « PDF PRCI du {date d'édition imprimée sur le document} — importé par {agent} le {date/heure réelle de l'import} ». Si le même document couvre les deux familles à la fois, une seule ligne combinée s'affiche. Comparer la date d'édition du PDF entre deux imports permet de repérer d'un coup d'œil si un document a déjà été traité, avant même de le réimporter.</p>
+
+      <h3>🅁 Renfort samedi (RFT SAM)</h3>
+      <p>Ce poste occasionnel s'affiche désormais directement dans la section <strong>🌆 Soirée</strong>, juste après <span class="b">PAAC2O · Aide AC PAR</span> — plus dans le pavé « 🗂 Divers » tout en bas comme avant. Visible sous les filtres <span class="b">PAR</span> et <span class="b">Tous</span>, masqué sous <span class="b">PRCI</span> (c'est structurellement un poste PAR).</p>
+
+      <h3>📟 Astreinte</h3>
+      <p>Ligne tout en bas de cet écran (avant le pavé « ⚠️ Non renseignés »), <strong>complètement indépendante</strong> du reste de CPS Officiel : elle n'est jamais alimentée par un import PDF, uniquement par saisie manuelle. Elle sert à noter qui tient l'astreinte de la semaine, sans lien avec la feuille de présence officielle.</p>
+      <p>La case <span class="b">ASTREINTE T</span> affiche le nom de la personne d'astreinte ce jour-là, ou <span class="b">Non renseigné</span> si rien n'est saisi. Le bouton <span class="b">✎</span> ouvre un petit popup :</p>
+      <ul>
+        <li>Un champ de recherche filtre en direct la liste des agents d'astreinte dès les premières lettres tapées (prénom ou nom).</li>
+        <li><span class="btn-label">✓ Appliquer à ce jour uniquement</span> — ne change que le jour actuellement affiché.</li>
+        <li><span class="btn-label">✓ Appliquer à toute la semaine</span> — écrit d'un coup les 7 jours de la semaine d'astreinte (vendredi → jeudi suivant), en écrasant sans condition ce qu'il y avait. Pratique pour poser la rotation normale avant d'ajuster ensuite les échanges.</li>
+      </ul>
+      <div class="callout rule">
+        <div class="callout-title">📖 Modifier un ou plusieurs jours après coup (échange entre agents)</div>
+        <p>Il n'y a pas de bouton dédié « échange » — un jour se modifie simplement en naviguant dessus (les mêmes onglets Lu / Ma / Me / ... / Di qu'ailleurs dans CPS Officiel) puis en rouvrant le popup pour ce jour précis. Chaque jour est stocké indépendamment : changer un seul jour n'affecte jamais les autres jours de la semaine, même déjà assignés en bloc.</p>
+      </div>
+      <div class="callout tip">
+        <div class="callout-title">⚙️ Gérer la liste des agents d'astreinte</div>
+        <p>Dans le même popup, un lien <span class="b">⚙️ Gérer la liste des agents d'astreinte</span> déplie un petit annuaire dédié (une dizaine de noms attendus) — <strong>sans lien avec les agents de l'appli</strong>, pas de matricule CP, juste un prénom et un nom. Ajout, renommage et suppression se font directement là, sans jamais fermer le popup. Renommer quelqu'un met à jour toutes ses journées déjà assignées ; le supprimer fait retomber ses journées à « Non renseigné », sans jamais bloquer.</p>
+      </div>
     </section>
 
     <div class="part-header" id="partie-3">
@@ -921,7 +941,7 @@
         <p>Par défaut, ton planning perso est <strong>privé</strong> — rien de ce que tu saisis n'apparaît ici tant que tu n'as pas activé l'interrupteur <span class="b">Partager mon planning</span> dans <a href="#mon-profil">Mon profil</a>. Une fois activé, seuls les codes de travail (M/AM/N/J/JF/FOR/DISPO) sont partagés — jamais tes repos, congés, notes perso ou autre donnée privée.</p>
       </div>
 
-      <p>Un agent en <a href="#mon-planning">étude de poste</a> apparaît ici en second sur le poste concerné, avec le badge <span class="b">🎓 Étude</span>, sans jamais déclencher le badge rouge « ⚠ Conflit » réservé aux vrais doublons de titulaires.</p>
+      <p>Un agent en <a href="#mon-planning">étude de poste</a> apparaît ici en second sur le poste concerné, avec le badge <span class="b">🎓 Étude</span>, sans jamais déclencher le badge rouge « ⚠ Conflit » réservé aux vrais doublons de titulaires. La ligne <span class="b">🟩 Disponibles</span> (agents présents sans poste attribué) n'est elle non plus jamais concernée par ce badge, même avec plusieurs agents à la fois — c'est un fonctionnement normal, pas un conflit.</p>
     </section>
 
     <div class="part-header modco-header" id="modules-complementaires">
