@@ -1519,7 +1519,15 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
       if(p.id==="AM"){
         const renfortsSamedi=agents.filter(a=>{const en=schedule[`${a.id}-${dateKey}`];return en&&en.jsCode==="RFT SAM";});
         if(renfortsSamedi.length>0){
-          rows.push({poste:{jsCode:"RFT SAM",label:"Renfort samedi",subtitle:""},jsCode:"RFT SAM",agents:renfortsSamedi,famille:null,maxSlots:99});
+          // famille:"PAR" (20/09, Olivier : "tu as pas mis le liseré vert a
+          // gauche comme poste par") -- la ligne était construite avec
+          // famille:null (copié par erreur du patron DIVERS/générique
+          // toutes-familles comme DISPO/JEQ), alors que RFT SAM est
+          // structurellement PAR (déjà le cas dans POSTE_REGISTRY, masqué
+          // sous le filtre PRCI) -- corrigé pour porter le même liseré vert
+          // + badge "PAR" que PAAC2O juste au-dessus, cohérent avec le reste
+          // de la section Soirée.
+          rows.push({poste:{jsCode:"RFT SAM",label:"Renfort samedi",subtitle:""},jsCode:"RFT SAM",agents:renfortsSamedi,famille:"PAR",maxSlots:99});
         }
       }
     }
