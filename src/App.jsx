@@ -2811,7 +2811,18 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                     reste strictement inchange. */}
                 {isPrevisionnel&&!row.isDispo&&nbTitulaires>1&&<span style={{fontSize:12,background:"#fee2e2",color:"#dc2626",borderRadius:10,padding:"2px 8px",fontWeight:800}}>⚠ Conflit</span>}
               </div>
-              <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginTop:3}}>{pJ?`${pJ.jsCode} · ${pJ.label}`:row.poste.label}</div>
+              {/* pJ.jsCode===pJ.label (20/09, Olivier : "la case dispo ne
+                  pourrait pas juste s'appeler dispo ? [...] la y a dispo 3
+                  fois. idem pour vm ?") -- plusieurs entrees POSTES_JOURNEE
+                  ont un jsCode identique a leur label (DISPO, VM, CAF, EIA,
+                  PPRCI, AFO PAR, K-PAR, F-PAR, K-PRCI, A-PRCI) -- le format
+                  "${jsCode} · ${label}" degenerait alors en "DISPO · DISPO",
+                  en plus du badge "DISPO" deja affiche juste au-dessus =
+                  3 fois le meme mot. N'affiche desormais le label seul dans
+                  ce cas -- le badge (violet pour DISPO/VM, garde tel quel)
+                  suffit deja a montrer le code, inchange pour tout poste ou
+                  jsCode et label different reellement (ex: "PICCLO · AC LC"). */}
+              <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginTop:3}}>{pJ?(pJ.jsCode===pJ.label?pJ.label:`${pJ.jsCode} · ${pJ.label}`):row.poste.label}</div>
               {pJ?.subtitle&&<div style={{fontSize:10,color:"#1e293b",fontWeight:600,fontStyle:"italic"}}>{pJ.subtitle}</div>}
               {row.isJournee&&pJ&&<div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>{pJ.horaires}</div>}
               {/* Rappel d'horaire du dimanche (20/09, CPS Officiel + Previsionnel,
