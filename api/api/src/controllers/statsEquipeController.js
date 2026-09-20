@@ -211,7 +211,15 @@ async function getStats(req, res) {
     // l'historique des sessions déjà attribuées à cette entité avant qu'un
     // vrai ASFP existe). Les deux tuiles restent affichées séparément côté
     // frontend, volontairement non fusionnées.
-    const totalAsfpReel = ageRowsActuel.filter(r => r.is_asfp).length;
+    // asfpReelSet (20/09, demande d'Olivier : "exclu asfp de l'ensemble de
+    // l'équipe comme les dpx" -- Magalie GUEGAIN va tenir le poste d'ASFP à
+    // plein temps à partir du 01/10, plus question de la compter comme un
+    // agent équipe "en rotation" normale) -- même traitement qu'Encadrement
+    // (DPX/Adj DPX) juste au-dessus : retiré du décompte "Agents équipe" (et
+    // par ricochet de l'axe Réserve/Roulement, voir plus bas), jamais du
+    // total "Agents global".
+    const asfpReelSet = new Set(ageRowsActuel.filter(r => r.is_asfp).map(r => r.cp));
+    const totalAsfpReel = asfpReelSet.size;
 
     // ─── Grades (18/08, demande d'Olivier : "decompté les Cadre Op [...]
     // les Maitrises [...] et Maytises 2", puis en suite immédiate : "affine
@@ -238,12 +246,14 @@ async function getStats(req, res) {
       maitrise: { total: totalMaitrise, equipe: totalMaitrise - maitriseReserve, reserve: maitriseReserve },
       maitrise2: { total: totalMaitrise2, equipe: totalMaitrise2 - maitrise2Reserve, reserve: maitrise2Reserve },
     };
-    // "Agents équipe" = tout le monde sauf Réserve régionale ET Encadrement,
-    // par différence d'ensembles (jamais une simple soustraction de totaux,
-    // qui compterait deux fois un éventuel agent à la fois réserve et DPX).
+    // "Agents équipe" = tout le monde sauf Réserve régionale, Encadrement ET
+    // ASFP réel, par différence d'ensembles (jamais une simple soustraction
+    // de totaux, qui compterait deux fois un éventuel agent à la fois réserve
+    // et DPX/ASFP).
     const equipeSet = new Set(ageRowsActuel.filter(r => r.cp !== 'ASFP').map(r => r.cp));
     reserveSet.forEach(cp => equipeSet.delete(cp));
     encadrementSet.forEach(cp => equipeSet.delete(cp));
+    asfpReelSet.forEach(cp => equipeSet.delete(cp));
     const totalEquipe = equipeSet.size;
 
     let sommeAges = 0, nbAgentsInclus = 0, nbAgentsExclusParseEchec = 0;
@@ -628,10 +638,14 @@ async function getStats(req, res) {
     // que computeAgeMoyenAnnee (présence historique via date_embauche/
     // date_depart) — un agent compte pour le mois entier où il part (encore
     // là "le mois de son départ"), exclu seulement à partir du mois suivant.
-    // is_reserve/is_dpx/is_adjoint_dpx restent des flags jamais historisés
-    // (limite déjà documentée ailleurs, ex. computeAgeMoyenAnnee) — appliqués
-    // tels quels (valeur d'aujourd'hui) à chaque mois, seule la présence
-    // (date_embauche/date_depart) est recalculée mois par mois.
+    // is_reserve/is_dpx/is_adjoint_dpx/is_asfp restent des flags jamais
+    // historisés (limite déjà documentée ailleurs, ex. computeAgeMoyenAnnee)
+    // — appliqués tels quels (valeur d'aujourd'hui) à chaque mois, seule la
+    // présence (date_embauche/date_depart) est recalculée mois par mois. Pour
+    // ASFP précisément (20/09, Guégain prend le poste au 01/10) : Olivier
+    // sait qu'il doit cocher "🎓 ASFP" le 1er octobre lui-même (pas avant),
+    // sans quoi les mois précédents (où elle était encore en rotation
+    // normale) seraient eux aussi exclus à tort de Réserve/Roulement.
     function presentDuringMonth(row, moisDebutStr, moisFinStr) {
       if (row.date_embauche && row.date_embauche > moisFinStr) return false; // pas encore arrivé ce mois-là
       if (row.date_depart && row.date_depart < moisDebutStr) return false; // déjà parti avant le début du mois
@@ -641,7 +655,7 @@ async function getStats(req, res) {
       return new Set(
         ageRows
           .filter(r => r.cp !== 'ASFP')
-          .filter(r => !r.is_reserve && !(r.is_dpx || r.is_adjoint_dpx))
+          .filter(r => !r.is_reserve && !(r.is_dpx || r.is_adjoint_dpx) && !r.is_asfp)
           .filter(r => presentDuringMonth(r, moisDebutStr, moisFinStr))
           .map(r => r.cp)
       );
