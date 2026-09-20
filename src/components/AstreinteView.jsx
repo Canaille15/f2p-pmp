@@ -56,7 +56,7 @@ function toIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function AstreinteEditPopup({ dateKey, roster, currentId, onClose, onSaved }) {
+function AstreinteEditPopup({ dateKey, roster, currentId, isVendredi, onClose, onSaved }) {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(currentId || null);
   const [busy, setBusy] = useState(false);
@@ -134,7 +134,12 @@ function AstreinteEditPopup({ dateKey, roster, currentId, onClose, onSaved }) {
           <div style={{fontSize:15,fontWeight:800,color:"#3730a3"}}>📟 Astreinte T</div>
           <button onClick={onClose} style={{background:"none",border:"none",fontSize:18,cursor:"pointer",color:"#94a3b8"}}>✕</button>
         </div>
-        <div style={{fontSize:12,color:"#64748b",marginBottom:14,textTransform:"capitalize"}}>{fmtLong(dateKey)}</div>
+        <div style={{fontSize:12,color:"#64748b",marginBottom:isVendredi?4:14,textTransform:"capitalize"}}>{fmtLong(dateKey)}</div>
+        {isVendredi && (
+          <div style={{fontSize:11,color:"#4338ca",background:"#eef2ff",border:"1px solid #c7d2fe",borderRadius:7,padding:"5px 8px",marginBottom:10,lineHeight:1.4}}>
+            Vendredi = jour de bascule à 12h00 — le choix ci-dessous est le <strong>successeur</strong> (à partir de 12h00). Celui qui termine à 12h00 reste celui déjà posé la veille (jeudi).
+          </div>
+        )}
 
         <input
           value={search}
@@ -206,6 +211,22 @@ function AstreinteEditPopup({ dateKey, roster, currentId, onClose, onSaved }) {
   );
 }
 
+// Mini-carte réutilisée pour un agent (couleur/étiquette configurables) ou
+// son état vide -- factorisée pour ne jamais désynchroniser le rendu normal
+// et le rendu vendredi (2 cartes) ci-dessous.
+function AstreinteBadge({ agent, videLabel, initialsColor }) {
+  return agent ? (
+    <div style={{display:"flex",alignItems:"center",gap:6,background:"#eef2ff",border:"1.5px solid #c7d2fe",borderRadius:9,padding:"4px 9px"}}>
+      <div style={{width:18,height:18,borderRadius:"50%",background:initialsColor,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,flexShrink:0}}>
+        {agent.prenom[0]}{agent.nom[0]}
+      </div>
+      <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{agent.prenom} {agent.nom}</div>
+    </div>
+  ) : (
+    <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic",padding:"4px 9px"}}>{videLabel}</div>
+  );
+}
+
 export default function AstreinteRow({ dateKey }) {
   const [roster, setRoster] = useState([]);
   const [schedule, setSchedule] = useState({});
@@ -216,7 +237,25 @@ export default function AstreinteRow({ dateKey }) {
 
   useEffect(() => { chargerRoster(); chargerSchedule(); }, []);
 
-  const assigne = schedule[dateKey]; // {astreinteAgentId, nom, prenom} | undefined
+  // Vendredi = jour de bascule (20/09, Olivier -- "le changement d'astreinte
+  // se fait le vendredi a 12h00 [...] j'aimerais que pour le vendredi il
+  // soit noté jusqu'à 12h00 et dans la case de droite le successeur à
+  // partir de 12h00") : ce jour précis affiche 2 personnes au lieu d'une --
+  // le SORTANT (dernier jour de son astreinte = la veille, jeudi, déjà
+  // stockée là) et l'ENTRANT (le nouveau, stocké sur le vendredi lui-même --
+  // c'est la valeur que ce composant édite normalement pour cette date,
+  // rien de nouveau côté stockage/backend, purement un enrichissement
+  // d'affichage). Un vendredi sans entrant renseigné affiche "Non
+  // communiqué" plutôt que "Non renseigné" -- distinction demandée
+  // explicitement par Olivier pour ce cas précis.
+  const dateObj = new Date(dateKey + "T12:00:00");
+  const isVendredi = dateObj.getDay() === 5;
+  let sortant = null;
+  if (isVendredi) {
+    const veille = new Date(dateObj); veille.setDate(veille.getDate() - 1);
+    sortant = schedule[toIso(veille)];
+  }
+  const entrant = schedule[dateKey]; // {astreinteAgentId, nom, prenom} | undefined
 
   return (
     <>
@@ -229,16 +268,21 @@ export default function AstreinteRow({ dateKey }) {
           <div style={{width:110,flexShrink:0}}>
             <span style={{fontFamily:"monospace",fontSize:10,fontWeight:800,color:"#fff",background:"#4338ca",borderRadius:5,padding:"2px 7px"}}>ASTREINTE T</span>
           </div>
-          <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8}}>
-            {assigne ? (
-              <div style={{display:"flex",alignItems:"center",gap:8,background:"#eef2ff",border:"1.5px solid #c7d2fe",borderRadius:9,padding:"5px 10px"}}>
-                <div style={{width:22,height:22,borderRadius:"50%",background:"#4338ca",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800}}>
-                  {assigne.prenom[0]}{assigne.nom[0]}
+          <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            {isVendredi ? (
+              <>
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  <span style={{fontSize:9,color:"#64748b",fontWeight:700}}>Jusqu'à 12h00</span>
+                  <AstreinteBadge agent={sortant} videLabel="Non renseigné" initialsColor="#818cf8"/>
                 </div>
-                <div style={{fontSize:12,fontWeight:700,color:"#1e293b"}}>{assigne.prenom} {assigne.nom}</div>
-              </div>
+                <span style={{color:"#c7d2fe",fontSize:16}}>→</span>
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  <span style={{fontSize:9,color:"#64748b",fontWeight:700}}>À partir de 12h00</span>
+                  <AstreinteBadge agent={entrant} videLabel="Non communiqué" initialsColor="#4338ca"/>
+                </div>
+              </>
             ) : (
-              <div style={{fontSize:12,color:"#94a3b8",fontStyle:"italic",padding:"5px 10px"}}>Non renseigné</div>
+              <AstreinteBadge agent={entrant} videLabel="Non renseigné" initialsColor="#4338ca"/>
             )}
             <button onClick={()=>setEditing(true)} style={{background:"none",border:"none",cursor:"pointer",fontSize:13,opacity:.5,padding:1}}>✎</button>
           </div>
@@ -248,7 +292,8 @@ export default function AstreinteRow({ dateKey }) {
         <AstreinteEditPopup
           dateKey={dateKey}
           roster={roster}
-          currentId={assigne?.astreinteAgentId || null}
+          currentId={entrant?.astreinteAgentId || null}
+          isVendredi={isVendredi}
           onClose={()=>setEditing(false)}
           onSaved={()=>{ chargerRoster(); chargerSchedule(); }}
         />
