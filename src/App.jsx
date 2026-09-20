@@ -1,19 +1,36 @@
 import React from "react";
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import api, { convertirCodePosteVersJsCode, resolveJsCode } from "./api/client";
-import AdminPanel from "./components/AdminPanel";
 import AgentHeader from "./components/AgentHeader";
 import DayEditPopup from "./components/DayEditPopup";
-import RemplissageMasseModal from "./components/RemplissageMasseView";
-import DemandeCongesView from "./components/DemandeCongesView";
 import { CetDashboardModal, computeDashboardCet, getCetTransfereJours, EpargneCetWidget, EpargneFetesCetWidget } from "./components/CetView";
-import CetPdfsView from "./components/CetPdfsView";
-import D2iView from "./components/D2iView";
-import FimPdfView from "./components/FimPdfView";
 import SignaturePad from "./components/SignaturePad";
-import FormationView, { AfoView } from "./components/FormationView";
-import StatsEquipeView from "./components/StatsEquipeView";
 import AstreinteRow from "./components/AstreinteView";
+// Chargées à la demande (20/09, code-splitting) : ces 8 vues/modales ne sont
+// jamais affichées au premier rendu (toutes gardées par view==="x" ou un
+// state de modale) — inutile de les inclure dans le bundle initial. Chacune
+// enveloppée d'un <Suspense> à son point de rendu, jamais partagée avec le
+// chargement de la page elle-même. AgentHeader/DayEditPopup/SignaturePad/
+// AstreinteRow/CetView restent en import direct : soit toujours visibles au
+// premier rendu (AgentHeader), soit trop fréquemment ouverts pour justifier
+// un flash de chargement (DayEditPopup), soit CetView mélange des composants
+// ET de simples fonctions de calcul (jamais lazy-loadable proprement).
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const RemplissageMasseModal = lazy(() => import("./components/RemplissageMasseView"));
+const DemandeCongesView = lazy(() => import("./components/DemandeCongesView"));
+const CetPdfsView = lazy(() => import("./components/CetPdfsView"));
+const D2iView = lazy(() => import("./components/D2iView"));
+const FimPdfView = lazy(() => import("./components/FimPdfView"));
+const FormationView = lazy(() => import("./components/FormationView"));
+const AfoView = lazy(() => import("./components/FormationView").then(m => ({ default: m.AfoView })));
+const StatsEquipeView = lazy(() => import("./components/StatsEquipeView"));
+// Fallback minimal, cohérent avec le fond de page existant (pas de spinner
+// dédié dans ce projet jusqu'ici) — affiché le temps du téléchargement du
+// chunk, quasi instantané en pratique (même origine, déjà en cache HTTP dès
+// la 2e visite d'une vue).
+function ChunkFallback(){
+  return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:13}}>Chargement…</div>;
+}
 
 
 // ─── PERSISTANCE LOCALE (localStorage) ───────────────────────────────────────
@@ -9804,7 +9821,7 @@ const setProfile=u=>setAgentProfiles(p=>({...p,[agKey]:{...(p[agKey]||{}),...u}}
         </button>
       </div>}
     </div>
-    {showRemplissage && <RemplissageMasseModal agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} schedule={schedule} setSchedule={setSchedule} onClose={()=>setShowRemplissage(false)} onOuvrirJour={ouvrirJourDepuisRemplissage}/>}
+    {showRemplissage && <Suspense fallback={<ChunkFallback/>}><RemplissageMasseModal agent={agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} schedule={schedule} setSchedule={setSchedule} onClose={()=>setShowRemplissage(false)} onOuvrirJour={ouvrirJourDepuisRemplissage}/></Suspense>}
 
     {/* type="month" plutôt que "date" (07/09, Olivier -- "plus moderne et
         fluide") : jumpToMonthDate n'a jamais lu que l'année et le mois de la
@@ -13377,6 +13394,11 @@ export default function App(){
         jumpTarget={personalJumpTarget}/>}
       {view==="echanges"&&<EchangesView agents={agents} currentAgent={currentAgent||currentUser?.agent}/>}
   {view==="annuaire"&&<AnnuaireView currentAgent={currentAgent||currentUser?.agent} isAdmin={isAdmin} agents={agents} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
+  {/* Suspense partagé (20/09, code-splitting) : ces 7 vues sont mutuellement
+      exclusives (view===x), un seul <Suspense> couvre le lot sans gêner les
+      vues non lazy juste au-dessus/en-dessous (Suspense ne se déclenche que
+      si un enfant lazy est réellement en cours de chargement). */}
+  <Suspense fallback={<ChunkFallback/>}>
   {view==="conges"&&<DemandeCongesView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="cetPdfs"&&<CetPdfsView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
   {view==="d2i"&&<D2iView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles}/>}
@@ -13384,9 +13406,10 @@ export default function App(){
   {view==="formation"&&<FormationView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} refreshSchedule={refreshMonSchedule} schedule={schedule} cpsSchedule={cpsSchedule} cpsAleas={cpsAleas}/>}
   {view==="afo"&&<AfoView currentAgent={currentAgent||currentUser?.agent} agents={agents} refreshProfil={refreshMonProfil} refreshSchedule={refreshMonSchedule}/>}
   {view==="statsEquipe"&&<StatsEquipeView/>}
+  </Suspense>
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} themeMode={themeMode} setThemeMode={setThemeMode} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
       {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
-      {view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}
+      <Suspense fallback={<ChunkFallback/>}>{view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}</Suspense>
     </div>
 
     {/* MODALS */}
