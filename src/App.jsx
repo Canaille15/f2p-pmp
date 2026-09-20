@@ -2793,6 +2793,11 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
               <div style={{fontSize:12,fontWeight:700,color:"#1e293b",marginTop:3}}>{pJ?`${pJ.jsCode} · ${pJ.label}`:row.poste.label}</div>
               {pJ?.subtitle&&<div style={{fontSize:10,color:"#1e293b",fontWeight:600,fontStyle:"italic"}}>{pJ.subtitle}</div>}
               {row.isJournee&&pJ&&<div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>{pJ.horaires}</div>}
+              {/* Rappel d'horaire du dimanche (20/09, CPS Officiel + Previsionnel,
+                  GlobalView partage entre les 2 vues) -- meme mecanisme et memes
+                  valeurs que HORAIRES_DIMANCHE_RAPPEL deja utilise dans Mon
+                  planning perso (25/08), jamais affiche ici jusqu'a ce jour. */}
+              {new Date(dateKey+"T12:00:00").getDay()===0&&HORAIRES_DIMANCHE_RAPPEL[row.jsCode]&&<div style={{fontSize:9,color:"#7c3aed",fontWeight:700,marginTop:1}}>{HORAIRES_DIMANCHE_RAPPEL[row.jsCode]}</div>}
             </div>
             <div style={{flex:1,minWidth:0,padding:"7px 12px",display:"flex",flexWrap:"wrap",gap:6,alignItems:"center",minHeight:46}}>
               {row.isDispo
