@@ -461,7 +461,13 @@ export default function AdminPanel({ currentUser, onAgentsChanged }) {
                   background: familleFilter === f ? (f === "PRCI" ? "#1d4ed8" : "#065f46") : "var(--bg-page)",
                   color: familleFilter === f ? "#fff" : "var(--text-secondary)"
                 }}>
-                {f} ({agents.filter(a => a.famille === f).length})
+                {/* (20/09, Olivier : "le nombre de ceux du prci ne change pas
+                    alors qu'il y en as un de moins" apres un depart) -- ce
+                    compteur ne filtrait jamais sur le statut, contrairement a
+                    nbReserve/nbAfo/nbAdmin/nbDpx/nbAdjointDpx juste en dessous
+                    (tous deja limites aux actifs) -- un agent quitte restait
+                    donc compte indefiniment dans le badge PRCI/PAR. */}
+                {f} ({agents.filter(a => a.famille === f && (a.statut || "actif") === "actif").length})
               </button>
             ))}
             <button onClick={() => setReserveOnly(v => !v)}
