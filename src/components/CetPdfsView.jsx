@@ -35,6 +35,7 @@ const TYPES = [
   { k: "epargne", label: "Demande d'épargne sur le CET (hors congés annuels)" },
   { k: "utilisationCourant", label: "Demande d'utilisation en temps — sous-compte courant" },
   { k: "utilisation", label: "Demande d'utilisation en temps — sous-compte fin d'activité" },
+  { k: "monetisationCet", label: "Demande de monétisation de jours CET (RH0930)" },
   { k: "monetisation", label: "Demande de monétisation — sous-compte fin d'activité" },
   { k: "transfert", label: "Demande de transfert de jours (courant → fin d'activité)" },
 ];
@@ -83,6 +84,7 @@ const LABEL_FICHIER_TYPE = {
   intention: "IntentionEpargneConges",
   utilisation: "UtilisationFinActivite",
   monetisation: "MonetisationFinActivite",
+  monetisationCet: "MonetisationCet",
   utilisationCourant: "UtilisationCourant",
   transfert: "TransfertJours",
 };
@@ -176,6 +178,19 @@ Annulation
 Annulation
 3- Un des intervenants signale une anomalie.
 4- Le gestionnaire annule la demande de transfert (une seule annulation est possible par acte de gestion) procède à l'annulation. Il envoie à l'agent une impression écran du nouvel état CET de l'agent. Le pôle RH reçoit cette même impression écran accompagnée du justificatif de l'annulation pour classement dans le dossier de l'agent.`,
+  monetisationCet: `1- L'agent remplit la demande de monétisation et l'envoie au gestionnaire CET.
+2 - Le gestionnaire CET vérifie la possibilité de monétisation selon le solde des jours monétisables.
+Le cas échéant, il retourne le formulaire au salarié
+Le gestionnaire CET met à jour l'outil CET, vise le formulaire et l'envoie à l'Agence Paie et Famille
+3- L'Agence Paie et Famille, procède au paiement en saisissant un nombre de jours « en quantité »
+- monétisation : saisir par le code « HSM » ;
+- liquidation : saisir par le code « HSO »
+L'Agence Paie et Famille envoie le formulaire au salarié
+
+Redressement
+5- Un des intervenants signale une anomalie.
+6- Le gestionnaire CET procède à une annulation sur l'outil CET. Il envoie à l'agent et à l'Agence Paie et Famille une impression écran du nouvel état CET de l'agent. Le pôle RH reçoit cette même impression accompagnée du justificatif d'annulation pour classement dans le dossier de l'agent.
+7- L'Agence Paie et Famille paye ou reprend les indus.`,
   utilisationCourant: `Acteurs / Procédure
 
 Agent
@@ -406,6 +421,77 @@ async function genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, s
   return finaliser(doc, form, signatureDataUrl);
 }
 
+// "RH0930 - Demande de monétisation de jours CET" (20/09, PDF réel fourni par
+// Olivier) — contrairement aux 6 autres imprimés CET, ce document n'a AUCUN
+// champ AcroForm (vérifié via pdf-lib, form.getFields().length===0 : un vrai
+// scan/impression aplatie, pas un formulaire remplissable) — même technique
+// que DemandeCongesView.jsx (texte dessiné à des coordonnées fixes) plutôt que
+// form.getTextField. Coordonnées validées par extraction du flux texte natif
+// du PDF source (pdfjs, position exacte de chaque libellé imprimé) pour
+// garantir qu'aucune valeur ajoutée ne chevauche le texte déjà présent — un
+// 1er essai plaçait la date d'envoi au gestionnaire EN PLEIN sur le "CET" déjà
+// imprimé juste avant, détecté uniquement grâce à cette vérification par
+// coordonnées (jamais visible sur un simple survol du texte).
+// Périmètre volontairement limité aux champs demandés par Olivier : Nom /
+// Prénom / Etablissement / Signature (cadre Identification Agent), Date de
+// demande / Nombre de jours (Courant + Fin d'activité) / Date d'envoi au
+// Gestionnaire CET / Signature (cadre Monétisation - Demande de l'agent) —
+// Immatriculation (CP) et les cadres Saisie/Récépissé (remplis par le
+// gestionnaire CET/l'Agence Paie et Famille, jamais par l'agent) restent
+// vierges, à compléter à la main.
+const RH0930_RECT = {
+  nom: [70, 698], prenom: [225, 698], etablissement: [390, 698],
+  dateDemande: [140, 621.4],
+  joursCourant: [195, 554.9], joursFinActivite: [460, 555.1],
+  dateEnvoiGestionnaire: [220, 525.6],
+};
+// Zones "Signature" (image, si enregistrée dans Mon profil) — cadre
+// Identification Agent (bande vide entre le libellé "Signature" à y=675 et
+// l'en-tête de section suivante à y≈637.5) puis cadre Demande de l'agent
+// (bande vide entre le libellé "Signature" à y≈526 et le début du cadre
+// Saisie à y=474) — validées de la même façon (aucun texte imprimé dans ces
+// plages), jamais un vrai champ AcroForm ici contrairement aux 6 autres
+// imprimés (donc pas trouverZonesSignature/finaliser, dessin direct).
+const RH0930_SIGNATURES = [
+  { x: 310, y: 642, width: 225, height: 28 },
+  { x: 310, y: 485, width: 220, height: 34 },
+];
+async function genererMonetisationCet({ nom, prenom, joursCourant, joursFinActivite, signatureDataUrl }) {
+  const bytes = await fetch("/CET_monetisation.pdf").then(r => r.arrayBuffer());
+  const doc = await PDFDocument.load(bytes);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const page = doc.getPages()[0];
+  const ecrire = ([x, y], texte, taille = 10) => {
+    if (!texte) return;
+    page.drawText(String(texte), { x, y, size: taille, font });
+  };
+  ecrire(RH0930_RECT.nom, (nom || "").toUpperCase());
+  ecrire(RH0930_RECT.prenom, prenom);
+  ecrire(RH0930_RECT.etablissement, "EIC PSO");
+  ecrire(RH0930_RECT.dateDemande, dateAuj());
+  if (joursCourant) ecrire(RH0930_RECT.joursCourant, String(joursCourant), 11);
+  if (joursFinActivite) ecrire(RH0930_RECT.joursFinActivite, String(joursFinActivite), 11);
+  ecrire(RH0930_RECT.dateEnvoiGestionnaire, dateAuj());
+  if (signatureDataUrl) {
+    try {
+      const sig = await doc.embedPng(signatureDataUrl);
+      RH0930_SIGNATURES.forEach(rect => {
+        const pad = 4;
+        const availW = rect.width - pad * 2, availH = rect.height - pad * 2;
+        const scale = Math.min(availW / sig.width, availH / sig.height, 1);
+        const w = sig.width * scale, h = sig.height * scale;
+        page.drawImage(sig, {
+          x: rect.x + (rect.width - w) / 2,
+          y: rect.y + (rect.height - h) / 2,
+          width: w, height: h,
+        });
+      });
+    } catch (e) { console.error("Erreur insertion signature:", e); }
+  }
+  retirerAnnotationsCommentaire(doc);
+  return doc.save();
+}
+
 async function genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, dateDebut, dateFin, signatureDataUrl }) {
   const { doc, form } = await chargerFormulaire("/CET_utilisation_courant.pdf");
   remplirIdentite(form, { nom, prenom, cp });
@@ -465,6 +551,11 @@ function messageEmail({ type, prenom, nom, jours, lignesEpargne, joursCourant, j
   } else if (type === "monetisation") {
     const motifLabel = MOTIFS_MONETISATION.find(m => m.code === motif)?.label || "";
     corps = `Ci-joint ma demande de monétisation des jours du sous-compte de fin d'activité : ${jours} jour(s), au titre de ${motifLabel}.`;
+  } else if (type === "monetisationCet") {
+    const parts = [];
+    if (joursCourant) parts.push(`${joursCourant} jour(s) sur le compte courant`);
+    if (joursFinActivite) parts.push(`${joursFinActivite} jour(s) sur le compte fin d'activité`);
+    corps = `Ci-joint ma demande de monétisation de jours CET (RH0930) : ${parts.join(" et ")}.`;
   } else if (type === "utilisationCourant") {
     const periodeTxt = (dateDebut && dateFin) ? `, du ${versDDMMYYYY(dateDebut)} au ${versDDMMYYYY(dateFin)}` : "";
     if (demandeComplementaire) {
@@ -565,7 +656,7 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
     ? jours !== "" && Number(jours) >= 5 && Number(jours) <= 20 && dateDebutUtil !== "" && dateFinUtil !== ""
     : type === "epargne"
     ? lignesEpargneValides.length > 0
-    : type === "intention"
+    : type === "intention" || type === "monetisationCet"
     ? (Number(joursCourant) || 0) > 0 || (Number(joursFinActivite) || 0) > 0
     : type === "utilisation"
     ? jours !== "" && Number(jours) > 0 && dateAboutir !== ""
@@ -589,6 +680,7 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
           : "Indique les dates de l'absence (du ... au ...).",
         epargne: "Indique au moins un nombre de jours (courant ou fin d'activité) pour un type de jours.",
         intention: "Indique au moins un nombre de congés (courant ou fin d'activité).",
+        monetisationCet: "Indique au moins un nombre de jours à monétiser (courant ou fin d'activité).",
         utilisation: (jours === "" || Number(jours) <= 0)
           ? "Indique un nombre de jours valide."
           : "Indique la date visée pour le dernier jour d'activité.",
@@ -612,6 +704,8 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
         bytes = await genererUtilisationFinActivite({ nom, prenom, cp, jours, formeAbsence, dureeReduite, dateAboutir, signatureDataUrl });
       } else if (type === "monetisation") {
         bytes = await genererMonetisationFinActivite({ nom, prenom, cp, jours, motif, signatureDataUrl });
+      } else if (type === "monetisationCet") {
+        bytes = await genererMonetisationCet({ nom, prenom, joursCourant, joursFinActivite, signatureDataUrl });
       } else if (type === "utilisationCourant") {
         bytes = await genererUtilisationCourant({ nom, prenom, cp, jours, demandeComplementaire, dateDebut: dateDebutUtil, dateFin: dateFinUtil, signatureDataUrl });
       } else {
@@ -689,6 +783,22 @@ export default function CetPdfsView({ currentAgent, agentProfiles }) {
           {type === "intention" && (
             <div>
               <label style={labelStyle}>Nombre de congés à épargner — par sous-compte</label>
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>Compte courant</div>
+                  <input type="number" min="0" value={joursCourant} onChange={e => setJoursCourant(e.target.value)} style={champStyle} placeholder="ex : 1" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>Compte fin d'activité</div>
+                  <input type="number" min="0" value={joursFinActivite} onChange={e => setJoursFinActivite(e.target.value)} style={champStyle} placeholder="ex : 1" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {type === "monetisationCet" && (
+            <div>
+              <label style={labelStyle}>Nombre de jours à monétiser — par sous-compte</label>
               <div style={{ display: "flex", gap: 12 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>Compte courant</div>
