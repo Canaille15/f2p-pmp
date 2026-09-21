@@ -478,11 +478,19 @@ const RH0930_RECT = {
 // ambiguïté possible sur le cadre concerné, quelle que soit la vraie
 // structure interne du tableau (jamais totalement fiable à déduire d'un
 // simple scan). Revérifié par rectangles de test sur un rendu bitmap réel.
-// Jamais un vrai champ AcroForm ici contrairement aux 6 autres imprimés
-// (donc pas trouverZonesSignature/finaliser, dessin direct).
+// Agrandi une 4ᵉ fois le 21/09 ("elle est au bon endroit faut l'aggrandir") :
+// zone élargie au maximum de l'espace réellement vide de chaque ligne
+// (jusqu'à la vraie limite droite du cadre, ~567pt, et verticalement
+// jusqu'aux 1ers vrais éléments voisins — le mot "Etablissement :" juste
+// au-dessus pour le cadre 1, l'en-tête de la section suivante pour les
+// deux — revérifié par rectangles de test puis par génération réelle avec
+// une signature de test à l'aspect ratio proche du réel : hauteur dessinée
+// passée de 18 à 28pt). Jamais un vrai champ AcroForm ici contrairement aux
+// 6 autres imprimés (donc pas trouverZonesSignature/finaliser, dessin
+// direct).
 const RH0930_SIGNATURES = [
-  { x: 355, y: 664, width: 195, height: 22 },
-  { x: 355, y: 516, width: 195, height: 22 },
+  { x: 350, y: 659, width: 210, height: 32 },
+  { x: 350, y: 513, width: 210, height: 32 },
 ];
 async function genererMonetisationCet({ nom, prenom, cp, joursCourant, joursFinActivite, signatureDataUrl }) {
   const bytes = await fetch("/CET_monetisation.pdf").then(r => r.arrayBuffer());
