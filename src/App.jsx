@@ -369,6 +369,40 @@ function computeOcrScale(page, maxDim = 2600) {
 // dépasser, jamais couverte jusqu'ici pour une image envoyée directement
 // (seul le rendu PDF->JPEG l'était). Rejette avec un message clair si le
 // navigateur ne sait vraiment pas décoder le format reçu.
+// Niveaux de gris + auto-contraste (étirement d'histogramme par percentile
+// 1%/99%, même principe que l'outil "Niveaux automatiques" de GIMP/Photoshop)
+// — réduit les erreurs OCR liées à un éclairage inégal, des reflets ou un
+// contraste faible sur une photo prise au téléphone d'un document papier
+// (24/09, demande d'Olivier après un cas réel où une image plus nette a
+// donné moins d'erreurs). Passe en gris (R=G=B) plutôt qu'un vrai seuillage
+// noir/blanc — un seuillage mal calé aurait pu effacer un texte fin ou fin
+// tableau, un simple étirement de contraste est plus sûr et suffit déjà à
+// bien séparer texte/fond. Opère en place sur un canvas déjà dessiné.
+function appliquerNiveauxAuto(ctx2d, width, height) {
+  const imgData = ctx2d.getImageData(0, 0, width, height);
+  const data = imgData.data;
+  const nbPixels = data.length / 4;
+  const hist = new Uint32Array(256);
+  const lum = new Uint8ClampedArray(nbPixels);
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    const v = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    lum[p] = v;
+    hist[v]++;
+  }
+  const clip = Math.round(nbPixels * 0.01);
+  let cum = 0, low = 0, high = 255;
+  for (let v = 0; v < 256; v++) { cum += hist[v]; if (cum >= clip) { low = v; break; } }
+  cum = 0;
+  for (let v = 255; v >= 0; v--) { cum += hist[v]; if (cum >= clip) { high = v; break; } }
+  const range = Math.max(1, high - low);
+  for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+    let v = Math.round((lum[p] - low) * 255 / range);
+    v = v < 0 ? 0 : v > 255 ? 255 : v;
+    data[i] = data[i + 1] = data[i + 2] = v;
+  }
+  ctx2d.putImageData(imgData, 0, 0);
+}
+
 function normaliserPhotoPourOcr(dataUrl) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -382,6 +416,7 @@ function normaliserPhotoPourOcr(dataUrl) {
       ctx2d.fillStyle = "#fff";
       ctx2d.fillRect(0, 0, canvas.width, canvas.height);
       ctx2d.drawImage(img, 0, 0, canvas.width, canvas.height);
+      appliquerNiveauxAuto(ctx2d, canvas.width, canvas.height);
       resolve(canvas.toDataURL("image/jpeg", 0.85).split(",")[1]);
     };
     img.onerror = () => reject(new Error("Format de photo non reconnu par le navigateur — réessaie en choisissant la photo depuis \"Photos\" plutôt que \"Fichiers\", ou en JPEG."));
