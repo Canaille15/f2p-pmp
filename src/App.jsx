@@ -358,6 +358,37 @@ function computeOcrScale(page, maxDim = 2600) {
   return Math.min(3.0, maxDim / longSide);
 }
 
+// Normalise n'importe quelle photo (JFIF — l'extension .jfif que Chrome/
+// Windows donne à une image téléchargée, un vrai JPEG sous un autre nom,
+// cas réel du 24/09 — mais aussi WEBP Android, HEIC iPhone, PNG...) en
+// JPEG avant OCR — même principe que computeOcrScale pour les PDF
+// scannés (24/09) : décode réellement les pixels (canvas) au lieu de se
+// fier à file.type, peu fiable selon l'extension/l'OS (Windows ne
+// reconnaît pas toujours .jfif comme image/jpeg). Protège aussi de la
+// même limite ocr.space (1 Mo/fichier) qu'une grosse photo peut
+// dépasser, jamais couverte jusqu'ici pour une image envoyée directement
+// (seul le rendu PDF->JPEG l'était). Rejette avec un message clair si le
+// navigateur ne sait vraiment pas décoder le format reçu.
+function normaliserPhotoPourOcr(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const longSide = Math.max(img.naturalWidth, img.naturalHeight);
+      const scale = Math.min(1, 2600 / longSide);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      const ctx2d = canvas.getContext("2d");
+      ctx2d.fillStyle = "#fff";
+      ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+      ctx2d.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.85).split(",")[1]);
+    };
+    img.onerror = () => reject(new Error("Format de photo non reconnu par le navigateur — réessaie en choisissant la photo depuis \"Photos\" plutôt que \"Fichiers\", ou en JPEG."));
+    img.src = dataUrl;
+  });
+}
+
 async function ocrSpaceRequest(imageB64, mimeType, engine, timeoutMs) {
   const form = new URLSearchParams();
   form.append("apikey", BULLETIN_OCR_APIKEY);
@@ -1106,7 +1137,8 @@ function BulletinImportButton({ agentCp, onImported }) {
             text = texts.join("\n");
           }
         } else {
-          text = await ocrImageViaOcrSpace(b64, file.type || "image/jpeg");
+          const jpegB64 = await normaliserPhotoPourOcr(reader.result);
+          text = await ocrImageViaOcrSpace(jpegB64, "image/jpeg");
         }
         if (!text) throw new Error("Aucun texte extrait du document");
 
@@ -2169,8 +2201,11 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
             text=texts.join("\n");
           }
         }else{
-          // Image directe
-          text=await ocrPage(b64,file.type||"image/jpeg");
+          // Image directe — normalisée en JPEG par décodage réel (canvas),
+          // jamais en se fiant à file.type (peu fiable sur certaines
+          // extensions comme .jfif, voir normaliserPhotoPourOcr)
+          const jpegB64=await normaliserPhotoPourOcr(reader.result);
+          text=await ocrPage(jpegB64,"image/jpeg");
         }
         // Fix OCR : espace parasite a l'interieur d'un code JS (ex: "PIL CLX" -> "PILCLX")
         // — inoffensif sur du texte natif (ne matche que le defaut OCR exact).
