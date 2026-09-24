@@ -4849,9 +4849,24 @@ const TC_PLAFOND_MIN = PLAFOND_32H_MIN; // alias historique, TC préexistant
 // si fourni, rejoue le ledger en ordre chronologique RÉEL (saisiLe, pas le
 // tri d'affichage par mois) et plafonne le solde cumulé — un ajout qui
 // dépasserait le plafond n'est crédité que jusqu'au plafond, l'excédent est
-// remonté dans horsPlafond (même principe que le plafond TC sur les pauses
-// figées, computeDashboardTC) ; un retrait (delta négatif) n'est lui jamais
+// remonté dans horsPlafond ; un retrait (delta négatif) n'est lui jamais
 // plafonné.
+// Correctif du 24/09 (Olivier a repéré que le TC autorise déjà un
+// dépassement manuel du plafond — utile quand les RH tardent à valider un
+// paiement, le solde doit pouvoir suivre la réalité en attendant — et a
+// demandé de reproduire ça sur TY) : SEULES les entrées "automatiques" (pour
+// TY, le seul cas existant est le basculement TQ→TY, `note==="transfert_tq"`,
+// posé par basculerTQversTY ci-dessous) sont soumises au plafond, rejouées en
+// ordre chronologique. Un ajustement manuel (bouton "+ Ajuster le solde",
+// jamais de `note`) est TOUJOURS crédité intégralement, même au-delà du
+// plafond — exactement le même principe déjà en place pour TC
+// (computeDashboardTC, qui ne plafonne QUE le crédit automatique +1h30 des
+// pauses figées, jamais un ajustement manuel). `basculerTQversTY` calcule
+// déjà lui-même la place disponible AVANT d'écrire l'entrée `transfert_tq`
+// (`Math.max(0, PLAFOND_32H_MIN - ty.solde)`) — si le solde dépasse déjà 32h
+// via un ajustement manuel, la place disponible retombe à 0 et tout le
+// montant du basculement part automatiquement en "à payer", sans qu'aucun
+// changement supplémentaire n'ait été nécessaire dans cette fonction.
 // cutoffDate (21/08, module FIM — Fiche Individuelle Mensuelle) : optionnel,
 // "YYYY-MM-DD" — ne prend en compte que les entrées dont le MOIS choisi par
 // l'agent (champ "mois", pas saisiLe) est à cette date ou avant, pour
@@ -4881,7 +4896,10 @@ export function computeLedgerSolde(agentProfiles, agentId, ledgerKey, plafondMin
   let solde = 0, horsPlafond = 0;
   chrono.forEach(e=>{
     const delta = e.deltaMinutes||0;
-    if(delta>0){
+    // Seul le basculement automatique TQ→TY (note==="transfert_tq") est
+    // plafonné — un ajustement manuel (pas de note) est toujours crédité
+    // intégralement, même au-delà du plafond (voir le commentaire au-dessus).
+    if(delta>0 && e.note==="transfert_tq"){
       const place = Math.max(0, plafondMin - solde);
       const ajoute = Math.min(delta, place);
       solde += ajoute;
@@ -6712,11 +6730,16 @@ function CompteurDetailModal({ agent, schedule, setSchedule, agentProfiles, setA
                 <div style={{fontSize:10,fontWeight:600,color:"#64748b",marginTop:4}}>
                   {ledgerData.dernierSaisiLe ? `Mis à jour le ${new Date(ledgerData.dernierSaisiLe).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}` : "Aucune saisie pour l'instant"}
                 </div>
-                {/* Plafond 32h00 (13/08, TY — même mécanisme que TC) : au-delà,
-                    l'excédent des ajouts n'est jamais crédité (computeLedgerSolde),
-                    remonté ici comme rappel "à vérifier/payer en heures sup". */}
+                {/* Plafond 32h00 (13/08, TY — même mécanisme que TC, précisé le
+                    24/09) : ne concerne QUE le basculement automatique TQ→TY —
+                    au-delà, l'excédent de CE basculement n'est jamais crédité
+                    (computeLedgerSolde, note==="transfert_tq"), remonté ici
+                    comme rappel "à vérifier/payer en heures sup". Un
+                    ajustement manuel reste toujours possible au-delà, jamais
+                    bloqué (même principe que TC, utile si les RH tardent à
+                    valider un paiement). */}
                 {plafondMin!=null && ledgerData.solde>=plafondMin && (
-                  <div style={{fontSize:11,fontWeight:700,color:"#b45309",marginTop:6}}>⚠️ Plafond 32h00 atteint — tout nouvel ajout au-delà sera à payer automatiquement (heures sup), jamais crédité au solde</div>
+                  <div style={{fontSize:11,fontWeight:700,color:"#b45309",marginTop:6}}>⚠️ Plafond 32h00 atteint — tout nouveau basculement TQ→TY sera désormais payé plutôt que transféré. Un ajustement manuel reste toujours possible et crédité intégralement au-delà.</div>
                 )}
                 {plafondMin!=null && ledgerData.horsPlafond>0 && (
                   <div style={{fontSize:10,fontWeight:600,color:"#92400e",marginTop:4}}>{minToHM(ledgerData.horsPlafond)} déjà passés en heures sup depuis le début du suivi</div>

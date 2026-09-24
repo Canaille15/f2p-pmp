@@ -30,14 +30,14 @@ describe("computeLedgerSolde — sans plafond (RN)", () => {
   });
 });
 
-describe("computeLedgerSolde — avec plafond 32h00 (TY)", () => {
-  it("un ajout qui dépasse le plafond n'est crédité que jusqu'au plafond, l'excédent va dans horsPlafond", () => {
+describe("computeLedgerSolde — avec plafond 32h00 (TY), correctif du 24/09 : seul le basculement TQ→TY (note===\"transfert_tq\") est plafonné, un ajustement manuel (sans note) ne l'est jamais — même asymétrie que TC (computeDashboardTC)", () => {
+  it("un basculement TQ→TY (note transfert_tq) qui dépasse le plafond n'est crédité que jusqu'au plafond, l'excédent va dans horsPlafond", () => {
     const agentProfiles = {
       [AGENT_ID]: {
         tyLedger: [
-          // 30h00 (1800 min) puis +5h00 (300 min) → dépasse 32h00 (1920 min)
-          { mois: "2026-01", deltaMinutes: 1800, saisiLe: "2026-01-15" },
-          { mois: "2026-02", deltaMinutes: 300, saisiLe: "2026-02-15" },
+          // 30h00 (1800 min) puis +5h00 (300 min) de basculement → dépasse 32h00 (1920 min)
+          { mois: "2026-01", deltaMinutes: 1800, saisiLe: "2026-01-15", note: "transfert_tq" },
+          { mois: "2026-02", deltaMinutes: 300, saisiLe: "2026-02-15", note: "transfert_tq" },
         ],
       },
     };
@@ -46,12 +46,40 @@ describe("computeLedgerSolde — avec plafond 32h00 (TY)", () => {
     expect(result.horsPlafond).toBe(1800 + 300 - PLAFOND_32H_MIN); // 180 min "à payer"
   });
 
-  it("un retrait (delta négatif) n'est jamais plafonné, même après un dépassement", () => {
+  it("un ajustement MANUEL (pas de note) n'est JAMAIS plafonné, même très au-delà de 32h00 — utile quand les RH tardent à valider un paiement", () => {
     const agentProfiles = {
       [AGENT_ID]: {
         tyLedger: [
-          { mois: "2026-01", deltaMinutes: 2000, saisiLe: "2026-01-15" }, // > plafond
-          { mois: "2026-02", deltaMinutes: -500, saisiLe: "2026-02-15" }, // gros retrait
+          { mois: "2026-01", deltaMinutes: 1800, saisiLe: "2026-01-15" }, // manuel, pas de note
+          { mois: "2026-02", deltaMinutes: 300, saisiLe: "2026-02-15" }, // manuel, pas de note
+        ],
+      },
+    };
+    const result = computeLedgerSolde(agentProfiles, AGENT_ID, "tyLedger", PLAFOND_32H_MIN);
+    expect(result.solde).toBe(1800 + 300); // crédité intégralement, > plafond
+    expect(result.horsPlafond).toBe(0); // aucun mouvement automatique, rien en heures sup
+  });
+
+  it("un basculement TQ→TY alors que le solde manuel dépasse DÉJÀ le plafond part intégralement en horsPlafond, sans toucher au solde", () => {
+    const agentProfiles = {
+      [AGENT_ID]: {
+        tyLedger: [
+          { mois: "2026-01", deltaMinutes: 2400, saisiLe: "2026-01-15" }, // manuel, 40h00, déjà > plafond
+          { mois: "2026-02", deltaMinutes: 600, saisiLe: "2026-02-15", note: "transfert_tq" }, // 10h00 de basculement
+        ],
+      },
+    };
+    const result = computeLedgerSolde(agentProfiles, AGENT_ID, "tyLedger", PLAFOND_32H_MIN);
+    expect(result.solde).toBe(2400); // le manuel reste à 40h00, le basculement n'ajoute rien
+    expect(result.horsPlafond).toBe(600); // les 10h00 du basculement partent entièrement en heures sup
+  });
+
+  it("un retrait (delta négatif, même manuel) n'est jamais plafonné, même après un dépassement", () => {
+    const agentProfiles = {
+      [AGENT_ID]: {
+        tyLedger: [
+          { mois: "2026-01", deltaMinutes: 2000, saisiLe: "2026-01-15", note: "transfert_tq" }, // > plafond
+          { mois: "2026-02", deltaMinutes: -500, saisiLe: "2026-02-15" }, // gros retrait manuel
         ],
       },
     };
@@ -60,14 +88,14 @@ describe("computeLedgerSolde — avec plafond 32h00 (TY)", () => {
     expect(result.solde).toBe(PLAFOND_32H_MIN - 500);
   });
 
-  it("le plafonnement se rejoue dans l'ordre chronologique du mois, pas l'ordre de saisie", () => {
+  it("le plafonnement des basculements TQ→TY se rejoue dans l'ordre chronologique du mois, pas l'ordre de saisie", () => {
     // Saisi dans le désordre (février avant janvier), mais le calcul doit
     // rejouer janvier PUIS février pour que le plafonnement soit correct.
     const agentProfiles = {
       [AGENT_ID]: {
         tyLedger: [
-          { mois: "2026-02", deltaMinutes: 300, saisiLe: "2026-01-01" }, // saisi en premier
-          { mois: "2026-01", deltaMinutes: 1800, saisiLe: "2026-01-02" }, // saisi en second
+          { mois: "2026-02", deltaMinutes: 300, saisiLe: "2026-01-01", note: "transfert_tq" }, // saisi en premier
+          { mois: "2026-01", deltaMinutes: 1800, saisiLe: "2026-01-02", note: "transfert_tq" }, // saisi en second
         ],
       },
     };
