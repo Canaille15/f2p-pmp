@@ -2067,7 +2067,7 @@ function JourneeSpecialeNotePopup({agentId,agentNom,dateKey,currentMessage,onClo
   </div>);
 }
 
-function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onRemoveAgent,isAdmin,isPrevisionnel,previsionnelSignalements,setPrevisionnelSignalements,journeeSpecialeNotes,setJourneeSpecialeNotes}){
+function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset,setWeekOffset,onImport,currentAgent,onRemoveAgent,isAdmin,isPrevisionnel,previsionnelSignalements,setPrevisionnelSignalements,journeeSpecialeNotes,setJourneeSpecialeNotes,stickyTop=88}){
   const [dayIdx,setDayIdx]=useState(()=>{const d=new Date().getDay();return d===0?6:d-1;});
   const goToDay=(delta)=>{
     let newIdx=dayIdx+delta;
@@ -2811,8 +2811,20 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
           `overflowX:"auto"` elle-même (celle qui scrolle nativement les 7
           jours sur un écran très étroit) pour ne jamais interférer avec ce
           scroll natif. Partagé par CPS Officiel ET Planning Prévisionnel,
-          les deux utilisant ce même composant GlobalView. */}
-      <div onTouchStart={swipeDay.onTouchStart} onTouchEnd={swipeDay.onTouchEnd} style={{display:"flex",alignItems:"center",gap:6}}>
+          les deux utilisant ce même composant GlobalView.
+          position:sticky (28/09, Olivier -- "losqu'on descent la vue vers
+          le bas, on ne voit plus quelle jour nous somme [...] c'est
+          possible que la barre de la [date] reste en haut de l'ecran ?")
+          -- reste à sa place normale tant qu'on n'a pas scrollé (comportement
+          CSS natif de sticky, rien à faire de spécial), puis se colle juste
+          sous le header de l'appli (stickyTop, mesuré en direct dans App
+          via headerRef -- jamais une valeur fixe devinée, la hauteur réelle
+          du header varie légèrement selon la largeur d'écran) dès qu'elle
+          atteindrait le haut de l'écran en scrollant. Fond + bordure
+          explicites : sans ça, le contenu qui défile en dessous (les
+          sections Matinée/Soirée/.../Divers) serait visible PAR-DESSOUS la
+          barre collée, illisible. */}
+      <div onTouchStart={swipeDay.onTouchStart} onTouchEnd={swipeDay.onTouchEnd} style={{display:"flex",alignItems:"center",gap:6,position:"sticky",top:stickyTop,zIndex:20,background:"var(--bg-page)",padding:"6px 0",borderBottom:"1px solid var(--border)"}}>
         <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w-1)} aria-label="Semaine précédente" style={NAV_ARROW_STYLE}>‹</button>
         <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
           {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
@@ -2822,7 +2834,16 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
         </div>
         <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w+1)} aria-label="Semaine suivante" style={NAV_ARROW_STYLE}>›</button>
       </div>
-    </div>
+      {/* fix (28/09) : le wrapper "Nav semaine" (position:"flex",
+          flexDirection:"column", ouvert plus haut) n'est plus refermé ici --
+          il englobe désormais aussi tout le bloc Sections juste en dessous
+          (fermeture déplacée après son dernier </div>, voir plus bas). Sans
+          ça, la barre des jours (position:sticky juste au-dessus) ne pouvait
+          jamais "coller" au-delà de la hauteur de ce petit wrapper d'origine
+          (2 lignes) -- une fois scrollé plus bas que lui, elle disparaissait
+          avec lui au lieu de rester visible pendant tout le scroll des
+          sections Matinée/Soirée/Nuit/Divers, exactement le bug signalé par
+          Olivier ("on ne voit plus quelle jour nous somme"). */}
 
     {/* Sections */}
     <div onTouchStart={swipeDay.onTouchStart} onTouchEnd={swipeDay.onTouchEnd}>
@@ -3185,6 +3206,10 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       </div>
     ))}
 
+    </div>
+    {/* fin du wrapper "Nav semaine" étendu (28/09, voir commentaire plus
+        haut, juste après la barre des jours) -- referme bien le même <div>
+        ouvert avant le mois/la barre des jours, pas un nouveau niveau. */}
     </div>
 
     {/* Astreinte (20/09, remonté avant "Non renseignés" le même jour) : tout
@@ -12078,6 +12103,24 @@ export default function App(){
   const [currentAgent,setCurrentAgent]=useState(null);
   const [weekOffset,setWeekOffset]=useState(0);
   const [menuOpen,setMenuOpen]=useState(false);
+  // headerHeight (28/09, Olivier -- "dans cps et previonel, losqu'on descent
+  // la vue vers le bas, on ne voit plus quelle jour nous somme [...] la
+  // barre de la [date] reste en haut de l'ecran") : mesure reelle de la
+  // hauteur du header sticky (logo+actions + onglets), plutot qu'une valeur
+  // fixe devinee -- la hauteur de la ligne d'onglets varie legerement selon
+  // la largeur d'ecran (fontSize en clamp()), une valeur codee en dur aurait
+  // risque un leger decalage/chevauchement selon l'appareil. Sert de `top`
+  // a la barre des jours (GlobalView, CPS Officiel + Planning Previsionnel)
+  // pour qu'elle reste "collee" juste sous le header en scrollant, jamais
+  // recouverte par lui ni ne le recouvrant.
+  const headerRef=useRef(null);
+  const [headerHeight,setHeaderHeight]=useState(88);
+  useEffect(()=>{
+    const mesurer=()=>{if(headerRef.current)setHeaderHeight(headerRef.current.offsetHeight);};
+    mesurer();
+    window.addEventListener("resize",mesurer);
+    return ()=>window.removeEventListener("resize",mesurer);
+  },[]);
   const [schedule,setSchedule]=usePersist("schedule",{});
   const [cpsSchedule,setCpsSchedule]=usePersist("cpsSchedule",{});
   const [cpsAleas,setCpsAleas]=usePersist("cpsAleas",[]);
@@ -12670,7 +12713,7 @@ export default function App(){
     <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box;}button:hover{opacity:.85;}`}</style>
 
     {/* ── HEADER ── */}
-    <div style={{background:"var(--bg-card)",borderBottom:"1.5px solid var(--border)",
+    <div ref={headerRef} style={{background:"var(--bg-card)",borderBottom:"1.5px solid var(--border)",
       position:"sticky",top:0,zIndex:50,
       boxShadow:"0 1px 6px rgba(0,0,0,.06)"}}>
 
@@ -12893,7 +12936,7 @@ export default function App(){
     </div>}
     {/* CONTENU */}
     <div style={{maxWidth:1100,margin:"0 auto",padding:"14px"}}>
-      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} previsionnelSignalements={[]} setPrevisionnelSignalements={()=>{}} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}
+      {view==="global"&&<GlobalView agents={agents} schedule={cpsSchedule} setSchedule={setCpsSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} previsionnelSignalements={[]} setPrevisionnelSignalements={()=>{}} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes} stickyTop={headerHeight}
         onImport={ag=>{setCurrentAgent(ag);setImportDPTarget(ag);}}
         onRemoveAgent={ag=>{if(window.confirm(`Supprimer ${ag.prenom} ${ag.nom} ?`))setAgents(p=>p.filter(a=>a.id!==ag.id));}}
         isAdmin={isAdmin}
@@ -12930,7 +12973,7 @@ export default function App(){
   {view==="statsEquipe"&&<StatsEquipeView/>}
   </Suspense>
       {view==="profil"&&<ProfilPersoView currentAgent={currentAgent||currentUser?.agent} agentProfiles={agentProfiles} setAgentProfiles={setAgentProfiles} themeMode={themeMode} setThemeMode={setThemeMode} onPartageChange={(val)=>{setCurrentUser(prev=>prev?{...prev,agent:{...prev.agent,partage_previsionnel:val}}:prev);setCurrentAgent(prev=>prev?{...prev,partage_previsionnel:val}:prev);api.planning.getAllPublic().then(entries=>{if(entries)setPrevisionnelSchedule(entries);}).catch(()=>{});}}/>}
-      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes}/>}
+      {view==="previsionnel"&&<GlobalView agents={agents} schedule={previsionnelSchedule} setSchedule={setPrevisionnelSchedule} cpsAleas={cpsAleas} setCpsAleas={setCpsAleas} currentAgent={currentAgent||currentUser?.agent} weekOffset={weekOffset} setWeekOffset={setWeekOffset} onImport={()=>{}} onRemoveAgent={()=>{}} isAdmin={isAdmin} isPrevisionnel={true} previsionnelSignalements={previsionnelSignalements} setPrevisionnelSignalements={setPrevisionnelSignalements} journeeSpecialeNotes={journeeSpecialeNotes} setJourneeSpecialeNotes={setJourneeSpecialeNotes} stickyTop={headerHeight}/>}
       <Suspense fallback={<ChunkFallback/>}>{view==="admin"&&<AdminPanel currentUser={currentUser} onAgentsChanged={rechargerAgents}/>}</Suspense>
     </div>
 
