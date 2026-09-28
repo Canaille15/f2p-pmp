@@ -2967,12 +2967,24 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                 // capacite max -- seuls les agents reellement presents sont montres,
                 // la capacite reste juste un plafond (jamais un plancher). Le poste
                 // normal a un seul agent (maxSlots===1, vacant ou occupe) garde son
-                // unique case habituelle, inchangee -- c'est le seul cas ou une case
-                // "Vacant" doit encore apparaitre. Le cas doublon/previsionnel
-                // (maxSlots deja egal a Math.max(ags.length,1) plus haut) n'est de
-                // toute facon jamais concerne, min(agents.length,maxSlots) y vaut
-                // deja exactement agents.length.
-                : Array.from({length:row.maxSlots<99?(row.maxSlots===1?1:Math.min(row.agents.length,row.maxSlots)):Math.max(row.agents.length,1)},(_,si)=>{
+                // unique case habituelle quand il n'y a 0 ou 1 agent -- c'est le seul
+                // cas ou une case "Vacant" doit encore apparaitre. Le cas doublon/
+                // previsionnel (maxSlots deja egal a Math.max(ags.length,1) plus haut)
+                // n'est de toute facon jamais concerne, min(agents.length,maxSlots) y
+                // vaut deja exactement agents.length.
+                // fix (28/09, cas reel PAPAUJ · Pauseur PAR, Olivier : "il il a un
+                // conflit [...] mais je ne vois qu'un seul nom") : le "1" fixe pour
+                // maxSlots===1 plafonnait le nombre de cases a 1 QUOI QU'IL ARRIVE,
+                // meme quand nbTitulaires (juste au-dessus, base sur row.agents SANS
+                // ce plafond) detectait a raison un vrai conflit (2+ agents reels sur
+                // le meme poste a un seul titulaire) -- le badge "⚠ Conflit" s'affichait
+                // donc correctement, mais le 2e agent en conflit restait invisible,
+                // sa carte jamais rendue. Remplace par Math.max(row.agents.length,1) --
+                // garde exactement le meme comportement pour 0 agent (1 case "Vacant")
+                // et 1 agent (1 case normale), mais affiche desormais toutes les cartes
+                // en conflit reel (2+ agents), une carte par agent, comme les postes
+                // multi-agents juste au-dessus.
+                : Array.from({length:row.maxSlots<99?(row.maxSlots===1?Math.max(row.agents.length,1):Math.min(row.agents.length,row.maxSlots)):Math.max(row.agents.length,1)},(_,si)=>{
                     const ag=rowAgentsTries[si];const en=ag?schedule[`${ag.id}-${dateKey}`]:null;
                     if(search&&ag&&!`${ag.prenom} ${ag.nom}`.toLowerCase().includes(search.toLowerCase()))return null;
                     const isForm=en?.equipe==="JF";const isMe=ag&&currentAgent?.id===ag.id;
