@@ -1119,14 +1119,15 @@ function ModalDepart({ agent, onConfirmDepart, onConfirmSuppression, onAnnulerDe
         </div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>Date de départ</div>
-          {/* Liseré rouge (01/10, demandé par Olivier) : une date de départ est
-              une action a consequence reelle, merite de ressortir visuellement --
-              fond/texte sur var(--bg-page)/var(--text-primary) pour rester lisible
-              en mode sombre (etait fige en clair avant, illisible une fois la
-              modale passee en sombre). color-scheme:dark (theme.css) fait en plus
-              passer le calendrier/les chiffres natifs du champ en rendu sombre. */}
+          {/* Fond/texte sur var(--bg-page)/var(--text-primary) (01/10) : etait
+              fige en clair avant, illisible une fois la modale passee en
+              sombre. color-scheme:dark (theme.css) fait en plus passer le
+              calendrier/les chiffres natifs du champ en rendu sombre. (Le
+              lisere rouge demande le meme jour visait en realite la barre
+              des jours de CPS Officiel/Planning Previsionnel, pas ce champ
+              -- voir plus bas dans ce journal.) */}
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            style={{ width: "100%", padding: "8px 12px", border: "2px solid #dc2626", borderRadius: 8, fontSize: 13, outline: "none", background: "var(--bg-page)", color: "var(--text-primary)" }}
+            style={{ width: "100%", padding: "8px 12px", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, outline: "none", background: "var(--bg-page)", color: "var(--text-primary)" }}
           />
         </div>
         <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
@@ -1134,8 +1135,23 @@ function ModalDepart({ agent, onConfirmDepart, onConfirmSuppression, onAnnulerDe
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "10px", background: "#f1f5f9", color: "#64748b", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>Annuler</button>
-          <button onClick={() => onConfirmDepart(date)} style={{ flex: 1, padding: "10px", background: "#78716c", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Confirmer le départ</button>
+          <button onClick={() => onConfirmDepart(date)} style={{ flex: 1, padding: "10px", background: "#78716c", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>
+            {aDejaDepartProgramme ? "Enregistrer la nouvelle date" : "Confirmer le départ"}
+          </button>
         </div>
+        {/* Rappel explicite (01/10, Olivier : "fallait confirmer le depart.
+            c'est trompeur") -- changer la date dans le champ ne sauvegarde
+            RIEN tout seul, il faut toujours cliquer sur ce bouton ensuite.
+            Le libelle du bouton lui-meme ("Confirmer le depart") ne le
+            rendait pas evident pour une simple MODIFICATION de date deja
+            programmee (on dirait qu'on re-declare un depart, pas qu'on
+            sauvegarde un changement) -- libelle adapte juste au-dessus, et
+            ce rappel pour lever toute ambiguite sur les DEUX etapes. */}
+        {aDejaDepartProgramme && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", marginTop: -4 }}>
+            ⚠️ Choisir une date ne suffit pas — clique sur "Enregistrer la nouvelle date" pour que le changement soit pris en compte.
+          </div>
+        )}
         {aDejaDepartProgramme && (
           <button onClick={() => { onAnnulerDepartProgramme(agent); onClose(); }}
             style={{ background: "none", border: "none", color: "#92400e", cursor: "pointer", fontSize: 11.5, fontWeight: 600, textDecoration: "underline", textAlign: "left" }}>

@@ -2831,8 +2831,20 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <div onTouchStart={swipeDay.onTouchStart} onTouchEnd={swipeDay.onTouchEnd} style={{display:"flex",alignItems:"center",gap:6,position:"sticky",top:stickyTop,zIndex:20,background:"var(--bg-page)",padding:"6px 0",borderBottom:"1px solid var(--border)"}}>
         <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w-1)} aria-label="Semaine précédente" style={NAV_ARROW_STYLE}>‹</button>
         <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
+          {/* Liseré rouge sur "aujourd'hui" (01/10, demandé par Olivier :
+              "mets un lisere rouge autour du carre de la date [...] en mode
+              sombre c'est pas tres lisible") -- l'ancien style (fond bleu
+              pastel #E6F1FB + texte #378ADD/#0C447C, jamais theme-aware)
+              restait fige en couleurs pensees pour un fond clair : une fois
+              la page passee en sombre, ce pave pastel clair jurait et
+              perdait en lisibilite. Remplace par var(--bg-card)/
+              var(--text-primary) (coherent avec les cases normales dans les
+              deux themes) + un simple lisere rouge 2px pour distinguer
+              "aujourd'hui" -- le jour COURAMMENT AFFICHE (dayIdx===i) garde
+              son remplissage bleu marine plein, deja correct dans les deux
+              themes, jamais touche. */}
           {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
-            <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #378ADD":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"var(--bg-card)",color:dayIdx===i?"#fff":isToday?"#0C447C":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
+            <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #dc2626":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":"var(--bg-card)",color:dayIdx===i?"#fff":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
               {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
             </button>);})}
         </div>
@@ -7905,7 +7917,8 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
             : card.key==="TY" ? minToHM(tyLedgerData.solde)
             : card.key==="TQ" ? minToHM(tqLedgerData.solde)
             // RQ affiche le restant (Acquis - Pris) au lieu du nombre de jours pris
-            // (17/07, demandé par Olivier) — RP/RU restent sur le total "pris".
+            // (17/07, demandé par Olivier) — RP reste sur le total "pris" (seul
+            // RU a rejoint RQ sur l'affichage "restant", voir plus haut).
             : card.key==="RQ" ? (rqData.solde ?? rqData.total) - cetTransfereRQ.total - maladiePerteRQ
             : DETAIL_DATA_BY_KEY[card.key] ? DETAIL_DATA_BY_KEY[card.key].total : val(card.key);
           const isTravailCard = card.key==="travail";
