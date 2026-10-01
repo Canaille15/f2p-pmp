@@ -7628,6 +7628,10 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // si quelque chose demande une action.
   const fetesInfo = useMemo(()=>computeFetesLignes(agent, schedule, agentProfiles, year), [agent, schedule, agentProfiles, year]);
   const nbFetesATraiter = fetesInfo.lignes.filter(l=>!l.override?.epargneCet && (l.statut==="attente"||l.statut==="perdue_probable")).length;
+  // nbFetesAVenir (01/10, demandé par Olivier) : même groupe que "À venir"
+  // dans le détail de la tuile (FetesDashboardModal, groupeAVenir) -- affiché
+  // en petit sur la tuile à côté de nbFetesATraiter, chacun avec son chiffre.
+  const nbFetesAVenir = fetesInfo.lignes.filter(l=>!l.override?.epargneCet && l.statut==="futur").length;
 
   // Module Formation (09/08) : cloche sur la carte tant qu'une notification
   // d'inscription AFO n'a pas été vue par l'agent (voir FormationView.jsx,
@@ -7698,6 +7702,15 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // figées validées — remplace l'ancien compteur générique "jours".
   const tcData = useMemo(()=>computeDashboardTC(agent, schedule, agentProfiles, pausesData, year), [agent, schedule, agentProfiles, pausesData, year]);
   const nbPausesEnAttente = pausesData.filter(p=>!p.fia_done).length;
+  // nbPausesTotalAnnee (01/10, demandé par Olivier) : total de pauses
+  // figées (validées + en attente) pour l'ANNÉE SÉLECTIONNÉE uniquement --
+  // contrairement à nbPausesEnAttente ci-dessus, jamais borné par année
+  // (une pause non vérifiée reste visible d'une année sur l'autre, voir
+  // 07/09) -- affiché en petit sur la tuile, sous le chiffre principal.
+  const nbPausesTotalAnnee = pausesData.filter(p=>{
+    const dk = String(p.date_jour).slice(0,10);
+    return dk>=start && dk<=end;
+  }).length;
 
   // Libellé "mois en cours" réutilisé par TC/RN/TY (17/07, demandé par
   // Olivier : la carte doit clairement dire que le solde ledger affiché est
@@ -7729,9 +7742,9 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
     {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Pris au 31/12"},
     {key:"RU",      label:"RU",              color:"#ea580c", subtitle:"Restant au 31/12"},
     {key:"RQ",      label:"RQ",              color:"#c026d3", subtitle:"Restant au 31/12"},
-    {key:"FETE",    label:"Fêtes",           color:"#db2777", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
+    {key:"FETE",    label:"Fêtes",           color:"#db2777", subtitle: `⏳ ${nbFetesATraiter} en attente · 🔜 ${nbFetesAVenir} à venir`, alert: nbFetesATraiter>0},
     {key:"RN",      label:"RN",              color:"#4f46e5", subtitle:`Solde — ${moisEnCoursLabel}`},
-    {key:"PF",      label:"Pause Figée",     color:"#0d9488", subtitle: nbPausesEnAttente>0 ? `⏳ ${nbPausesEnAttente} à vérifier` : "Pauses figées", alert: nbPausesEnAttente>0},
+    {key:"PF",      label:"Pause Figée",     color:"#0d9488", subtitle: `${nbPausesTotalAnnee} pause${nbPausesTotalAnnee>1?"s":""} en ${year}`, alert: nbPausesEnAttente>0},
     {key:"TC",      label:"TC",              color:"#0284c7", subtitle: tcData.solde>=TC_PLAFOND_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tcData.solde>=TC_PLAFOND_MIN},
     {key:"TY",      label:"TY",              color:"#9333ea", subtitle: tyLedgerData.solde>=PLAFOND_32H_MIN ? "Plafond 32h00 · ATTEINT" : `Solde — ${moisEnCoursLabel}`, alert: tyLedgerData.solde>=PLAFOND_32H_MIN},
     {key:"TQ",      label:"TQ",              color:"#ca8a04", subtitle:`Solde ${getSemestreCourant().label}`},
@@ -7876,7 +7889,17 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
             : card.key==="RU" ? (ruData.acquis??0) - ruData.total - maladiePerteRU
             : card.key==="VT" ? vtData.pris
             : card.key==="CET" ? cetData.soldeTotal
-            : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
+            // PF affiche désormais le nombre de pauses EN ATTENTE de
+            // vérification (jamais borné par année, voir nbPausesTotalAnnee
+            // juste au-dessus pour le total par année affiché en petit) --
+            // au lieu du nombre de pauses déjà validées cette année (01/10,
+            // demandé par Olivier).
+            : card.key==="PF" ? nbPausesEnAttente
+            // FETE affiche désormais le nombre de fêtes en attente (même
+            // groupe que "À traiter" dans le détail de la tuile), au lieu du
+            // nombre brut de codes fête saisis dans l'année (01/10, demandé
+            // par Olivier) -- nbFetesAVenir affiché en petit à côté.
+            : card.key==="FETE" ? nbFetesATraiter
             : card.key==="TC" ? minToHM(tcData.solde)
             : card.key==="RN" ? minToHM(rnLedgerData.solde)
             : card.key==="TY" ? minToHM(tyLedgerData.solde)
