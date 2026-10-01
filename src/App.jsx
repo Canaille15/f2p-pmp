@@ -1760,10 +1760,22 @@ function buildSections(schedule, dateKey, filterF, agents, isPrevisionnel){
 // choisir "Tout le poste" (comportement historique, inchange) ou un agent
 // precis -- dans ce cas agents_concernes=[cpAgent] est envoye, et findAlea
 // (voir plus bas) ne fait matcher cet alea QUE sur la case de cet agent-la,
-// les autres restant affiches normalement. Jamais applique a echange/
-// erreur_cps (agents_concernes y sert deja a tout autre chose : les
-// REMPLACANTS du poste, pas "qui ca concerne").
+// les autres restant affiches normalement.
+// 02/10 (Olivier : "quand on modifie un nom ca le met sur tous les agents,
+// on ne peut plus annuler certaine fonction") : meme bug exact que ci-dessus,
+// mais pour "echange"/"erreur_cps" -- jamais corrige en meme temps que
+// non_tenu/message le 18/09 car ce type utilise deja agents_concernes pour
+// autre chose (les REMPLACANTS proposes, pas "qui ca concerne"). Sur une
+// case a plusieurs agents, l'absence totale de ciblage faisait que findAlea
+// renvoyait le MEME echange/erreur_cps pour TOUS les agents de la ligne --
+// impossible de creer un 2e signalement pour l'autre agent (sa case etait
+// deja "prise" par le 1er), et un ✕ sur l'un supprimait l'unique alea pour
+// les deux. Nouveau champ, independant d'agents_concernes : agent_source_id
+// (cps_aleas, VARCHAR nullable) precise LEQUEL des agents affiches ce
+// signalement echange/erreur_cps concerne -- NULL = tout le poste
+// (comportement historique inchange, cas normal a un seul agent).
 const ALEA_TYPES_CIBLABLES=["non_tenu","message"];
+const ALEA_TYPES_ECHANGE=["echange","erreur_cps"];
 function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAgents,forceAgentId,onClose,onSaved,editAlea}){
   const [type,setType]=useState(editAlea?editAlea.type:null); // "echange" | "erreur_cps" | "non_tenu" | "message"
   const [agentsChoisis,setAgentsChoisis]=useState(()=>editAlea?.agents_concernes ? agents.filter(a=>editAlea.agents_concernes.includes(a.id)) : []);
@@ -1795,6 +1807,9 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
   // agents_concernes, pas forceAgentId).
   const [cible,setCible]=useState(()=>{
     if(editAlea && ALEA_TYPES_CIBLABLES.includes(editAlea.type) && editAlea.agents_concernes?.length===1) return editAlea.agents_concernes[0];
+    // 02/10 : un echange/erreur_cps a editer relit son propre agent_source_id
+    // (jamais agents_concernes, qui designe les remplacants pour ce type).
+    if(editAlea && ALEA_TYPES_ECHANGE.includes(editAlea.type) && editAlea.agent_source_id) return editAlea.agent_source_id;
     if(forceAgentId) return forceAgentId;
     if(plusieursAgentsSurCetteCase) return null;
     return "tout";
@@ -1809,7 +1824,10 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
     try{
       if(editAlea){
         const data={motif:motif||null};
-        if(editAlea.type==="echange"||editAlea.type==="erreur_cps") data.agents_concernes=agentsChoisis.map(a=>a.id);
+        if(ALEA_TYPES_ECHANGE.includes(editAlea.type)){
+          data.agents_concernes=agentsChoisis.map(a=>a.id);
+          data.agent_source_id=cible==="tout"?null:cible;
+        }
         else if(ALEA_TYPES_CIBLABLES.includes(editAlea.type)) data.agents_concernes=cible==="tout"?[]:[cible];
         await api.cpsAleas.update(editAlea.id,data);
       }else{
@@ -1819,6 +1837,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           famille,
           type,
           agents_concernes: ALEA_TYPES_CIBLABLES.includes(type) ? (cible==="tout"?[]:[cible]) : agentsChoisis.map(a=>a.id),
+          agent_source_id: ALEA_TYPES_ECHANGE.includes(type) ? (cible==="tout"?null:cible) : undefined,
           motif: motif||null,
         });
       }
@@ -1881,6 +1900,7 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           juste en dessous, dupliquant textarea et faisant apparaitre un
           champ de recherche d'agent superflu et deroutant. */}
       {type&&type!=="non_tenu"&&type!=="message"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {SelecteurCible}
         <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>{type==="echange"?"Agent(s) qui assure(nt) le poste":"Préciser l'erreur"}</div>
         <input placeholder="Rechercher un agent…" value={search} onChange={e=>setSearch(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13}}/>
@@ -1898,9 +1918,9 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <button onClick={()=>editAlea?onClose():setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>{editAlea?"Annuler":"Retour"}</button>
-          <button onClick={valider} disabled={busy||agentsChoisis.length===0}
+          <button onClick={valider} disabled={busy||agentsChoisis.length===0||(plusieursAgentsSurCetteCase&&!cible)}
             style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
-            background:agentsChoisis.length===0?"#e2e8f0":"#0C447C",color:agentsChoisis.length===0?"#94a3b8":"#fff"}}>
+            background:(agentsChoisis.length===0||(plusieursAgentsSurCetteCase&&!cible))?"#e2e8f0":"#0C447C",color:(agentsChoisis.length===0||(plusieursAgentsSurCetteCase&&!cible))?"#94a3b8":"#fff"}}>
             {busy?"…":(editAlea?"Enregistrer":"Valider")}
           </button>
         </div>
@@ -1949,10 +1969,14 @@ function annulerAlea(aleaId, setCpsAleas){
 // un alea non_tenu/message cible sur UN agent precis (agents_concernes non
 // vide, voir AleaPopup/SelecteurCible) plutot que celui qui concerne tout
 // le poste (agents_concernes vide, comportement historique inchange quand
-// agentId est omis ou qu'aucun alea cible n'existe pour cet agent). Jamais
-// applique a echange/erreur_cps (agents_concernes y designe deja les
-// REMPLACANTS du poste, pas "qui ca concerne" -- comportement inchange
-// pour ces 2 types, toujours le premier trouve, comme avant).
+// agentId est omis ou qu'aucun alea cible n'existe pour cet agent).
+// 02/10 : echange/erreur_cps suit desormais le meme principe, mais via
+// agent_source_id (pas agents_concernes, qui pour ce type designe toujours
+// les REMPLACANTS proposes, jamais "qui ca concerne"). Un alea de ce type
+// sans agent_source_id (NULL) reste "tout le poste", comme avant ce
+// correctif -- les anciennes lignes jamais ciblees (donnees existantes
+// avant l'ajout de la colonne) continuent de s'afficher sur chaque agent du
+// poste exactement comme avant, aucune regression.
 export function findAlea(cpsAleas, jsCode, dateKey, famille, agentId){
   if(!cpsAleas||!cpsAleas.length) return null;
   const matches=cpsAleas.filter(a=>a.js_code===jsCode && String(a.date_jour).slice(0,10)===dateKey && a.famille===famille);
@@ -1960,8 +1984,14 @@ export function findAlea(cpsAleas, jsCode, dateKey, famille, agentId){
   if(agentId){
     const cible=matches.find(a=>(a.type==="non_tenu"||a.type==="message") && Array.isArray(a.agents_concernes) && a.agents_concernes.length>0 && a.agents_concernes.includes(agentId));
     if(cible) return cible;
+    const cibleEchange=matches.find(a=>(a.type==="echange"||a.type==="erreur_cps") && a.agent_source_id===agentId);
+    if(cibleEchange) return cibleEchange;
   }
-  return matches.find(a=>!(a.type==="non_tenu"||a.type==="message") || !a.agents_concernes || a.agents_concernes.length===0) || null;
+  return matches.find(a=>{
+    if(a.type==="non_tenu"||a.type==="message") return !a.agents_concernes || a.agents_concernes.length===0;
+    if(a.type==="echange"||a.type==="erreur_cps") return !a.agent_source_id;
+    return true;
+  }) || null;
 }
 function PrevisionnelSignalementPopup({agents,agentTitulaireId,dateKey,nomTitulaire,currentAgent,onClose,onSaved}){
   const [agentsChoisis,setAgentsChoisis]=useState([]);
@@ -3084,7 +3114,7 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         </div>
                         <div style={{fontSize:11,fontWeight:700,color:"#854d0e",paddingLeft:24}}>{nomsRemplacants||"?"}</div>
                         {alea.motif&&<div style={{fontSize:10,color:"#a16207",paddingLeft:24,fontStyle:"italic"}}>{alea.motif}</div>}
-                        <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div>{!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button></>}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div>{!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,rowAgents:rowAgentsTries,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button></>}</div>
                       </div>);
                     }
                     if(ag&&isPrevisionnel){
