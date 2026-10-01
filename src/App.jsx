@@ -7262,6 +7262,27 @@ function computeBilanGlobalJours(agent, schedule, agentProfiles, year, dateProje
   const vtData = computeDashboardVT(agent, schedule, agentProfiles, year);
   const fetesInfo = computeFetesLignes(agent, schedule, agentProfiles, year);
 
+  // Bug corrigé le 01/10 (Olivier, cas réel Sébastien Guay) : ce récap
+  // recalculait son propre "Restant" pour Congés/RU/RQ à partir du solde brut
+  // (acquis-pris), sans jamais retirer les jours déjà épargnés au CET ni ceux
+  // perdus suite à un arrêt maladie — contrairement à la tuile Congés et à
+  // computeDashboardConges (card.key==="conges" plus bas dans ce fichier) qui
+  // le font déjà correctement depuis le 06-07/08. Un agent avec des jours au
+  // CET voyait donc ici un "Restant" trop élevé par rapport à la vraie tuile.
+  // Même déduction forfaitaire qu'ailleurs (pas de filtrage par date, la
+  // projection à une date choisie applique la même déduction totale que le
+  // solde au 31/12 -- cohérent avec le fait que la tuile elle-même n'a jamais
+  // eu besoin d'un filtrage plus fin). VT et Fêtes non concernés (aucun des
+  // deux n'a de source CET ni de perte maladie, voir DETAIL_CONFIG).
+  const cetTransfereCA = getCetTransfereJours(agentProfiles, agent?.id, year, "CA");
+  const cetTransfereRQ = getCetTransfereJours(agentProfiles, agent?.id, year, "RQ");
+  const maladiePerteCA = getMaladiePerteJours(agentProfiles, agent?.id, "CA", year);
+  const maladiePerteRU = getMaladiePerteJours(agentProfiles, agent?.id, "RU", year);
+  const maladiePerteRQ = getMaladiePerteJours(agentProfiles, agent?.id, "RQ", year);
+  const deductionCA = cetTransfereCA.total + maladiePerteCA;
+  const deductionRU = maladiePerteRU;
+  const deductionRQ = cetTransfereRQ.total + maladiePerteRQ;
+
   // Fêtes n'a pas d'"Acquis"/solde continu comme les 4 autres — c'est une
   // liste de dates nommées avec un statut (réglée / à traiter / perdue / à
   // venir). "Pris" = fêtes réglées cette année (prises ou payées), "Restant"
@@ -7272,14 +7293,14 @@ function computeBilanGlobalJours(agent, schedule, agentProfiles, year, dateProje
   const feteReglees = (fetesInfo.lignes||[]).filter(l=>l && (l.override?.epargneCet || l.statut==="prise"||l.statut==="payee"||l.statut==="payee_auto"));
   const feteATraiter = (fetesInfo.lignes||[]).filter(l=>l && !l.override?.epargneCet && (l.statut==="attente"||l.statut==="perdue_probable"));
 
-  const projeter = (data) => dateProjection
-    ? (data.acquis ?? data.entitlement ?? 0) - (data.tousJours||[]).filter(d=>d<=dateProjection).length
+  const projeter = (data, deduction=0) => dateProjection
+    ? (data.acquis ?? data.entitlement ?? 0) - (data.tousJours||[]).filter(d=>d<=dateProjection).length - deduction
     : null;
 
   const lignes = [
-    {key:"conges", label:"Congés", acquis:congesData.entitlement, pris:congesData.pris, restant31:congesData.solde, restantProj:projeter(congesData)},
-    {key:"RU",     label:"RU",     acquis:ruData.acquis??0,       pris:ruData.total,     restant31:(ruData.acquis??0)-ruData.total, restantProj:projeter(ruData)},
-    {key:"RQ",     label:"RQ",     acquis:rqData.acquis??0,       pris:rqData.total,     restant31:(rqData.acquis??0)-rqData.total, restantProj:projeter(rqData)},
+    {key:"conges", label:"Congés", acquis:congesData.entitlement, pris:congesData.pris, restant31:congesData.solde-deductionCA, restantProj:projeter(congesData,deductionCA)},
+    {key:"RU",     label:"RU",     acquis:ruData.acquis??0,       pris:ruData.total,     restant31:(ruData.acquis??0)-ruData.total-deductionRU, restantProj:projeter(ruData,deductionRU)},
+    {key:"RQ",     label:"RQ",     acquis:rqData.acquis??0,       pris:rqData.total,     restant31:(rqData.acquis??0)-rqData.total-deductionRQ, restantProj:projeter(rqData,deductionRQ)},
     {key:"VT",     label:"VT",     acquis:vtData.entitlement,     pris:vtData.pris,      restant31:vtData.solde, restantProj:projeter(vtData)},
     {key:"FETE",   label:"Fêtes",  acquis:null,                   pris:feteReglees.length, restant31:feteATraiter.length, restantProj:null},
   ];
@@ -7703,10 +7724,10 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
   // — remplace l'ancienne palette hétéroclite (mélange de tons vifs et
   // ternes, VT et Congés partageaient même la même couleur #eab308).
   const CARDS = [
-    {key:"conges",  label:"Congés",          color:"#d97706", subtitle:`Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:(solde-cetTransfereCA.total-maladiePerteCA)<5},
+    {key:"conges",  label:"Congés",          color:"#d97706", subtitle:`Restant · Pris : ${congesPris} / Acquis : ${CONGES_ANNUELS}`, alert:(solde-cetTransfereCA.total-maladiePerteCA)<5},
     {key:"travail", label:"Jours travaillés", color:"#dc2626", subtitle:`Année ${year}`},
     {key:"RP",      label:"RP",              color:"#16a34a", subtitle:"Pris au 31/12"},
-    {key:"RU",      label:"RU",              color:"#ea580c", subtitle:"Pris au 31/12"},
+    {key:"RU",      label:"RU",              color:"#ea580c", subtitle:"Restant au 31/12"},
     {key:"RQ",      label:"RQ",              color:"#c026d3", subtitle:"Restant au 31/12"},
     {key:"FETE",    label:"Fêtes",           color:"#db2777", subtitle: nbFetesATraiter>0 ? `🔔 ${nbFetesATraiter} à traiter` : "Jours fête", alert: nbFetesATraiter>0},
     {key:"RN",      label:"RN",              color:"#4f46e5", subtitle:`Solde — ${moisEnCoursLabel}`},
@@ -7848,6 +7869,11 @@ function DashboardCompteurs({agent, schedule, setSchedule, agentProfiles, setAge
       {(()=>{
         const renderCard = (card) => {
           const v = card.key==="conges" ? congesData.solde - cetTransfereCA.total - maladiePerteCA
+            // RU affiche désormais le restant (Acquis - Pris - perte maladie,
+            // pas de source CET pour RU) au lieu du nombre de jours pris
+            // (01/10, demandé par Olivier) -- même principe que RQ juste en
+            // dessous, label "Restant au 31/12" assorti dans CARDS.
+            : card.key==="RU" ? (ruData.acquis??0) - ruData.total - maladiePerteRU
             : card.key==="VT" ? vtData.pris
             : card.key==="CET" ? cetData.soldeTotal
             : card.key==="PF" ? pausesData.filter(p=>p.fia_done && String(p.date_jour).slice(0,10)>=start && String(p.date_jour).slice(0,10)<=end).length
