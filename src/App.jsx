@@ -10377,6 +10377,13 @@ justifyContent: "flex-start",
           prive:    newEntry.prive||false,
           finNuit:  newEntry.finNuit !== undefined ? newEntry.finNuit : (prevEntry.finNuit||false),
           notePerso: newEntry.notePerso !== undefined ? (newEntry.notePerso||null) : (prevEntry.notePerso||null),
+          // notePersoColor (01/10) : oublié au premier passage -- fullEntry est
+          // reconstruit champ par champ ici (jamais un simple spread de
+          // newEntry), donc tout champ absent de cette liste est perdu avant
+          // meme d'atteindre saveEntry, silencieusement. Meme principe que
+          // notePerso juste au-dessus : preserve la valeur existante si le
+          // popup ne l'a pas touchee.
+          notePersoColor: newEntry.notePersoColor !== undefined ? (newEntry.notePersoColor||null) : (prevEntry.notePersoColor||null),
           greve:    newEntry.greve !== undefined ? (newEntry.greve||null) : (prevEntry.greve||null),
           formation: newEntry.formation !== undefined ? (newEntry.formation||null) : (prevEntry.formation||null),
           // etudePoste (27/08) : meme principe que finNuit/greve -- preserve
