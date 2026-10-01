@@ -1114,16 +1114,22 @@ function ModalDepart({ agent, onConfirmDepart, onConfirmSuppression, onAnnulerDe
   return (
     <Modal title="🚪 Départ d'un agent" onClose={onClose}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
           {agent.prenom} {agent.nom} ({agent.cp})
         </div>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>Date de départ</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>Date de départ</div>
+          {/* Liseré rouge (01/10, demandé par Olivier) : une date de départ est
+              une action a consequence reelle, merite de ressortir visuellement --
+              fond/texte sur var(--bg-page)/var(--text-primary) pour rester lisible
+              en mode sombre (etait fige en clair avant, illisible une fois la
+              modale passee en sombre). color-scheme:dark (theme.css) fait en plus
+              passer le calendrier/les chiffres natifs du champ en rendu sombre. */}
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            style={{ width: "100%", padding: "8px 12px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 13, outline: "none" }}
+            style={{ width: "100%", padding: "8px 12px", border: "2px solid #dc2626", borderRadius: 8, fontSize: 13, outline: "none", background: "var(--bg-page)", color: "var(--text-primary)" }}
           />
         </div>
-        <div style={{ fontSize: 12, color: "#64748b" }}>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
           Si la date choisie est aujourd'hui ou déjà passée, le départ est immédiat : le planning après cette date est supprimé (prévisionnel non pertinent après le départ), tout ce qui précède est conservé, et la connexion de l'agent est bloquée aussitôt. Si la date est dans le futur, rien de tout ça n'a lieu tant que cette date n'est pas atteinte — l'agent reste actif normalement (connexion possible, planning intact) : c'est un simple départ programmé, la date reste modifiable à tout moment en cas de report en rappelant ce même bouton.
         </div>
         <div style={{ display: "flex", gap: 8 }}>

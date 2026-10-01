@@ -165,6 +165,23 @@
 }
 body { background: var(--bg-page); transition: background .15s; }
 
+/* Champs de date/heure natifs (01/10, Olivier : "en mode sombre c'est pas
+   tres lisible [...] le carre de la date") -- un <input type="date"> (ou
+   time/datetime-local/month) est rendu par le systeme d'exploitation/le
+   navigateur, jamais par nos propres styles CSS : sans cette regle, le
+   calendrier et les chiffres restent toujours dans leur rendu CLAIR par
+   defaut, meme en mode sombre -- un carre blanc incongru au milieu d'une
+   modale sombre. color-scheme:dark demande au navigateur de rendre CE
+   controle natif avec son propre theme sombre (texte clair, icone de
+   calendrier adaptee), sans toucher a la bordure/au fond que nous posons
+   nous-memes par ailleurs. */
+:root[data-theme="dark"] input[type="date"],
+:root[data-theme="dark"] input[type="time"],
+:root[data-theme="dark"] input[type="datetime-local"],
+:root[data-theme="dark"] input[type="month"] {
+  color-scheme: dark;
+}
+
 /* Mon planning (19/08, Olivier : "sur la vue telephone, le bouton de
    chargement du pdf dans etre au dessus de la date") -- le bouton
    "Importer bulletin de commande / roulement" doit passer AU-DESSUS de la
