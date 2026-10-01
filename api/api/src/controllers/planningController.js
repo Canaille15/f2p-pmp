@@ -10,7 +10,7 @@ async function getPlanning(req, res) {
     const [rows] = await pool.query(
       `SELECT pj.id, pj.date_jour, pj.source,
               pp.ordre, pp.code_equipe, pp.code_poste,
-              pp.heure_debut, pp.heure_fin, pp.prive, pp.note, pp.note_perso, pp.etude_poste
+              pp.heure_debut, pp.heure_fin, pp.prive, pp.note, pp.note_perso, pp.note_perso_color, pp.etude_poste
        FROM planning_jour pj
        JOIN planning_periode pp ON pp.planning_jour_id = pj.id
        WHERE pj.cp_agent = ?
@@ -19,13 +19,14 @@ async function getPlanning(req, res) {
          AND (pp.prive = 0 OR ? OR ?)
        ORDER BY pj.date_jour, pp.ordre`,
       [cp, from||null, from||null, to||null, to||null, isSelf?1:0, isAdmin?1:0]);
-    // note_perso est une donnee strictement personnelle : jamais renvoyee
-    // a quelqu'un d'autre que le titulaire du planning, meme un admin,
-    // meme sur une ligne publique (M/AM/N/J...). Filtrage fait ici en JS
-    // plutot qu'en SQL pour eviter tout comportement incertain d'un
-    // parametre lie a l'interieur d'un CASE WHEN selon le driver/version.
+    // note_perso (et sa couleur, 01/10) est une donnee strictement
+    // personnelle : jamais renvoyee a quelqu'un d'autre que le titulaire du
+    // planning, meme un admin, meme sur une ligne publique (M/AM/N/J...).
+    // Filtrage fait ici en JS plutot qu'en SQL pour eviter tout comportement
+    // incertain d'un parametre lie a l'interieur d'un CASE WHEN selon le
+    // driver/version.
     if (!isSelf) {
-      for (const row of rows) row.note_perso = null;
+      for (const row of rows) { row.note_perso = null; row.note_perso_color = null; }
     }
     res.json(rows);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Erreur serveur' }); }
@@ -50,10 +51,10 @@ async function setJour(req, res) {
     for (const p of periodes) {
       const prive = p.prive !== undefined ? (p.prive?1:0) : (CODES_PUBLICS.has(p.code_equipe)?0:1);
       await conn.query(
-        `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso,etude_poste)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso,note_perso_color,etude_poste)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
         [jour.id, p.ordre||1, p.code_equipe||(p.note==='fin_nuit'?'N':null), p.code_poste||null,
-         p.heure_debut||null, p.heure_fin||null, prive, p.note||null, p.note_perso||null, p.etude_poste?1:0]);
+         p.heure_debut||null, p.heure_fin||null, prive, p.note||null, p.note_perso||null, p.note_perso_color||null, p.etude_poste?1:0]);
     }
     await conn.commit();
     res.json({ message: 'Journée enregistrée', id: jour.id });
@@ -325,7 +326,7 @@ async function bulkClear(req, res) {
     let nbProteges = 0;
     for (const j of jours) {
       const [periodes] = await conn.query(
-        `SELECT ordre, code_equipe, code_poste, heure_debut, heure_fin, prive, note, note_perso
+        `SELECT ordre, code_equipe, code_poste, heure_debut, heure_fin, prive, note, note_perso, note_perso_color
          FROM planning_periode WHERE planning_jour_id=?`, [j.id]
       );
       // Congé ACCORDÉ (CA/CP, y compris en 2e créneau -- voir "un Congé peut
@@ -358,9 +359,9 @@ async function bulkClear(req, res) {
       await conn.query('DELETE FROM planning_periode WHERE planning_jour_id=?', [j.id]);
       if (noteConservee) {
         await conn.query(
-          `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
-           VALUES (?,1,'N',NULL,NULL,NULL,0,'note_seule',?)`,
-          [j.id, noteConservee.note_perso]
+          `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso,note_perso_color)
+           VALUES (?,1,'N',NULL,NULL,NULL,0,'note_seule',?,?)`,
+          [j.id, noteConservee.note_perso, noteConservee.note_perso_color||null]
         );
       } else {
         await conn.query('DELETE FROM planning_jour WHERE id=?', [j.id]);
@@ -402,9 +403,9 @@ async function bulkClearUndo(req, res) {
       const periodes = typeof d.periodes_json === 'string' ? JSON.parse(d.periodes_json) : d.periodes_json;
       for (const p of periodes) {
         await conn.query(
-          `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
-          [jour.id, p.ordre||1, p.code_equipe||null, p.code_poste||null, p.heure_debut||null, p.heure_fin||null, p.prive?1:0, p.note||null, p.note_perso||null]
+          `INSERT INTO planning_periode (planning_jour_id,ordre,code_equipe,code_poste,heure_debut,heure_fin,prive,note,note_perso,note_perso_color)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          [jour.id, p.ordre||1, p.code_equipe||null, p.code_poste||null, p.heure_debut||null, p.heure_fin||null, p.prive?1:0, p.note||null, p.note_perso||null, p.note_perso_color||null]
         );
       }
     }

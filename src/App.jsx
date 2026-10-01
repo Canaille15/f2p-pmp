@@ -306,8 +306,12 @@ export const EQUIPES = [
   { code:"VM",   label:"VM",         heures:"",            color:"#6b7280", textColor:"#fff", dot:"#f3f4f6", prive:true,  compteur:"ABS",     bg:"#6b7280" },
   // CET (06/08) : jour d'utilisation en temps du Compte Épargne Temps, écrit
   // dans le planning perso à l'accord d'un mouvement "utilisation" (voir
-  // CetView.jsx) — même principe que VT, compteur générique "ABS".
-  { code:"CET",  label:"CET",        heures:"",            color:"#7c3aed", textColor:"#fff", dot:"#ede9fe", prive:true,  compteur:"ABS",     bg:"#7c3aed" },
+  // CetView.jsx) — même principe que VT, compteur générique "ABS". Libellé
+  // affiché "WO" depuis le 01/10 (demande d'Olivier, code réel SNCF pour une
+  // journée d'utilisation du CET) — le code interne reste "CET" partout
+  // ailleurs (schedule.equipe, OMIS_EXPORT, tuile "💼 CET" du panneau
+  // compteurs, module de génération PDF...), seul ce libellé change.
+  { code:"CET",  label:"WO (CET)",   heures:"",            color:"#7c3aed", textColor:"#fff", dot:"#ede9fe", prive:true,  compteur:"ABS",     bg:"#7c3aed" },
   ...Object.keys(CODES_FETES).map(k=>({ code:k, label:k, heures:"", color:"#ec4899", textColor:"#fff", dot:"#fce7f3", prive:true, compteur:"FETE", bg:"#ec4899" })),
 ];
 export const EQ = Object.fromEntries(EQUIPES.map(e=>[e.code,e]));
@@ -10183,7 +10187,7 @@ justifyContent: "flex-start",
                 ⏳ VT{vtToutNumeros[dk]?.statut==="demande" ? ` (n°${vtToutNumeros[dk].numero})` : ""}
               </div>}
               {isOwnProfile&&en?.notePerso&&!code&&<div style={{
-                background:getColor("NOTE"), color:"#fff",
+                background:en?.notePersoColor||getColor("NOTE"), color:"#fff",
                 borderRadius:5, padding:"2px 5px",
                 fontSize:8, fontWeight:700, lineHeight:1.25,
                 display:"flex", alignItems:"flex-start", gap:3,
@@ -10212,7 +10216,7 @@ justifyContent: "flex-start",
                 {code==="MA"&&maNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block"}}>n°{maNumeros[dk]}</span>}
                 {posteLabel&&<span lang="fr" style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:500,display:"block",whiteSpace:"normal",overflowWrap:"break-word"}}>{posteLabel}</span>}
                 {dow===0&&en?.jsCode&&HORAIRES_DIMANCHE_RAPPEL[en.jsCode]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:700,display:"block",whiteSpace:"normal"}}>{HORAIRES_DIMANCHE_RAPPEL[en.jsCode]}</span>}
-                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
+                {isOwnProfile&&en?.notePerso&&<span style={{fontSize:8,fontWeight:700,color:"#fff",background:en?.notePersoColor||getColor("NOTE"),borderRadius:4,padding:"1px 4px",marginTop:1,display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>📝 {en.notePerso}</span>}
               </div>}
 
               {/* ZONE 2bis — RPP : badge rond dédié, palette dissociée de RP */}
@@ -10228,7 +10232,7 @@ justifyContent: "flex-start",
               {code==="RPP"&&showData&&rpNumeros[dk]&&<span style={{fontSize:"clamp(6px,2vw,9px)",opacity:.85,fontWeight:600,display:"block",textAlign:"center"}}>n°{rpNumeros[dk].numero}{rpNumeros[dk].anneeReport?` (${rpNumeros[dk].anneeReport})`:""}</span>}
               {code==="RPP"&&showData&&isOwnProfile&&en?.notePerso&&<span style={{
                 fontSize:8, color:"#fff", fontWeight:700,
-                background:getColor("NOTE"), borderRadius:4, padding:"1px 5px",
+                background:en?.notePersoColor||getColor("NOTE"), borderRadius:4, padding:"1px 5px",
                 textAlign:"center", display:"block", margin:"0 auto",
               }}>📝 {en.notePerso}</span>}
 

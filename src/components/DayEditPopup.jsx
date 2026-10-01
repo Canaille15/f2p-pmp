@@ -332,6 +332,19 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
   // 🌙 finNuit : toggle indépendant, coexiste avec tout
   const [finNuit,   setFinNuit]   = useState(!!entry?.finNuit);
   const [notePerso, setNotePerso] = useState(entry?.notePerso || "");
+  // notePersoColor (01/10, Olivier : "personnaliser la couleur des notes...
+  // de facon individuelle, par journee ou au bon vouloir, sans changer ce qui
+  // est deja là") : override facultatif, propre à CETTE journée -- absent
+  // (null) pour toute note déjà existante ou nouvelle par défaut, auquel cas
+  // la couleur globale "NOTE" du sélecteur de couleurs continue de s'appliquer
+  // exactement comme avant. Rien d'autre ne change tant que l'agent ne choisit
+  // pas explicitement une couleur ici.
+  const [notePersoColor, setNotePersoColor] = useState(entry?.notePersoColor || null);
+  const colorNote = notePersoColor || noteColor;
+  // Petite palette dédiée à ce picker, volontairement indépendante de celle du
+  // sélecteur de couleurs global (App.jsx, ColorCustomizer) -- composant
+  // différent, aucun risque de la toucher par erreur.
+  const PALETTE_NOTE = ["#b45309","#dc2626","#ea580c","#16a34a","#0284c7","#4338ca","#9333ea","#db2777","#334155"];
   const [showFetes, setShowFetes] = useState(false);
   const [feteBloqueeMsg, setFeteBloqueeMsg] = useState(null);
   // Grève (04/08) : indépendant de type1/typeN, coexiste avec tout comme finNuit.
@@ -548,6 +561,9 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                     ...FETES.map(f=>f.code)].includes(type1),
       finNuit:    finNuit,
       notePerso:  notePerso || null,   // indépendant, disponible sur tout type de jour, sauvegardé tel quel
+      // notePersoColor (01/10) : jamais transmis si la note elle-même est
+      // vide -- pas de couleur orpheline sans texte.
+      notePersoColor: notePerso ? (notePersoColor || null) : null,
       greve:      greve || null,       // indépendant, se combine avec n'importe quelle journée (comme finNuit)
       formation:  formation || null,   // indépendant, retiré ici uniquement (jamais ajouté depuis ce popup)
       // etudePoste (27/08) : jamais transmis si le poste actuellement choisi
@@ -741,21 +757,21 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
           <div style={{
             padding:"10px 14px",
             background: notePerso ? "#1a1207" : "#f8fafc",
-            border: `2px solid ${notePerso ? noteColor : "#cbd5e1"}`,
+            border: `2px solid ${notePerso ? colorNote : "#cbd5e1"}`,
             borderStyle: notePerso ? "solid" : "dashed",
             borderRadius:10,
             transition:"all .15s",
           }}>
             <div style={{
               fontSize:12, fontWeight:700,
-              color: notePerso ? noteColor : "#64748b",
+              color: notePerso ? colorNote : "#64748b",
               display:"flex", alignItems:"center", gap:8,
               marginBottom:8,
             }}>
               📝 Note (visible uniquement par toi)
               <span style={{
                 marginLeft:"auto", fontSize:10, fontWeight:700,
-                background: notePerso ? noteColor : "#e2e8f0",
+                background: notePerso ? colorNote : "#e2e8f0",
                 color: notePerso ? "#fff" : "#94a3b8",
                 borderRadius:6, padding:"1px 8px",
               }}>
@@ -769,7 +785,7 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                 placeholder="ex: Réunion service, visite de poste, rappel..."
                 style={{
                   flex:1, padding:"9px 11px",
-                  border: `1.5px solid ${notePerso ? noteColor : "#e2e8f0"}`,
+                  border: `1.5px solid ${notePerso ? colorNote : "#e2e8f0"}`,
                   borderRadius:8, background:"#fff",
                   fontSize:14, fontWeight:600, color:"#1e293b",
                   outline:"none", boxSizing:"border-box",
@@ -786,6 +802,31 @@ export default function DayEditPopup({ date, entry, agent, agentProfiles, fetesP
                   }}>✕</button>
               )}
             </div>
+            {/* Couleur de cette note précise (01/10) — à la demande, jamais
+                obligatoire : "↺ défaut" revient à la couleur globale réglée
+                dans le sélecteur de couleurs (Mon profil), sans rien changer
+                pour les autres journées. */}
+            {notePerso && (
+              <div style={{display:"flex", gap:5, alignItems:"center", marginTop:8, flexWrap:"wrap"}}>
+                {PALETTE_NOTE.map(c => (
+                  <button key={c} onClick={() => setNotePersoColor(c)} title={c}
+                    style={{
+                      width:20, height:20, borderRadius:"50%", padding:0, cursor:"pointer",
+                      background:c,
+                      border: notePersoColor===c ? "2.5px solid #fff" : "1.5px solid rgba(255,255,255,.3)",
+                      boxShadow: notePersoColor===c ? `0 0 0 2px ${c}` : "none",
+                    }}/>
+                ))}
+                {notePersoColor && (
+                  <button onClick={() => setNotePersoColor(null)}
+                    style={{
+                      marginLeft:4, fontSize:10, fontWeight:700,
+                      background:"none", border:"1px solid #475569", color:"#94a3b8",
+                      borderRadius:6, padding:"2px 8px", cursor:"pointer",
+                    }}>↺ défaut</button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── Repos / Absences ── */}

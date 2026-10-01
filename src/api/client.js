@@ -370,6 +370,11 @@ export const planning = {
         prive:    !!p1.prive,
         finNuit:  isFinNuit,
         notePerso: p1.note_perso || null,
+        // notePersoColor (01/10) : couleur propre à CETTE note, choisie à la
+        // demande sur une journée précise — absente (null) pour toute note
+        // sans override, auquel cas l'affichage retombe sur la couleur
+        // globale "NOTE" du sélecteur de couleurs, comme avant.
+        notePersoColor: p1.note_perso_color || null,
         greve:    pGreve ? pGreve.code_equipe : null,
         formation: pFormation ? (pFormation.code_poste || 'Formation') : null,
         // etudePoste (27/08, demandé par Olivier) : porté par p1 (poste jour
@@ -429,6 +434,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
         prive: entry.prive || false,
         note: entry.finNuit ? 'fin_nuit' : null,
         note_perso: entry.notePerso || null,
+        note_perso_color: entry.notePersoColor || null,
         // etudePoste (27/08) : porté par cette période UNIQUEMENT si un vrai
         // poste (equipe M/AM/J) est choisi -- jamais sur un simple RP/Congé.
         etude_poste: !!entry.etudePoste,
@@ -469,7 +475,7 @@ result[`${row.agent_id || agentId}-${date}`] = {
         note: estNuit ? 'debut_nuit' : (estPeriodeUnique ? null : 'debut_nuit'),
         // Si periode unique, elle fait office de periode N°1 : elle doit
         // porter la note (sinon la note n'a nulle part ou etre sauvegardee).
-        ...(estPeriodeUnique ? {note_perso: entry.notePerso || null} : {}),
+        ...(estPeriodeUnique ? {note_perso: entry.notePerso || null, note_perso_color: entry.notePersoColor || null} : {}),
         // etudePoste (27/08) : seulement pour une vraie NUIT SEULE (période
         // unique) -- une nuit ACCOLÉE à un jour/repos n'est pas couverte dans
         // cette V1 (cas marginal, voir commentaire dans getSchedule()).
@@ -487,9 +493,10 @@ result[`${row.agent_id || agentId}-${date}`] = {
         prive: false,
         note: 'fin_nuit',
         note_perso: entry.notePerso || null,
+        note_perso_color: entry.notePersoColor || null,
       });
     }
-    if (periodes.length === 0) periodes.push({ordre:1, code_equipe:'N', code_poste:null, heure_debut:null, heure_fin:null, prive:false, note:'note_seule', note_perso: entry.notePerso || null});
+    if (periodes.length === 0) periodes.push({ordre:1, code_equipe:'N', code_poste:null, heure_debut:null, heure_fin:null, prive:false, note:'note_seule', note_perso: entry.notePerso || null, note_perso_color: entry.notePersoColor || null});
     // Grève (DA/DB/DC, 04/08) : periode independante supplementaire, se combine
     // avec n'importe quelle journee ci-dessus (ou reste seule, portee par le
     // placeholder 'note_seule' cree juste au-dessus) - jamais mise dans la
