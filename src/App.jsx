@@ -2831,20 +2831,23 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <div onTouchStart={swipeDay.onTouchStart} onTouchEnd={swipeDay.onTouchEnd} style={{display:"flex",alignItems:"center",gap:6,position:"sticky",top:stickyTop,zIndex:20,background:"var(--bg-page)",padding:"6px 0",borderBottom:"1px solid var(--border)"}}>
         <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w-1)} aria-label="Semaine précédente" style={NAV_ARROW_STYLE}>‹</button>
         <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
-          {/* Liseré rouge sur "aujourd'hui" (01/10, demandé par Olivier :
-              "mets un lisere rouge autour du carre de la date [...] en mode
-              sombre c'est pas tres lisible") -- l'ancien style (fond bleu
-              pastel #E6F1FB + texte #378ADD/#0C447C, jamais theme-aware)
-              restait fige en couleurs pensees pour un fond clair : une fois
-              la page passee en sombre, ce pave pastel clair jurait et
-              perdait en lisibilite. Remplace par var(--bg-card)/
-              var(--text-primary) (coherent avec les cases normales dans les
-              deux themes) + un simple lisere rouge 2px pour distinguer
-              "aujourd'hui" -- le jour COURAMMENT AFFICHE (dayIdx===i) garde
-              son remplissage bleu marine plein, deja correct dans les deux
-              themes, jamais touche. */}
+          {/* Liseré rouge sur le jour COURAMMENT AFFICHÉ, pas "aujourd'hui"
+              (01/10, Olivier a corrigé le premier essai : "je voulais que la
+              couleur aujourd'hui reste la meme. que le lisere ce mette sur
+              les jours si on swippe") -- "aujourd'hui" retrouve son style
+              d'origine (fond bleu pastel), inchangé quel que soit le jour
+              affiché. Le lisere rouge marque désormais dayIdx===i (le jour
+              actuellement affiché, qu'on y arrive par un clic sur un jour ou
+              en swipant la semaine) -- se déplace donc automatiquement d'un
+              carré à l'autre à mesure qu'on navigue, en plus de son
+              remplissage bleu marine déjà existant pour ce cas.
+              Jamais les deux liserés en même temps par accident : "aujourd'hui"
+              et "jour affiché" sont deux conditions indépendantes qui peuvent
+              coexister sur le même carré sans se marcher dessus (bordure
+              rouge prioritaire visuellement, fond bleu marine prioritaire
+              sur le fond pastel si les deux sont vrais à la fois). */}
           {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
-            <button key={d} onClick={()=>setDayIdx(i)} style={{border:isToday?"2px solid #dc2626":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":"var(--bg-card)",color:dayIdx===i?"#fff":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
+            <button key={d} onClick={()=>setDayIdx(i)} style={{border:dayIdx===i?"2px solid #dc2626":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"var(--bg-card)",color:dayIdx===i?"#fff":isToday?"#0C447C":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
               {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
             </button>);})}
         </div>
