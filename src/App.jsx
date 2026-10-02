@@ -2875,25 +2875,30 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
       <div onTouchStart={swipeDay.onTouchStart} onTouchEnd={swipeDay.onTouchEnd} style={{display:"flex",alignItems:"center",gap:6,position:"sticky",top:stickyTop,zIndex:20,background:"var(--bg-page)",padding:"6px 0",borderBottom:"1px solid var(--border)"}}>
         <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w-1)} aria-label="Semaine précédente" style={NAV_ARROW_STYLE}>‹</button>
         <div style={{display:"flex",gap:4,flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
-          {/* Liseré rouge sur le jour COURAMMENT AFFICHÉ, pas "aujourd'hui"
-              (01/10, Olivier a corrigé le premier essai : "je voulais que la
-              couleur aujourd'hui reste la meme. que le lisere ce mette sur
-              les jours si on swippe") -- "aujourd'hui" retrouve son style
-              d'origine (fond bleu pastel), inchangé quel que soit le jour
-              affiché. Le lisere rouge marque désormais dayIdx===i (le jour
-              actuellement affiché, qu'on y arrive par un clic sur un jour ou
-              en swipant la semaine) -- se déplace donc automatiquement d'un
-              carré à l'autre à mesure qu'on navigue, en plus de son
-              remplissage bleu marine déjà existant pour ce cas.
-              Jamais les deux liserés en même temps par accident : "aujourd'hui"
-              et "jour affiché" sont deux conditions indépendantes qui peuvent
-              coexister sur le même carré sans se marcher dessus (bordure
-              rouge prioritaire visuellement, fond bleu marine prioritaire
-              sur le fond pastel si les deux sont vrais à la fois). */}
+          {/* Pastille sous le jour COURAMMENT AFFICHÉ, pas "aujourd'hui"
+              (02/10, Olivier -- "c'etait mieux avant, mais j'aimerais [...]
+              mieux identifier le jour [...] tu peut enlever le rouge c'est
+              moche" -- liseré rouge du 01/10 jugé trop agressif, retiré).
+              "Aujourd'hui" garde son style d'origine (fond bleu pastel),
+              inchangé quel que soit le jour affiché. Le jour COURAMMENT
+              AFFICHÉ (dayIdx===i, qu'on y arrive par clic ou en swipant) est
+              marqué par un petit point bleu sous sa pastille -- jamais sur
+              le fond navy de la pastille elle-même (un point de la même
+              teinte accent y serait invisible en mode clair, le bleu marine
+              et l'accent se confondant) : chaque jour est désormais enveloppé
+              dans une colonne avec un emplacement de point toujours réservé
+              (transparent si ce n'est pas le jour affiché), pour ne jamais
+              faire sauter la hauteur de la rangée en changeant de jour.
+              Remplissage bleu marine déjà existant conservé tel quel pour
+              signaler aussi le jour affiché -- la pastille seule n'ajoute
+              qu'une confirmation visuelle, jamais le seul indicateur. */}
           {["Lu","Ma","Me","Je","Ve","Sa","Di"].map((d,i)=>{const isToday=weekDates[i]===TODAY;return(
-            <button key={d} onClick={()=>setDayIdx(i)} style={{border:dayIdx===i?"2px solid #dc2626":"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",flexShrink:0,cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"var(--bg-card)",color:dayIdx===i?"#fff":isToday?"#0C447C":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
-              {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
-            </button>);})}
+            <div key={d} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,flexShrink:0}}>
+              <button onClick={()=>setDayIdx(i)} style={{border:"1.5px solid var(--border)",borderRadius:10,padding:"5px 10px",cursor:"pointer",background:dayIdx===i?"#0C447C":isToday?"#E6F1FB":"var(--bg-card)",color:dayIdx===i?"#fff":isToday?"#0C447C":"var(--text-primary)",fontSize:11,fontWeight:dayIdx===i||isToday?700:600,lineHeight:1.4}}>
+                {d}<br/><span style={{opacity:.85,fontSize:10}}>{weekDates[i]?.slice(8)}/{weekDates[i]?.slice(5,7)}</span>
+              </button>
+              <span style={{width:6,height:6,borderRadius:"50%",background:dayIdx===i?"var(--accent-active)":"transparent"}}/>
+            </div>);})}
         </div>
         <button className="f2ppmp-week-arrow" onClick={()=>setWeekOffset(w=>w+1)} aria-label="Semaine suivante" style={NAV_ARROW_STYLE}>›</button>
       </div>
