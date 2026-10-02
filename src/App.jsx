@@ -1899,9 +1899,23 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
           + textarea "Motif") s'affichait EN PLUS du vrai formulaire message
           juste en dessous, dupliquant textarea et faisant apparaitre un
           champ de recherche d'agent superflu et deroutant. */}
-      {type&&type!=="non_tenu"&&type!=="message"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {type&&type!=="non_tenu"&&type!=="message"&&(()=>{
+        // remplacantOptionnel (02/10, Olivier : "ne laisse qu'un seul agent
+        // sil y a une erreur sur la feuille [...] il ne doit pas mettre le
+        // poste en non tenu [...] il y a bien un agent pour travailler a cet
+        // endroit") : uniquement pour "Erreur CPS", sur une case a plusieurs
+        // agents avec une cible choisie -- marque juste cet agent precis
+        // comme une erreur de doublon sur la feuille (nom raye), sans exiger
+        // de remplacant (il n'y en a pas, c'est l'AUTRE agent deja affiche
+        // qui est le vrai). Jamais pour "echange" (qui designe toujours un
+        // vrai remplacant), jamais pour une case a un seul agent (ce serait
+        // alors un poste vraiment vacant -- "non_tenu" reste le bon type).
+        const remplacantOptionnel=type==="erreur_cps"&&plusieursAgentsSurCetteCase&&!!cible;
+        const bloque=busy||(!remplacantOptionnel&&agentsChoisis.length===0)||(plusieursAgentsSurCetteCase&&!cible);
+        return(<div style={{display:"flex",flexDirection:"column",gap:10}}>
         {SelecteurCible}
         <div style={{fontSize:12,fontWeight:700,color:"#475569"}}>{type==="echange"?"Agent(s) qui assure(nt) le poste":"Préciser l'erreur"}</div>
+        {remplacantOptionnel&&<div style={{fontSize:11,color:"#92400e",background:"#fffbeb",border:"1.5px solid #fde68a",borderRadius:8,padding:"6px 8px"}}>Laisse vide si cet agent ne devrait simplement pas apparaître ici (doublon par erreur sur la feuille) — l'autre agent déjà affiché reste le vrai titulaire, le poste n'est pas non tenu.</div>}
         <input placeholder="Rechercher un agent…" value={search} onChange={e=>setSearch(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13}}/>
         {search.trim().length>0?(<div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:140,overflowY:"auto"}}>
@@ -1913,18 +1927,18 @@ function AleaPopup({agents,jsCode,dateKey,famille,nomOfficiel,currentAgent,rowAg
               {a.prenom} {a.nom}
             </button>);
           })}
-        </div>):(<div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic",padding:"4px 2px"}}>Tapez un nom pour rechercher un agent...</div>)}
+        </div>):(<div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic",padding:"4px 2px"}}>{remplacantOptionnel?"Tapez un nom seulement s'il y a un vrai remplaçant à désigner...":"Tapez un nom pour rechercher un agent..."}</div>)}
         <textarea placeholder="Motif (optionnel)" value={motif} onChange={e=>setMotif(e.target.value)}
           style={{padding:"8px 10px",border:"1.5px solid #e2e8f0",borderRadius:8,fontSize:13,minHeight:60,resize:"vertical"}}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <button onClick={()=>editAlea?onClose():setType(null)} style={{flex:1,padding:"10px 0",border:"1.5px solid #e2e8f0",borderRadius:9,background:"#fff",cursor:"pointer",fontSize:13,fontWeight:600}}>{editAlea?"Annuler":"Retour"}</button>
-          <button onClick={valider} disabled={busy||agentsChoisis.length===0||(plusieursAgentsSurCetteCase&&!cible)}
+          <button onClick={valider} disabled={bloque}
             style={{flex:2,padding:"10px 0",border:"none",borderRadius:9,cursor:busy?"wait":"pointer",fontSize:13,fontWeight:700,
-            background:(agentsChoisis.length===0||(plusieursAgentsSurCetteCase&&!cible))?"#e2e8f0":"#0C447C",color:(agentsChoisis.length===0||(plusieursAgentsSurCetteCase&&!cible))?"#94a3b8":"#fff"}}>
+            background:bloque?"#e2e8f0":"#0C447C",color:bloque?"#94a3b8":"#fff"}}>
             {busy?"…":(editAlea?"Enregistrer":"Valider")}
           </button>
         </div>
-      </div>)}
+      </div>);})()}
 
       {type==="non_tenu"&&(<div style={{display:"flex",flexDirection:"column",gap:10}}>
         {SelecteurCible}
@@ -3107,12 +3121,22 @@ function GlobalView({agents,schedule,setSchedule,cpsAleas,setCpsAleas,weekOffset
                         const a=agents.find(x=>x.id===cpId);
                         return a?`${a.prenom} ${a.nom}`:cpId;
                       }).join(", ");
+                      // erreurSansRemplacant (02/10) : "Erreur CPS" pose sur
+                      // un agent precis d'une case en doublon, sans aucun
+                      // remplacant designe -- cet agent est simplement un
+                      // doublon errone sur la feuille, l'autre agent deja
+                      // affiche sur la case reste le vrai titulaire. Jamais
+                      // pour "echange" (toujours un vrai remplacant) ni pour
+                      // un ancien alea "tout le poste" (agents_concernes vide
+                      // ET agent_source_id vide -- cas historique, garde le
+                      // "?" d'origine).
+                      const erreurSansRemplacant=alea.type==="erreur_cps"&&!!alea.agent_source_id&&(!alea.agents_concernes||alea.agents_concernes.length===0);
                       return(<div key={si} style={{display:"flex",flexDirection:"column",gap:3,background:"#fefce8",border:"1.5px solid #fde047",borderRadius:9,padding:"5px 9px"}}>
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           <Av initials={ag.initials} size={18} famille={ag.famille}/>
                           <div style={{fontSize:11,fontWeight:600,color:"#94a3b8",textDecoration:"line-through"}}>{ag.prenom} {ag.nom}</div>
                         </div>
-                        <div style={{fontSize:11,fontWeight:700,color:"#854d0e",paddingLeft:24}}>{nomsRemplacants||"?"}</div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#92400e",paddingLeft:24}}>{erreurSansRemplacant?"⚠️ Erreur de feuille — à ignorer":(nomsRemplacants||"?")}</div>
                         {alea.motif&&<div style={{fontSize:10,color:"#a16207",paddingLeft:24,fontStyle:"italic"}}>{alea.motif}</div>}
                         <div style={{display:"flex",alignItems:"center",gap:6,paddingLeft:24}}><div style={{fontSize:9,color:"#a16207"}}>{alea.type==="echange"?"🔄 Échange/Combiné":"⚠️ Erreur CPS"}</div>{!isPrevisionnel&&<><button onClick={()=>setAleaTarget({jsCode:row.jsCode,famille:row.famille||ag.famille,nomOfficiel:`${ag.prenom} ${ag.nom}`,rowAgents:rowAgentsTries,editAlea:alea})} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6,marginLeft:"auto"}}>✎</button><button onClick={()=>annulerAlea(alea.id,setCpsAleas)} style={{background:"none",border:"none",cursor:"pointer",fontSize:10,color:"#a16207",opacity:.6}}>✕</button></>}</div>
                       </div>);
