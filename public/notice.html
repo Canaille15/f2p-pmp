@@ -331,7 +331,7 @@
   <div class="logo">🚆</div>
   <h1>Notice d'utilisation — F2P.PMP</h1>
   <p>L'outil de planning partagé de tous les agents PRCI et PAR de Paris Montparnasse. Ce guide explique, module par module, comment s'en servir et les règles qui s'appliquent derrière chaque écran.</p>
-  <div class="meta">Dernière mise à jour : 1er octobre 2026</div>
+  <div class="meta">Dernière mise à jour : 2 octobre 2026</div>
   <button class="print-btn" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
 </div>
 
@@ -881,7 +881,7 @@
       <p>Sur chaque case de poste, un bouton permet de signaler un échange, une erreur de saisie CPS, un poste non tenu, ou de laisser un message libre visible par tous. Chaque signalement reste annulable par n'importe qui.</p>
       <div class="callout tip">
         <div class="callout-title">📖 Cibler un agent précis sur une case à plusieurs agents</div>
-        <p>Sur une case avec deux agents (titulaire + agent en <span class="b">🎓 En formation</span>, voir plus bas), un signalement « Poste non tenu » ou un message libre demande directement de choisir l'agent concerné — pas de « Tout le poste » à part, choisir l'agent suffit. Cibler un agent ne touche jamais l'autre : son propre badge/message reste inchangé. Utile par exemple si l'agent en formation est absent ce jour-là : le cibler précisément fait apparaître « ⚠️ Poste non tenu » sur sa seule case, sans jamais toucher au titulaire à côté.</p>
+        <p>Sur une case avec deux agents (titulaire + agent en <span class="b">🎓 En formation</span>, voir plus bas), un signalement « Poste non tenu », « Échange/Combiné », « Erreur CPS » ou un message libre demande directement de choisir l'agent concerné — pas de « Tout le poste » à part, choisir l'agent suffit. Cibler un agent ne touche jamais l'autre : son propre badge/message/échange reste inchangé, et chacun des deux peut avoir son propre signalement en même temps, modifiable et annulable indépendamment. Utile par exemple si l'agent en formation est absent ce jour-là : le cibler précisément fait apparaître « ⚠️ Poste non tenu » sur sa seule case, sans jamais toucher au titulaire à côté.</p>
       </div>
       <div class="callout warn">
         <div class="callout-title">⚠️ Message « Tout le poste » posé avant un changement d'agent</div>
@@ -901,6 +901,10 @@
       <div class="callout rule">
         <div class="callout-title">📖 Si l'agent en formation est absent ce jour-là</div>
         <p>Cible-le précisément avec le bouton 🔄 (« Poste non tenu », voir plus haut) : sa carte affiche alors son nom <strong>rayé</strong> avec un badge sobre <span class="b">🚫 Absent</span> (gris, pas une alerte) plutôt que l'habituel « ⚠️ Poste non tenu » — le titulaire à côté reste affiché normalement, sans aucun changement. « ⚠️ Poste non tenu » reste réservé au vrai suivi opérationnel (génération automatique de pause figée, statistique « Postes non tenus ») et ne s'affiche plus jamais sur un agent nommé — seul un poste réellement <strong>vacant</strong> (personne du tout affiché) garde ce badge d'alerte.</p>
+      </div>
+      <div class="callout warn">
+        <div class="callout-title">📖 Si le doublon est une erreur de la feuille (pas une vraie formation)</div>
+        <p>Cible-le avec le bouton 🔄, choisis <span class="b">⚠️ Erreur CPS</span>, sélectionne cet agent dans « Pour quel agent ? » puis <strong>laisse le champ remplaçant vide</strong> et valide — sa carte affiche son nom rayé avec « ⚠️ Erreur de feuille — à ignorer », l'autre agent reste le vrai titulaire. Volontairement différent de « Poste non tenu » : le poste est bien couvert, donc il ne doit jamais être compté dans la statistique « Postes non tenus » ni déclencher de pause figée automatique sur un poste Pauseur — ce que « Erreur CPS » ne fait jamais, contrairement à « Poste non tenu ».</p>
       </div>
 
       <h3>📄 Le bandeau « Dernier import »</h3>
