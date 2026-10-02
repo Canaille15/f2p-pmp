@@ -3989,8 +3989,16 @@ function TravailDashboardContent({ data }) {
                 </div>
               </div>
               {Object.keys(p.parShift).length>0 && <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {Object.entries(p.parShift).map(([shift,s])=>(
-                  <div key={shift} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10}}>
+                {/* Ordre FIXE Matin > Soirée > Nuit > Journée (02/10, Olivier :
+                    "le detail des matinnee nuit soiree ne sont pas toujours
+                    dans le meme ordre") -- Object.entries suivait l'ordre dans
+                    lequel l'appli rencontre chaque vacation en parcourant le
+                    planning de l'agent (donc variable d'un agent/poste a
+                    l'autre). Tri purement d'affichage : aucun total ni date ne
+                    change, une vacation jamais faite reste masquee, un code
+                    inattendu irait en fin de liste. */}
+                {Object.entries(p.parShift).sort(([a],[b])=>{const o=["M","AM","N","J"];const ia=o.indexOf(a),ib=o.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);}).map(([shift,s])=>(
+                  <div key={shift} style={{background:"#f1f5f9",borderRadius:7,padding:"4px 8px",fontSize:10,whiteSpace:"nowrap"}}>
                     <span style={{fontWeight:700,color:"#334155"}}>{SHIFT_LABELS[shift]||shift} : {s.count}</span>
                     <span style={{fontWeight:600,color:"#475569",marginLeft:5}}>({fmtDate(s.lastDate)})</span>
                   </div>

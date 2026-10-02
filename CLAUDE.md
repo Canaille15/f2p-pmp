@@ -1,5 +1,8 @@
 # F2P.PMP — Contexte projet
 
+- **02/10 — Jours travaillés : les pastilles par vacation d'un poste s'affichent maintenant toujours dans le même ordre (Matin, Soirée, Nuit, Journée).** Olivier avait remarqué sur le compte d'un agent qui fait beaucoup de postes que le détail Matinée/Soirée/Nuit n'était pas toujours dans le même ordre. Cause : `TravailDashboardContent` (App.jsx) lisait `Object.entries(p.parShift)`, dans l'ordre où `computeDashboardTravail` rencontre chaque vacation en parcourant le planning — donc la première vacation faite sur ce poste dans l'année passait en tête. Tri d'affichage seul (aucun total, pourcentage ni date de `computeDashboardTravail` touché) ; une vacation sans service reste masquée (choix d'Olivier : "on va garder le masquage actuel") ; un code inattendu irait en fin de liste ; `whiteSpace:nowrap` sur chaque pastille pour qu'elle ne passe pas sur 2 lignes. Le mot "dernier :" devant la date n'a PAS été ajouté (Olivier : ça allonge l'affichage et passe sur 2 lignes). Vérifié par simulation du tri sur 3 cas (nuit en premier, soirée en premier sans nuit, code inconnu). Rendu sur données réelles non vérifié (le compte de test n'a aucun jour travaillé en 2026). Build propre, déployé, hash identique à la production — 100% frontend.
+
+
 Application de gestion de planning pour ~75 agents SNCF (PRCI/PAR). Propriétaire : Olivier Beffaral (P03, CP 6810186B), seul développeur, non-développeur de formation — dirige toutes les décisions produit, Claude est le partenaire technique d'implémentation.
 
 ## Stack & structure
