@@ -64,8 +64,11 @@ async function deleteAgent(req, res) {
 async function getSchedule(req, res) {
   const { from, to } = req.query;
   try {
-    let sql = `SELECT j.date_jour, j.astreinte_agent_id, a.nom, a.prenom
-               FROM astreinte_jour j LEFT JOIN astreinte_agent a ON a.id = j.astreinte_agent_id`;
+    let sql = `SELECT j.date_jour, j.astreinte_agent_id, a.nom, a.prenom,
+                      j.astreinte_formation_id, f.nom AS formation_nom, f.prenom AS formation_prenom
+               FROM astreinte_jour j
+               LEFT JOIN astreinte_agent a ON a.id = j.astreinte_agent_id
+               LEFT JOIN astreinte_agent f ON f.id = j.astreinte_formation_id`;
     const params = [];
     if (from && to) { sql += ' WHERE j.date_jour BETWEEN ? AND ?'; params.push(from, to); }
     sql += ' ORDER BY j.date_jour';
@@ -80,12 +83,13 @@ async function getSchedule(req, res) {
 async function setJour(req, res) {
   const { date } = req.params;
   const astreinteAgentId = req.body?.astreinte_agent_id ?? null;
+  const formationId = req.body?.astreinte_formation_id ?? null;
   try {
     await pool.query(
-      `INSERT INTO astreinte_jour (date_jour, astreinte_agent_id, modifie_par)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE astreinte_agent_id=VALUES(astreinte_agent_id), modifie_par=VALUES(modifie_par)`,
-      [date, astreinteAgentId, req.agent.cp]
+      `INSERT INTO astreinte_jour (date_jour, astreinte_agent_id, astreinte_formation_id, modifie_par)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE astreinte_agent_id=VALUES(astreinte_agent_id), astreinte_formation_id=VALUES(astreinte_formation_id), modifie_par=VALUES(modifie_par)`,
+      [date, astreinteAgentId, formationId, req.agent.cp]
     );
     res.json({ message: 'Astreinte enregistrée' });
   } catch (err) {
@@ -112,6 +116,7 @@ function vendrediDeLaSemaine(dateStr) {
 async function setSemaine(req, res) {
   const { date } = req.body || {};
   const astreinteAgentId = req.body?.astreinte_agent_id ?? null;
+  const formationId = req.body?.astreinte_formation_id ?? null;
   if (!date) return res.status(400).json({ error: 'Date requise' });
   const vendredi = vendrediDeLaSemaine(date);
   const dates = [];
@@ -125,10 +130,10 @@ async function setSemaine(req, res) {
     await conn.beginTransaction();
     for (const d of dates) {
       await conn.query(
-        `INSERT INTO astreinte_jour (date_jour, astreinte_agent_id, modifie_par)
-         VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE astreinte_agent_id=VALUES(astreinte_agent_id), modifie_par=VALUES(modifie_par)`,
-        [d, astreinteAgentId, req.agent.cp]
+        `INSERT INTO astreinte_jour (date_jour, astreinte_agent_id, astreinte_formation_id, modifie_par)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE astreinte_agent_id=VALUES(astreinte_agent_id), astreinte_formation_id=VALUES(astreinte_formation_id), modifie_par=VALUES(modifie_par)`,
+        [d, astreinteAgentId, formationId, req.agent.cp]
       );
     }
     await conn.commit();

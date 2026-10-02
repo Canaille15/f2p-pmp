@@ -849,14 +849,18 @@ export const astreinte = {
     const result = {};
     rows.forEach((row) => {
       const date = row.date_jour ? row.date_jour.split('T')[0] : row.date_jour;
-      if (row.astreinte_agent_id) {
-        result[date] = { astreinteAgentId: row.astreinte_agent_id, nom: row.nom, prenom: row.prenom };
+      // formation (02/10) : 2e agent "en formation" qui suit le titulaire.
+      if (row.astreinte_agent_id || row.astreinte_formation_id) {
+        result[date] = {
+          astreinteAgentId: row.astreinte_agent_id || null, nom: row.nom, prenom: row.prenom,
+          formation: row.astreinte_formation_id ? { id: row.astreinte_formation_id, nom: row.formation_nom, prenom: row.formation_prenom } : null,
+        };
       }
     });
     return result;
   },
-  setJour: (date, astreinteAgentId) => apiFetch(`/astreinte/${date}`, { method: 'PUT', body: JSON.stringify({ astreinte_agent_id: astreinteAgentId }) }),
-  setSemaine: (date, astreinteAgentId) => apiFetch('/astreinte/semaine', { method: 'POST', body: JSON.stringify({ date, astreinte_agent_id: astreinteAgentId }) }),
+  setJour: (date, astreinteAgentId, formationId = null) => apiFetch(`/astreinte/${date}`, { method: 'PUT', body: JSON.stringify({ astreinte_agent_id: astreinteAgentId, astreinte_formation_id: formationId }) }),
+  setSemaine: (date, astreinteAgentId, formationId = null) => apiFetch('/astreinte/semaine', { method: 'POST', body: JSON.stringify({ date, astreinte_agent_id: astreinteAgentId, astreinte_formation_id: formationId }) }),
 };
 
 // ─── MODULE CPS (planning officiel SNCF importé) ──────────────────────────────

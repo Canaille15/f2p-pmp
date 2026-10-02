@@ -56,9 +56,11 @@ function toIso(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function AstreinteEditPopup({ dateKey, roster, currentId, isVendredi, onClose, onSaved }) {
+function AstreinteEditPopup({ dateKey, roster, currentId, currentFormationId, isVendredi, onClose, onSaved }) {
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState(currentId || null);
+  const [formationId, setFormationId] = useState(currentFormationId || null);
+  const [showFormation, setShowFormation] = useState(!!currentFormationId);
   const [busy, setBusy] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [newNom, setNewNom] = useState("");
@@ -80,8 +82,8 @@ function AstreinteEditPopup({ dateKey, roster, currentId, isVendredi, onClose, o
   const appliquer = async (mode) => {
     setBusy(true);
     try {
-      if (mode === "jour") await api.astreinte.setJour(dateKey, selectedId);
-      else await api.astreinte.setSemaine(dateKey, selectedId);
+      if (mode === "jour") await api.astreinte.setJour(dateKey, selectedId, formationId);
+      else await api.astreinte.setSemaine(dateKey, selectedId, formationId);
       onSaved();
       onClose();
     } catch (e) {
@@ -121,6 +123,7 @@ function AstreinteEditPopup({ dateKey, roster, currentId, isVendredi, onClose, o
     try {
       await api.astreinte.deleteAgent(id);
       if (selectedId === id) setSelectedId(null);
+      if (formationId === id) setFormationId(null);
       onSaved();
     } catch (e) {
       alert("Erreur réseau, réessaie : " + e.message);
@@ -162,6 +165,29 @@ function AstreinteEditPopup({ dateKey, roster, currentId, isVendredi, onClose, o
             >{a.prenom} {a.nom}</button>
           ))}
         </div>
+
+        {/* Rare : le 2e agent n'apparaît que sur demande (lien replié par
+            défaut, ouvert d'office seulement si une formation est déjà posée). */}
+        {!showFormation ? (
+          <button onClick={()=>setShowFormation(true)} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"#6d28d9",padding:0,marginBottom:12,fontWeight:600}}>
+            ➕ Ajouter un agent en formation
+          </button>
+        ) : (
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:11,fontWeight:700,color:"#6d28d9",marginBottom:4}}>🎓 En formation (suit le titulaire)</label>
+            <select
+              value={formationId || ""}
+              onChange={e=>setFormationId(e.target.value ? Number(e.target.value) : null)}
+              style={{width:"100%",boxSizing:"border-box",padding:"8px 10px",borderRadius:8,border:"1.5px solid #c4b5fd",fontSize:13,background:"#faf5ff",color:"#1e293b"}}
+            >
+              <option value="">— Aucun —</option>
+              {roster.filter(a=>a.id!==selectedId).map(a=>(
+                <option key={a.id} value={a.id}>{a.prenom} {a.nom}</option>
+              ))}
+            </select>
+            <div style={{fontSize:10,color:"#7c3aed",marginTop:3,lineHeight:1.4}}>Posé avec « Appliquer à toute la semaine », il suit le titulaire sur les 7 jours.</div>
+          </div>
+        )}
 
         <div style={{display:"flex",flexDirection:"column",gap:7,marginBottom:14}}>
           <button disabled={busy} onClick={()=>appliquer("jour")} style={{padding:"9px 12px",borderRadius:9,border:"none",background:"#4338ca",color:"#fff",fontWeight:700,fontSize:13,cursor:busy?"default":"pointer",opacity:busy?.6:1}}>
@@ -215,15 +241,27 @@ function AstreinteEditPopup({ dateKey, roster, currentId, isVendredi, onClose, o
 // son état vide -- factorisée pour ne jamais désynchroniser le rendu normal
 // et le rendu vendredi (2 cartes) ci-dessous.
 function AstreinteBadge({ agent, videLabel, initialsColor }) {
-  return agent ? (
-    <div style={{display:"flex",alignItems:"center",gap:6,background:"#eef2ff",border:"1.5px solid #c7d2fe",borderRadius:9,padding:"4px 9px"}}>
-      <div style={{width:18,height:18,borderRadius:"50%",background:initialsColor,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,flexShrink:0}}>
-        {agent.prenom[0]}{agent.nom[0]}
-      </div>
-      <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{agent.prenom} {agent.nom}</div>
+  const titulaire = agent?.astreinteAgentId ? agent : null;
+  const formation = agent?.formation || null;
+  return (
+    <div style={{display:"flex",flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:6}}>
+      {titulaire ? (
+        <div style={{display:"flex",alignItems:"center",gap:6,background:"#eef2ff",border:"1.5px solid #c7d2fe",borderRadius:9,padding:"4px 9px"}}>
+          <div style={{width:18,height:18,borderRadius:"50%",background:initialsColor,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,flexShrink:0}}>
+            {titulaire.prenom[0]}{titulaire.nom[0]}
+          </div>
+          <div style={{fontSize:11,fontWeight:700,color:"#1e293b"}}>{titulaire.prenom} {titulaire.nom}</div>
+        </div>
+      ) : (
+        <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic",padding:"4px 9px"}}>{videLabel}</div>
+      )}
+      {formation && (
+        <div style={{display:"flex",alignItems:"center",gap:6,background:"#f5f3ff",border:"1.5px solid #c4b5fd",borderRadius:9,padding:"3px 9px"}}>
+          <span style={{fontSize:10,fontWeight:700,color:"#6d28d9"}}>🎓 En formation</span>
+          <span style={{fontSize:11,fontWeight:600,color:"#1e293b"}}>{formation.prenom} {formation.nom}</span>
+        </div>
+      )}
     </div>
-  ) : (
-    <div style={{fontSize:11,color:"#94a3b8",fontStyle:"italic",padding:"4px 9px"}}>{videLabel}</div>
   );
 }
 
@@ -301,6 +339,7 @@ export default function AstreinteRow({ dateKey, swipeHandlers }) {
           dateKey={dateKey}
           roster={roster}
           currentId={entrant?.astreinteAgentId || null}
+          currentFormationId={entrant?.formation?.id || null}
           isVendredi={isVendredi}
           onClose={()=>setEditing(false)}
           onSaved={()=>{ chargerRoster(); chargerSchedule(); }}
